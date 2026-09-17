@@ -3,8 +3,9 @@ using MEditService.Watcher.Tests.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;
 
-/// <summary>ADR-0015 invariant 2: which folders a load order puts under watch, and the upgrade a
-/// watch makes for itself when a source tree or a repository appears under an untracked mod.</summary>
+/// <summary>The Mod watcher's arming: which folders a load order puts under watch, and the
+/// upgrade a watch makes for itself when a source tree or a repository appears under an untracked
+/// mod.</summary>
 public sealed class WatchArmingTests
 {
     private const string Origin = "TrackedMod";
@@ -76,8 +77,27 @@ public sealed class WatchArmingTests
         Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
     }
 
-    // The rival this pins: unregistering the source root on a settle that finds no repository,
-    // which takes the registration with it while Track is still writing.
+    // ADR-0003: another tool removed the repository, the roots outlived it, and a re-Track writes
+    // the repository alone. The rival this pins: an upgrade that rides only on a root appearing.
+    [Fact]
+    public async Task ReTrackingAModWhoseRootsOutlivedTheRepository_ReachesTheIndexByKey()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, PluginName);
+        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
+        await tree.ApplyLoadOrder();
+
+        WatchedTree.Track(modFolder, PluginName);
+        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
+
+        WatchedTree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
+
+        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
+        Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
+    }
+
+    // The rival this pins: unregistering the source root on a settle that finds no repository.
+    // The root here appears before the repository, the reverse of Track's own order.
     [Fact]
     public async Task ASettleBeforeTheRepositoryExists_KeepsTheRegistration()
     {

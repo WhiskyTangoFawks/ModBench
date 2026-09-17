@@ -192,20 +192,20 @@ internal sealed class ModWatch : IDisposable
         {
             if (_disposed) return;
 
-            if (IsRefPath(fullPath))
+            if (SourceTreeAppeared(fullPath))
+            {
+                // Nothing the restart between the two watch shapes dropped can be named, so every
+                // copy is projected whole once the tree settles.
+                _watcher.IncludeSubdirectories = true;
+                foreach (var plugin in _plugins.Values) plugin.WholePlugin = true;
+            }
+            else if (IsRefPath(fullPath))
             {
                 foreach (var plugin in _plugins.Values) plugin.WholePlugin = true;
             }
             else if (Under(_git.GitDirectory, fullPath))
             {
                 return;
-            }
-            else if (SourceTreeAppeared(fullPath))
-            {
-                // Nothing the restart between the two watch shapes dropped can be named, so every
-                // copy is projected whole once the tree settles.
-                _watcher.IncludeSubdirectories = true;
-                foreach (var plugin in _plugins.Values) plugin.WholePlugin = true;
             }
             else if (_plugins.Values.FirstOrDefault(p => Under(p.SourceRoot, fullPath)) is { } sourcePlugin)
             {
@@ -226,8 +226,9 @@ internal sealed class ModWatch : IDisposable
         }
     }
 
-    // Called under _lock. A top-level watch sees the repository or the folder every plugin's source
-    // root shares appear, which is Track's first write and the moment everything under it matters.
+    // Called under _lock, ahead of the repository's own early return: a top-level watch sees the
+    // repository (Track's first write) or the folder every source root shares appear, and from
+    // then on everything under the mod matters.
     private bool SourceTreeAppeared(string fullPath) =>
         _upgradable
         && !_watcher.IncludeSubdirectories

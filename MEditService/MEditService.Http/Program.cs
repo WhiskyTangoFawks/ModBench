@@ -93,8 +93,8 @@ try
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // ADR-0015 invariant 2: one watch per mod folder in the load order, a process singleton, and
-    // the one listener to the load-order change.
+    // The Mod watcher of the target architecture: one watch per mod folder in the load order, a
+    // process singleton, and the one listener to the load-order change.
     builder.Services.AddSingleton(sp => new ModFolderWatcher(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IRefreshIndex>(),

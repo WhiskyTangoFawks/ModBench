@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Watcher;
 
-/// <summary>The one listener to the load-order change (ADR-0015 invariant 2), with one watch per
-/// mod folder it names. Nothing sends it a message; it tells the Index and Commands and announces
-/// nothing.</summary>
+/// <summary>The Mod watcher of the target architecture: the one listener to the load-order change,
+/// with one watch per mod folder it names. Nothing sends it a message; it tells the Index and
+/// Commands and announces nothing.</summary>
 public sealed class ModFolderWatcher : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -59,9 +59,8 @@ public sealed class ModFolderWatcher : IDisposable
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    // Arming comes first, so no stale watch settles after it; the reconcile then goes on its own
-    // thread beside the settles, since the progressive reconcile (ADR-0013 invariant 1) never
-    // waits on a git status per tracked mod.
+    // Arming comes first, so no stale watch settles after it; the reconcile (ADR-0013 invariant
+    // 1) then goes on its own thread beside the settles and waits on no git status per mod.
     private void ArmSettleAndReconcile(LoadOrderSnapshot snapshot, long version)
     {
         try
@@ -133,36 +132,25 @@ public sealed class ModFolderWatcher : IDisposable
     private void OnSettle(ModWatch mod)
     {
         if (!TryEnter()) return;
-        _ = SettleAsync(mod);
+        _ = InFlight(() => SettleAsync(mod));
     }
 
     private async Task SettleAsync(ModWatch mod)
     {
-        try
-        {
-            var window = mod.Close();
-            if (window.IsEmpty) return;
+        var window = mod.Close();
+        if (window.IsEmpty) return;
 
-            if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
+        if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
 
-            if (SourceRepository.IsTracked(mod.ModFolder))
-            {
-                if (window.ModTouched || window.Binaries.Count > 0)
-                    RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
-                return;
-            }
+        if (SourceRepository.IsTracked(mod.ModFolder))
+        {
+            if (window.ModTouched || window.Binaries.Count > 0)
+                RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
+            return;
+        }
 
-            foreach (var binary in window.Binaries)
-                await _sinks.RefreshBinary(binary.Key, binary.Path).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            _logger.LogError(ex, "A watcher callback failed unexpectedly");
-        }
-        finally
-        {
-            Exit();
-        }
+        foreach (var binary in window.Binaries)
+            await _sinks.RefreshBinary(binary.Key, binary.Path).ConfigureAwait(false);
     }
 
     // An operating-system overflow dropped events, so nothing this mod's watch saw can be trusted.
@@ -170,20 +158,26 @@ public sealed class ModFolderWatcher : IDisposable
     private void OnOverflow(ModWatch mod)
     {
         if (!TryEnter()) return;
-        try
+        _ = InFlight(() =>
         {
             if (!mod.FolderExists)
             {
                 _watches.Drop(mod);
-                return;
+                return Task.CompletedTask;
             }
 
             mod.MarkEverythingTouched();
             _overflow.Validate(mod.RegisteredKeys);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+            return Task.CompletedTask;
+        });
+    }
+
+    // A callback already past the in-flight gate: it always exits the gate, whatever it did.
+    private async Task InFlight(Func<Task> callback)
+    {
+        try
         {
-            _logger.LogError(ex, "A watcher callback failed unexpectedly");
+            await RaiseSafely(callback).ConfigureAwait(false);
         }
         finally
         {
@@ -191,13 +185,21 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
+    // Completed before it returns, since nothing in a synchronous action awaits.
+    private void RaiseSafely(Action action) =>
+        _ = RaiseSafely(() =>
+        {
+            action();
+            return Task.CompletedTask;
+        });
+
     // Runs on the FileSystemWatcher's own thread or a timer callback, with no caller to catch
-    // anything.
-    private void RaiseSafely(Action action)
+    // anything: the one catch every callback shares.
+    private async Task RaiseSafely(Func<Task> action)
     {
         try
         {
-            action();
+            await action().ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

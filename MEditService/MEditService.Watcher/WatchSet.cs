@@ -19,6 +19,7 @@ internal sealed class WatchSet : IDisposable
     private readonly Action<ModWatch> _settle;
     private readonly Action<ModWatch> _overflow;
     private long? _armedVersion;
+    private bool _disposed;
 
     public WatchSet(TimeSpan quiet, TimeSpan maxWindow, TimeProvider time, Action<ModWatch> settle, Action<ModWatch> overflow)
     {
@@ -29,8 +30,8 @@ internal sealed class WatchSet : IDisposable
         _overflow = overflow;
     }
 
-    /// <summary>The watch set this snapshot implies. Null when a newer version was armed already:
-    /// a change that arrived out of order arms nothing and settles nothing.</summary>
+    /// <summary>The watch set this snapshot implies. Null when a newer version was armed already
+    /// or the set is disposed: that change arms nothing and settles nothing.</summary>
     public IReadOnlyList<TrackedMod>? Arm(LoadOrderSnapshot order, long version)
     {
         var wanted = FoldersOf(order);
@@ -38,6 +39,9 @@ internal sealed class WatchSet : IDisposable
 
         lock (_gate)
         {
+            // A change already past the watcher's in-flight gate when Dispose ran would otherwise
+            // arm watches nothing disposes.
+            if (_disposed) return null;
             if (_armedVersion is { } armed && version <= armed) return null;
             _armedVersion = version;
 
@@ -115,6 +119,7 @@ internal sealed class WatchSet : IDisposable
     {
         lock (_gate)
         {
+            _disposed = true;
             foreach (var mod in _mods.Values) mod.Dispose();
             _mods.Clear();
         }

@@ -93,17 +93,17 @@ internal sealed class WatchedTree : IDisposable
     internal static string ContentHashOf(string path) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
 
-    /// <summary>What makes a mod folder tracked is a repository in it. Each plugin's binary is
-    /// parked as its last compile, the state Track leaves, so unchanged bytes classify as nothing
-    /// changed.</summary>
+    /// <summary>A repository in the mod folder, written in Track's own order: the repository first,
+    /// then each plugin's source root. Each binary is parked as its last compile, so unchanged
+    /// bytes classify as nothing changed.</summary>
     internal static void Track(string modFolder, params string[] plugins)
     {
-        foreach (var plugin in plugins) Directory.CreateDirectory(SourceRepository.RootIn(modFolder, plugin));
         var gitDir = Path.Combine(modFolder, ".git");
         GitProbe.Run(gitDir, modFolder, "init", "-q", "-b", "main");
         GitProbe.Run(gitDir, modFolder, "config", "user.email", "watch@example.invalid");
         GitProbe.Run(gitDir, modFolder, "config", "user.name", "Watch Fixture");
         GitProbe.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
+        foreach (var plugin in plugins) Directory.CreateDirectory(SourceRepository.RootIn(modFolder, plugin));
         GitProbe.Run(gitDir, modFolder, "add", "-A");
         GitProbe.Run(gitDir, modFolder, "commit", "-q", "--allow-empty", "-m", "tracked");
         foreach (var plugin in plugins)
