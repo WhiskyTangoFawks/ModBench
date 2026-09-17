@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -68,9 +67,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
     // names present, not their content.
     private sealed class RealFixtureScratch : IDisposable
     {
-        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
-        private readonly IndexProjector _index;
+        private readonly LoadOrderSnapshot _loadOrder;
         private const string Origin = "DiagnosisFixtureMod";
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-diagnosis-mod-").FullName;
@@ -94,16 +92,15 @@ public sealed class PluginDiagnosisRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _index = Indexes.Open(Holder);
-            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
+            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance).TrackAsync(_index, Holder, Origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+                .TrackAsync(_loadOrder, [.. _loadOrder.Copies.Select(c => c.Key)], Origin, SourcePreset.Edits);
 
         public void Dispose()
         {
-            _index.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }
