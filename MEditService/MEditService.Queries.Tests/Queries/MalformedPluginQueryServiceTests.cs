@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Queries;
 
@@ -12,11 +13,17 @@ public sealed class MalformedPluginQueryServiceTests
     private static RegisteredCopy Plugin(string name, string path, string origin = "SomeMod", bool isForced = false) =>
         new(name, origin, path, Slot: 0, Enabled: true, Winning: true, IsForced: isForced);
 
+    private static IReadOnlyList<PluginDiagnosisReport> Diagnose(params RegisteredCopy[] copies)
+    {
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        return new MalformedPluginQueryService(holder).GetLoadOrderDiagnoses();
+    }
+
     [Fact]
     public void ScanAll_AMalformedHeldPlugin_ReportsTheRefusalWording()
     {
-        var reports = MalformedPluginQueryService.ScanAll(
-            [Plugin("LitR - TrueStorms.esp", Fixture("LitR - TrueStorms.esp"))], logger: null);
+        var reports = Diagnose(Plugin("LitR - TrueStorms.esp", Fixture("LitR - TrueStorms.esp")));
 
         var r = Assert.Single(reports);
         Assert.Equal("LitR - TrueStorms.esp", r.Plugin);
@@ -35,9 +42,8 @@ public sealed class MalformedPluginQueryServiceTests
     {
         // medit-repair.md: immutable plugins ARE the proof set the tables were built from — a
         // hit there is a table bug (the vanilla-proof test's job), never a user-facing diagnosis.
-        var reports = MalformedPluginQueryService.ScanAll(
-            [Plugin("LitR - TrueStorms.esp", Fixture("LitR - TrueStorms.esp"), origin: "Data", isForced: true)],
-            logger: null);
+        var reports = Diagnose(
+            Plugin("LitR - TrueStorms.esp", Fixture("LitR - TrueStorms.esp"), origin: "Data", isForced: true));
 
         Assert.Empty(reports);
     }
@@ -47,8 +53,7 @@ public sealed class MalformedPluginQueryServiceTests
     {
         // Never assume exclusive ownership (root CLAUDE.md): the file can vanish between the
         // reconcile and this scan. Absence is validation's finding, not this scan's.
-        var reports = MalformedPluginQueryService.ScanAll(
-            [Plugin("Gone.esp", Fixture("no-such-file.esp"))], logger: null);
+        var reports = Diagnose(Plugin("Gone.esp", Fixture("no-such-file.esp")));
 
         Assert.Empty(reports);
     }
@@ -56,8 +61,7 @@ public sealed class MalformedPluginQueryServiceTests
     [Fact]
     public void ScanAll_ACleanPlugin_ReportsNothing()
     {
-        var reports = MalformedPluginQueryService.ScanAll(
-            [Plugin("RecruitSierra.esl", Fixture("RecruitSierra.esl"))], logger: null);
+        var reports = Diagnose(Plugin("RecruitSierra.esl", Fixture("RecruitSierra.esl")));
 
         Assert.Empty(reports);
     }
