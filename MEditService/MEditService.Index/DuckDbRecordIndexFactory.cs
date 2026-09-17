@@ -34,10 +34,8 @@ internal sealed class DuckDbRecordIndexFactory(
         return repo;
     }
 
-    /// <summary>ADR-0014: drops the instance's index file and reopens it empty, refusing exactly as
-    /// <see cref="Create"/> does when another process holds it. Floors the reopened sequence at
-    /// <paramref name="atLeastSequence"/>.</summary>
-    // Construction alone opens (or refuses) the existing file; RebuildEmpty then drops it.
+    /// <summary>ADR-0014: the reopened sequence is floored at <paramref name="atLeastSequence"/>, so a
+    /// rebuild never regresses below a value this process already handed out.</summary>
     public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
     {
         var repo = new DuckDbRecordIndex(
