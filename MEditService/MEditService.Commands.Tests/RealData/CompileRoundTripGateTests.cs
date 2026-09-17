@@ -2,14 +2,11 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using MEditService.Queries;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -263,20 +260,20 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         using var scope = new MutationScope(fixture);
 
-        var scopeStore = scope.Index.RequireReads();
-        var npc = scopeStore
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin.Name, Origin: scope.Plugin.Origin, Limit: 1))
-            .Items[0];
+        using var original = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4);
+        var npc = ((IFallout4ModGetter)original).Npcs.First();
+        var npcFormKey = npc.FormKey.ToString();
         // Asked of the repository rather than computed: the path needs an order index this test
         // would otherwise reverse-engineer from Track's own output.
         var expectedPath = Path.GetRelativePath(scope.ModFolder, SourceDocumentPath.Of(
-            scope.ModFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));
+            scope.ModFolder, CutDownPluginFixture.PluginFileName, "npc_", npcFormKey, npc.EditorID, GameRelease.Fallout4));
 
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = ProjectingEditService.Over(scope.Index, scope.Holder)
-            .Set(scope.Plugin, npc.FormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
+        var edit = scope.EditHandler().Set(scope.Plugin, npcFormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
         var result = scope.CompileService().Compile(scope.Plugin, new CompileSource.WorkingTree());
@@ -311,9 +308,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         using var scope = new MutationScope(fixture);
 
-        var edit = ProjectingEditService.Over(scope.Index, scope.Holder)
-            .Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
-                JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
+        var edit = scope.EditHandler().Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
+            JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
         var result = scope.CompileService().Compile(scope.Plugin, new CompileSource.WorkingTree());
@@ -337,7 +333,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         internal LoadOrderHolder Holder { get; } = new();
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
-        public IndexProjector Index { get; }
         public PluginCopyKey Plugin { get; }
 
         public MutationScope(CompileRoundTripGateFixture fixture)
@@ -345,20 +340,16 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
             Plugin = fixture.Plugin;
 
-            Index = Indexes.Open(Holder);
-            Index.Reconcile(Holder,
-                fixture.GameDirectory,
-                [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
+            var loadOrder = new LoadOrderSnapshot(fixture.GameDirectory, instanceRoot: null, GameRelease.Fallout4,
+                SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+            Holder.Apply(loadOrder);
         }
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);
 
-        public void Dispose()
-        {
-            Index.Dispose();
-            CompileRoundTripGateFixture.TryDelete(ModFolder);
-        }
+        public EditRecordHandler EditHandler() => TestEditService.EditHandler(Holder);
+
+        public void Dispose() => CompileRoundTripGateFixture.TryDelete(ModFolder);
     }
 }

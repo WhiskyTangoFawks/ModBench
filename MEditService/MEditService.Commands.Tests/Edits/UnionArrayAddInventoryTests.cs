@@ -60,15 +60,17 @@ public class UnionArrayAddInventoryTests
     [MemberData(nameof(UnionArrays))]
     public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
+        using var fixture = new DocumentEditFixture();
         var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
         var col = schema.RecordColumns.Single(c => c.Name == column);
-        var text = DocumentEdits.Serialize(NewRecord(mod, table));
+        var formKey = fixture.Seed(NewRecord(mod, table), table);
 
-        var refusal = DocumentEdits.Apply(text, schema, Envelopes.AddAt(Envelopes.Member(column)), out var body);
+        var (result, after) = fixture.Apply(formKey, Envelopes.AddAt(Envelopes.Member(column)));
 
-        Assert.Null(refusal);
-        using var document = JsonDocument.Parse(body);
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(after);
+        using var document = JsonDocument.Parse(after);
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
         // The one member the default names, and the leaf it names.

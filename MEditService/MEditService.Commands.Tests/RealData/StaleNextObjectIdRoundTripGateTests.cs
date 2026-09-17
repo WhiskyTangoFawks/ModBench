@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -117,7 +116,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     {
         internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-stale-header-game-").FullName;
-        private readonly IndexProjector _index;
+        private readonly LoadOrderSnapshot _loadOrder;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-stale-header-").FullName;
         public string PluginPath { get; }
@@ -142,22 +141,21 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _index = Indexes.Open(Holder);
-            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
+            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+            Holder.Apply(_loadOrder);
         }
 
         public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
             new TrackService(
                     NullLogger<TrackService>.Instance,
                     deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : MutagenPluginAdapter.Instance)
-                .TrackAsync(_index, Holder, Plugin.Origin, SourcePreset.Edits);
+                .TrackAsync(_loadOrder, [.. _loadOrder.Copies.Select(c => c.Key)], Plugin.Origin, SourcePreset.Edits);
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);
 
         public void Dispose()
         {
-            _index.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

@@ -1,6 +1,5 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
-using MEditService.Http;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -49,9 +48,9 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         }
         inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-        // Both stubs name FO4 implicit masters, so the game directory forces them: the deriver is
-        // what composes the load order production would hold for this directory.
-        _loadOrder = ForcedPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+        // Plain stub entries, the same shape PrunedMasterScratch registers: the defect this test
+        // reproduces does not turn on whether a master is marked forced.
+        _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
 
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
         var (treeFiles, _) = MutagenPluginAdapter.Instance.ReadSourceAsync(

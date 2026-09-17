@@ -106,6 +106,11 @@ public sealed class CompileFixture : IDisposable
     public void Remove(FormKey formKey, string recordType, string? editorId) =>
         Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
 
+    public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
+        SourceDocumentPath.Of(ModFolder, PluginName, recordType, formKey.ToString(), editorId, Release);
+
+    public string NpcSourceFile => SourceFileFor(Npc, NpcRecordType, NpcEditorId);
+
     private string RunGit(params string[] args) => GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
 
     /// <summary>Commits the working tree as it stands, so a compile at a ref reads blobs the files on
