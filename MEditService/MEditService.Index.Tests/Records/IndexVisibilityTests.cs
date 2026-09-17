@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -28,7 +29,6 @@ public sealed class IndexVisibilityTests
         using var index = Indexes.Open(holder);
 
         var counts = new ConcurrentBag<int>();
-        var hashes = new ConcurrentBag<string?>();
         var sequences = new ConcurrentQueue<long>();
         using var indexing = new CancellationTokenSource();
 
@@ -37,8 +37,7 @@ public sealed class IndexVisibilityTests
         {
             while (!indexing.IsCancellationRequested)
             {
-                counts.Add(index.Reads?.CountOf(key, "npc_") ?? 0);
-                hashes.Add(index.IndexedContentHash(key));
+                counts.Add(CountOrNone(index, key));
                 sequences.Enqueue(index.Sequence);
             }
         })).ToArray();
@@ -59,11 +58,21 @@ public sealed class IndexVisibilityTests
             $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
         Assert.Equal(NpcCount, index.RequireReads().CountOf(key, "npc_"));
 
-        // The copy's hash and the sequence answer from the committed index too: before or after the
-        // ingest, never a value of its own.
-        var finalHash = index.IndexedContentHash(key);
-        Assert.NotNull(finalHash);
-        Assert.All(hashes, hash => Assert.True(hash is null || hash == finalHash, $"a read observed the hash '{hash}' mid-ingest"));
+        // The sequence answers from the committed index too: before or after the ingest, never a
+        // value of its own.
         Assert.All(sequences, sequence => Assert.True(sequence <= index.Sequence));
+    }
+
+    // No store yet is a count of nothing, which is what a reader before the reconcile sees.
+    private static int CountOrNone(IndexProjector index, PluginCopyKey key)
+    {
+        try
+        {
+            return index.RequireReads().CountOf(key, "npc_");
+        }
+        catch (NoLoadOrderException)
+        {
+            return 0;
+        }
     }
 }

@@ -24,7 +24,7 @@ public sealed class ReconcileOriginTests
         IndexProjector index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var reads = manager.RequireReads();
         var opened = reads.OpenedCopies.Keys.Single(k => k.Name == "A.esp");
         Assert.Equal("SomeMod", opened.Origin);
     }
@@ -44,7 +44,7 @@ public sealed class ReconcileOriginTests
         IndexProjector index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var reads = manager.RequireReads();
         var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esp", Limit: 10, Offset: 0));
 
         var row = Assert.Single(result.Items);

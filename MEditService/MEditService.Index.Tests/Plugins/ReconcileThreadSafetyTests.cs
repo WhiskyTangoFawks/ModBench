@@ -40,6 +40,6 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
         var manager = MakeLoadedManager(holder);
         manager.Dispose();
 
-        Assert.Null(manager.Reads);
+        Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
     }
 }

@@ -15,8 +15,8 @@ internal static class SnapshotReconcile
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
         var snapshot = ForcedPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
-        holder.Apply(snapshot);
-        index.Reconcile(snapshot);
+        var version = holder.Apply(snapshot);
+        index.Reconcile(snapshot, version);
         return holder;
     }
 }

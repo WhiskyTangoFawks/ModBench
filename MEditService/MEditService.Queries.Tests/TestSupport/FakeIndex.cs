@@ -70,6 +70,8 @@ internal sealed class FakeReads(
         rows.Where(r => r.Document.ParseDiagnosis != null).Select(r => ColumnKey.Of(r.Plugin.Name, r.Plugin.Origin))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
+    public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
     public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey plugin) => new HashSet<string>();
     public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey) => [];

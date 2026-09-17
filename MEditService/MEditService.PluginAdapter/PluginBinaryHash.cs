@@ -21,6 +21,10 @@ public static class PluginBinaryHash
         catch (UnauthorizedAccessException) { return null; }
     }
 
+    /// <summary>The same hash over bytes a caller already holds, spelled as <see cref="OfFile"/>
+    /// spells it, so a file read once for two purposes hashes as one read would.</summary>
+    public static string OfBytes(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
     /// <summary>The same hash upper-cased, which is how the commit trailers spell it (ADR-0003).
     /// Throws rather than answering null: a caller here has just written the file.</summary>
     public static string TrailerFormOfFile(string path)

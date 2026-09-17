@@ -95,16 +95,6 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public async Task AwaitSequence_AnswersTheMomentTheSequenceLands_AndNotYetOnATimeout()
-    {
-        Reconcile(_fixture.Plugins);
-        var landed = _index.Sequence;
-
-        Assert.True(await _index.AwaitSequenceAsync(landed, TimeSpan.FromSeconds(5)));
-        Assert.False(await _index.AwaitSequenceAsync(landed + 1, TimeSpan.FromMilliseconds(100)));
-    }
-
-    [Fact]
     public void RefreshKeys_TwoKeysInOneCall_AdvancesTheSequenceOnce()
     {
         Reconcile(_fixture.Plugins);

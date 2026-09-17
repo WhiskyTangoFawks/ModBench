@@ -30,13 +30,12 @@ public sealed class SecondWindowRefusedTests
         var filesWhileHeld = Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList();
 
         using var index = MakeIndex(holder);
-        var ex = Assert.Throws<IndexHeldElsewhereException>(() =>
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot));
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         // Refused by name, and nothing held.
-        Assert.Contains("another Modbench window", ex.Message, StringComparison.Ordinal);
-        Assert.Equal(indexPath, ex.IndexPath);
-        Assert.Equal(LoadOrderState.None, index.Status.State);
+        Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
+        Assert.Contains("another Modbench window", index.Status.Message, StringComparison.Ordinal);
+        Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
         // Never a second file — and the held one was not deleted out from under the other
         // window: the directory is exactly as the holder had it.
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());

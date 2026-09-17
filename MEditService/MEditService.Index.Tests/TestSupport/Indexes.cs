@@ -44,16 +44,15 @@ internal static class Indexes
     {
         var holder = new LoadOrderHolder();
         var index = Open(holder, adapter, loggerFactory, notifications);
-        try
+        index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
+        // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
+        if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)
         {
-            index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
-            return index;
-        }
-        catch
-        {
+            var message = index.Status.Message;
             index.Dispose();
-            throw;
+            throw new InvalidOperationException($"The fixture's reconcile was refused: {message}");
         }
+        return index;
     }
 
     /// <summary>The SQL door (ADR-0011): the filter is arbitrary SQL yielding form_key, so what it

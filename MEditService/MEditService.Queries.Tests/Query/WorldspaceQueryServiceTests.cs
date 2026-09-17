@@ -45,6 +45,8 @@ public class WorldspaceQueryServiceTests
         public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
+        public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
+        public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
         public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
