@@ -256,7 +256,7 @@ the configured game directory's `Data/`.
 - Modbench does not invent a modlist format — its format **is** MO2's
   ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)). The **Instance** reads it
   ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md))
-  and the free-function commands in `modmanager/commands/` write it; there is no adapter object
+  and the free-function commands in the command boxes write it; there is no adapter object
   between them and the files.
 - **MO2 layout** (first-class): read/written in place — `mods/<name>/`, the
   active profile's `modlist.txt` (`+`/`-` prefixes, top of file = winning end, bottom = losing end) and
@@ -369,7 +369,7 @@ The extension owns the editing backend process
   separator).
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
   Separator, Uninstall, New Empty Mod) writes to `modlist.txt` immediately, through the
-  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0015 invariant 2).
+  free-function command for that gesture (`modlist/modlist.ts`, ADR-0015 invariant 2).
   There is **no save/discard flow** in this
   view — unlike the Editing surface, whose edits land as working-tree source changes reviewed
   and committed in the native Source Control panel (ADR-0007, medit-version-control.md).
@@ -446,7 +446,7 @@ The extension owns the editing backend process
 
 ### Deploy / purge (Modbench-4)
 
-Deploy is a module of the [Toolbox](containers.md) (`modmanager/commands/deployment.ts` plus
+Deploy is a module of the [Toolbox](containers.md) (`deploy/deployment.ts` plus
 the hardlink/manifest/purge core in `mo2Files/files.ts`), offering deploy, purge and
 status (the manifest's presence) — one strategy, hardlinks, with no strategy interface: the
 symlink fallback stays a requirement, not a second implementation, until it actually ships.
@@ -652,15 +652,15 @@ folder so the user can reassign or discard those files without leaving Modbench.
 
 - Every `modlist.txt` gesture (enable, reorder, insert/rename/delete separator, move a mod
   to a separator, reorder a separator block, uninstall, new empty mod) is a **free-function
-  command** in `modmanager/commands/modlist.ts`, splicing through the `modlist.txt` kernel:
+  command** in `modlist/modlist.ts`, splicing through the `modlist.txt` kernel:
   it takes the instance root, the active profile and the gesture's own inputs, and returns
   `{ applied: true; wrote: boolean }` or `{ applied: false; refusal: string }` — never a
   throw, never a read of the Instance, never a refresh or sync request (ADR-0015 invariant 2). A
-  scan test (`modmanager/commands/instanceScan.test.ts`, generic over the whole folder) and
+  scan test (`test/commandInstanceScan.test.ts`, generic over every command box) and
   a small per-file one enforce the latter, in the style of `formatLiteralScan.test.ts`.
 - Install, profile switch, deploy and purge are free-function commands beside the
   `modlist.txt` ones, in the same shape and under the same scan test:
-  `modmanager/commands/install.ts`, `profile.ts` and `deployment.ts`.
+  `install/install.ts`, `instanceCommands/profile.ts` and `deploy/deployment.ts`.
 - The **Instance** (`instance/instance.ts`) is the only reader of MO2's files: the modlist
   with each mod's `meta.ini` folded in, `plugins.txt`, the active profile and the game name all
   come from one value. Reconciling `mods/` with `modlist.txt` is `reconcileMods`, a command
@@ -682,7 +682,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - **Primary unit seams** (Vitest, `npm run test:unit`, no backend): the byte-faithful text
   transforms (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) — parse, toggle
   enable/disable, reorder, separator ops — asserted byte-faithfully; the modlist.txt
-  gesture commands (`modmanager/commands/modlist.ts`) — each verb against a temporary
+  gesture commands (`modlist/modlist.ts`) — each verb against a temporary
   instance, asserting the bytes written (and `wrote: false` for a no-op) or the refusal
   returned; and the `FileConflictIndex` — winner resolution, conflict/override counts, and
   missing-mod detection.

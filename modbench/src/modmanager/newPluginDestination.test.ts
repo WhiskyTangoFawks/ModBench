@@ -11,7 +11,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance } from '../instance/instance';
 import { resolvePluginDestination, type PluginDestinationChoice } from './pluginDestination';
-import { appendPlugin } from './commands/plugins';
+import { appendPlugin } from '../pluginsCommands/plugins';
 import { present } from '../ports/present';
 
 const PROFILE = 'Default';

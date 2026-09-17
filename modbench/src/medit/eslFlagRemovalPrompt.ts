@@ -1,5 +1,5 @@
 import { headerFormKeyFor } from './formKeyIdentity';
-import type { MEditClient } from './client';
+import type { MEditClient } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
 

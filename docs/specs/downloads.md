@@ -383,7 +383,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   live on every call. It exists only because Show hidden is additive (hidden rows render
   alongside visible ones with no separate list), so a visual cue is the sole way to tell
   them apart — MO2 itself draws none.
-- **`deleteDownload`** (`modmanager/commands/downloads.ts`, no `vscode` import) owns the
+- **`deleteDownload`** (`install/downloadSidecar.ts`, no `vscode` import) owns the
   trash-both-files ordering (`.meta` before the download, so a mid-failure never orphans
   a sidecar) and takes the trash call as an argument, which `DownloadsPanel.ts`'s VS Code
   adapter supplies along with the confirm and the report.
@@ -437,7 +437,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   call.
 - **`HiddenDownloadDecorationProvider.test.ts`**: decorates only rows both under the
   `downloads/` prefix and named in the live `hiddenNames()` set.
-- **`commands/downloads.test.ts`**: the trash-`.meta`-before-download ordering, the
+- **`install/test/downloadSidecar.test.ts`**: the trash-`.meta`-before-download ordering, the
   confirm-gate, and cancel-is-a-no-op.
 - **Prior art**: `metaIni.test.ts`, `modlistText.test.ts`, `statusChecker.test.ts`,
   `modOrganizerIni.test.ts` — same fixture-in / value-out style; instance fixtures live

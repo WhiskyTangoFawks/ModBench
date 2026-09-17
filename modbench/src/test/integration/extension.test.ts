@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import type { PluginMetadata } from '../../medit/client';
+import type { PluginMetadata } from '../../client';
 import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../modmanager/DownloadsProvider';
 import { present } from '../../ports/present';

@@ -19,8 +19,8 @@ import {
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
-import type { RecordSummary } from '../../medit/client';
-import { InMemoryMEditClient } from '../../medit/client';
+import type { RecordSummary } from '../../client';
+import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });

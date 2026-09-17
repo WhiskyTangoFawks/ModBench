@@ -1,4 +1,4 @@
-import type { BackendStatus, MEditClient } from './client';
+import type { BackendStatus, MEditClient } from '../client';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 

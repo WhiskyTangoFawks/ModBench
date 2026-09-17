@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { implicitMastersFrom, rebuildIndexVia } from '../toolboxClientCalls';
-import { InMemoryMEditClient } from '../medit/client';
+import { InMemoryMEditClient } from '../client';
 
 describe('implicitMastersFrom', () => {
   it('calls the port with the folder and the resolved game release', async () => {

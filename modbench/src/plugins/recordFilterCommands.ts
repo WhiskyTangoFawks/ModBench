@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { MEditClient } from '../medit/client';
+import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
 

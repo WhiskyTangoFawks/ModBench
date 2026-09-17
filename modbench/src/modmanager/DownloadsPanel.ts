@@ -1,14 +1,9 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from '../mo2Codecs/downloads';
-import {
-  deleteDownload,
-  hideDownload,
-  markDownloadInstalled,
-  unhideDownload,
-  type DownloadCommandResult,
-} from './commands/downloads';
+import { deleteDownload, hideDownload, unhideDownload, type DownloadCommandResult } from '../install/downloadSidecar';
 import { nexusSlugForGame } from '../tables/gamePaths';
-import type { InstallChoice } from './commands/install';
+import type { InstallChoice } from '../install/install';
+import type { InstallFromArchiveOutcome } from './modManagementCommands';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instance/instance';
 import type { Reporter } from '../ports/reporter';
@@ -58,12 +53,13 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
 }
 
 // Pre-supplying the archive path keeps the install command's file-picker from appearing. The
-// row's own mod id, file id and version are what it is told: the view re-reads no sidecar.
+// row's own mod id, file id and version are what it is told: the view re-reads no sidecar, and
+// install marks it installed.
 async function installArchive(
-  instanceRoot: string, row: DownloadFile, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  row: DownloadFile, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): Promise<void> {
   const { name } = row;
-  let installed = false;
+  let outcome: InstallFromArchiveOutcome;
   try {
     const candidates = selectUpgradeCandidates(instance.value, row);
     let choice: InstallChoice = { kind: 'new' };
@@ -72,25 +68,23 @@ async function installArchive(
       if (!picked) return; // Esc: install nothing
       choice = picked;
     }
-    installed = (await vscode.commands.executeCommand<boolean | undefined>(
+    outcome = (await vscode.commands.executeCommand<InstallFromArchiveOutcome | undefined>(
       'modbench.modList.installFromArchive',
       row.path, row.modID, row.fileID, row.version, choice,
-    )) ?? false;
+    )) ?? { installed: false };
   } catch (err) {
     // ADR-0019: explicit user action failed -> error notification + log.
     reporter.report('error', `Failed to install "${name}".`, message(err));
     return;
   }
-  if (!installed) return;
-  const marked = await markDownloadInstalled(instanceRoot, name);
-  if (marked.applied) return;
+  if (!outcome.installed || outcome.downloadRefusal === undefined) return;
   // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS installed, only its
   // Downloads bookkeeping failed. Must not read as "install failed", or the user may retry and
   // get a duplicate mod.
   reporter.report(
     'warning',
     `"${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
-    marked.refusal,
+    outcome.downloadRefusal,
   );
 }
 
@@ -167,7 +161,7 @@ export function registerDownloadsSingleRowCommands(
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(instanceRoot, node.row, instance, reporter);
+      if (node?.row.name) void installArchive(node.row, instance, reporter);
     }),
     // A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
     vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {

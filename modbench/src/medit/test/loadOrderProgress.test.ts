@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeReconcileProgressHandler, reportIndexRefusal } from '../loadOrderProgress';
-import type { LoadOrderProgress } from '../client';
+import type { LoadOrderProgress } from '../../client';
 
 // Applying a tick re-renders the whole tree, and PluginTreeProvider.getPluginChildren is
 // uncached, so re-applying an unchanged tick every 500ms would re-fetch record types for every

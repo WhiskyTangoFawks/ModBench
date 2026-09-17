@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { uninstallMod } from '../commands/modlist';
+import { uninstallMod } from '../../modlist/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
 } from './corpusFixture';

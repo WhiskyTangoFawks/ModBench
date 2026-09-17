@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plugins';
+import { reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instance/loadOrderSnapshot';
 import type { InstanceValue } from '../../instance/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type WorldspaceBlocks, type CellPage, type RecordSummary,
-} from '../../medit/client';
+} from '../../client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,

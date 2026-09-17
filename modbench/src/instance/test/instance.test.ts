@@ -862,6 +862,59 @@ describe('Instance — listing mods/', () => {
   });
 });
 
+describe('Instance — what a command is handed instead of probing for it', () => {
+  it('lists every profile directory and no stray file beside them', async () => {
+    const { root, instance } = await realInstance();
+    await writeFile(join(root, 'profiles', 'stray.txt'), 'not a profile');
+
+    await instance.refresh();
+
+    expect([...instance.value.profiles].sort()).toEqual(['Default', 'Secondary']);
+  });
+
+  it('names every folder under mods/, listed or not', async () => {
+    const { root, instance } = await minimalInstance();
+    await mkdir(join(root, 'mods', 'Unlisted Folder'), { recursive: true });
+
+    await instance.refresh();
+
+    expect([...instance.value.modFolders].sort()).toEqual(['Consumer', 'Unlisted Folder']);
+  });
+
+  it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {
+    const { root, instance, setResolver } = await minimalInstance();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(join(dataFolder, 'Textures'), { recursive: true });
+    await writeFile(join(dataFolder, 'Fallout4.ESM'), '');
+    await writeFile(join(dataFolder, 'Fallout4.ba2'), '');
+    await writeFile(join(dataFolder, 'Hidden.esp.mohidden'), '');
+    await writeFile(join(dataFolder, 'Textures', 'Nested.esp'), '');
+    setResolver(() => Promise.resolve({ root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    const listed = instance.value.dataFolderPlugins;
+    expect(listed.kind).toBe('listed');
+    expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['fallout4.esm']);
+  });
+
+  // A folder nobody could read is its own answer, not an empty one: pruning plugins.txt against
+  // an empty set would delete every line, and the command refuses on this instead.
+  it('tells an unresolved game directory from a folder that resolved and could not be read', async () => {
+    const { instance, logs, setResolver } = await minimalInstance();
+
+    await instance.refresh();
+    expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
+
+    setResolver(() => Promise.resolve({ root: '/nowhere', dataFolder: '/nowhere/Data' }));
+    await instance.refresh();
+
+    expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
+    expect(instance.sequence).toBe(2);
+    expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
+  });
+});
+
 describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
   it('carries a download row\'s fileID from its sidecar and a mod\'s installedFiles pairs from meta.ini', async () => {
     const { root, instance } = await minimalInstance();

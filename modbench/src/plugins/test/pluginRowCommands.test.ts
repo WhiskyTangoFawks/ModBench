@@ -36,13 +36,13 @@ import {
   registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
 import { originFolder } from '../../instance/loadOrderSnapshot';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { PluginTreeProvider } from '../PluginTreeProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
-import { pluginMetadataFixture, compileResultFixture } from '../../medit/client/test/fixtures';
+import { pluginMetadataFixture, compileResultFixture } from '../../client/test/fixtures';
 import type { ExtensionSession } from '../../session';
 import { present } from '../../ports/present';
 

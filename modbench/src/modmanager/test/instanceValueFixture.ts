@@ -7,6 +7,8 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
   return {
     mods: [],
     unlistedFolders: [],
+    modFolders: [],
+    profiles: ['Default'],
     files: new FileConflictLookup(),
     filesByMod: new Map(),
     plugins: [],
@@ -14,6 +16,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     activeProfile: 'Default',
     gameRelease: 'Fallout4',
     gameDirectory: undefined,
+    dataFolderPlugins: { kind: 'unresolved' },
     deployed: false,
     modStatuses: new Map(),
     overwriteFileCount: 0,

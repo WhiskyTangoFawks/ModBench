@@ -4,7 +4,7 @@ import {
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
-import { InMemoryMEditClient, type NotificationEvent } from '../../medit/client';
+import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {

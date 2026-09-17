@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { isRefused, type MEditClient, type CompileResult } from '../medit/client';
+import { isRefused, type MEditClient, type CompileResult } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { resolveCompileTarget } from '../medit/compileTarget';
 import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';

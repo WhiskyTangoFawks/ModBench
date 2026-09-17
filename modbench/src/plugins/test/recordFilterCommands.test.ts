@@ -27,7 +27,7 @@ vi.mock('vscode', () => ({
 vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: vi.fn(), readFileSync: vi.fn() }));
 
 import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 

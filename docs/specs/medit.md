@@ -127,12 +127,12 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
 - A new end-to-end command is three touch points, or it is half-wired: backend endpoint →
-  `/regenerate-api` → the mEdit client (`medit/client/`) → `package.json` commands/menus +
+  `/regenerate-api` → the mEdit client (`client/`) → `package.json` commands/menus +
   `extension.ts` registration.
 
 ### Architecture / seams
 
-- **The mEdit client (`medit/client/`) is the seam every view crosses** (ADR-0002): its port
+- **The mEdit client (`client/`) is the seam every view crosses** (ADR-0002): its port
   answers the commands, the queries, the subscription and the backend's status, and it hides the
   generated API client, the transport and the backend process alike. A view takes the narrowest
   `Pick` of that port it needs, never a transport object.
@@ -144,7 +144,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   the grid as `cellStates` — the frontend maps states to color, it does not derive them. Its
   visual encoding is specified in [medit-record-editor.md](medit-record-editor.md).
 - Behind the client, all backend HTTP calls go through the generated `openapi-fetch` client
-  (`medit/client/apiClient.ts`) — never raw `fetch()`; a source scan enforces it.
+  (`client/apiClient.ts`) — never raw `fetch()`; a source scan enforces it.
 - Errors surface on [ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)'s severity tiers via an
   injected reporter, never raw `vscode.window.*` below the gesture that asked.
 

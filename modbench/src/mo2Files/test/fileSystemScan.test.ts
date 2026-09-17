@@ -102,7 +102,7 @@ describe('no file outside MO2 files imports the file system to read the instance
 
   it('reaches the commands, the views and the Instance box, not only one folder', () => {
     const scanned = productionFiles(SRC).map((p) => relative(SRC, p));
-    expect(scanned).toContain(join('modmanager', 'commands', 'modlist.ts'));
+    expect(scanned).toContain(join('modlist', 'modlist.ts'));
     expect(scanned).toContain(join('instance', 'instance.ts'));
     expect(scanned).toContain(join('plugins', 'PluginsTreeProvider.ts'));
   });

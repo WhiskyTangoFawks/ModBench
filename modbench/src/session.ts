@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import type { LoadOrderSender } from './medit/client';
+import type { LoadOrderSender } from './client';
 import type { NameFilter } from './nameFilter';
 import { say } from './editingTeardown';
 

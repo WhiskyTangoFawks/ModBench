@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { CrashRepairOffer, MEditClient } from '../medit/client';
+import type { CrashRepairOffer, MEditClient } from '../client';
 import {
   subscribeQuestionOpen, type OpenMergeEditor,
 } from './externalChangeCoordinator';

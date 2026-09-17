@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Instance } from './instance/instance';
-import { deployMods, purgeMods, type DeploymentCommandResult } from './modmanager/commands/deployment';
-import { listProfiles, switchProfile } from './modmanager/commands/profile';
+import { deployMods, purgeMods, type DeploymentCommandResult } from './deploy/deployment';
+import { switchProfile } from './instanceCommands/profile';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 
@@ -68,14 +68,13 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const launchReporter = reporterFor('launchTarget');
   return [
     vscode.commands.registerCommand('modbench.toolbox.switchProfile', async () => {
-      const active = instance.value.activeProfile;
-      const profiles = await listProfiles(instanceRoot);
+      const { activeProfile: active, profiles } = instance.value;
       const picked = await vscode.window.showQuickPick(
         profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
         { placeHolder: 'Switch profile' },
       );
       if (!picked || picked.label === active) return;
-      const outcome = await switchProfile(instanceRoot, picked.label);
+      const outcome = await switchProfile(instanceRoot, picked.label, profiles);
       if (!outcome.applied) {
         profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
         return;

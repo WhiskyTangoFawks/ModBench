@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { MEditClient } from './client';
+import type { MEditClient } from '../client';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
 // Any reconcile-free record change is reason enough for a whole refresh() — the tree has no
