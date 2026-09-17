@@ -46,7 +46,7 @@ const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_B
 const boxRoot = (box: string): string => join(SRC, box);
 
 // A box's production files: the box directory's own tree minus its tests, which live under
-// `test/` and compile in the legacy project, not in the box's own.
+// `test/` and compile in the test project, not in the box's own.
 function productionFiles(root: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {

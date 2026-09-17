@@ -34,9 +34,6 @@ const EDITING_DIR = 'medit';
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
-const MODS_VIEW_DIR = 'mods';
-const DOWNLOADS_VIEW_DIR = 'downloads';
-const INSTANCE_DIR = 'instance';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
@@ -351,60 +348,25 @@ function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: st
   return offenses;
 }
 
-// The record lifecycle commands carry user-facing strings that legitimately name Mod
-// Management's term for the user ("mod"), so recordLifecycleCommands.ts gets the import-only
-// tier rather than a "no vocabulary in its own text" bar.
-describe('Editor and the Plugins view import from neither each other', () => {
-  it('nothing under Editor imports from the Plugins view, Mod Management or the Instance', () => {
-    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR])).toEqual([]);
-  });
-
-  it('nothing under the Plugins view imports from Editor', () => {
-    expect(crossFolderOffenders(SRC, PLUGINS_VIEW_DIR, [EDITOR_DIR])).toEqual([]);
-  });
-
+// Editor, Plugins, Mods, Downloads and the Instance are boxes whose reference lists never reach
+// each other, so `tsc -b` refuses those imports. Editing's wiring compiles in the composition
+// root, which references everything, so this scan holds it.
+describe('Editing imports nothing from Editor', () => {
   // Editing sits below Editor in the dependency direction (Editor imports the client, never the
   // reverse): a medit/ file reaching into editor/ would cycle the two.
   it('nothing under Editing imports from Editor', () => {
     expect(crossFolderOffenders(SRC, EDITING_DIR, [EDITOR_DIR])).toEqual([]);
   });
 
-  describe('a plant in each direction is caught, and the same plant inside its own side is not', () => {
+  describe('a plant is caught, and a sibling import beside it is not', () => {
     function withPlantedTree(run: (root: string) => void): void {
-      const root = mkdtempSync(join(tmpdir(), 'medit-editor-plugins-boundary-'));
+      const root = mkdtempSync(join(tmpdir(), 'medit-editing-editor-boundary-'));
       try {
         run(root);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
     }
-
-    it('a Plugins-view import planted in an Editor-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { RecordNode } from '../plugins/PluginTreeProvider';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR]).map((o) => o.path))
-          .toEqual([join('editor', 'someCommand.ts')]);
-      });
-    });
-
-    it('an Instance import planted in an Editor-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { Instance } from '../instance/instance';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR]).map((o) => o.path))
-          .toEqual([join('editor', 'someCommand.ts')]);
-      });
-    });
-
-    it('an Editor import planted in a Plugins-shaped file is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
-          .toEqual([join('plugins', 'SomeProvider.ts')]);
-      });
-    });
 
     it('an Editor import planted in an Editing-shaped file is caught', () => {
       withPlantedTree((root) => {
@@ -415,20 +377,16 @@ describe('Editor and the Plugins view import from neither each other', () => {
       });
     });
 
-    // The "own side" negative control for this direction: a Plugins-shaped file whose import
-    // merely stays inside its own folder must not be caught alongside the one that crosses over.
-    it('a Plugins-view file importing its own sibling is not caught alongside one that crosses to Editor', () => {
+    // The "own side" negative control: an Editing-shaped file whose import merely stays inside
+    // its own folder must not be caught alongside the one that crosses over.
+    it('an Editing file importing its own sibling is not caught alongside one that crosses to Editor', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        writeFileSync(join(root, 'plugins', 'OtherProvider.ts'), "import { PluginTreeNode } from './PluginTreeProvider';\n");
-        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
-          .toEqual([join('plugins', 'SomeProvider.ts')]);
+        mkdirSync(join(root, 'medit'), { recursive: true });
+        writeFileSync(join(root, 'medit', 'someModule.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        writeFileSync(join(root, 'medit', 'otherModule.ts'), "import { pluginFailures } from './pluginFailures';\n");
+        expect(crossFolderOffenders(root, EDITING_DIR, [EDITOR_DIR]).map((o) => o.path))
+          .toEqual([join('medit', 'someModule.ts')]);
       });
     });
-  });
-
-  it('recordLifecycleCommands.ts imports nothing from Mod Management', () => {
-    expect(importsOf(read('editor/recordLifecycleCommands.ts')).filter((s) => s.includes('mods'))).toEqual([]);
   });
 });
