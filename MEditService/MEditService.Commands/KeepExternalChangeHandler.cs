@@ -5,7 +5,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -19,24 +18,24 @@ public sealed class KeepExternalChangeHandler
     private readonly WriteTargets _targets;
     private readonly IPluginAdapter _adapter;
     private readonly SchemaReflector _reflector;
+    private readonly RecordTextCodec _codec;
     private readonly ILogger<KeepExternalChangeHandler> _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal KeepExternalChangeHandler(
-        WriteTargets targets, IPluginAdapter adapter, SchemaReflector reflector,
+        WriteTargets targets, IPluginAdapter adapter, SchemaReflector reflector, RecordTextCodec codec,
         ILogger<KeepExternalChangeHandler> logger) =>
-        (_targets, _adapter, _reflector, _logger) = (targets, adapter, reflector, logger);
+        (_targets, _adapter, _reflector, _codec, _logger) = (targets, adapter, reflector, codec, logger);
 
     public ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
     {
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = _reflector.GetSchemas(gameRelease);
 
         var touchedByPlugin = new Dictionary<string, List<TouchedRecord>>(StringComparer.OrdinalIgnoreCase);
         foreach (var plugin in plugins)
-            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path, gameRelease, codec, schemas);
+            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path, gameRelease, schemas);
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         var stagedAlready = trackedFileChanges.Where(c => c.StagedAlready).ToList();
@@ -99,7 +98,7 @@ public sealed class KeepExternalChangeHandler
     // would help nobody.
     private List<TouchedRecord> TouchedRecordsFor(
         SourceRepository repository, PluginCopyKey plugin, string pluginPath, GameRelease gameRelease,
-        RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var pluginName = plugin.Name;
         var baselineByFormKey = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -110,7 +109,7 @@ public sealed class KeepExternalChangeHandler
         var touched = new List<TouchedRecord>();
         foreach (var (incoming, incomingText) in _adapter.RecordDocumentsOf(
                      new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease,
-                     PluginStrings.In(repository.ModFolder), codec, schemas))
+                     PluginStrings.In(repository.ModFolder), _codec, schemas))
         {
             var formKey = incoming.FormKey;
             var baselineText = baselineByFormKey.GetValueOrDefault(formKey);

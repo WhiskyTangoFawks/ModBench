@@ -5,9 +5,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>ADR-0007's create gesture: the plugin file, the Track its destination needs before
-/// anything can be edited there, and the copy's registration in Load order state. Never touches
-/// plugins.txt.</summary>
+/// <summary>The create gesture: the plugin file, the Track its destination needs before anything
+/// can be edited there (ADR-0007 invariant 1), and the copy's registration in Load order state.
+/// Never touches plugins.txt.</summary>
 public sealed class CreatePluginHandler
 {
     private readonly IPluginAdapter _adapter;
@@ -49,8 +49,8 @@ public sealed class CreatePluginHandler
         if (!SourceRepository.IsTracked(modFolder))
             return await _track.TrackAsync(registered, copy.Origin, SourcePreset.Edits);
 
-        // Modbench's own write is never an external change (ADR-0003): parked as the binary this
-        // gesture wrote, so the mod's next settle has nothing to ask about it.
+        // Modbench's own write is never an external change (ADR-0003 invariant 3): parked as the
+        // binary this gesture wrote, so the mod's next settle has nothing to ask about it.
         SourceRepository.ParkCompileSnapshot(modFolder, copy.Name, atRef: null, PluginBinaryHash.TrailerFormOfFile(copy.Path));
         return null;
     }

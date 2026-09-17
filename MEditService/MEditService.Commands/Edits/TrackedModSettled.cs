@@ -47,9 +47,9 @@ public sealed class TrackedModSettled
         }
     }
 
-    /// <summary>The repair offer's own verdict of the same question-open notification kind
-    /// (ADR-0009): a tracked binary the load-time check found unreadable, or an interrupted
-    /// compile above, each naming the plugins it found.</summary>
+    /// <summary>The repair offer's own verdict of the same question-open notification kind: a
+    /// tracked binary the load-time check found unreadable, or an interrupted compile above, each
+    /// naming the plugins it found.</summary>
     public void RaiseCrashRepair(
         LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<string> plugins, CrashRepairReason reason) =>
         _notifications.Publish(new QuestionOpenNotification(

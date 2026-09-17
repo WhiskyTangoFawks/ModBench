@@ -45,10 +45,11 @@ public sealed class TrackServiceTests
         }
     }
 
-    // A registered copy whose file cannot be read has no bytes to deep-parse, so Track passes over
-    // it instead of failing the whole origin on it; the Plugin adapter is what answers that.
+    // A registered copy the Plugin adapter cannot read has no bytes to deep-parse, so Track passes
+    // over it instead of failing the whole origin on it. The adapter answers, not the disk: the
+    // rival is a handler asking whether the file exists, which this one does.
     [Fact]
-    public async Task TrackAsync_SkipsARegisteredCopyWhoseFileCannotBeRead()
+    public async Task TrackAsync_SkipsARegisteredCopyTheAdapterCannotRead()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-unopened-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-track-unopened-game-").FullName;
@@ -59,27 +60,39 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("FirstNpc");
             mod.WriteToBinary(pluginPath);
 
-            var unreadable = Path.Combine(modFolder, "Gone.esp");
-            Assert.False(File.Exists(unreadable));
+            var heldElsewhere = Path.Combine(modFolder, "Locked.esp");
+            new Fallout4Mod(ModKey.FromFileName("Locked.esp"), Fallout4Release.Fallout4).WriteToBinary(heldElsewhere);
 
             var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
             [
                 new RegisteredCopy("Fixture.esp", "FixtureMod", pluginPath, 0, Enabled: true, Winning: true),
-                new RegisteredCopy("Gone.esp", "FixtureMod", unreadable, 1, Enabled: true, Winning: true),
+                new RegisteredCopy("Locked.esp", "FixtureMod", heldElsewhere, 1, Enabled: true, Winning: true),
             ]);
 
-            await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
                 .TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
-            Assert.True(SourceRepository.IsTracked(modFolder));
+            Assert.True(result.Applied, result.Message);
             Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"))));
-            Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Gone.esp"))));
+            Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Locked.esp"))));
         }
         finally
         {
             SafeDelete(modFolder);
             SafeDelete(gameDir);
         }
+    }
+
+    // The real adapter over every file but one, which another tool holds against a reader; the
+    // round-trip gate's scratch write is the real one too.
+    private sealed class LockedPluginAdapter(string lockedName) : ReadOnlyPluginAdapter
+    {
+        public override bool CanRead(ModPath modPath) =>
+            !modPath.ModKey.FileName.String.Equals(lockedName, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);
+
+        public override Task WriteFromTreeAsync(
+            IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
+            MutagenPluginAdapter.Instance.WriteFromTreeAsync(files, destinationPath, cancel);
     }
 
     private static void SafeDelete(string folder)

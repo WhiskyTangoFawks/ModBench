@@ -94,6 +94,7 @@ public static class CommandHandlers
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(

@@ -120,6 +120,30 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
+    // The answer Keep records is the staged index; a restart's settle reads git afresh, and a file
+    // whose working tree already matches what was staged is nothing left to ask about.
+    [Fact]
+    public void Keep_UnderTheEverythingPreset_LeavesNothingForARestartsSettleToAsk()
+    {
+        using var mod = SourceEditFixture.TrackedEverything(
+            folder => File.WriteAllText(Path.Combine(folder, "texture.dds"), "original"));
+        File.WriteAllText(Path.Combine(mod.ModFolder, "texture.dds"), "changed-by-the-release");
+        var pluginPath = Path.Combine(mod.ModFolder, SourceEditFixture.PluginName);
+        Assert.Equal(
+            TrackedModSettledOutcome.QuestionOpened,
+            TestEditService.Settled(new InMemoryNotificationPublisher()).Handle(mod.LoadOrder, mod.ModFolder));
+
+        var result = mod.KeepHandler.Keep(mod.ModFolder, mod.PluginCopies(pluginPath), GameRelease.Fallout4);
+        Assert.True(result.Applied, result.RefusalReason);
+
+        var afterRestart = new InMemoryNotificationPublisher();
+        var outcome = TestEditService.Settled(afterRestart).Handle(mod.LoadOrder, mod.ModFolder);
+
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
+        Assert.Empty(afterRestart.Notifications);
+        Assert.Null(SourceRepository.UnansweredExternalChange(mod.ModFolder));
+    }
+
     [Fact]
     public void Keep_Refuses_WhenTheSameRecordAlreadyHasUncommittedDirtThatDisagreesWithTheIncomingValue()
     {

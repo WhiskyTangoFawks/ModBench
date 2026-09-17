@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>ADR-0013: validates the game release, prepends the forced plugins (invariant 2) and
+/// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2) and
 /// applies the result to Load order state. Reconciling into the Index and re-arming the watcher
 /// are subscriptions wired at composition (ADR-0014 invariant 3).</summary>
 public sealed class PutLoadOrderHandler
