@@ -13,7 +13,7 @@ internal sealed class DuckDbRecordIndexFactory(
     TableDdlBuilder ddlBuilder,
     INotificationPublisher? notifications = null,
     ILogger<DuckDbRecordIndexFactory>? logger = null,
-    TimeProvider? timeProvider = null) : IRecordIndexFactory
+    TimeProvider? timeProvider = null)
 {
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly TableDdlBuilder _ddlBuilder = ddlBuilder;
@@ -21,6 +21,9 @@ internal sealed class DuckDbRecordIndexFactory(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
     private readonly TimeProvider? _timeProvider = timeProvider;
 
+    /// <summary>ADR-0009: <paramref name="instanceRoot"/> keys one persistent file per instance; an
+    /// origin is a mod folder name, unique only within one. Null means an in-memory index that dies
+    /// with this object.</summary>
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
         var repo = new DuckDbRecordIndex(
@@ -31,6 +34,9 @@ internal sealed class DuckDbRecordIndexFactory(
         return repo;
     }
 
+    /// <summary>ADR-0014: drops the instance's index file and reopens it empty, refusing exactly as
+    /// <see cref="Create"/> does when another process holds it. Floors the reopened sequence at
+    /// <paramref name="atLeastSequence"/>.</summary>
     // Construction alone opens (or refuses) the existing file; RebuildEmpty then drops it.
     public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
     {

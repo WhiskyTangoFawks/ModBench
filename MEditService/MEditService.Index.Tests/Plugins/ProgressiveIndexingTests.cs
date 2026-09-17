@@ -244,6 +244,44 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
+    public async Task ACopyRegisteredMidReconcile_IsIndexedByTheReconcileThatSupersedesIt()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("sm-progressive-registered-midload")
+            .WithPlugin("Fallout4.esm")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
+            .WithPlugin("Minted.esp", mod => mod.Npcs.AddNew("FromMinted"))
+            .BuildScattered();
+        var beforeTheCreate = fx.Plugins.Where(p => p.Name != "Minted.esp").ToList();
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
+        using var _ = manager;
+        using var __ = gate;
+
+        var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+        var readsWhileParked = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+
+        // ADR-0007: a create registers its copy on the holder mid-reconcile, so the snapshot that
+        // supersedes the parked one names a copy the parked one never knew about.
+        var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        gate.Release();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => first);
+        await second;
+
+        // The superseding snapshot is what gets reconciled, not the scope's first one: the created
+        // copy is indexed, and what the parked reconcile had already landed is still there.
+        Assert.Same(readsWhileParked, manager.Reads);
+        Assert.Equal(
+            ["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
+            manager.Status.IndexedPlugins.Select(p => p.Name));
+        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+    }
+
+    [Fact]
     public async Task MidLoad_ReadsAreServed_RatherThanBlockingUntilTheLoadFinishes()
     {
         var holder = new LoadOrderHolder();
