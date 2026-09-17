@@ -120,7 +120,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             {
                 var expected = children.Select(c => c.FormKey.ToString()).ToList();
                 foreach (var child in expected)
-                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), child));
+                    Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child));
                 if (expected.Count == 0)
                 {
                     Assert.Null(root[slot]);
@@ -134,7 +134,10 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             foreach (var topic in quest.DialogTopics)
             {
                 foreach (var response in topic.Responses)
-                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
+                {
+                    Assert.Null(SourceRepository.PathCarrying(
+                        documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString()));
+                }
                 var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
                     .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
                     ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
@@ -178,13 +181,11 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
     }
 
-    // A record's document is the file carrying its FormKey, or the RecordData.json of the directory
-    // that does: the layout is the serialization library's, so both shapes are admitted here.
+    // The layout is the repository's, so which file holds a record is asked of it rather than
+    // spelled here. Asked one path at a time, so Single still fails a tree holding two.
     internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
-        documents.Single(f =>
-            SourceRepository.NameCarriesFormKey(Path.GetFileName(f), formKey)
-            || (Path.GetFileName(f) == SourceRepository.RecordDataFileName
-                && SourceRepository.NameCarriesFormKey(Path.GetFileName(PathShape.DirectoryOf(f)), formKey)));
+        documents.Single(
+            f => SourceRepository.PathCarrying([f], CutDownPluginFixture.PluginFileName, formKey) != null);
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.

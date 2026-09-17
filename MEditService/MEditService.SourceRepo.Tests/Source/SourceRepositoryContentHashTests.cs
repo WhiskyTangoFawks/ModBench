@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The content hash is the name git gives the same bytes, so real git is the only honest
 /// oracle: a SHA-1 computed the same way would pass with the header format wrong.</summary>

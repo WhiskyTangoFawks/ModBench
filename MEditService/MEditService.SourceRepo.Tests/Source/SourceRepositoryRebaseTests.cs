@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Replaying the edit branch onto a baseline another tool moved: refused over uncommitted
 /// dirt, clean when nothing overlaps, conflicted when the same document changed on both sides, and

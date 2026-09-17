@@ -1,6 +1,6 @@
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Multi-plugin compile is atomic under a crash injected between writes: the marker always
 /// tells a reader which plugins landed.</summary>

@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Plugin binaries are ignored in both presets (compiled artifacts); <c>meta.ini</c> too
 /// (ADR-0007: never track a file that changes for non-content reasons).</summary>

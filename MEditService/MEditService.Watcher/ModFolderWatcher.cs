@@ -502,7 +502,7 @@ public sealed class ModFolderWatcher : IDisposable
         foreach (var path in change.Paths)
         {
             if (SourceRepository.CarriesNoRecord(path)) continue;
-            if (SourceRepository.FormKeyDeclaredBy(path, change.ModFolder, change.PluginName) is not { } formKey)
+            if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is not { } formKey)
                 return null;
             formKeys.Add(formKey);
         }

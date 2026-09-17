@@ -1,4 +1,4 @@
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.SourceRepo.Tests.TestSupport;
 
 /// <summary>Every class that mutates process-wide environment variables (PATH, HOME, git config):
 /// any other test calling real git while one of these holds the mutation would break on an

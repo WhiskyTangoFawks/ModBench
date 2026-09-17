@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Deleting <c>.git</c> makes the mod untracked with no residue, registry or sweep;
 /// nothing in this module reacts to the deletion (never assume exclusive ownership, ADR-0007).</summary>

@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>One batch of puts and removes across two tracked mod folders: either every tree takes it,
 /// or every tree goes back (ADR-0007).</summary>

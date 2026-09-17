@@ -1,10 +1,12 @@
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Whole-plugin reads over a real tracked tree, with no index in the fixture: the working
 /// tree's own documents, and the same question answered at a named ref through git.</summary>
@@ -48,6 +50,58 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
 
     private static (string, string, string?, string) Tuple(SourceDocument document) =>
         (document.FormKey, document.RecordType, document.EditorId, document.Body);
+
+    // The header's own document, at the tree's root. It declares a ModKey, never a FormKey, which is
+    // why the FormKey it is filed under is PluginHeader's to compute.
+    private static readonly string HeaderRelativePath =
+        Path.Combine("source", PluginName, "RecordData.json");
+
+    private const string HeaderBody = "{\n  \"ModKey\": \"Fixture.esp\",\n  \"MutagenObjectType\": \"Fallout4Mod\"\n}";
+
+    private static string HeaderFormKey => PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
+
+    private SourceRepository TrackedWithHeader()
+    {
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits,
+            [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
+             new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
+            new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
+        return SourceRepository.Open(_modFolder, Release)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+    }
+
+    [Fact]
+    public void ReadAll_AtTheWorkingTree_HoldsThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
+    {
+        var header = TrackedWithHeader().ReadAll(Plugin).SingleOrDefault(d => d.FormKey == HeaderFormKey);
+
+        Assert.NotNull(header);
+        Assert.Equal(PluginHeader.RecordType, header.RecordType);
+        Assert.Equal(HeaderBody, header.Body);
+    }
+
+    [Fact]
+    public void ReadAll_AtARef_HoldsThePluginHeaderUnderTheFormKeyPluginHeaderComputes()
+    {
+        var header = TrackedWithHeader().ReadAll(Plugin, "refs/heads/main")
+            .SingleOrDefault(d => d.FormKey == HeaderFormKey);
+
+        Assert.NotNull(header);
+        Assert.Equal(PluginHeader.RecordType, header.RecordType);
+    }
+
+    // The path a caller asks by is its own document's, so Get answers the header too.
+    [Fact]
+    public void GetAt_ThePluginHeader_IsTheCommittedHeaderDocument()
+    {
+        var repository = TrackedWithHeader();
+
+        var header = repository.GetAt(
+            Plugin, new RecordIdentity(HeaderFormKey, PluginHeader.RecordType, null), "refs/heads/main");
+
+        Assert.Equal(HeaderBody, header?.Body);
+    }
 
     [Fact]
     public void ReadAll_AtTheWorkingTree_IsEveryDocumentPut()

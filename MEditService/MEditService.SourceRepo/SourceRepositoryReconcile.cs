@@ -79,7 +79,7 @@ public sealed partial class SourceRepository
             // Identity from the document, not the path: an EditorID may contain " - ". Null covers an
             // unreadable file as well as one declaring nothing, and a file that races this read is
             // exactly what must degrade visibly rather than go missing.
-            var formKey = FormKeyDeclaredBy(fullPath, _modFolder, plugin.Name)
+            var formKey = FormKeyDeclaredBy(fullPath, plugin.Name)
                 ?? throw new UnreadableSourceDocumentException(fullPath, "it declares no FormKey");
             documents.Add(new DirtyDocument(formKey, identity.RecordType, committedText, InWorkingTree: true));
         }

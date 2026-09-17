@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The encoding only needs to be stable and injective, not reversible: nothing enumerates
 /// these refs.</summary>

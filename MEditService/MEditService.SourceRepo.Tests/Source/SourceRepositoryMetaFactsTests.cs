@@ -1,6 +1,6 @@
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The mod folder's meta facts as the repository answers them (ADR-0003): what Track's
 /// baseline trailers and the external-change classifier read, without either reading the file.</summary>

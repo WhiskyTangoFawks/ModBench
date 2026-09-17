@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Track writes a block level's directory through the whole-mod serializer and a put places
 /// one from the repository's own spelling; a tree the two spell differently holds two directories

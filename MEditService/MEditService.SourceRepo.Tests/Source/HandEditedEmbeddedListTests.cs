@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>An embedded list is an array of its container's document, so a hand edit of it is
 /// ordinary: a removed element is a deletion and the array's order is the game's.</summary>

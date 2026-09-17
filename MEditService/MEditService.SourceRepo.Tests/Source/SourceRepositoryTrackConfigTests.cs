@@ -1,8 +1,9 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.SourceRepo.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>autocrlf=false keeps byte equality for dirty detection; gpgsign=false stops a signing
 /// config hanging a commit; gc.autoDetach=false keeps a repack inside the command that triggered

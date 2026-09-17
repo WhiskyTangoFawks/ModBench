@@ -3,8 +3,9 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Group-folder names come from <see cref="RecordTypeDispatch"/> rather than literals, so
 /// these tests cannot drift from whatever the reflection walk decides.</summary>
@@ -87,5 +88,92 @@ public sealed class SourceRepositoryLayoutTests
              Path.Combine("source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);
+    }
+
+    [Fact]
+    public void PathCarrying_AFlatRecord_IsTheFileWhoseNameCarriesTheFormKey()
+    {
+        string[] paths =
+        [
+            "source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json",
+            "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
+        ];
+
+        Assert.Equal(
+            "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
+            SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
+    }
+
+    // A container's document is named for the door, not for the record, so the FormKey is on the
+    // directory holding it.
+    [Fact]
+    public void PathCarrying_AContainer_IsTheDocumentOfTheDirectoryWhoseNameCarriesTheFormKey()
+    {
+        string[] paths = ["source/Vendor.esp/Cells/0, 0/0, 0/SomeCell - 0012AB_Vendor.esp/RecordData.json"];
+
+        Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
+    }
+
+    // The plugin header's document is the one the layout names after no FormKey at all: it is the
+    // plugin's own, and PluginHeader decides which FormKey that is.
+    [Fact]
+    public void PathCarrying_ThePluginsOwnHeader_IsTheTreesRootDocument()
+    {
+        string[] paths = ["source/Vendor.esp/RecordData.json"];
+
+        Assert.Equal(
+            paths[0],
+            SourceRepository.PathCarrying(
+                paths, "Vendor.esp", PluginHeader.FormKeyFor(ModKey.FromFileName("Vendor.esp"))));
+    }
+
+    // The rival that reads every door-named document as the record of the directory above it would
+    // answer the plugin's own folder here.
+    [Fact]
+    public void PathCarrying_ARecordThatIsNotTheHeader_DoesNotMatchTheTreesRootDocument()
+    {
+        string[] paths = ["source/Vendor.esp/RecordData.json"];
+
+        Assert.Null(SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
+    }
+
+    // A git listing spells its separators one way and a Windows working tree the other, so the door
+    // answers both and no caller normalizes before asking.
+    [Fact]
+    public void PathCarrying_AWindowsSeparatedContainer_IsAnsweredLikeAGitListing()
+    {
+        string[] paths = [@"C:\mods\VendorMod\source\Vendor.esp\Cells\0, 0\0, 0\SomeCell - 0012AB_Vendor.esp\RecordData.json"];
+
+        Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
+    }
+
+    // The same, for the header's fixed path: its own separators must not decide whether it is found.
+    [Fact]
+    public void PathCarrying_AWindowsSeparatedHeaderDocument_IsThePluginsOwnHeader()
+    {
+        string[] paths = [@"C:\mods\VendorMod\source\Vendor.esp\RecordData.json"];
+
+        Assert.Equal(
+            paths[0],
+            SourceRepository.PathCarrying(
+                paths, "Vendor.esp", PluginHeader.FormKeyFor(ModKey.FromFileName("Vendor.esp"))));
+    }
+
+    [Fact]
+    public void PathCarrying_NothingHoldingTheFormKey_IsNull()
+    {
+        Assert.Null(SourceRepository.PathCarrying(
+            ["source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
+    }
+
+    // A listing is read from git and from a directory walk, and neither is promised to be free of an
+    // empty line: the door answers for one rather than throwing past its caller.
+    [Fact]
+    public void PathCarrying_APathWithNoSegments_IsPassedOver()
+    {
+        string[] paths = ["", "/", "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
+
+        Assert.Equal(paths[2], SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
+        Assert.Null(SourceRepository.PathCarrying(["", "/"], "Vendor.esp", "000800:Vendor.esp"));
     }
 }

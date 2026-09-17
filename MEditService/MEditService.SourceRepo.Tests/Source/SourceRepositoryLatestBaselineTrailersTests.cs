@@ -1,8 +1,9 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.SourceRepo.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 public sealed class SourceRepositoryLatestBaselineTrailersTests
 {
