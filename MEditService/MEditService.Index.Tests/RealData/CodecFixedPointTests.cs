@@ -62,9 +62,9 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
 
     private static async Task<string> RoundTripRecord(RecordTextCodec codec, string recordType, string stored)
     {
-        var record = await codec.DeserializeFromBytesAsync(
+        var record = codec.DeserializeFromBytes(
             Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4, recordType);
-        return Encoding.UTF8.GetString(await codec.SerializeToBytesAsync(record, GameRelease.Fallout4));
+        return Encoding.UTF8.GetString(codec.SerializeToBytes(record, GameRelease.Fallout4));
     }
 
     private static string FirstDifference(string expected, string actual)

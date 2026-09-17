@@ -57,12 +57,12 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     }
 
     [Fact]
-    public async Task Index_DocumentBody_IsTheCodecsSourceText()
+    public void Index_DocumentBody_IsTheCodecsSourceText()
     {
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
-        var expected = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytesAsync(record, GameRelease.Fallout4);
+        var expected = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytes(record, GameRelease.Fallout4);
 
         var document = fixture.Reads.GetDocument(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
 

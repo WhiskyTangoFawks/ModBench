@@ -158,8 +158,8 @@ public static class ModelIdentity
     private static bool CodecDocumentsMatch(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
-        var originalBytes = Codec.SerializeToBytesAsync(original, release).GetAwaiter().GetResult();
-        var recompiledBytes = Codec.SerializeToBytesAsync(recompiled, release).GetAwaiter().GetResult();
+        var originalBytes = Codec.SerializeToBytes(original, release);
+        var recompiledBytes = Codec.SerializeToBytes(recompiled, release);
         if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return true;
 
         // Not byte-identical: decide structurally, honouring only the two model-equal respellings a rewrite

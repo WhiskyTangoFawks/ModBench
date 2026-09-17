@@ -19,9 +19,7 @@ public static class SourceEdits
         where T : class, IMajorRecord
     {
         var body = repository.Get(plugin, identity).Require().Body;
-        var record = (T)Codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, identity.RecordType)
-            .GetAwaiter().GetResult();
+        var record = (T)Codec.DeserializeFromBytes(Encoding.UTF8.GetBytes(body), release, identity.RecordType);
         change(record);
         Write(repository, plugin, record, identity.RecordType, release);
     }
@@ -30,5 +28,5 @@ public static class SourceEdits
         SourceRepository repository, PluginCopyKey plugin, IMajorRecordGetter record, string recordType, GameRelease release) =>
         repository.Put(plugin, new SourceDocument(
             record.FormKey.ToString(), recordType, record.EditorID,
-            Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult())));
+            Encoding.UTF8.GetString(Codec.SerializeToBytes(record, release))));
 }

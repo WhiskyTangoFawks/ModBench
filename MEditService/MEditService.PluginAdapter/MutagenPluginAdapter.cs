@@ -65,6 +65,23 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         }
     }
 
+    // FileMode.Open, FileAccess.Read, FileShare.Read: what File.OpenRead gives, and what every
+    // read below opens the same file with, so this answers for the read that follows it.
+    public bool CanRead(ModPath modPath)
+    {
+        try
+        {
+            using (File.OpenRead(modPath.Path)) return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
+        ImplicitPlugins.In(dataFolder, gameRelease);
+
     public (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {

@@ -45,7 +45,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     }
 
     [Fact]
-    public async Task ACellsSourceFile_RoundTripsThroughThePerRecordCodecByteIdentically()
+    public void ACellsSourceFile_RoundTripsThroughThePerRecordCodecByteIdentically()
     {
         // A container's file read and rewritten with no edit comes back byte for byte, so any difference
         // the test above sees is the edit and nothing else.
@@ -53,8 +53,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var before = File.ReadAllBytes(file);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
 
-        var record = await codec.DeserializeAsync(file, GameRelease.Fallout4, "cell");
-        var reserialized = await codec.SerializeToBytesAsync(record, GameRelease.Fallout4);
+        var record = codec.DeserializeFile(file, GameRelease.Fallout4, "cell");
+        var reserialized = codec.SerializeToBytes(record, GameRelease.Fallout4);
 
         Assert.Equal(before, reserialized);
     }

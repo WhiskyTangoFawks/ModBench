@@ -48,7 +48,8 @@ internal sealed class IndexStore : IDisposable
             return memory;
         }
 
-        Directory.CreateDirectory(PathShape.DirectoryOf(_databasePath));
+        Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)
+            ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder."));
         try
         {
             return OpenFile();

@@ -44,6 +44,11 @@ public sealed partial class SourceRepository
     /// per-plugin suffix guard orphans the tree when its plugin is renamed outside Modbench.</summary>
     public static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
+    /// <summary>The mod's own display name, for a caller naming it in a message without reaching
+    /// for the path itself.</summary>
+    public static string ModNameIn(string modFolder) =>
+        Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
+
     /// <summary>The folder holding <paramref name="pluginFileName"/>'s documents. It need not exist:
     /// an untracked mod has none until Track writes one.</summary>
     public static string RootIn(string modFolder, string pluginFileName) =>

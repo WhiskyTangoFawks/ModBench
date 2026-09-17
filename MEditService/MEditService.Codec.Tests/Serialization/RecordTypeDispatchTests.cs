@@ -34,7 +34,7 @@ public class RecordTypeDispatchTests
         };
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeAsync_DispatchesNpcByRuntimeType()
+    public async Task SerializeAsync_ThenDeserializeFile_DispatchesNpcByRuntimeType()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeNpc();
@@ -46,7 +46,7 @@ public class RecordTypeDispatchTests
             // The public seam takes IMajorRecordGetter, not INpcGetter — proves the caller never
             // has to name the concrete type to serialize, only to deserialize back into one.
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Npc)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "npc_");
+            var roundTripped = (Npc)codec.DeserializeFile(filePath, GameRelease.Fallout4, "npc_");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -62,7 +62,7 @@ public class RecordTypeDispatchTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeAsync_DispatchesCellByRuntimeType()
+    public async Task SerializeAsync_ThenDeserializeFile_DispatchesCellByRuntimeType()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
@@ -72,7 +72,7 @@ public class RecordTypeDispatchTests
             var filePath = Path.Combine(dir.FullName, "cell.json");
 
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "Cell");
+            var roundTripped = (Cell)codec.DeserializeFile(filePath, GameRelease.Fallout4, "Cell");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -94,7 +94,7 @@ public class RecordTypeDispatchTests
     // record_type the schema does not know means "expect the document to name itself", so the failure
     // is a document naming a type with no case.
     [Fact]
-    public async Task DeserializeAsync_ForTextNamingAnUnknownType_ThrowsNamedException()
+    public async Task DeserializeFile_ForTextNamingAnUnknownType_ThrowsNamedException()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var dir = Directory.CreateTempSubdirectory("medit-dispatch-unsupported-");
@@ -111,8 +111,8 @@ public class RecordTypeDispatchTests
             await File.WriteAllTextAsync(filePath,
                 text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
 
-            var ex = await Assert.ThrowsAsync<RecordTypeSerializationUnsupportedException>(
-                () => codec.DeserializeAsync(filePath, GameRelease.Fallout4, "glob"));
+            var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
+                () => codec.DeserializeFile(filePath, GameRelease.Fallout4, "glob"));
 
             // The offending name is deliberately not asserted: the kernel discards it on this route, so
             // requiring it would pin an upstream detail rather than this codec's contract.

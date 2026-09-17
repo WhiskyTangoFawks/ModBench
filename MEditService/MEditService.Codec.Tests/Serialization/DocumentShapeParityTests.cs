@@ -130,7 +130,7 @@ public sealed class DocumentShapeParityTests
             Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
             var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
-            var codecBytes = await Codec().SerializeToBytesAsync(record, GameRelease.Fallout4);
+            var codecBytes = Codec().SerializeToBytes(record, GameRelease.Fallout4);
 
             Assert.Equal(
                 System.Text.Encoding.UTF8.GetString(wholeModBytes),

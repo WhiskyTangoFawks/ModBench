@@ -30,14 +30,14 @@ public class SourceRepositoryContentHashTests
     }
 
     [Fact]
-    public async Task ContentHash_ForARealRecordsSourceText_MatchesGitHashObject()
+    public void ContentHash_ForARealRecordsSourceText_MatchesGitHashObject()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
-        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytesAsync(record, GameRelease.Fallout4);
+        var body = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytes(record, GameRelease.Fallout4);
 
         Assert.NotEmpty(body);
         Assert.Equal(GitHashObject(body), SourceRepository.ContentHash(body));

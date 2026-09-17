@@ -30,7 +30,7 @@ public class RecordTextCodecTests
     // The Omit customizations are verified no-ops for a standalone Weapon, both targeting only
     // group/Cell/Worldspace fields it does not have.
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeAsync_IsFieldFaithful()
+    public async Task SerializeAsync_ThenDeserializeFile_IsFieldFaithful()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeWeapon();
@@ -40,7 +40,7 @@ public class RecordTextCodecTests
             var filePath = Path.Combine(dir.FullName, "weapon.json");
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
 
-            var roundTripped = (Weapon)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "weap");
+            var roundTripped = (Weapon)codec.DeserializeFile(filePath, GameRelease.Fallout4, "weap");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();

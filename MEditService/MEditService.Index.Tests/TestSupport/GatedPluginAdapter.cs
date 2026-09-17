@@ -24,6 +24,11 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         inner.ReadContent(modPath, gameRelease, strings);
 
+    public bool CanRead(ModPath modPath) => inner.CanRead(modPath);
+
+    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
+        inner.ImplicitPluginsIn(dataFolder, gameRelease);
+
     public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) => inner.ReadFormIds(modPath, gameRelease);
 
     public LinkAnswers LinkTargets(
