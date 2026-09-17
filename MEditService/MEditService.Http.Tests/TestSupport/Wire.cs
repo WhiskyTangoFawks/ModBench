@@ -50,6 +50,9 @@ internal static class Wire
         await client.GetFromJsonAsync<JsonElement>(
             $"/records/{Uri.EscapeDataString(formKey)}{(query is null ? string.Empty : "?" + query)}");
 
+    internal static async Task<JsonElement> Compare(this HttpClient client, string formKey) =>
+        await client.GetFromJsonAsync<JsonElement>($"/records/{Uri.EscapeDataString(formKey)}/compare");
+
     internal static async Task<IReadOnlyList<JsonElement>> Plugins(this HttpClient client) =>
         [.. (await client.GetFromJsonAsync<JsonElement>("/plugins")).EnumerateArray()];
 

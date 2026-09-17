@@ -1,8 +1,8 @@
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
@@ -12,56 +12,30 @@ namespace MEditService.Tests.Query;
 // public door: classification is Queries' own internal.
 public class MasterResolutionTests
 {
-    private sealed class StubReader(IReadOnlyDictionary<PluginCopyKey, PluginContent> opened) : IRecordReads
-    {
-        public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies => opened;
-        public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
-        public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginCopyKey plugin) => null;
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin) => [];
-        public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public PagedResult<RecordSummary> Search(RecordQuery query) => new([], 0);
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) => [];
-        public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) => new HashSet<string>();
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey plugin) => new HashSet<string>();
-        public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int limit, int offset) => new([], 0);
-        public CellReferences GetCellReferences(PluginCopyKey plugin, string cellFormKey) => new([], []);
-        public PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin) => null;
-        public CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey) => null;
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey) => [];
-        public ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey) => null;
-    }
-
-    private sealed class StubIndex(IRecordReads reads, IReadOnlyList<PluginLoadFailure> failures) : IQueryIndex
-    {
-        public LoadOrderStatus Status => new(LoadOrderState.Ready, 0, [], ConflictsComputed: true, failures);
-        public string? FilterSql => null;
-        public IRecordReads RequireReads() => reads;
-    }
-
     private static (PluginCopyKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
         (new PluginCopyKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
-        (PluginCopyKey Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures)
+    private static IReadOnlyList<PluginRow> GetPlugins(
+        (PluginCopyKey Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
+        params PluginLoadFailure[] failures)
     {
         var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer);
-        var holder = new LoadOrderHolder();
         var copies = plugins
             .Select((p, slot) => new RegisteredCopy(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
             .ToList();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. copies]);
+        var status = new LoadOrderStatus(state, plugins.Length, [], ConflictsComputed: state == LoadOrderState.Ready, failures);
         var svc = new RecordQueryService(
-            new StubIndex(new StubReader(opened), failures), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+            new FakeIndex(new FakeReads(opened, []), status), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
-        return svc.GetPlugins()
+        return svc.GetPlugins();
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
+        (PluginCopyKey Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
+        GetPlugins(plugins, LoadOrderState.Ready, failures)
             .Where(row => row.MasterIssues.Count > 0)
             .ToDictionary(row => row.Copy.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
-    }
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()
@@ -121,5 +95,16 @@ public class MasterResolutionTests
         var result = Classify([Plugin("Base.esm")]);
 
         Assert.Empty(result);
+    }
+
+    // ADR-0012's error, suppressed while it cannot yet be told from a plugin simply not opened
+    // yet (ADR-0013): GetPlugins answers no issue mid-load rather than a wrong one.
+    [Fact]
+    public void GetPlugins_MidLoad_DoesNotFlagAMasterThatSimplyHasNotBeenOpenedYet()
+    {
+        var midLoad = GetPlugins([Plugin("A.esp", "Later.esm")], LoadOrderState.Reconciling);
+
+        var a = Assert.Single(midLoad, p => p.Copy.Name == "A.esp");
+        Assert.Empty(a.MasterIssues);
     }
 }

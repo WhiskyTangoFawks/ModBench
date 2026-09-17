@@ -29,6 +29,10 @@ public sealed class ReferenceApiTests(LoadedApiFixture<ReferencePluginFixture> l
             r.GetProperty("plugin").GetString() == ReferencePluginFixture.PluginName);
         Assert.NotEqual(default, match);
         Assert.Equal("TestNPC_WithKw", match.GetProperty("editorId").GetString());
+
+        // And nothing beyond it: the NPC that declares no keyword is not a referencing source —
+        // the row a staged reference could add here.
+        Assert.DoesNotContain(results, r => r.GetProperty("formKey").GetString() == _fixture.NpcWithoutKeywordFormKey.ToString());
     }
 
     [Theory]

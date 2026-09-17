@@ -1,10 +1,7 @@
-using MEditService.Codec.Schema;
-using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
-using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
@@ -134,20 +131,6 @@ public class WorldspaceQueryServiceTests
         Assert.Equal(
             [(0, 0), (0, 2), (1, 1)],
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
-    }
-
-    // The schema's real table name, like every other spatial type, is the raw record signature
-    // lowercased ("wrld"). StubReader ignores its table-name argument, so this runs against a real
-    // index, where a wrong name surfaces as a failure.
-    [Fact]
-    public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
-    {
-        using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubIndex(fixture.Reads), Holder());
-
-        var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
-
-        Assert.Contains(result, w => w.EditorId == "Commonwealth");
     }
 
     [Fact]

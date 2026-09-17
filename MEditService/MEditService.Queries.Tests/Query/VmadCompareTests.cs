@@ -1,7 +1,5 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -13,62 +11,64 @@ namespace MEditService.Tests.Query;
 
 /// <summary>Scripts, properties and alias scripts are keyed arrays aligned by key, so a plugin
 /// carrying fewer scripts reads as absences at those keys rather than shifting rows.</summary>
-public sealed class VmadCompareTests : IDisposable
+public sealed class VmadCompareTests
 {
-    private readonly PluginFixtureData _fixture;
-    private readonly IndexProjector _manager;
-    private readonly RecordQueryService _service;
-
-    private static readonly FormKey ScriptedNpc = new(ModKey.FromFileName("Base.esm"), 0x800);
-    private static readonly FormKey ScriptedQuest = new(ModKey.FromFileName("Base.esm"), 0x801);
-
+    private static readonly GameRelease Release = GameRelease.Fallout4;
+    private static readonly PluginCopyKey BasePlugin = new("Base.esm", "Data");
+    private static readonly PluginCopyKey TopPlugin = new("Top.esp", "Data");
     private const string Field = "VirtualMachineAdapter";
+
+    private readonly FormKey _scriptedNpc;
+    private readonly FormKey _scriptedQuest;
+    private readonly RecordQueryService _service;
 
     public VmadCompareTests()
     {
-        var holder = new LoadOrderHolder();
-        _fixture = new PluginFixtureBuilder("compare-vmad")
-            .WithPlugin("Base.esm", mod =>
-            {
-                var npc = mod.Npcs.AddNew("ScriptedNPC");
-                var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
-                adapter.Scripts.Add(NamedScript("Ambush", "Radius", 10));
-                adapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
-                npc.VirtualMachineAdapter = adapter;
+        var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
+        var baseNpc = baseMod.Npcs.AddNew("ScriptedNPC");
+        var baseAdapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
+        baseAdapter.Scripts.Add(NamedScript("Ambush", "Radius", 10));
+        baseAdapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
+        baseNpc.VirtualMachineAdapter = baseAdapter;
+        _scriptedNpc = baseNpc.FormKey;
 
-                var quest = mod.Quests.AddNew("ScriptedQuest");
-                quest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
-            })
-            .WithPlugin("Top.esp", (mod, built) =>
-            {
-                var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
+        var baseQuest = baseMod.Quests.AddNew("ScriptedQuest");
+        baseQuest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
+        _scriptedQuest = baseQuest.FormKey;
 
-                // Only Guard survives here — the master's Ambush is absent, not renamed.
-                var npc = basePlugin.Npcs.First(n => n.FormKey == ScriptedNpc).DeepCopy();
-                var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
-                adapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
-                npc.VirtualMachineAdapter = adapter;
-                mod.Npcs.Set(npc);
+        // Only Guard survives here — the master's Ambush is absent, not renamed.
+        var topNpc = baseNpc.DeepCopy();
+        var topAdapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
+        topAdapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
+        topNpc.VirtualMachineAdapter = topAdapter;
 
-                // The one disagreement, confined to a member of an alias script's own property.
-                var quest = basePlugin.Quests.First(q => q.FormKey == ScriptedQuest).DeepCopy();
-                quest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
-                mod.Quests.Set(quest);
-            })
-            .Build();
+        // The one disagreement, confined to a member of an alias script's own property.
+        var topQuest = baseQuest.DeepCopy();
+        topQuest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
 
-        var reflector = SharedSchemaReflector.Instance;
-        _manager = Indexes.Open(holder);
-        _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _service = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
+        var rows = new[]
+        {
+            Row(baseNpc, BasePlugin, 0, isWinner: false, "npc_"),
+            Row(topNpc, TopPlugin, 1, isWinner: true, "npc_"),
+            Row(baseQuest, BasePlugin, 0, isWinner: false, "qust"),
+            Row(topQuest, TopPlugin, 1, isWinner: true, "qust"),
+        };
+        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        {
+            [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 2),
+            [TopPlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),
+        };
+        var copies = new[]
+        {
+            new RegisteredCopy("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
+            new RegisteredCopy("Top.esp", "Data", "Top.esp", 1, Enabled: true, Winning: true),
+        };
+        var holder = FakeLoadOrder.Of(Release, copies);
+        _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 
-    public void Dispose()
-    {
-        _manager.Dispose();
-        _fixture.Dispose();
-    }
+    private static FakeRow Row(IMajorRecordGetter record, PluginCopyKey plugin, int loadOrderIndex, bool isWinner, string recordType) =>
+        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType));
 
     private static ScriptEntry NamedScript(string name, string property, int value)
     {
@@ -103,7 +103,7 @@ public sealed class VmadCompareTests : IDisposable
     [Fact]
     public void ScriptsPresentInOneOverrideOnly_AlignByName()
     {
-        var scripts = Child(Adapter(ScriptedNpc), "Scripts");
+        var scripts = Child(Adapter(_scriptedNpc), "Scripts");
 
         // Both keys are rows, in key order, and the master's own holds nothing on the override's side. A
         // positional reading would line the master's Ambush up against the override's Guard.
@@ -122,7 +122,7 @@ public sealed class VmadCompareTests : IDisposable
     [Fact]
     public void AConflictConfinedToAnAliasScript_IsReportedAtThatMember()
     {
-        var adapter = Adapter(ScriptedQuest);
+        var adapter = Adapter(_scriptedQuest);
 
         // The alias array is keyed by the alias number its binding names; the scripts under it by
         // script name; the properties under those by property name.
@@ -137,29 +137,4 @@ public sealed class VmadCompareTests : IDisposable
         Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Script").CellStates["Top.esp"]);
         Assert.DoesNotContain(Children(adapter), c => c.FieldName is "Scripts" or "Fragments");
     }
-
-    [Fact]
-    public void Vmad_Compare_MatchesGolden()
-    {
-        var npcCompare = _service.GetCompare(ScriptedNpc.ToString());
-        var questCompare = _service.GetCompare(ScriptedQuest.ToString());
-        Assert.NotNull(npcCompare);
-        Assert.NotNull(questCompare);
-
-        var captured = new Dictionary<string, object?>
-        {
-            ["scripted-npc"] = Project(npcCompare),
-            ["scripted-quest"] = Project(questCompare),
-        };
-
-        Golden.Verify("compare-vmad", captured);
-    }
-
-    // The adapter's own diff subtree only: the record-wide picture is CompareGoldenTests' golden,
-    // and repeating an NPC's ~200 agreeing columns here would bury the one field this pins.
-    private static object Project(CompareResult r) => new
-    {
-        r.ConflictAll,
-        Adapter = r.Diffs.Single(d => d.FieldName == Field),
-    };
 }

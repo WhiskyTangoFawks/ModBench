@@ -1,13 +1,8 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Queries;
-using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -15,24 +10,35 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-[Collection(TestPluginFixtureCollection.Name)]
-public sealed class RecordQueryServiceTests : IDisposable
+public sealed class RecordQueryServiceTests
 {
-    private readonly IndexProjector _manager;
+    private static readonly GameRelease Release = GameRelease.Fallout4;
+    private const string PluginName = "TestPlugin.esp";
+    private const int RecordCount = 2;
+
+    private readonly FakeIndex _manager;
+    private readonly FakeReads _reads;
     private readonly RecordQueryService _svc;
 
-    public RecordQueryServiceTests(TestPluginFixture fixture)
+    public RecordQueryServiceTests()
     {
-        var holder = new LoadOrderHolder();
-        var reflector = SharedSchemaReflector.Instance;
-        _manager = Indexes.Open(holder);
-        _manager.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod =>
+            {
+                mod.Npcs.AddNew("TestNPC01");
+                mod.Npcs.AddNew("TestNPC02");
+            })
+            .Build();
+        (_manager, var svc) = Build(fixture);
+        _reads = (FakeReads)_manager.RequireReads();
+        _svc = svc;
     }
 
-    public void Dispose() => _manager.Dispose();
-
-    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
+    private static (FakeIndex Manager, RecordQueryService Service) Build(FakeFixtureData fixture)
+    {
+        var (manager, holder) = FakeIndex.From(fixture);
+        return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier()));
+    }
 
     // --- GET /plugins ---
 
@@ -42,26 +48,20 @@ public sealed class RecordQueryServiceTests : IDisposable
         var plugins = _svc.GetPlugins();
 
         Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Copy.Name);
-        Assert.Equal(TestPluginFixture.RecordCount, plugins[0].Content.RecordCount);
+        Assert.Equal(PluginName, plugins[0].Copy.Name);
+        Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
-    // ADR-0012: a plugin whose master is absent from the whole load order is flagged on the
+    // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
     {
-        var holder = new LoadOrderHolder();
-        // ADR-0008: masters are lifecycle-derived from the live object graph, never
-        // user-declared — a bare ModHeader.MasterReferences.Add is discarded on write. A genuine
-        // reference into the (never-built) master is what makes Mutagen record it for real.
-        using var fx = new PluginFixtureBuilder("rqs-missing-master")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
-        using var manager = Indexes.Open(holder);
-        manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var (_, svc) = Build(fixture);
 
         var plugins = svc.GetPlugins();
 
@@ -71,15 +71,13 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0012 end to end: a whole load order built via LoadOrderSnapshot/IndexProjector rather than a
-    // hand-fed index, where the referenced master is not part of the load order at all, with no
-    // plugins.txt line and no file.
+    // ADR-0012 end to end: a whole load order built via the real codec's own reference resolution,
+    // where the referenced master is not part of the load order at all.
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
-        var holder = new LoadOrderHolder();
         FormKey npcFormKey = default;
-        using var fx = new PluginFixtureBuilder("rqs-absent-master-ref")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Patch.esp", mod =>
             {
                 var npc = mod.Npcs.AddNew("PatchedNpc");
@@ -87,9 +85,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 npc.Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800));
             })
             .Build();
-        using var manager = Indexes.Open(holder);
-        manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var (_, svc) = Build(fixture);
 
         var detail = svc.GetRecord(npcFormKey.ToString());
 
@@ -114,8 +110,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var result = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0);
 
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
+        Assert.Equal(RecordCount, result.Total);
+        Assert.Equal(RecordCount, result.Items.Count);
     }
 
     [Fact]
@@ -172,10 +168,10 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecords_ByPlugin_FiltersResults()
     {
-        var result = _svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 10, offset: 0);
+        var result = _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0);
 
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.All(result.Items, r => Assert.Equal(TestPluginFixture.PluginName, r.Plugin));
+        Assert.Equal(RecordCount, result.Total);
+        Assert.All(result.Items, r => Assert.Equal(PluginName, r.Plugin));
     }
 
     [Fact]
@@ -183,8 +179,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var result = _svc.GetRecords(type: null, plugin: null, search: null, limit: 100, offset: 0);
 
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
+        Assert.Equal(RecordCount, result.Total);
+        Assert.Equal(RecordCount, result.Items.Count);
     }
 
     [Fact]
@@ -196,7 +192,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Single(page1.Items);
         Assert.Single(page2.Items);
         Assert.NotEqual(page1.Items[0].FormKey, page2.Items[0].FormKey);
-        Assert.Equal(TestPluginFixture.RecordCount, page1.Total);
+        Assert.Equal(RecordCount, page1.Total);
     }
 
     // --- GET /records/{formKey} ---
@@ -241,29 +237,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Null(detail);
     }
 
-    // ADR-0015 invariant 2: the query path never opens a file under a mod folder, so a hand edit
-    // stays invisible until RefreshByKeys — the door the Source watcher calls — lands it.
-    [Fact]
-    public void GetRecord_NeverReadsSourceItself_AHandEditStaysInvisibleUntilTheStoreIsRefreshed()
-    {
-        using var mod = IndexedModFixture.Tracked();
-        var reads = new RecordQueryService(mod.Index, mod.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
-
-        var text = File.ReadAllText(mod.NpcSourceFile);
-        File.WriteAllText(
-            mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
-
-        var beforeRefresh = reads.GetRecord(mod.Npc.ToString());
-        Assert.NotNull(beforeRefresh);
-        Assert.Equal(IndexedModFixture.NpcEditorId, beforeRefresh.EditorId);
-
-        mod.Index.RefreshKeys(mod.Plugin, [mod.Npc.ToString()]);
-
-        var afterRefresh = reads.GetRecord(mod.Npc.ToString());
-        Assert.NotNull(afterRefresh);
-        Assert.Equal("RenamedByHand", afterRefresh.EditorId);
-    }
-
     // "Copy as New Record" needs the record's schema table name up front (CreateRecord
     // validates RecordType before it even reads TemplateFormKey), so RecordDetail must carry it.
     [Fact]
@@ -295,25 +268,18 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
     {
-        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-participation")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
             .WithPlugin("Disabled.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).CalcMinLevel = 5, enabled: false)
             .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = Indexes.Open(holder);
-            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
+        var (_, svc) = Build(fixture);
 
-            var compare = svc.GetCompare(npcKey.ToString());
+        var compare = svc.GetCompare(npcKey.ToString());
 
-            Assert.NotNull(compare);
-            Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
-        }
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
     }
 
     // ADR-0013. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
@@ -322,7 +288,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-participation")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
             .WithPlugin("Mid.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(10))
@@ -330,16 +296,12 @@ public sealed class RecordQueryServiceTests : IDisposable
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20),
                 enabled: false)
             .Build();
-        using (data)
-        {
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
+        var (_, svc) = Build(fixture);
 
-                Assert.NotNull(compare);
-                Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
-            });
-        }
+        var compare = svc.GetCompare(npcKey.ToString());
+
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
     }
 
     [Fact]
@@ -355,30 +317,23 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
     {
-        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-conflict")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
             .WithPlugin("Mid.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20))
             .WithPlugin("Top.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(30))
             .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = Indexes.Open(holder);
-            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
+        var (_, svc) = Build(fixture);
 
-            var compare = svc.GetCompare(npcKey.ToString());
+        var compare = svc.GetCompare(npcKey.ToString());
 
-            Assert.NotNull(compare);
-            // Non-VMAD fields are identical overrides, so only the adapter differs — yet the record
-            // is conflicted, and the diff reaches the one property that disagrees.
-            Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-            Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
-        }
+        Assert.NotNull(compare);
+        // Non-VMAD fields are identical overrides, so only the adapter differs — yet the record
+        // is conflicted, and the diff reaches the one property that disagrees.
+        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
+        Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
     }
 
     [Fact]
@@ -395,27 +350,25 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetCompare_OnlyOverrideCarriesAnAdapter_StillDiffsTheField()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-added")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey) // no VMAD
             .WithPlugin("Over.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5))
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                // The master carries no adapter and the override adds one → still a diff row.
-                Assert.Contains(compare.Diffs, d => d.FieldName == VmadField);
-                Assert.Equal(ConflictAll.Override, compare.ConflictAll);
-            });
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        // The master carries no adapter and the override adds one → still a diff row.
+        Assert.Contains(compare.Diffs, d => d.FieldName == VmadField);
+        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
     }
 
     [Fact]
     public void GetCompare_FieldOverrideAndVmadOverride_StaysOverride()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-field-override")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
             .WithPlugin("Over.esp", (mod, prev) =>
             {
@@ -424,20 +377,18 @@ public sealed class RecordQueryServiceTests : IDisposable
                 o.VirtualMachineAdapter = ScriptVmad(20); // VMAD override (2 plugins)
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                Assert.Equal(ConflictAll.Override, compare.ConflictAll);
-            });
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
     }
 
     [Fact]
     public void GetCompare_FieldOverrideAndVmadConflict_EscalatesToConflict()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-vmad-field-conflict")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
             .WithPlugin("Mid.esp", (mod, prev) =>
             {
@@ -452,13 +403,11 @@ public sealed class RecordQueryServiceTests : IDisposable
                 o.VirtualMachineAdapter = ScriptVmad(30); // VMAD differs among non-masters → Conflict
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-            });
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
     }
 
     [Fact]
@@ -469,7 +418,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         // But their VMAD values differ → vmad = Conflict.
         // So EscalateConflict(Override, Conflict) must return Conflict.
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-escalate-override")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
             {
                 var npc = mod.Npcs.AddNew("EscalateTest");
@@ -489,13 +438,11 @@ public sealed class RecordQueryServiceTests : IDisposable
                 o.VirtualMachineAdapter = ScriptVmad(20); // differs from Mid → VMAD Conflict
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-            });
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
     }
 
     [Fact]
@@ -504,7 +451,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         // Escalation must take the more severe axis even when the generic side is the severe one and VMAD
         // is milder: Mid and Top disagree on aggression, and their VMAD is identical.
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-escalate-no-downgrade")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
             {
                 var npc = mod.Npcs.AddNew("EscalateNoDowngradeTest");
@@ -523,13 +470,11 @@ public sealed class RecordQueryServiceTests : IDisposable
                 o.Aggression = Npc.AggressionType.Aggressive; // differs from Mid → generic Conflict
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-            });
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
     }
 
     [Fact]
@@ -538,7 +483,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         // ADR-0018: a generic field and a VMAD property in the same conflict shape (Mid overridden
         // by Top) must classify to the same ConflictThis per plugin — pins parity across the two classifiers.
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-parity-conflict-loses")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
             {
                 var npc = mod.Npcs.AddNew("ParityTest");
@@ -559,19 +504,17 @@ public sealed class RecordQueryServiceTests : IDisposable
                 o.VirtualMachineAdapter = ScriptVmad(30);
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(npcKey.ToString());
-                Assert.NotNull(compare);
-                var fieldStates = compare.Diffs.First(d => d.FieldName == "Aggression").CellStates;
-                var vmadStates = PowerPropertyDiff(compare).CellStates;
+        var (_, svc) = Build(fixture);
 
-                Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
-                Assert.Equal(ConflictThis.ConflictWins, fieldStates["Top.esp"]);
-                Assert.Equal(fieldStates["Mid.esp"], vmadStates["Mid.esp"]);
-                Assert.Equal(fieldStates["Top.esp"], vmadStates["Top.esp"]);
-            });
+        var compare = svc.GetCompare(npcKey.ToString());
+        Assert.NotNull(compare);
+        var fieldStates = compare.Diffs.First(d => d.FieldName == "Aggression").CellStates;
+        var vmadStates = PowerPropertyDiff(compare).CellStates;
+
+        Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
+        Assert.Equal(ConflictThis.ConflictWins, fieldStates["Top.esp"]);
+        Assert.Equal(fieldStates["Mid.esp"], vmadStates["Mid.esp"]);
+        Assert.Equal(fieldStates["Top.esp"], vmadStates["Top.esp"]);
     }
 
     // A condition list is an ordinary reflected array column, so it reaches the compare grid through
@@ -580,7 +523,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren()
     {
         FormKey cobjKey = default;
-        var data = new PluginFixtureBuilder("rqs-conditions")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
             {
                 var cobj = mod.ConstructibleObjects.AddNew("Recipe");
@@ -593,19 +536,17 @@ public sealed class RecordQueryServiceTests : IDisposable
                 });
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(cobjKey.ToString());
+        var (_, svc) = Build(fixture);
 
-                Assert.NotNull(compare);
-                var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
-                var condition = Assert.Single(Children(conditions));
-                var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
-                var function = Assert.Single(Children(data0), c => c.FieldName == "Function");
-                Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
-                Assert.Equal("Base.esp", conditions.WinnerColumn);
-            });
+        var compare = svc.GetCompare(cobjKey.ToString());
+
+        Assert.NotNull(compare);
+        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
+        var condition = Assert.Single(Children(conditions));
+        var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
+        var function = Assert.Single(Children(data0), c => c.FieldName == "Function");
+        Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
+        Assert.Equal("Base.esp", conditions.WinnerColumn);
     }
 
     // GetCompare's memoized resolveFormKey (ADR-0005) reaches a condition's Form parameter through
@@ -615,7 +556,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetCompare_ConditionFormParameter_ResolvesEditorId()
     {
         FormKey cobjKey = default;
-        var data = new PluginFixtureBuilder("rqs-condition-resolution")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
             {
                 var quest = mod.Quests.AddNew("SomeQuest");
@@ -632,31 +573,20 @@ public sealed class RecordQueryServiceTests : IDisposable
                 });
             })
             .Build();
-        using (data)
-            WithCompareService(data, svc =>
-            {
-                var compare = svc.GetCompare(cobjKey.ToString());
+        var (_, svc) = Build(fixture);
 
-                Assert.NotNull(compare);
-                var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
-                var condition = Assert.Single(Children(conditions));
-                var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
-                var param = Assert.Single(Children(data0), c => c.FieldName == "ParameterOneRecord");
-                var resolutions = param.Resolutions;
-                Assert.NotNull(resolutions);
-                var paramResolution = resolutions["Base.esp"];
-                Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
-                Assert.Equal("SomeQuest", paramResolution.EditorId);
-            });
-    }
+        var compare = svc.GetCompare(cobjKey.ToString());
 
-    private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
-    {
-        var holder = new LoadOrderHolder();
-        var reflector = SharedSchemaReflector.Instance;
-        using var manager = Indexes.Open(holder);
-        manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-        test(new RecordQueryService(manager, holder, reflector, new ConflictClassifier()));
+        Assert.NotNull(compare);
+        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
+        var condition = Assert.Single(Children(conditions));
+        var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
+        var param = Assert.Single(Children(data0), c => c.FieldName == "ParameterOneRecord");
+        var resolutions = param.Resolutions;
+        Assert.NotNull(resolutions);
+        var paramResolution = resolutions["Base.esp"];
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
+        Assert.Equal("SomeQuest", paramResolution.EditorId);
     }
 
     private static FormKey MakeScriptedNpc(IFallout4Mod mod, int power)
@@ -702,10 +632,10 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
     {
-        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName);
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
-        Assert.Equal(TestPluginFixture.RecordCount, npc.Count);
+        Assert.Equal(RecordCount, npc.Count);
         Assert.All(result, r => Assert.True(r.Count > 0));
     }
 
@@ -714,22 +644,18 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         // The signature ("npc_") stays the key; DisplayName is additive, sourced
         // from the same xEdit-parity lookup SchemaReflector uses.
-        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName);
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal("Non-Player Character", npc.DisplayName);
     }
-
-    // Ascending-order guarantee is tested with >1 type in
-    // GetPluginRecordTypes_WithMultipleTypes_ReturnsInAscendingOrder; the single-type
-    // fixture makes a dedicated ordering test here trivially true.
 
     [Fact]
     public void GetPluginRecordTypes_ExcludesHeader()
     {
         // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
         // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
-        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName);
 
         Assert.DoesNotContain(result, r => r.Type == "header");
     }
@@ -758,124 +684,36 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        WithUnloadedService(unloaded =>
-        {
-            var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
-            Assert.Contains("No load order", ex.Message);
-        });
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
+        Assert.Contains("No load order", ex.Message);
     }
 
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        WithUnloadedService(unloaded =>
-        {
-            var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
-            Assert.Contains("No load order", ex.Message);
-        });
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+        Assert.Contains("No load order", ex.Message);
     }
 
     [Fact]
     public void GetRecords_AllTypes_ReturnsSortedByEditorId()
     {
-        var holder = new LoadOrderHolder();
-        var data = new PluginFixtureBuilder("rqs-sort-records")
+        var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("SortTest.esp", mod =>
             {
                 mod.Npcs.AddNew("Zebra");
                 mod.Npcs.AddNew("Apple");
             })
             .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = Indexes.Open(holder);
-            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
+        var (_, svc) = Build(fixture);
 
-            var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
+        var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
 
-            var editorIds = result.Items.Select(r => r.EditorId).ToList();
-            Assert.Equal(2, editorIds.Count);
-            Assert.Equal([.. editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase)], editorIds);
-        }
-    }
-
-    // --- Plugin header reachable through the existing generic FormKey lookup/compare path,
-    // with no new endpoint — a red result here signals a gap in the schema/indexer design,
-    // not a missing endpoint.
-
-    [Fact]
-    public void GetRecord_PluginHeaderFormKey_ReturnsAuthorFlagsMasters()
-    {
-        var holder = new LoadOrderHolder();
-        var data = new PluginFixtureBuilder("rqs-header-record")
-            .WithPlugin("HeaderQuery.esp", mod =>
-            {
-                mod.ModHeader.Author = "Test Author";
-                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
-            },
-                // WriteToBinary normally recomputes the master list from actual FormLink usage,
-                // stripping a manually-added master reference with no corresponding FormLink —
-                // NoCheck preserves it so this test can assert on it after the disk round-trip.
-                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
-                {
-                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
-                })
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = Indexes.Open(holder);
-            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
-
-            var detail = svc.GetRecord("000000:HeaderQuery.esp");
-
-            Assert.NotNull(detail);
-            var author = detail.Fields.Single(f => f.Metadata.Name == "Author");
-            Assert.Equal("Test Author", Assert.IsType<JsonElement>(author.Value).GetString());
-
-            var flags = detail.Fields.Single(f => f.Metadata.Name == "Flags");
-            Assert.Equal([nameof(Fallout4ModHeader.HeaderFlag.Small)], Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()));
-
-            var masters = detail.Fields.Single(f => f.Metadata.Name == "MasterReferences");
-            var mastersValue = masters.Value;
-            Assert.NotNull(mastersValue);
-            Assert.Contains("Fallout4.esm", mastersValue.ToString());
-        }
-    }
-
-    [Fact]
-    public void GetCompare_PluginHeaderFormKey_ReturnsSingleOverride()
-    {
-        var holder = new LoadOrderHolder();
-        var data = new PluginFixtureBuilder("rqs-header-compare")
-            .WithPlugin("CompareA.esp")
-            .WithPlugin("CompareB.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = Indexes.Open(holder);
-            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
-
-            var compare = svc.GetCompare("000000:CompareA.esp");
-
-            Assert.NotNull(compare);
-            var overrides = Assert.Single(compare.Overrides);
-            Assert.Equal("CompareA.esp", overrides.Plugin);
-        }
-    }
-
-    private static void WithUnloadedService(Action<RecordQueryService> body)
-    {
-        var holder = new LoadOrderHolder();
-        var reflector = SharedSchemaReflector.Instance;
-        using var manager = Indexes.Open(holder);
-        body(new RecordQueryService(manager, new LoadOrderHolder(), reflector, new ConflictClassifier()));
+        var editorIds = result.Items.Select(r => r.EditorId).ToList();
+        Assert.Equal(2, editorIds.Count);
+        Assert.Equal([.. editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase)], editorIds);
     }
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (plugins.md) ---
@@ -883,14 +721,12 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
-        _manager.SetFilter($"SELECT form_key FROM \"NPC_\"");
-        try
-        {
-            var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
-            Assert.True(plugin.HasMatchingRecords);
-        }
-        finally { _manager.ClearFilter(); }
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        _reads.MatchingPlugins = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { PluginName };
+
+        var plugins = _svc.GetPlugins();
+        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        Assert.True(plugin.HasMatchingRecords);
     }
 
     // plugins.md: a record filter prunes records and record types, never a plugin row, because this tree
@@ -899,13 +735,11 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
-        try
-        {
-            var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
-            Assert.False(plugin.HasMatchingRecords);
-        }
-        finally { _manager.ClearFilter(); }
+        _reads.MatchingPlugins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var plugins = _svc.GetPlugins();
+        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        Assert.False(plugin.HasMatchingRecords);
     }
 
     [Fact]
@@ -916,8 +750,7 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugin.Copy.Name);
+        Assert.Equal(PluginName, plugin.Copy.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
-
 }

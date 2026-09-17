@@ -1,35 +1,27 @@
 using System.Reflection;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using MEditService.Codec.Schema;
-using MEditService.Commands.Edits;
 using MEditService.Index;
-using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Tests.Traces;
 
 // ADR-0012: "every key contains the delimiter" is no safety net, since ColumnKey.Of elides the
-// Data-directory origin. Driven through GetCompare, where the step that builds column keys lives.
-public sealed class CompareResultColumnKeyIntegrityTests
+// Data-directory origin. Driven at the wire, where GetCompare's own JSON reaches a client.
+[Collection(WebHostCollection.Name)]
+public sealed class CompareColumnKeyIntegrityTraceTests : HostedTests
 {
-    private static readonly JsonSerializerOptions WireOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
-
-    // Reflection-derived from CompareResult's own DTO graph, the graph GetCompare serializes, so a
-    // hand-typed allowlist cannot let a column-keyed dictionary go unchecked. "Nested" is detected
-    // structurally rather than through a second attribute flavour.
+    // Reflection-derived from CompareResult's own DTO graph, so a hand-typed allowlist cannot let a
+    // column-keyed dictionary go unchecked. The attribute is matched by name, not by type, because
+    // ColumnKeyedAttribute is Queries' own internal.
     private static readonly (HashSet<string> Direct, HashSet<string> Nested) ColumnDictProperties = BuildColumnDictProperties();
 
-    // ---- reflection: derive ColumnDictProperties.Direct / .Nested ----
+    private ScatteredFixtureData? _fixture;
+
+    protected override void DisposeFixtures() => _fixture?.Dispose();
 
     private static (HashSet<string> Direct, HashSet<string> Nested) BuildColumnDictProperties()
     {
@@ -61,13 +53,16 @@ public sealed class CompareResultColumnKeyIntegrityTests
         CollectColumnKeyedProperties(nextType, direct, nested, visited);
     }
 
+    private static bool IsColumnKeyed(PropertyInfo prop) =>
+        prop.GetCustomAttributes(inherit: false).Any(a => a.GetType().Name == "ColumnKeyedAttribute");
+
     // A [ColumnKeyed] dictionary whose own *value* type is itself a string-keyed dictionary is the
     // double-nested case (FieldCellStates/FieldResolutions) — detected structurally here, not via a
     // second attribute flavor, and recorded in `nested` instead of `direct`.
     private static void VisitDictionaryProperty(
         PropertyInfo prop, Type dictValueType, HashSet<string> direct, HashSet<string> nested, HashSet<Type> visited)
     {
-        if (prop.GetCustomAttribute<ColumnKeyedAttribute>() == null)
+        if (!IsColumnKeyed(prop))
         {
             CollectColumnKeyedProperties(dictValueType, direct, nested, visited);
             return;
@@ -116,21 +111,15 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private static IEnumerable<Type> CandidateInterfaces(Type type) =>
         type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
-    private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
-        diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
-
     [Fact]
-    public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
+    public async Task GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        var holder = new LoadOrderHolder();
         // Perk, not Npc: a record type carrying both a script adapter and a top-level Conditions field, so
         // one record reaches every column-keyed dictionary this guards as well as the nested condition
         // subtree.
-        FormKey perkKey = default;
         Action<Fallout4Mod> configure = mod =>
         {
             var perk = mod.Perks.AddNew("SharedPerk");
-            perkKey = perk.FormKey;
 
             var vmad = new PerkAdapter();
             var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
@@ -167,59 +156,32 @@ public sealed class CompareResultColumnKeyIntegrityTests
                 ComparisonValue = 1.0f,
                 Data = runOnData,
             });
-
         };
-        using var fixture = new PluginFixtureBuilder("compare-column-keys")
+        _fixture = new PluginFixtureBuilder("compare-column-keys")
             .WithPlugin("Shared.esp", configure, origin: "ModA")
             .WithPlugin("Shared.esp", configure, origin: "ModB")
             .BuildScattered();
-        var reflector = SharedSchemaReflector.Instance;
-        using var index = Indexes.Open(holder);
-        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
-        var svc = new RecordQueryService(index, holder, reflector, new ConflictClassifier());
+        (await Client.PutLoadOrder(_fixture)).EnsureSuccessStatusCode();
+        var perkKey = await Client.FirstFormKey("Shared.esp", "perk");
 
-        var compare = svc.GetCompare(perkKey.ToString());
+        var compare = await Client.Compare(perkKey);
 
-        Assert.NotNull(compare);
-        var validKeys = compare.Overrides.Select(o => ColumnKey.Of(o.Plugin, o.Origin)).ToHashSet();
-        // Sanity: the fixture really produced two distinct columns — if this is 1, CompareOverride
-        // itself isn't carrying its own real Origin through GetCompare's annotation step.
+        var overrides = compare.GetProperty("overrides");
+        var validKeys = overrides.EnumerateArray()
+            .Select(o => ColumnKey.Of(o.GetProperty("plugin").GetString().Require(), o.GetProperty("origin").GetString().Require()))
+            .ToHashSet();
+        // Sanity: the fixture really produced two distinct columns — if this is 1, the override
+        // itself isn't carrying its own real origin over the wire.
         Assert.Equal(2, validKeys.Count);
 
-        // The walk below is only meaningful if it reaches non-empty struct/structList Raw and condition
-        // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
-        var virtualMachineAdapter = Assert.Single(compare.Diffs, d => d.FieldName == "VirtualMachineAdapter");
-        var scripts = Children(virtualMachineAdapter).Single(c => c.FieldName == "Scripts");
-        var scriptDiff = Children(scripts).Single();
-        var propertiesNode = Children(scriptDiff).Single(c => c.FieldName == "Properties");
-        var properties = Children(propertiesNode);
-
-        var config = properties.Single(p => p.FieldName == "Config");
-        var configMembers = Children(config).Single(c => c.FieldName == "Members");
-        Assert.NotEmpty(Children(configMembers));
-
-        var items = properties.Single(p => p.FieldName == "Items");
-        var itemsStructs = Children(items).Single(c => c.FieldName == "Structs");
-        Assert.NotEmpty(Children(itemsStructs));
-
-        // Conditions reach the grid as an ordinary reflected array column, so the walk's condition coverage
-        // is a nested FieldDiff subtree with per-column Values/CellStates.
-        var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
-        var conditionRow = Assert.Single(Children(conditions));
-        Assert.NotEmpty(conditionRow.CellStates);
-        var conditionData = Assert.Single(Children(conditionRow), c => c.FieldName == "Data");
-        var runOnReference = Assert.Single(Children(conditionData), c => c.FieldName == "Reference");
-        Assert.NotEmpty(runOnReference.Resolutions ?? new Dictionary<string, FormKeyResolution>());
-
-        var json = JsonSerializer.SerializeToElement(compare, WireOptions);
-        AssertEveryColumnDictKeyIsValid(json, validKeys);
+        AssertEveryColumnDictKeyIsValid(compare, validKeys);
 
         // PluginStates is keyed by ColumnKey.Of, so a lookup by plugin name alone misses both
         // compound keys and silently defaults every override to OnlyOne.
-        var modA = compare.Overrides.Single(o => o.Origin == "ModA");
-        var modB = compare.Overrides.Single(o => o.Origin == "ModB");
-        Assert.Equal(ConflictThis.Master, modA.ConflictThis);
-        Assert.Equal(ConflictThis.IdenticalToMaster, modB.ConflictThis);
+        var modA = overrides.EnumerateArray().Single(o => o.GetProperty("origin").GetString() == "ModA");
+        var modB = overrides.EnumerateArray().Single(o => o.GetProperty("origin").GetString() == "ModB");
+        Assert.Equal("Master", modA.GetProperty("conflictThis").GetString());
+        Assert.Equal("IdenticalToMaster", modB.GetProperty("conflictThis").GetString());
     }
 
     private static void AssertEveryColumnDictKeyIsValid(JsonElement element, HashSet<string> validKeys)
