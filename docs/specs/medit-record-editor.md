@@ -576,7 +576,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - There is **no per-plugin or per-record Save** on the panel — writing the binary is the separate
   Save & Compile gesture ([medit-version-control.md](medit-version-control.md)).
 
-### Progressive load ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md))
+### Progressive load ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md) invariant 3)
 
 A plugin's records are browsable — and therefore this panel is openable — the moment that plugin
 is indexed, well before the winner sweep runs (the Plugins tree states the same fact,
@@ -749,7 +749,7 @@ key read off the element: scripts and alias scripts by script name, properties a
 by property name, PERK fragments by their index, QUST fragments by (stage, stage index), SCEN
 phase fragments by (index, flags), and a quest's alias bindings by the alias number they name.
 A keyed array is
-[aligned across plugins by that key in the compare grid](../../MEditService/MEditService.Core/Queries/ConflictClassifier.cs)
+[aligned across plugins by that key in the compare grid](../../MEditService/MEditService.Queries/ConflictClassifier.cs)
 rather than by position, so a plugin that carries fewer scripts than its master reads as an absence
 at those keys instead of shifting every row after it; it is stored back in key order on every
 write, whatever order the payload listed; and two elements sharing a key are refused
@@ -960,7 +960,7 @@ These apply everywhere a field value is rendered — the one compare grid and an
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
    `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`. All nine
    have their write side compile-and-reparse verified
-   (`MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
+   (`MEditService.Commands.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
    same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. Two of them,
    `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
    struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their

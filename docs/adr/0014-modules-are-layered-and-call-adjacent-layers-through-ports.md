@@ -31,4 +31,6 @@ live in the glossary.
 - **Every module knows every other**, the service this replaced: the write path pushed rows into
   the index, queries re-read the source tree, and the load order, index and ingest were one type.
 - **An architecture test library or an import-boundaries lint** to hold the layers. Project
-  references on both sides make the compiler the sweep.
+  references make the compiler the sweep on both sides: `ProjectReference` between the service's
+  csproj files, TypeScript project references between the extension's per-box `tsconfig.json`
+  files, each list the arrows the reference view draws.

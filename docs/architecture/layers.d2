@@ -2,6 +2,8 @@
 # box may reference any layer below it, or the kernel of its own column, never up and never
 # across a column. Two channels carry change up instead of a reference, watch and push, styled
 # as the signal and push classes so a diagram tells them apart from a reference at a glance.
+# Watch runs from the systems of record and from the kernel: a driving adapter watches files,
+# and it is a driving adapter that listens to the load-order change the kernel raises.
 # The same-band pairs below are the layer rule's own named exceptions, drawn with the zoom-out's
 # ids so the checker matches them by name; a diagram that needs a different one asks the
 # maintainer, never adds a line here.
@@ -30,6 +32,7 @@ core -> data: {class: ref}
 driven -> data: {class: ref}
 
 data -> driving: "watch" {class: signal}
+kernel -> driving: "watch" {class: signal}
 kernel -> driving: "push" {class: push}
 
 exceptions: "Same-band references the layer rule alone would forbid, named by the zoom-out's own ids" {

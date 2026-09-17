@@ -12,6 +12,8 @@ views: "every view" {class: driving}
 plugin: @../target-architecture.medit_data.plugin
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 projector: @../target-architecture.medit_driven.index.projector
 projector.label: Projector
 store: @../target-architecture.medit_driven.index.store
@@ -29,9 +31,10 @@ instance -> views: value {class: loadout}
 tools -> plugin: bytes, at any time {class: outside}
 plugin -> watcher: bytes {class: signal}
 watcher -> projector: "plugin changed: validate by hash" {class: signal}
-watcher -> port: external change pending (tracked mod) {class: push}
+watcher -> commands: settle the tracked mod {class: signal}
+commands -> port: external change pending (tracked mod) {class: push}
 projector -> store: rows {class: query}
-store -> port: rows changed {class: push}
+store -> port: "plugin changed, then rows changed" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> views: rows changed (push), then re-read {class: push}

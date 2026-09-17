@@ -188,11 +188,12 @@ using git.
   ours on the panel.
 - Source diffs are readable by construction: canonical JSON formatting (stable key
   order, fixed indentation) means a one-field edit is a one-line diff.
-- **A structural edit is as small in the panel as it is in meaning.** Deleting one record
-  from an ordered container shows **one deletion and one changed parent document** — never
-  a rename of every later sibling. Child files are named by identity alone; their order is
-  a list in the parent's own document (ADR-0006 decision 4), so an insert is one file plus
-  one line and a reorder is a parent-document diff on its own. This is a property of the
+- **A structural edit is as small in the panel as it is in meaning** (ADR-0006 invariant 4).
+  A container's children live inline in the container's own document and have no files, so
+  editing, inserting, deleting or reordering one is **one hunk in one file**. A group's
+  records are files named by identity alone and no list records their order, so an insert or
+  a delete is **one file appearing or disappearing** and no sibling is renamed for another's
+  arrival, and a reorder is nothing at all. This is a property of the
   format, not of the panel: it holds the same in the terminal, in a merge, and in a
   reviewer's diff. The superseded scheme numbered child filenames, which made a
   single-record delete of one of 13 siblings show 25 entries here — content-identical
@@ -391,7 +392,7 @@ plugins are never probed at all.
 - **`meta.ini` is a source, never content**: read for trailer values at baseline moments,
   never committed (ADR-0007 — never track a file that changes for non-content
   reasons).
-- **No list carries order, and hand edits are ordinary edits** (ADR-0006 decision 4). A
+- **No list carries order, and hand edits are ordinary edits** (ADR-0006 invariants 4 and 6). A
   flat group's or block level's child is a file or directory named by identity and never
   position, and nothing records the order: the reader's directory enumeration decides it.
   **Deleting a child file is a deletion** and **adding one is an addition**; the git-native
@@ -411,11 +412,11 @@ plugins are never probed at all.
   product — source, baseline, trailers, `.gitignore`, branch, parked ref — and compile
   round-trips re-parse clean (the permanent round-trip gate —
   `BinaryRoundTripGateTests`/`CompileRoundTripGateTests`,
-  `MEditService.Tests/RealData/`, run in the ordinary `dotnet test`).
+  `MEditService.Commands.Tests/RealData/`, run in the ordinary `dotnet test`).
 - **Track's round-trip gate also catches subrecord loss the model can't see**: Mutagen's
   parse occasionally drops a subrecord silently (a malformed length field desyncing the parser,
   a duplicate-slot collision) — invisible to the model-identity check, since the in-memory model
-  never held what was dropped. A byte-level walk (`MEditService.Core/Source/PluginBinaryWalk.cs`,
+  never held what was dropped. A byte-level walk (`MEditService.Codec/Serialization/PluginBinaryWalk.cs`,
   Mutagen-free) compares the original and recompiled binaries' subrecord signatures per record;
   any signature occurring fewer times in the rewrite is refused naming the record type, FormID
   and dropped signature(s) (more occurrences — a canonical marker insertion — is not a refusal).
@@ -444,9 +445,10 @@ plugins are never probed at all.
   materialised once per apply rather than evaluated per query, so no field is promoted to
   a real extracted column.
 - **Round-trip gate** — `BinaryRoundTripGateTests` and `CompileRoundTripGateTests`
-  (`MEditService.Tests/RealData/`), permanent, exercised on every `dotnet test`.
+  (`MEditService.Commands.Tests/RealData/`), permanent, exercised on every `dotnet test`.
 - **Mutagen pin** — `Mutagen.Bethesda.Fallout4` is pinned at an exact version (not a
-  floating range) in `MEditService.Core.csproj`; the pin comment there records the
+  floating range) in `MEditService.Codec.csproj` and `MEditService.PluginAdapter.csproj`; the
+  pin comment there records the
   `ObjectTemplate`/`refr.Base` regression the pinned version avoids and names the
   upstream-fix tracking issue that gates moving off it.
 

@@ -109,7 +109,8 @@ superseded by there being no pair to place.)
 **Refresh** is one command id (`modbench.refresh`) that refreshes the whole of Modbench, not only
 Mod Management. It re-reads mods, plugins and downloads from disk as it always did, and it also
 drops the Index and rebuilds it from scratch: every plugin re-indexed from its bytes, every
-tracked mod re-ingested from its source, through the same path the first load takes (ADR-0014).
+tracked mod re-ingested from its source, through the same path the first load takes
+(ADR-0009 invariant 4).
 A partial refresh is the state where the user believes they have resynced and one tree still
 quietly disagrees. Refresh remains a safety net for flaky watch events, never the primary path:
 every one of those sources is otherwise watcher-driven.
@@ -250,4 +251,5 @@ reached nine navigation icons with nothing in overflow, which VS Code silently c
   placement rubric (slots, icon ceiling, workspace actions absent from domain trees, destructive
   actions out of navigation, icon vocabulary) holds across every contributed menu. Each `it`
   carries a pointer comment to the rule number here, not the rule's own text.
-- `src/test/integration/extension.test.ts` — `modbench.refresh` and `modbench.launch` register.
+- `src/test/integration/extension.test.ts` — every command `package.json` contributes registers
+  on activation, the Toolbox's `modbench.refresh` and `modbench.toolbox.launch` among them.
