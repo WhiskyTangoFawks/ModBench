@@ -32,9 +32,9 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForAPopulatedCell_EmbedsEveryChildSlot()
+    public void SerializeToBytes_ForAPopulatedCell_EmbedsEveryChildSlot()
     {
-        var bytes = await Codec().SerializeToBytesAsync(MakePopulatedCell(), GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(bytes);
         var root = doc.RootElement;
@@ -52,12 +52,12 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public async Task RoundTrip_OfAnEmbeddedCell_IsChildFaithful()
+    public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful()
     {
         var codec = Codec();
-        var bytes = await codec.SerializeToBytesAsync(MakePopulatedCell(), GameRelease.Fallout4);
+        var bytes = codec.SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4);
 
-        var roundTripped = (Cell)await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, "cell");
+        var roundTripped = (Cell)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "cell");
 
         Assert.Equal(["PersistentRef"], roundTripped.Persistent.Select(RequireEditorID).ToArray());
         Assert.Equal(["TemporaryRef"], roundTripped.Temporary.Select(RequireEditorID).ToArray());
@@ -89,7 +89,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForAWorldspace_EmbedsItsTopCell()
+    public void SerializeToBytes_ForAWorldspace_EmbedsItsTopCell()
     {
         var worldspace = new Worldspace(Mod)
         {
@@ -97,7 +97,7 @@ public sealed class RecordTextCodecEmbedTests
             TopCell = new Cell(Mod) { EditorID = "EmbedTopCell" },
         };
 
-        var bytes = await Codec().SerializeToBytesAsync(worldspace, GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(worldspace, GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(bytes);
         Assert.Equal("EmbedTopCell", doc.RootElement.GetProperty("TopCell").GetProperty("EditorID").GetString());

@@ -88,7 +88,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     ];
 
     private byte[] Serialize(IMajorRecordGetter record) =>
-        _codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
+        _codec.SerializeToBytes(record, Release);
 
     // My own edit, made the way a write makes it: the record's document replaced through the
     // repository, leaving the working tree dirty on the edit branch.

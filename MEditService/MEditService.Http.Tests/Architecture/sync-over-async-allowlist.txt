@@ -3,11 +3,6 @@
 # calling thread on exactly the same hazard, so this list is the work remaining rather than
 # permission. It shrinks as each caller learns to await, and when it is empty the ban grows the
 # entries and this gate goes. A line added here is a new block that needs the maintainer's ruling.
-MEditService.Codec/Schema/DeclaredDefaults.cs: GetAwaiter().GetResult(): 3
-MEditService.Codec/Serialization/HeaderDocument.cs: GetAwaiter().GetResult(): 2
-MEditService.Codec/Serialization/ModDocuments.cs: GetAwaiter().GetResult(): 2
-MEditService.Codec/Serialization/ModelIdentity.cs: GetAwaiter().GetResult(): 2
-MEditService.Codec/Serialization/RecordTextCodec.cs: GetAwaiter().GetResult(): 5
 MEditService.Commands/AbsorbExternalChangeHandler.cs: GetAwaiter().GetResult(): 1
 MEditService.Commands/Edits/PluginCompileService.cs: GetAwaiter().GetResult(): 3
 MEditService.Index/IndexProjector.cs: .Wait(): 1

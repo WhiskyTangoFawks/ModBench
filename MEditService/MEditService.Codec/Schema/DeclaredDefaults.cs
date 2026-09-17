@@ -36,8 +36,8 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
 
     private HashSet<string> TopLevelMembers(Type concrete, string json)
     {
-        var instance = (IMajorRecordGetter)RecordTextCodec.DeserializeTextAsync(concrete, json, release).GetAwaiter().GetResult();
-        var bytes = Codec.SerializeToBytesAsync(instance, release).GetAwaiter().GetResult();
+        var instance = (IMajorRecordGetter)RecordTextCodec.DeserializeText(concrete, json, release);
+        var bytes = Codec.SerializeToBytes(instance, release);
         using var document = System.Text.Json.JsonDocument.Parse(bytes);
         return [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
     }
@@ -57,7 +57,7 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
             return null;
         try
         {
-            return RecordTextCodec.DeserializeEmptyAsync(concrete, release).GetAwaiter().GetResult();
+            return RecordTextCodec.DeserializeEmpty(concrete, release);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

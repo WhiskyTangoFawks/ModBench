@@ -1,8 +1,8 @@
-namespace MEditService.Tests.RealData;
+namespace MEditService.Tests.TestSupport;
 
 /// <summary>Skipped, not passed, without MEDIT_SMOKE=1, so a run reports honestly rather than a
 /// green no-op.</summary>
-internal sealed class SmokeFactAttribute : FactAttribute
+public sealed class SmokeFactAttribute : FactAttribute
 {
     public SmokeFactAttribute(string reason)
     {

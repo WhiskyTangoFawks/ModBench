@@ -96,7 +96,7 @@ public sealed class ConcreteBaseUnionSchemaTests
     }
 
     [Fact]
-    public async Task LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
+    public void LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Layers701.esp"), Fallout4Release.Fallout4);
         var cell = new Cell(mod.GetNextFormKey("Cell701"), Fallout4Release.Fallout4)
@@ -107,8 +107,8 @@ public sealed class ConcreteBaseUnionSchemaTests
             },
         };
 
-        var body = await new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
-            .SerializeToBytesAsync(cell, GameRelease.Fallout4);
+        var body = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance)
+            .SerializeToBytes(cell, GameRelease.Fallout4);
         using var document = JsonDocument.Parse(body);
         var layers = document.RootElement.GetProperty("Landscape").GetProperty("Layers");
 

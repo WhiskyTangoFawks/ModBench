@@ -33,10 +33,10 @@ public static class HeaderDocument
 
         // Nothing is created and nothing is written: NoRecordFolders neutralizes the door's own
         // Directory.CreateDirectory, and every stream but the root document's goes to Stream.Null.
-        RecordTextCodecGeneratorSeed.SerializeWholeMod(
-            clone, folder, InlineWorkDropoff.Instance, CancellationToken.None,
-            fileSystem: NoRecordFolders.Instance, streamCreator: capture)
-            .GetAwaiter().GetResult();
+        InlineSerialization.Finished(
+            RecordTextCodecGeneratorSeed.SerializeWholeMod(
+                clone, folder, InlineWorkDropoff.Instance, CancellationToken.None,
+                fileSystem: NoRecordFolders.Instance, streamCreator: capture));
 
         // The one canonical-formatting guarantee the kernel does not make, applied identically to the
         // tracked tree, so content_hash is a real git object name for the header on every platform.
@@ -51,11 +51,11 @@ public static class HeaderDocument
         var folder = ScratchFolder();
         var rootPath = Path.Combine(folder, RootDocumentFileName);
 
-        return RecordTextCodecGeneratorSeed.DeserializeWholeMod(
-            folder, InlineWorkDropoff.Instance, CancellationToken.None,
-            fileSystem: new OnlyTheRootDocumentExists(rootPath),
-            streamCreator: new SupplyRootDocument(rootPath, body))
-            .GetAwaiter().GetResult();
+        return InlineSerialization.Finished(
+            () => RecordTextCodecGeneratorSeed.DeserializeWholeMod(
+                folder, InlineWorkDropoff.Instance, CancellationToken.None,
+                fileSystem: new OnlyTheRootDocumentExists(rootPath),
+                streamCreator: new SupplyRootDocument(rootPath, body)));
     }
 
     /// <summary>The document with the ESL (<c>Small</c>) flag set or cleared, as a document-to-document

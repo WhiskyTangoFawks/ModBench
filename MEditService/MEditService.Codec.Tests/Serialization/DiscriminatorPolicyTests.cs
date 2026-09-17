@@ -24,9 +24,9 @@ public sealed class DiscriminatorPolicyTests
         new(Mod) { EditorID = "PolicyGlobal", Data = 2.5f };
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForAWeapon_WritesNoTopLevelDiscriminator()
+    public void SerializeToBytes_ForAWeapon_WritesNoTopLevelDiscriminator()
     {
-        var bytes = await Codec().SerializeToBytesAsync(MakeWeapon(), GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(bytes);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _),
@@ -34,12 +34,12 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public async Task DeserializeFromBytesAsync_ForAWeaponDocument_ReconstitutesFromRecordType()
+    public void DeserializeFromBytes_ForAWeaponDocument_ReconstitutesFromRecordType()
     {
         var codec = Codec();
-        var bytes = await codec.SerializeToBytesAsync(MakeWeapon(), GameRelease.Fallout4);
+        var bytes = codec.SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
 
-        var roundTripped = await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, "weap");
+        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "weap");
 
         var weapon = Assert.IsType<Weapon>(roundTripped);
         Assert.Equal("PolicyWeapon", weapon.EditorID);
@@ -47,9 +47,9 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForAGlobalFloat_KeepsTheDiscriminator()
+    public void SerializeToBytes_ForAGlobalFloat_KeepsTheDiscriminator()
     {
-        var bytes = await Codec().SerializeToBytesAsync(MakeGlobalFloat(), GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(bytes);
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
@@ -61,24 +61,24 @@ public sealed class DiscriminatorPolicyTests
     [InlineData("glob")]
     [InlineData("globalfloat")]
     [InlineData(null)]
-    public async Task DeserializeFromBytesAsync_ForAGlobalFloatDocument_ReturnsGlobalFloat(string? recordType)
+    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat(string? recordType)
     {
         var codec = Codec();
-        var bytes = await codec.SerializeToBytesAsync(MakeGlobalFloat(), GameRelease.Fallout4);
+        var bytes = codec.SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);
 
-        var roundTripped = await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, recordType);
+        var roundTripped = codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, recordType);
 
         var global = Assert.IsType<GlobalFloat>(roundTripped);
         Assert.Equal(2.5f, global.Data);
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForACellWithChildren_KeepsTheChildrensDiscriminators()
+    public void SerializeToBytes_ForACellWithChildren_KeepsTheChildrensDiscriminators()
     {
         var cell = new Cell(Mod) { EditorID = "DiscriminatorCell" };
         cell.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });
 
-        var bytes = await Codec().SerializeToBytesAsync(cell, GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(cell, GameRelease.Fallout4);
 
         using var doc = JsonDocument.Parse(bytes);
         Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _), "CELL's group element is concrete.");

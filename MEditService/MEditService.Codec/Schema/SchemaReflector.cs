@@ -22,7 +22,6 @@ public sealed class SchemaReflector
     internal SchemaReflector(Func<GameCategory, SchemaAnnotations> annotationsFor, ILogger<SchemaReflector>? logger = null)
     {
         _annotationsFor = annotationsFor;
-        // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
         _logger = logger ?? NullLogger<SchemaReflector>.Instance;
     }
 

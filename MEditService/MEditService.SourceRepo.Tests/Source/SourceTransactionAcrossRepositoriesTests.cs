@@ -61,7 +61,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         byte[] Serialize(IMajorRecordGetter record) =>
-            codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
+            codec.SerializeToBytes(record, Release);
 
         string Leaf(IMajorRecordGetter record) =>
             $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";

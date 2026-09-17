@@ -32,7 +32,7 @@ public class ContainerSingleFileTests
             // A container whose children the writer tried to spill into a sibling folder fails here
             // rather than merely looking wrong, and comes back as its own concrete type from the
             // stated record_type.
-            var roundTripped = await codec.DeserializeAsync(filePath, GameRelease.Fallout4, recordType);
+            var roundTripped = codec.DeserializeFile(filePath, GameRelease.Fallout4, recordType);
             Assert.IsType(concreteType, roundTripped);
         }
         finally
