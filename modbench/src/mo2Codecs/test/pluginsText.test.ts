@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parsePlugins, pluginSlots, setPluginEnabledInText, movePluginsInText, appendPluginInText, removePluginFromText } from '../pluginsText';
 import type { PluginEntry } from '../pluginsText';
 
-const fixtureDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
+const fixtureDir = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 const defaultPlugins = () =>
   readFileSync(join(fixtureDir, 'profiles', 'Default', 'plugins.txt'), 'utf8');
 

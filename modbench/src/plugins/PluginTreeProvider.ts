@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
   ContainerChildSummary, MEditClient,
 } from '../client';
-import { recordResourceUri } from '../medit/recordResourceUri';
-import { failurePrefixIcon } from '../failurePrefixIcon';
+import { recordResourceUri } from './recordResourceUri';
+import { failurePrefixIcon } from './failurePrefixIcon';
 import { present } from '../ports/present';
-export { headerFormKeyFor } from '../medit/formKeyIdentity';
+export { headerFormKeyFor } from './formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
 // one call (measured no meaningful cost even at the realistic worst case; see fetchRecords and

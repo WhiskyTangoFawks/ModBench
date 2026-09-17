@@ -40,10 +40,10 @@ vi.mock('../modlist/modlist', () => ({
 }));
 
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from './ModListProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../test/expectInstanceOf';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import type { Reporter } from '../ports/reporter';
 
 const INSTANCE_ROOT = '/instance';

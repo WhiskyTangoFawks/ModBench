@@ -1,5 +1,5 @@
 import type { RecordDecorationProvider } from './RecordDecorationProvider';
-import { recordResourceUri } from '../medit/recordResourceUri';
+import { recordResourceUri } from './recordResourceUri';
 import type { WorkingTreeState } from '../client';
 
 /** Editor's own view of whatever tree needs to hear about a landed edit — a structural shape,

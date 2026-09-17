@@ -2,13 +2,13 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
 import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instance/instance';
-import { registerPluginsReconcile } from './pluginsReconcileTrigger';
+import { registerPluginsReconcile } from '../pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';

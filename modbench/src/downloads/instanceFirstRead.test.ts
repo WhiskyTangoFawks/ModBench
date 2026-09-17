@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { firstReadOf } from './instanceFirstRead';
 import type { InstanceSubscriber, ReadFailureListener } from '../instance/instance';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 
 // ADR-0013: the one path from a landed recompute to a PUT — no gesture, command or view calls
 // `request()` itself (asserted by a scan elsewhere); this is the sole wiring that does.

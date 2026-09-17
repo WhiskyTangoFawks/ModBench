@@ -48,8 +48,8 @@ import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
 import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { Instance, InstanceValue } from '../instance/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../test/surfacingDoubles';
-import { downloadRowFixture } from './test/downloadRowFixture';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { downloadRowFixture } from '../test/mo2/downloadRowFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 
 // The row the Instance would publish for this instance root: its two paths are what the panel
 // opens, so every gesture is driven by the same tree the test wrote.

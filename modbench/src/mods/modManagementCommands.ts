@@ -1,16 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode } from './ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode } from './ModListProvider';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
-import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps } from './DownloadsPanel';
-import { DownloadsProvider } from './DownloadsProvider';
-import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
-import type { Instance, InstanceView } from '../instance/instance';
-import type { Own } from '../session';
+import type { Instance } from '../instance/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { registerNameFilter } from '../nameFilter';
-import { setMo2InstanceContext } from '../workspaceConfig';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -255,84 +249,4 @@ export function registerOverwriteView(
       }
     }),
   ];
-}
-/** A real provider would only fail lazily on first read, so the view gets an always-empty stub
- *  and its `viewsWelcome` contribution renders an actionable message instead. */
-export function registerNotMo2InstanceWelcome(
-  instanceRoot: string,
-  outputChannel: vscode.LogOutputChannel,
-): vscode.Disposable {
-  outputChannel.info(`[toolbox] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
-  setMo2InstanceContext(false);
-  return vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER });
-}
-/** Tree, filter and profile readout together, because the view's description has exactly one
- *  owner. Split apart, a profile update and a filter keystroke race for that property and the
- *  loser silently vanishes. */
-export function createModListView(
-  own: Own,
-  modListProvider: ModListProvider,
-  instance: Pick<Instance, 'value' | 'subscribe'>,
-): { modListView: vscode.TreeView<ModlistNode>; updateProfileDescription: () => Promise<void> } {
-  const modListView = own(vscode.window.createTreeView('modbench.modList', {
-    treeDataProvider: modListProvider,
-    showCollapseAll: true,
-    dragAndDropController: modListProvider,
-  }));
-  const modListFilter = own(registerNameFilter({
-    view: modListView,
-    viewId: 'modbench.modList',
-    placeholder: 'Filter mods…',
-    setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
-    // The pinned Overwrite row sits outside all filtering (it is a fixture over the folder, not
-    // a modlist entry), so it is not evidence that the term matched anything.
-    hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
-    toggle: { icon: 'list-tree', label: 'Group by separator' },
-  }));
-  // Async only because Refresh's own sequence awaits it (ADR-0014); the profile is a field of
-  // the value the Instance already landed, so there is no disk read left to fail.
-  const updateProfileDescription = () => {
-    modListFilter.setBaseDescription(instance.value.activeProfile);
-    return Promise.resolve();
-  };
-  void updateProfileDescription();
-  // A profile switch rewrites ModOrganizer.ini, which the Instance watches — the recompute it
-  // lands is what moves this readout, not the gesture.
-  own(instance.subscribe(() => void updateProfileDescription()));
-  return { modListView, updateProfileDescription };
-}
-/** Returns the live provider alongside its disposables, so integration tests can reach it.
- *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
-export function registerDownloadsView(
-  own: Own,
-  instanceRoot: string,
-  instance: InstanceView,
-  reporter: Reporter,
-  ask: AskQuestion,
-  install: DownloadInstallDeps,
-): DownloadsProvider {
-  const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instance, reporter,
-  }));
-  const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
-    treeDataProvider: downloadsProvider,
-    canSelectMany: true,
-  }));
-  // Dims hidden rows once Show hidden is on — the sole cue distinguishing them, since Show
-  // hidden is additive, not an exclusive filter.
-  own(vscode.window.registerFileDecorationProvider(
-    new HiddenDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.hiddenNames()),
-  ));
-  own(registerNameFilter({
-    view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
-    setFilter: (text) => downloadsProvider.setFilter(text),
-    hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
-  }));
-  own(registerDownloadsSortCommand(downloadsProvider));
-  for (const disposable of [
-    ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
-    ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask),
-  ]) own(disposable);
-  return downloadsProvider;
 }

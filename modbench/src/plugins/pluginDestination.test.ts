@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { present } from '../ports/present';
 
 const value = instanceValueFixture({

@@ -13,10 +13,10 @@ vi.mock('vscode', () => ({
 }));
 
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
 import { expectInstanceOf } from '../test/expectInstanceOf';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { DownloadFile, InstanceValue } from '../instance/instance';
 import { present } from '../ports/present';

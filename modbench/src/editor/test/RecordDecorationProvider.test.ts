@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
-import { recordResourceUri } from '../../medit/recordResourceUri';
+import { recordResourceUri } from '../recordResourceUri';
 import { fakeUri } from '../../test/vscodeMock';
 
 describe('RecordDecorationProvider', () => {

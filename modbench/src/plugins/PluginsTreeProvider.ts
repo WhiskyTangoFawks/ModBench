@@ -2,12 +2,12 @@ import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instance/instance';
-import { firstReadOf, type FirstRead } from '../modmanager/instanceFirstRead';
+import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
-import { failurePrefixIcon } from '../failurePrefixIcon';
+import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 

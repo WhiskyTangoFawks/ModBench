@@ -5,16 +5,16 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instance/instance';
-import { instanceValueFixture } from './test/instanceValueFixture';
-import { registerModAdoption, type ModAdoptionOutcome } from './modAdoptionTrigger';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
+import { registerModAdoption, type ModAdoptionOutcome } from '../modAdoptionTrigger';
 import { adoptMods } from '../modlist/modlist';
 import { installFromFolder } from '../install/install';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
 import { present } from '../ports/present';
 

@@ -3,7 +3,7 @@ import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instance/instance';
 import { OVERWRITE_ORIGIN } from '../instance/loadOrderSnapshot';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
-import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
+import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
 import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 

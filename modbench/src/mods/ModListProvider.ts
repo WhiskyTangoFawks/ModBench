@@ -5,7 +5,7 @@ import type { ModStatus, ModStatusResult } from '../instance/statusChecker';
 import type { Reporter } from '../ports/reporter';
 import type { InstanceValue, InstanceView } from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 import {
   moveModToSeparator as moveModToSeparatorCommand,
   reorderMod as reorderModCommand,

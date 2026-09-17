@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
-import { providedPluginsIn } from '../../modmanager/test/corpusFixture';
+import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../mo2Files/pluginFile';
 import type { DataFolderPlugins } from '../../instance/loadOrderSnapshot';
 

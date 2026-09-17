@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
-import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
-import { resolveOrigin } from '../medit/resolveOrigin';
+import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
+import { resolveOrigin } from './resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
 import type { Reporter } from '../ports/reporter';

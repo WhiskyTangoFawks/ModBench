@@ -29,7 +29,7 @@ import { registerCreatePluginCommand, registerRevealInExplorerCommand } from '..
 import { appendPlugin } from '../../pluginsCommands/plugins';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 
 beforeEach(() => {

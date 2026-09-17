@@ -11,7 +11,7 @@ import {
 } from '../downloadSidecar';
 import { scanDownloads } from '../../instance/downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../../mo2Codecs/downloads';
-import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../../modmanager/test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../../test/mo2/corpusFixture';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const ARCHIVE = `downloads/${NAME}`;

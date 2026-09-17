@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mo2InstanceContext } from './mo2InstanceContext';
+import { mo2InstanceContext } from '../mo2InstanceContext';
 
 // An unset context key reads identically to `false` under a plain `!key` negation, so a second
 // key is what tells "checked, and not an instance" apart from "never checked".

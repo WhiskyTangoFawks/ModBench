@@ -2,16 +2,16 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { isRefused, type MEditClient, type CompileResult } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveCompileTarget } from '../medit/compileTarget';
-import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
-import { resolveOrigin } from '../medit/resolveOrigin';
+import { resolveCompileTarget } from './compileTarget';
+import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
+import { resolveOrigin } from './resolveOrigin';
 import type { OriginFolder } from '../instance/loadOrderSnapshot';
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked,
-} from '../medit/trackedRepositories';
+} from './trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
-import { trackProgressMessage } from '../medit/trackProgress';
+import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';

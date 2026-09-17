@@ -140,7 +140,7 @@ describe('computeModStatuses — case-insensitive conflicts', () => {
   // Proton/Wine resolves paths case-insensitively over ext4, so Textures/Foo.dds and
   // textures/foo.dds are one file. The fold belongs in the index, since statusChecker looks
   // paths up exactly as the walk wrote them.
-  const caseFixture = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'case-conflict-instance');
+  const caseFixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'case-conflict-instance');
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {

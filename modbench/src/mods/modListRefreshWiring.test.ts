@@ -6,8 +6,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fakeVscodeModule } from './test/fakeVscodeWatcher';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
+import { fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer,

@@ -4,12 +4,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseModlist } from '../mo2Codecs/modlistText';
-import { parseManifest } from '../mo2Files/files';
-import { deployMods, purgeMods } from '../deploy/deployment';
-import { buildFileConflictIndex } from '../instance/fileConflictIndex';
-import type { GameDirectory } from '../mo2Files/gameDirectory';
-import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from './test/corpusFixture';
+import { parseModlist } from '../../mo2Codecs/modlistText';
+import { parseManifest } from '../../mo2Files/files';
+import { deployMods, purgeMods } from '../../deploy/deployment';
+import { buildFileConflictIndex } from '../../instance/fileConflictIndex';
+import type { GameDirectory } from '../../mo2Files/gameDirectory';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from '../../test/mo2/corpusFixture';
 
 const MANIFEST = 'mods/.medit-manifest.json';
 const TRACKED_GIT_HEAD = 'mods/Tracked Patch Mod/.git/HEAD';

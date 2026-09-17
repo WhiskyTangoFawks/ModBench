@@ -9,7 +9,7 @@ import type {
   DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
 } from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 import type { Reporter } from '../ports/reporter';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the

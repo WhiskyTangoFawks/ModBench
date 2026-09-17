@@ -33,7 +33,7 @@ vi.mock('../modlist/modlist', () => ({
 import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from './modManagementCommands';
 import { ModNode } from './ModListProvider';
 import { scriptedDialog } from '../test/surfacingDoubles';
-import { instanceValueFixture } from './test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);

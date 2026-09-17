@@ -38,7 +38,7 @@ import {
 } from '../modlist';
 import { parseModlist } from '../../mo2Codecs/modlistText';
 
-const fixture = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
+const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
 // The fixture's own mods/ folders, as the value lists them for the new-empty-mod refusal.
 const MOD_FOLDERS = [

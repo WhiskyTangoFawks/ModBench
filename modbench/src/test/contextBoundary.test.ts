@@ -34,7 +34,8 @@ const EDITING_DIR = 'medit';
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
-const MOD_MANAGEMENT_DIR = 'modmanager';
+const MODS_VIEW_DIR = 'mods';
+const DOWNLOADS_VIEW_DIR = 'downloads';
 const INSTANCE_DIR = 'instance';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
@@ -169,17 +170,17 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
     it('a FormKey import planted in a Mods-shaped file is caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import type { FormKey } from '../medit/ApiClient';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        mkdirSync(join(root, 'mods'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import type { FormKey } from '../medit/ApiClient';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
 
     it('an mEdit-client import planted in a Downloads-shaped file is caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'DownloadsProvider.ts'), "import { ApiPluginRepository } from '../medit/PluginRepository';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'DownloadsProvider.ts')]);
+        mkdirSync(join(root, 'downloads'), { recursive: true });
+        writeFileSync(join(root, 'downloads', 'DownloadsProvider.ts'), "import { ApiPluginRepository } from '../medit/PluginRepository';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('downloads', 'DownloadsProvider.ts')]);
       });
     });
 
@@ -187,9 +188,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     // the MO2 side exactly as a medit/ import would, and `.includes('medit')` alone never sees it.
     it('a Plugins-view import planted in a MO2-shaped file is caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        mkdirSync(join(root, 'mods'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
 
@@ -197,18 +198,18 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     // also flag a genuinely MO2-side module whose name merely contains the word.
     it('an MO2-side module named pluginsText is not caught by the Plugins-view check', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager', 'mo2'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'mo2', 'pluginsText.ts'), 'export const x = 1;\n');
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { parsePlugins } from './mo2/pluginsText';\n");
+        mkdirSync(join(root, 'mods', 'mo2'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'mo2', 'pluginsText.ts'), 'export const x = 1;\n');
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { parsePlugins } from './mo2/pluginsText';\n");
         expect(findOffenders(root)).toEqual([]);
       });
     });
 
     it('an mEdit-client import planted in the Instance file itself is caught, at its real nested depth', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'instance.ts'), "import { EditingController } from '../medit/EditingController';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'instance.ts')]);
+        mkdirSync(join(root, 'instance'), { recursive: true });
+        writeFileSync(join(root, 'instance', 'instance.ts'), "import { EditingController } from '../medit/EditingController';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('instance', 'instance.ts')]);
       });
     });
 
@@ -221,25 +222,25 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
     it('the same FormKey import inside the Plugins view is not caught — the walk still reaches it', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        mkdirSync(join(root, 'mods'), { recursive: true });
         mkdirSync(join(root, 'plugins'), { recursive: true });
         const planted = "import type { FormKey } from '../medit/ApiClient';\n";
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), planted);
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
         writeFileSync(join(root, 'plugins', 'PluginTreeProvider.ts'), planted);
         const reached = tsFiles(root).map((p) => relative(root, p));
         expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginTreeProvider.ts')]));
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
 
     it('the same mEdit-client import inside Editing\'s own directory is not caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        mkdirSync(join(root, 'mods'), { recursive: true });
         mkdirSync(join(root, 'medit'), { recursive: true });
         const planted = "import { ApiPluginRepository } from '../medit/PluginRepository';\n";
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), planted);
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
         writeFileSync(join(root, 'medit', 'EditingController.ts'), planted);
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
 
@@ -247,20 +248,20 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     // guards against — a MO2-shaped file reaching it is exactly the violation this rule exists for.
     it('an Editor-folder import planted in a Mods-shaped file is caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        mkdirSync(join(root, 'mods'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
 
     it('the same Editor-folder import inside Editor\'s own directory is not caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        mkdirSync(join(root, 'mods'), { recursive: true });
         mkdirSync(join(root, 'editor'), { recursive: true });
         const planted = "import { ActiveRecordTracker } from './ActiveRecordTracker';\n";
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
         writeFileSync(join(root, 'editor', 'recordPanelHost.ts'), planted);
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
   });
@@ -282,17 +283,11 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 // Held to the stricter "imports from neither context" bar: unlike Mods, Downloads, Toolbox and
 // the Instance, these have no legitimate reason to import either side's vocabulary at all.
 describe('composition-root modules import from neither context', () => {
-  // The one shared presentation primitive both trees decorate with. It belongs to neither
-  // context and must stay that way, or importing it would carry one context into the other.
-  it('the shared failure prefix icon imports nothing but vscode', () => {
-    expect(importsOf(read('failurePrefixIcon.ts'))).toEqual(['vscode']);
-  });
-
   // The name filter serves views from both contexts, so it belongs to neither folder and lives
   // at the composition root; the same structural-deps check keeps that honest.
   it('the name filter imports from neither context', () => {
     const imports = importsOf(read('nameFilter.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
 
@@ -300,7 +295,7 @@ describe('composition-root modules import from neither context', () => {
   // structural-deps property, so they are guarded the same way: nothing imported but `vscode`.
   it('the editing teardown module imports from neither context', () => {
     const imports = importsOf(read('editingTeardown.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports.filter((s) => s.includes('medit') || s.includes('mods') || s.includes('downloads'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
 
@@ -353,7 +348,7 @@ function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: st
 // tier rather than a "no vocabulary in its own text" bar.
 describe('Editor and the Plugins view import from neither each other', () => {
   it('nothing under Editor imports from the Plugins view, Mod Management or the Instance', () => {
-    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR])).toEqual([]);
+    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR])).toEqual([]);
   });
 
   it('nothing under the Plugins view imports from Editor', () => {
@@ -380,7 +375,7 @@ describe('Editor and the Plugins view import from neither each other', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'editor'), { recursive: true });
         writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { RecordNode } from '../plugins/PluginTreeProvider';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR]).map((o) => o.path))
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR]).map((o) => o.path))
           .toEqual([join('editor', 'someCommand.ts')]);
       });
     });
@@ -389,7 +384,7 @@ describe('Editor and the Plugins view import from neither each other', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'editor'), { recursive: true });
         writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { Instance } from '../instance/instance';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR]).map((o) => o.path))
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MODS_VIEW_DIR, DOWNLOADS_VIEW_DIR, INSTANCE_DIR]).map((o) => o.path))
           .toEqual([join('editor', 'someCommand.ts')]);
       });
     });
@@ -426,6 +421,6 @@ describe('Editor and the Plugins view import from neither each other', () => {
   });
 
   it('recordLifecycleCommands.ts imports nothing from Mod Management', () => {
-    expect(importsOf(read('editor/recordLifecycleCommands.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
+    expect(importsOf(read('editor/recordLifecycleCommands.ts')).filter((s) => s.includes('mods'))).toEqual([]);
   });
 });

@@ -29,10 +29,10 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
   SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, IndexingNode,
 } from '../PluginTreeProvider';
-import { ErrorNode } from '../../errorNode';
+import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
-import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
