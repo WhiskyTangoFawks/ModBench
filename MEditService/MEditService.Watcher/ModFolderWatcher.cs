@@ -1,11 +1,9 @@
-using System.Timers;
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
-using Timer = System.Timers.Timer;
 
 namespace MEditService.Watcher;
 
@@ -18,6 +16,7 @@ public sealed class ModFolderWatcher : IDisposable
     private readonly IRefreshIndex _index;
     private readonly INotificationPublisher _notifications;
     private readonly ILogger _logger;
+    private readonly TimeProvider _time;
     private readonly TimeSpan _quiet;
     private readonly TimeSpan _maxWindow;
     private readonly object _gate = new();
@@ -27,20 +26,22 @@ public sealed class ModFolderWatcher : IDisposable
     // copy costs less than asking git per named record.
     private const int CoalesceThreshold = 32;
 
-    /// <summary>The 300ms default collapses several events into one settle; the 2s default bounds
-    /// how long a mod's batch stays open when the stream never goes quiet.</summary>
+    /// <summary>The 300ms default collapses several events into one settle; the 2s default bounds a
+    /// batch the stream never lets go quiet. Both windows run on the injected clock.</summary>
     public ModFolderWatcher(
         LoadOrderHolder holder,
         IRefreshIndex index,
         INotificationPublisher notifications,
         ILogger logger,
         TimeSpan? quiet = null,
-        TimeSpan? maxWindow = null)
+        TimeSpan? maxWindow = null,
+        TimeProvider? timeProvider = null)
     {
         _holder = holder;
         _index = index;
         _notifications = notifications;
         _logger = logger;
+        _time = timeProvider ?? TimeProvider.System;
         _quiet = quiet ?? TimeSpan.FromMilliseconds(300);
         _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
     }
@@ -245,37 +246,20 @@ public sealed class ModFolderWatcher : IDisposable
             return existing;
         }
 
-        FileSystemWatcher? fsWatcher = null;
-        Timer? quietTimer = null;
-        Timer? maxWindowTimer = null;
+        ModEntry? unarmed = null;
         try
         {
             try
             {
-                fsWatcher = new FileSystemWatcher(modFolder)
-                {
-                    IncludeSubdirectories = recursive,
-                    // FileName and DirectoryName: git and a compile both write through a rename, and
-                    // .NET's inotify-backed Linux watcher gates Renamed on those bits.
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
-                                    | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                    // Wider than the 8KB default: a whole mod folder is a wider surface than one file's
-                    // directory, and Error is still the backstop when a burst outruns even this.
-                    InternalBufferSize = 65536,
-                };
+                unarmed = new ModEntry(
+                    modFolder, SourceRepository.GitWatchPathsIn(modFolder), recursive, _time, Settle);
             }
             catch (ArgumentException)
             {
                 return null;
             }
 
-            quietTimer = new Timer(_quiet.TotalMilliseconds) { AutoReset = false };
-            maxWindowTimer = new Timer(_maxWindow.TotalMilliseconds) { AutoReset = false };
-
-            var mod = new ModEntry(
-                modFolder, SourceRepository.GitWatchPathsIn(modFolder), fsWatcher, quietTimer, maxWindowTimer);
-            mod.QuietTimer.Elapsed += (_, _) => Settle(mod);
-            mod.MaxWindowTimer.Elapsed += (_, _) => Settle(mod);
+            var mod = unarmed;
             mod.Watcher.Changed += (_, e) => Observe(mod, e.FullPath);
             mod.Watcher.Created += (_, e) => Observe(mod, e.FullPath);
             // A deletion is a settle like any other: the whole point of the indexed-binary route, and a
@@ -283,9 +267,7 @@ public sealed class ModFolderWatcher : IDisposable
             mod.Watcher.Deleted += (_, e) => Observe(mod, e.FullPath);
             mod.Watcher.Renamed += (_, e) => { Observe(mod, e.OldFullPath); Observe(mod, e.FullPath); };
             mod.Watcher.Error += (_, _) => Interrupted(modFolder);
-            fsWatcher = null;
-            quietTimer = null;
-            maxWindowTimer = null;
+            unarmed = null;
 
             mod.Watcher.EnableRaisingEvents = true;
             _mods[modFolder] = mod;
@@ -293,9 +275,7 @@ public sealed class ModFolderWatcher : IDisposable
         }
         finally
         {
-            fsWatcher?.Dispose();
-            quietTimer?.Dispose();
-            maxWindowTimer?.Dispose();
+            unarmed?.Dispose();
         }
     }
 
@@ -391,17 +371,15 @@ public sealed class ModFolderWatcher : IDisposable
 
     // Called under _gate. Starts the bounding max-window timer once per batch, and always restarts
     // the quiet timer.
-    private static void OpenOrExtendBatch(ModEntry mod)
+    private void OpenOrExtendBatch(ModEntry mod)
     {
         if (!mod.BatchOpen)
         {
             mod.BatchOpen = true;
-            mod.MaxWindowTimer.Stop();
-            mod.MaxWindowTimer.Start();
+            mod.MaxWindowTimer.Change(_maxWindow, Timeout.InfiniteTimeSpan);
         }
 
-        mod.QuietTimer.Stop();
-        mod.QuietTimer.Start();
+        mod.QuietTimer.Change(_quiet, Timeout.InfiniteTimeSpan);
     }
 
     // Fired by either of the mod's own timers: one source batch, one mod-wide external-change
@@ -415,8 +393,8 @@ public sealed class ModFolderWatcher : IDisposable
         {
             if (!mod.BatchOpen) return;
             mod.BatchOpen = false;
-            mod.QuietTimer.Stop();
-            mod.MaxWindowTimer.Stop();
+            mod.QuietTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            mod.MaxWindowTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
             batch = [];
             indexedTouched = [];
@@ -606,15 +584,38 @@ public sealed class ModFolderWatcher : IDisposable
 
     // One mod folder's watch: its recursive FileSystemWatcher, its git watch targets, its own quiet
     // and bounding timers, and its currently registered plugins. Guarded by _gate.
-    private sealed class ModEntry(
-        string modFolder, GitWatchPaths git, FileSystemWatcher watcher, Timer quietTimer, Timer maxWindowTimer)
-        : IDisposable
+    private sealed class ModEntry : IDisposable
     {
-        public string ModFolder { get; } = modFolder;
-        public GitWatchPaths Git { get; } = git;
-        public FileSystemWatcher Watcher { get; } = watcher;
-        public Timer QuietTimer { get; } = quietTimer;
-        public Timer MaxWindowTimer { get; } = maxWindowTimer;
+        public ModEntry(
+            string modFolder, GitWatchPaths git, bool recursive,
+            TimeProvider time, Action<ModEntry> settle)
+        {
+            ModFolder = modFolder;
+            Git = git;
+            Watcher = new FileSystemWatcher(modFolder)
+            {
+                IncludeSubdirectories = recursive,
+                // FileName and DirectoryName: git and a compile both write through a rename, and
+                // .NET's inotify-backed Linux watcher gates Renamed on those bits.
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
+                                | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                // Wider than the 8KB default: a whole mod folder is a wider surface than one file's
+                // directory, and Error is still the backstop when a burst outruns even this.
+                InternalBufferSize = 65536,
+            };
+            // Both idle until a batch opens: an armed timer fires once, and OpenOrExtendBatch is
+            // the only thing that arms one.
+            QuietTimer = time.CreateTimer(
+                _ => settle(this), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            MaxWindowTimer = time.CreateTimer(
+                _ => settle(this), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        }
+
+        public string ModFolder { get; }
+        public GitWatchPaths Git { get; }
+        public FileSystemWatcher Watcher { get; }
+        public ITimer QuietTimer { get; }
+        public ITimer MaxWindowTimer { get; }
         public bool BatchOpen { get; set; }
         // A path that is neither source, refs nor a registered plugin's own binary — an asset, a
         // meta.ini edit — set mod-wide since Commands checks git's status, not this flag.

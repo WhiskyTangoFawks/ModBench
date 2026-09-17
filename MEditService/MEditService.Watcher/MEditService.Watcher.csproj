@@ -18,15 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Watcher.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.CrossBox.Tests</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- Drawn: the watcher turns a file change into a command (ADR-0015). -->
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
     <!-- Drawn: the watcher refreshes the record index (ADR-0015). -->
