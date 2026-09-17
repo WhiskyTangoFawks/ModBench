@@ -63,7 +63,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));
 
-        var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
+        var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
         trackService.TrackAsync(_loadOrder, HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }

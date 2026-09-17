@@ -88,10 +88,12 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new AbsorbExternalChangeHandler(
             sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ILogger<AbsorbExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new KeepExternalChangeHandler(
             sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<RecordTextCodec>(),

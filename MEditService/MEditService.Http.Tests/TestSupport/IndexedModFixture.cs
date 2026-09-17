@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -64,7 +63,7 @@ public sealed class IndexedModFixture : IDisposable
 
         Index = new IndexProjector(
             holder,
-            MutagenPluginAdapter.Instance,
+            TestAdapters.Mutagen(),
             SharedSchemaReflector.Instance,
             notifications: notifications);
         Holder = Index.Reconcile(holder,
@@ -76,7 +75,7 @@ public sealed class IndexedModFixture : IDisposable
         if (track)
         {
             beforeTrack?.Invoke(ModFolder);
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(Holder.Current, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }

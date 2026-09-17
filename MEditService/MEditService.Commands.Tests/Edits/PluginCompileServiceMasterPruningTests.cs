@@ -52,7 +52,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
 
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
-        var (treeFiles, _) = MutagenPluginAdapter.Instance.ReadSourceAsync(
+        var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
             new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), FixtureFileName, GameRelease.Fallout4,
             PluginStrings.In(_modFolder)).GetAwaiter().GetResult();
         var pristineFiles = SourceRepository.PristineFilesOf(FixtureFileName, treeFiles);

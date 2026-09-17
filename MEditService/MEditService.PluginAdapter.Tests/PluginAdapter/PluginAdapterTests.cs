@@ -16,7 +16,7 @@ public sealed class PluginAdapterTests
 {
     private const string PluginName = "Adapter.esp";
 
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);

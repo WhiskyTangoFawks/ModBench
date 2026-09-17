@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -82,7 +81,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         LoadOrder = new LoadOrderSnapshot(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins));
 
-        var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
+        var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
         {
             track.TrackAsync(LoadOrder, origin, SourcePreset.Edits)

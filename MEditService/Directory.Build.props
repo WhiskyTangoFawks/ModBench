@@ -30,11 +30,15 @@
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Ports'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Index'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.SourceRepo'">true</MutagenBanIncluded>
+    <!-- Every production box, by the same naming rule the architecture gates read the solution
+         with: a test project ends in .Tests, and TestSupport is the shared fixture library. -->
+    <SyncOverAsyncBanIncluded Condition="!$(MSBuildProjectName.EndsWith('.Tests')) And '$(MSBuildProjectName)' != 'MEditService.TestSupport'">true</SyncOverAsyncBanIncluded>
   </PropertyGroup>
 
   <!-- RS0030 is at error for every project (.editorconfig); no folder carries its own severity.
        BannedSymbols.txt (time, blocking waits) binds unconditionally. BannedSymbols.Mutagen.txt
-       (the live-object namespaces) binds only the eight projects named above. -->
+       (the live-object namespaces) binds only the eight projects named above.
+       BannedSymbols.SyncOverAsync.txt binds every production box and no test project. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -56,5 +60,9 @@
 
   <ItemGroup Condition="'$(MutagenBanIncluded)' == 'true'">
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SyncOverAsyncBanIncluded)' == 'true'">
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.SyncOverAsync.txt" />
   </ItemGroup>
 </Project>

@@ -78,7 +78,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
                 new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Slot: 3, Enabled: true, Winning: true),
             ]));
 
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(_loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

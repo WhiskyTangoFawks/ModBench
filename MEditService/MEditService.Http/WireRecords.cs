@@ -9,8 +9,9 @@ namespace MEditService.Http;
 public record FilterRequest(string Sql);
 public record FilterResponse(string? Sql);
 
-/// <summary>ADR-0014: the answer to "did the projection reach at least N?" — Sequence is the value
-/// observed at the moment of that answer, not necessarily equal to the awaited bound.</summary>
+/// <summary>ADR-0015 invariant 3: the answer to "did the projection reach at least N?" — Sequence
+/// is the value observed at the moment of that answer, not necessarily equal to the awaited
+/// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
 
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, and a repair
@@ -25,7 +26,8 @@ public record LoadOrderRequest(
 // making every copy non-participating.
 public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
-// ADR-0014: the Refresh rebuild's own request — same instance-keying reasoning as LoadOrderRequest.
+// ADR-0009 invariant 5: the Refresh rebuild's own request, keyed on the instance as
+// LoadOrderRequest is.
 public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
 
 public record HealthResponse(string Status);

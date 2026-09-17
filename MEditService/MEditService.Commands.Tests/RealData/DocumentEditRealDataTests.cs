@@ -38,7 +38,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
         var loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
@@ -74,7 +74,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         // land/navm/navi publish no schema, so this walk excludes them the same way the Index does.
-        var identities = MutagenPluginAdapter.Instance
+        var identities = TestAdapters.Mutagen()
             .RecordDocumentsOf(modPath, GameRelease.Fallout4, strings, codec, Schemas)
             .Select(d => d.Identity)
             .Where(i => Schemas.ContainsKey(i.RecordType))

@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,6 +23,10 @@ public sealed class ContainerModFixture : IDisposable
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public LoadOrderSnapshot LoadOrder { get; }
+
+    /// <summary>The kernel's holder with <see cref="LoadOrder"/> applied, for a handler built over
+    /// this fixture.</summary>
+    public LoadOrderHolder Holder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
@@ -188,6 +191,7 @@ public sealed class ContainerModFixture : IDisposable
         if (track) Track();
 
         holder.Apply(LoadOrder);
+        Holder = holder;
         RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
@@ -199,7 +203,7 @@ public sealed class ContainerModFixture : IDisposable
     /// <summary>Track through the real service: what an edit does to a git working tree is the thing
     /// under test, and no mock can answer that.</summary>
     internal void Track() =>
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(LoadOrder, ModFolderOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
@@ -222,11 +226,6 @@ public sealed class ContainerModFixture : IDisposable
     }
 
     public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
-
-    /// <summary>The mod-level Absorb/Keep gestures take a plugin list, not one plugin — this
-    /// fixture's own single plugin, wrapped.</summary>
-    public static IReadOnlyList<RegisteredCopy> PluginCopies(string pluginPath) =>
-        [new RegisteredCopy(PluginName, ModFolderOrigin, pluginPath, 0, true, true)];
 
     // Any document: a container's RecordData.json, a flat record's own file, or the file that inlines
     // an embedded child.

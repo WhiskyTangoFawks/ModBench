@@ -1,7 +1,6 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -48,7 +47,7 @@ internal sealed class SourceModFixture : IDisposable
 
         if (tracked)
         {
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(LoadOrder, origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }

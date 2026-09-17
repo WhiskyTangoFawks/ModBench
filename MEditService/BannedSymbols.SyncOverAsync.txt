@@ -1,0 +1,19 @@
+# A task's result is reached by awaiting it. Each spelling below takes it while blocking the
+# calling thread, the hazard BannedSymbols.txt names under `.Result`. Bound to the production
+# boxes alone: a test fixture may block on the tree it builds.
+M:System.Runtime.CompilerServices.TaskAwaiter.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Runtime.CompilerServices.TaskAwaiter`1.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Runtime.CompilerServices.ValueTaskAwaiter.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Runtime.CompilerServices.ValueTaskAwaiter`1.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Runtime.CompilerServices.ConfiguredTaskAwaitable.ConfiguredTaskAwaiter.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult;Await the task instead of blocking on GetAwaiter().GetResult().
+M:System.Threading.Tasks.Task.Wait;Await the task instead of blocking on Wait(); a Wait with a timeout asks whether the work arrived, which is a different question.
+M:System.Threading.SemaphoreSlim.Wait;Await WaitAsync, or ask with a timeout, instead of blocking on a bare Wait().
+M:System.Threading.ManualResetEventSlim.Wait;Ask with a timeout instead of blocking on a bare Wait().
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[]);Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.ReadOnlySpan{System.Threading.Tasks.Task});Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Int32);Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.TimeSpan);Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Threading.CancellationToken);Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Int32,System.Threading.CancellationToken);Await Task.WhenAll instead of blocking on WaitAll.
+M:System.Threading.Tasks.Task.WaitAll(System.Collections.Generic.IEnumerable{System.Threading.Tasks.Task},System.Threading.CancellationToken);Await Task.WhenAll instead of blocking on WaitAll.

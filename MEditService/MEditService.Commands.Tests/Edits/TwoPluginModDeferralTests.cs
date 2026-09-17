@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -51,7 +50,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         };
         var loadOrder = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

@@ -81,6 +81,18 @@ public sealed class TrackAPluginTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
     }
 
+    [Fact]
+    public async Task AfterTrackAndTheNextSnapshot_ThePluginListReportsTheCopyTracked()
+    {
+        await Loaded();
+        Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+
+        Assert.True((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+    }
+
     // ADR-0015 invariant 2: no load order is put between the Track and the hand edit, so the tracked
     // copy can only have reached the answers through the watch Track's own write armed.
     [Fact]

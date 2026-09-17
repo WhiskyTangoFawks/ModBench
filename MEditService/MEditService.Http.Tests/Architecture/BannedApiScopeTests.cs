@@ -41,6 +41,28 @@ public sealed class BannedApiScopeTests
         "P:System.Threading.Tasks.Task`1.Result",
     ];
 
+    // Every spelling that takes a task's result while blocking the calling thread; the timed
+    // overloads of Wait are absent on purpose, since they ask whether the work arrived.
+    private static readonly string[] BannedSyncOverAsyncSymbols =
+    [
+        "M:System.Runtime.CompilerServices.TaskAwaiter.GetResult",
+        "M:System.Runtime.CompilerServices.TaskAwaiter`1.GetResult",
+        "M:System.Runtime.CompilerServices.ValueTaskAwaiter.GetResult",
+        "M:System.Runtime.CompilerServices.ValueTaskAwaiter`1.GetResult",
+        "M:System.Runtime.CompilerServices.ConfiguredTaskAwaitable.ConfiguredTaskAwaiter.GetResult",
+        "M:System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1.ConfiguredTaskAwaiter.GetResult",
+        "M:System.Threading.Tasks.Task.Wait",
+        "M:System.Threading.SemaphoreSlim.Wait",
+        "M:System.Threading.ManualResetEventSlim.Wait",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[])",
+        "M:System.Threading.Tasks.Task.WaitAll(System.ReadOnlySpan{System.Threading.Tasks.Task})",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Int32)",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.TimeSpan)",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Threading.CancellationToken)",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Threading.Tasks.Task[],System.Int32,System.Threading.CancellationToken)",
+        "M:System.Threading.Tasks.Task.WaitAll(System.Collections.Generic.IEnumerable{System.Threading.Tasks.Task},System.Threading.CancellationToken)",
+    ];
+
     private const string Rs0030 = "RS0030";
 
     [Fact]
@@ -139,6 +161,38 @@ public sealed class BannedApiScopeTests
         Assert.Contains(lines, line => line.Contains("TimeProvider", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("Await the task", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void TheSyncOverAsyncSymbolList_BansEveryBlockingSpelling_NamingTheAwait()
+    {
+        var lines = SyncOverAsyncSymbolLines();
+        var banned = lines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
+
+        Assert.Equal(BannedSyncOverAsyncSymbols.Order(StringComparer.Ordinal), banned);
+        Assert.All(lines, line => Assert.Matches("Await|timeout", line.Split(';')[1]));
+    }
+
+    // A test fixture may block on the tree it builds, so the file binds by the same naming rule the
+    // gates read the solution with: every box, no .Tests project, not the fixture library.
+    [Fact]
+    public void TheSyncOverAsyncFile_BindsEveryProductionBox_AndNoTestProject()
+    {
+        var props = LoadBuildProps();
+
+        var file = Assert.Single(
+            props.Descendants("AdditionalFiles"),
+            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.SyncOverAsync.txt", StringComparison.Ordinal) == true);
+        Assert.Equal("'$(SyncOverAsyncBanIncluded)' == 'true'", (string?)file.Parent?.Attribute("Condition"));
+
+        var included = Assert.Single(props.Descendants("SyncOverAsyncBanIncluded"));
+        Assert.Equal("true", included.Value);
+        var condition = (string?)included.Attribute("Condition") ?? "";
+        Assert.Contains("!$(MSBuildProjectName.EndsWith('.Tests'))", condition, StringComparison.Ordinal);
+        Assert.Contains("'$(MSBuildProjectName)' != 'MEditService.TestSupport'", condition, StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<string> SyncOverAsyncSymbolLines() =>
+        SourceTree.ReadAllowlist(Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.SyncOverAsync.txt"));
 
     private static IReadOnlyList<string> TimeSymbolLines() =>
         SourceTree.ReadAllowlist(Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.txt"));

@@ -26,7 +26,7 @@ public sealed class RegisteredPluginSpellingTests
     {
         using var scratch = new ModFolderScratch();
 
-        var result = await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
 
         Assert.True(result.Applied, result.Message);
@@ -79,7 +79,7 @@ public sealed class RegisteredPluginSpellingTests
         // registered whatever the Track door does with the name.
         internal void TrackFromPristineFiles()
         {
-            var (treeFiles, _) = MutagenPluginAdapter.Instance.ReadSourceAsync(
+            var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
                 new ModPath(ModKey.FromFileName(PluginName), PluginPath), PluginName, Release,
                 PluginStrings.In(ModFolder)).GetAwaiter().GetResult();
             var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);

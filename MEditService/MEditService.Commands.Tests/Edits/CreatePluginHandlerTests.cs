@@ -1,7 +1,6 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -237,7 +236,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
             !modPath.ModKey.FileName.String.Equals(name, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);
 
         public override Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
-            MutagenPluginAdapter.Instance.CreateAndWriteAsync(modKey, destinationPath, gameRelease, smallMaster);
+            TestAdapters.Mutagen().CreateAndWriteAsync(modKey, destinationPath, gameRelease, smallMaster);
     }
 
     private static IModFlagsGetter Written(string modFolder, string name) =>

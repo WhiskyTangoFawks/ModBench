@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -51,7 +52,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
     public async Task Compile_Succeeds_RightAfterAbsorbAnswersTheQuestion()
     {
         RaiseParseableExternalChange();
-        var absorbed = await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(PluginPath), _mod.LoadOrder);
+        var absorbed = (await _mod.AbsorbHandler.AbsorbAsync(SourceEditFixture.ModFolderOrigin)).Require();
         Assert.True(absorbed.Applied, absorbed.RefusalReason);
 
         var result = await Compile();
@@ -63,7 +64,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
     public async Task Compile_Succeeds_RightAfterKeepAnswersTheQuestion()
     {
         RaiseParseableExternalChange();
-        var kept = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var kept = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
         Assert.True(kept.Applied, kept.RefusalReason);
 
         var result = await Compile();

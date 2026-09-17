@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -134,7 +133,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 

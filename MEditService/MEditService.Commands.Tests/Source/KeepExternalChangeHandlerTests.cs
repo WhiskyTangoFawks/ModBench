@@ -32,11 +32,25 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     }
 
     [Fact]
+    public void Keep_OfAnOriginNoLoadedPluginHas_AnswersNothing()
+    {
+        Assert.Null(_mod.KeepHandler.Keep("NoSuchMod"));
+    }
+
+    [Fact]
+    public void Keep_OfAnUntrackedMod_AnswersNothing()
+    {
+        using var untracked = SourceEditFixture.Untracked();
+
+        Assert.Null(untracked.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin));
+    }
+
+    [Fact]
     public void Keep_LandsOnlyTheTouchedRecord_AsWorkingTreeDirt()
     {
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
@@ -67,7 +81,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         File.Delete(impostor);
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
     }
@@ -87,7 +101,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         mod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         mod.WriteToBinary(PluginPath);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         var npcsDirectory = Path.Combine(
@@ -102,7 +116,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(PluginPath)));
@@ -115,7 +129,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
-        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
@@ -133,7 +147,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
             TrackedModSettledOutcome.QuestionOpened,
             TestEditService.Settled(new InMemoryNotificationPublisher()).Handle(mod.LoadOrder, mod.ModFolder));
 
-        var result = mod.KeepHandler.Keep(mod.ModFolder, mod.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
         Assert.True(result.Applied, result.RefusalReason);
 
         var afterRestart = new InMemoryNotificationPublisher();
@@ -154,7 +168,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -183,7 +197,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         firstMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         firstMod.WriteToBinary(PluginPath);
 
-        var firstLand = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var firstLand = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
         var otherNpcPathBeforeDelete = SourceDocumentPath.Of(
             _mod.ModFolder, SourceEditFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
@@ -203,7 +217,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         secondMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         secondMod.WriteToBinary(PluginPath);
 
-        var secondLand = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var secondLand = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
         // Exactly one file for UntouchedNpc, at the same path it already had, with its content
@@ -232,7 +246,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         fallout4Mod.Npcs.Add(new Npc(mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         fallout4Mod.WriteToBinary(pluginPath);
 
-        var result = mod.KeepHandler.Keep(mod.ModFolder, mod.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
@@ -251,7 +265,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(SourceEditFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
     }

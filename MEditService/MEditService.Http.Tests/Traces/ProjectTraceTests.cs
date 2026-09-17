@@ -46,8 +46,8 @@ public sealed class ProjectTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
-    // Nothing watches an untracked copy, so its answers stay stale until the reconcile asks; a
-    // binary has no smaller unit than itself, so the copy is re-derived whole rather than by key.
+    // A binary has no smaller unit than itself, so the copy the reconcile names is re-derived whole
+    // rather than by key.
     [Fact]
     public async Task ReconcilingOnePlugin_RederivesTheCopyWhoseBytesMoved_AndTheAnswerFollows()
     {

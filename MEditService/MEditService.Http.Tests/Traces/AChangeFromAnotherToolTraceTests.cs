@@ -64,8 +64,29 @@ public sealed class AChangeFromAnotherToolTraceTests : HostedTests
         Assert.Equal("RenamedByAnotherTool", (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
 
-    // The plugin's own bytes are the other half of the same watch: they are the mod's system of
-    // record, so a rewrite is a question rather than a projection.
+    // An untracked copy's bytes are its only truth, so the Index re-derives the copy itself and
+    // names it whole: too many rows to list.
+    [Fact]
+    public async Task ARewriteOfAnUntrackedPluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
+    {
+        using var fx = new PluginFixtureBuilder("trace-another-tool-untracked")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+
+        OtherTool.WritesThePlugin(
+            fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+
+        var changed = await stream.EventsUntil("plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin);
+        Assert.Equal(Origin, changed[^1].GetProperty("origin").GetString());
+        await Client.SequenceReaches(changed[^1].GetProperty("sequence").GetInt64());
+        Assert.Equal(0.9, (await Field(formKey, "HeightMax")).GetDouble(), 3);
+    }
+
+    // A tracked copy's bytes are the mod's system of record and its rows come from the source
+    // tree, so a rewrite is Commands' question, never the Index's projection.
     [Fact]
     public async Task ARewriteOfTheTrackedPluginsBytes_OpensAQuestionNamingTheCopy()
     {
