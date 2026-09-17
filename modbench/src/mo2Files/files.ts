@@ -10,6 +10,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { modsDir as modsDirOf, modGitDir, overwriteDir, profilesDir, settingsFile } from './layout';
 import type { GameDirectory } from './gameDirectory';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here, and surfaces that error elsewhere (ADR-0019). Synchronous: the composition
@@ -412,7 +413,7 @@ async function deployLoadOrder(
       await copyFile(source, target);
       written.push(target);
     } catch (err) {
-      failed.push({ source, target, error: err instanceof Error ? err.message : String(err) });
+      failed.push({ source, target, error: errorMessage(err) });
     }
   }
   return { written, failed };
@@ -505,7 +506,7 @@ async function relocateStrayFiles(
       await mkdir(dirname(to), { recursive: true });
       await moveFile(from, to, renameFn);
     } catch (err) {
-      unmoved.push(`${relativePath}: ${err instanceof Error ? err.message : String(err)}`); // ADR-0019
+      unmoved.push(`${relativePath}: ${errorMessage(err)}`); // ADR-0019
     }
   }
   return unmoved;

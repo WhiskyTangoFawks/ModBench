@@ -6,6 +6,7 @@ import {
 import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
+import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // The write path's own port call, widened by the FormKey picker's search — one client
@@ -35,7 +36,7 @@ async function copyToClipboard(reporter: Reporter, value: string): Promise<void>
   try {
     await vscode.env.clipboard.writeText(value);
   } catch (err) {
-    reporter.report('error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
+    reporter.report('error', 'Could not copy to the clipboard.', errorMessage(err));
   }
 }
 

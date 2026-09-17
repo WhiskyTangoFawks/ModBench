@@ -8,6 +8,7 @@ import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugi
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
+import { errorMessage } from '../ports/errorMessage';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -541,7 +542,7 @@ export class PluginsTreeProvider
     try {
       return (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
     } catch (err) {
-      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message(err)}`);
+      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${errorMessage(err)}`);
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
       this.matches = undefined;
       this._onDidChangeTreeData.fire(undefined);
@@ -576,7 +577,7 @@ export class PluginsTreeProvider
       this.diagnoses = diagnoses;
       this._onDidChangeTreeData.fire(undefined);
     } catch (err) {
-      this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${message(err)}`);
+      this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
     }
   }
 
@@ -636,8 +637,8 @@ export class PluginsTreeProvider
     } catch (e) {
       // ADR-0019: an explicit user action failed — notify + log, then resync the
       // moved rows against disk so the tree never shows a phantom reorder.
-      this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${message(e)}`);
-      this.reporter?.report('error', 'Failed to reorder plugins.', message(e));
+      this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
+      this.reporter?.report('error', 'Failed to reorder plugins.', errorMessage(e));
     }
     this.invalidate();
   }
@@ -670,6 +671,3 @@ function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginCopy<string> 
   return byCopy;
 }
 
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}

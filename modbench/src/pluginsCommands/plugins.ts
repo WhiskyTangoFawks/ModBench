@@ -7,6 +7,7 @@ import { pluginsFile } from '../mo2Files/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../mo2Files/files';
+import { errorMessage } from '../ports/errorMessage';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -23,7 +24,7 @@ async function modifyPlugins(
     const { wrote } = await putIfChanged(pluginsFile(instanceRoot, profile), edit);
     return { applied: true, wrote };
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return { applied: false, refusal: errorMessage(err) };
   }
 }
 
@@ -120,7 +121,7 @@ export async function reconcilePlugins(
     const implicitFolded = new Set(implicit.map(foldPath));
     appendable = new Map([...provided].filter(([folded]) => !implicitFolded.has(folded)));
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return { applied: false, refusal: errorMessage(err) };
   }
   const inDataNames = inData.kind === 'listed' ? inData.names : undefined;
 

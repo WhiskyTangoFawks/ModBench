@@ -1,5 +1,6 @@
 import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditEnvelope } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 
 /** What any record-panel gesture needs to write, whichever surface it arrives from — the webview's
  *  inline and keyboard edits through the message router, the right-click menus straight from the
@@ -29,6 +30,6 @@ export async function applyRecordEdit(
     deps.reporter.report('warning', outcome.message);
   } catch (err) {
     deps.reporter.report(
-      'error', 'Could not edit this record.', err instanceof Error ? err.message : String(err));
+      'error', 'Could not edit this record.', errorMessage(err));
   }
 }

@@ -5,6 +5,7 @@
     "outDir": "../../out/projects/client"
   },
   "references": [
+    { "path": "../ports" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

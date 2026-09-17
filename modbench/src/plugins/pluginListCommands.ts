@@ -6,6 +6,7 @@ import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider'
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
 import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
+import { errorMessage } from '../ports/errorMessage';
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
@@ -24,7 +25,7 @@ export function registerRevealInExplorerCommand(
     try {
       await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
     } catch (err) {
-      reporter.report('error', `Failed to reveal "${name}" in Explorer.`, err instanceof Error ? err.message : String(err));
+      reporter.report('error', `Failed to reveal "${name}" in Explorer.`, errorMessage(err));
     }
   });
 }

@@ -4,6 +4,7 @@ import type {
 import { isRefused } from '../client';
 import { reportIndexRefusal } from './loadOrderProgress';
 import { reportSkippedPlugins } from './pluginFailures';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Each callback is exactly one ADR-0019 surface — `warn`/`error` toast, `log` writes the
  *  channel, `setStatusText` writes the status bar, `notifyConflictsComputed` fires once,
@@ -102,7 +103,7 @@ export async function syncActiveFilter(
   try {
     result = await getActiveFilter();
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
+    const detail = errorMessage(e);
     deps.log(`syncing the active filter failed: ${detail}`);
     result = { refused: true, message: `mEdit: Could not read the active filter — treating the filter as inactive. ${detail}` };
   }

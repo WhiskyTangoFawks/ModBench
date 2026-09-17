@@ -1,5 +1,6 @@
 import type { NotificationEvent } from './apiClient';
 import { isNotificationKind, type NotificationKind } from './MEditClient';
+import { errorMessage } from '../ports/errorMessage';
 
 // Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
@@ -184,7 +185,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
       if (!this.isStopped()) this.log('[notifications] stream ended; reconnecting');
     } catch (e) {
       if (this.isStopped()) return;
-      this.log(`[notifications] stream dropped: ${e instanceof Error ? e.message : String(e)}`);
+      this.log(`[notifications] stream dropped: ${errorMessage(e)}`);
     } finally {
       // A failed attempt releases the waiting caller too: no stream is a degraded load, not a
       // stalled one.

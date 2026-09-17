@@ -1,4 +1,5 @@
 import type { MEditClient } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 
 /** The port has no `resolveOrigin` — derived here from `getPlugins()`. A transport failure
  *  degrades to `undefined` (ADR-0019), logged rather than thrown. Shared by Plugins and Editor,
@@ -10,7 +11,7 @@ export async function resolveOrigin(
   try {
     plugins = await client.getPlugins();
   } catch (e) {
-    log(`[resolveOrigin] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
+    log(`[resolveOrigin] resolveOrigin(${pluginName}) failed: ${errorMessage(e)}`);
     return undefined;
   }
   return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;

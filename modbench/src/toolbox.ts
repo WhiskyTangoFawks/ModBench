@@ -24,7 +24,7 @@ import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './pluginsCommands/plugins';
+import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource } from './pluginsCommands/plugins';
 import { adoptMods } from './modlist/modlist';
 import { registerModAdoption } from './modAdoptionTrigger';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
@@ -38,6 +38,8 @@ import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import { errorMessage } from './ports/errorMessage';
+import { applyOrThrow } from './ports/applyOrThrow';
 
 // The port members every gesture, the reconcile and the launch in this file call — narrowed off
 // `MEditClient` (ADR-0002), never the controller or the repository.
@@ -83,20 +85,15 @@ export interface Toolbox extends vscode.Disposable {
 }
 
 
-async function applyOrThrow(command: Promise<PluginsCommandResult>): Promise<void> {
-  const result = await command;
-  if (!result.applied) throw new Error(result.refusal);
-}
-
 // The commands are free functions, so the composition root binds the instance root and the
 // profile the Instance last landed, and turns a refusal into the rejection ADR-0019's
 // notify-and-log path is written against.
 function pluginListSource(instanceRoot: string, instance: Instance): PluginListSource {
   return {
-    setPluginEnabled: (name, enabled) =>
-      applyOrThrow(setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
-    reorderPlugins: (names, drop) =>
-      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, drop)),
+    setPluginEnabled: async (name, enabled) =>
+      applyOrThrow(await setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
+    reorderPlugins: async (names, drop) =>
+      applyOrThrow(await reorderPlugins(instanceRoot, instance.value.activeProfile, names, drop)),
   };
 }
 
@@ -451,7 +448,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       await action();
       modListProvider.invalidate();
     } catch (err) {
-      reporterFor(logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
+      reporterFor(logLabel).report('error', failMessage, errorMessage(err));
     }
   };
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
@@ -475,7 +472,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
   // in the applied outcome is logged here, because no caller is left to hear it.
   own(instance.subscribe(() => void reconcile().catch((e: unknown) => outputChannel.error(
-    `[toolbox] handing mEdit the load order threw: ${e instanceof Error ? e.message : String(e)}`))));
+    `[toolbox] handing mEdit the load order threw: ${errorMessage(e)}`))));
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));

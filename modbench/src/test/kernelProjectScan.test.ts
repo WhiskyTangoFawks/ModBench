@@ -21,11 +21,11 @@ const DRIVEN_BOXES: Record<string, string[]> = {
 // out here and reported, never referenced to make the picture symmetric.
 const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'mo2Files', 'ports'],
-  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files'],
-  instanceCommands: ['mo2Codecs', 'mo2Files'],
+  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
+  instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
   install: ['mo2Codecs', 'mo2Files', 'ports'],
-  deploy: ['instance', 'mo2Files'],
-  client: ['wire'],
+  deploy: ['instance', 'mo2Files', 'ports'],
+  client: ['ports', 'wire'],
 };
 
 

@@ -12,6 +12,7 @@ import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
 import { listDir } from '../mo2Files/files';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 // Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.
@@ -106,7 +107,7 @@ export async function readDataFolderPlugins(
     const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => foldPath(d.name));
     return { kind: 'listed', names: new Set(names) };
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
+    const reason = errorMessage(err);
     log(`[instance] the game's Data folder could not be listed: ${reason}`);
     return { kind: 'unreadable', reason };
   }

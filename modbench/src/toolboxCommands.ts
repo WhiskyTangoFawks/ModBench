@@ -4,6 +4,7 @@ import { deployMods, purgeMods, type DeploymentCommandResult } from './deploy/de
 import { switchProfile } from './instanceCommands/profile';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
+import { errorMessage } from './ports/errorMessage';
 
 // The task type the Launch… command picks from. Nothing contributes one yet, so the pick is
 // empty until a task provider or a tasks.json entry declares this type.
@@ -46,7 +47,7 @@ async function runDeployment(
   try {
     outcome = await command();
   } catch (err) {
-    outcome = { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    outcome = { applied: false, refusal: errorMessage(err) };
   }
   if (!outcome.applied) {
     reporter.report('error', failure, outcome.refusal);

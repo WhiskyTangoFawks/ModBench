@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient, ReferenceResult } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
  *  than as several. */
@@ -120,7 +121,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
     try {
       references = await this.client.getReferences(formKey);
     } catch (e) {
-      this.log(`[ReferencedByTreeProvider] getReferences(${formKey}) failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.log(`[ReferencedByTreeProvider] getReferences(${formKey}) failed: ${errorMessage(e)}`);
       this.onCountChanged(undefined);
       return [new ErrorNode()];
     }

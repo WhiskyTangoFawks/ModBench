@@ -11,6 +11,7 @@ import {
 import { downloadFile, modsDir as modsDirOf } from '../mo2Files/layout';
 import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../mo2Files/files';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 /** For a manual local install only `installationFile` is typically known; the rest arrives from a
  *  Nexus archive's download identity. */
@@ -90,7 +91,7 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
       refusal: `Cannot install "${name}": the staging folder and mods/ are on different drives, so the mod folder cannot be moved into place in one step.`,
     };
   }
-  return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  return { applied: false, refusal: errorMessage(err) };
 }
 
 // meta.ini is written into the staged tree first, so the folder is never seen without it, then
@@ -167,7 +168,7 @@ function landStagedMod(
         return {
           applied: false,
           refusal: `Upgrading "${name}" failed partway and was not rolled back: ${
-            err instanceof Error ? err.message : String(err)}`,
+            errorMessage(err)}`,
         };
       }
       return { applied: true, wrote: true, isFomod };
@@ -208,7 +209,7 @@ export async function installFromArchive(
     if (!outcome.applied) return outcome;
     return { ...outcome, ...(await markedInstalled(instanceRoot, archivePath)) };
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return { applied: false, refusal: errorMessage(err) };
   }
 }
 
@@ -236,6 +237,6 @@ export async function installFromFolder(
         instanceRoot, target, staging, metaFor({}, opts), isFomod, opts.gameName, opts.renameFn ?? rename);
     });
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return { applied: false, refusal: errorMessage(err) };
   }
 }

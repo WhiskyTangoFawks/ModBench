@@ -15,12 +15,8 @@ import {
 } from '../modlist/modlist';
 import { defaultModName, installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from '../install/install';
 import { collidingModName } from './modNameCollision';
-
-// A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
-// contract whether the failure came from a rejected promise or an `{ applied: false }` result.
-function applyOrThrow(outcome: { applied: true } | { applied: false; refusal: string }): void {
-  if (!outcome.applied) throw new Error(outcome.refusal);
-}
+import { errorMessage } from '../ports/errorMessage';
+import { applyOrThrow } from '../ports/applyOrThrow';
 
 
 /** Always empty, so VS Code renders the `viewsWelcome` contribution instead of the tree.
@@ -245,7 +241,7 @@ export function registerOverwriteView(
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {
         reporter.report(
-          'error', 'Failed to reveal the overwrite folder in the Explorer.', err instanceof Error ? err.message : String(err));
+          'error', 'Failed to reveal the overwrite folder in the Explorer.', errorMessage(err));
       }
     }),
   ];

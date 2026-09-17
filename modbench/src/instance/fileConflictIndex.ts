@@ -7,6 +7,7 @@ import { modDir } from '../mo2Files/layout';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { factsOf, listDir } from '../mo2Files/files';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 // Nearly every mod has one, so indexing it would make them all conflict with each other.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
@@ -142,7 +143,7 @@ async function walkSymlink(
     // than silently degrading to a skip, matching statusChecker.ts's modFolderExists
     // convention: a permission error must reject, not read as "nothing here".
     if (errnoCode(err) !== 'ENOENT') throw err;
-    log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${err instanceof Error ? err.message : String(err)})`);
+    log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${errorMessage(err)})`);
     return [];
   }
   if (facts.kind === 'directory') return descend(absolutePath, root, ancestors, log);
