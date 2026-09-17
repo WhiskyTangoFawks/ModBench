@@ -93,24 +93,17 @@ try
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // ADR-0014: one recursive watcher per mod folder in the load order, a process singleton so the
-    // reconcile-time check (PUT /load-order), Track and the live watch all share it.
+    // The Mod watcher of the target architecture: one watch per mod folder in the load order, a
+    // process singleton, and the one listener to the load-order change.
     builder.Services.AddSingleton(sp => new ModFolderWatcher(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IRefreshIndex>(),
-        sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<TrackedModSettled>(),
         sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 
     var app = builder.Build();
 
-    // The Index has no subscribe door: the change reaches its reconcile door from here, off the
-    // writer's thread. debt #946: the watcher, the one listener to the load-order change, makes this call.
-    var holder = app.Services.GetRequiredService<LoadOrderHolder>();
-    var projector = app.Services.GetRequiredService<IndexProjector>();
-    holder.Changed += (snapshot, version) => Task.Factory.StartNew(
-        () => projector.Reconcile(snapshot, version), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-    app.Services.GetRequiredService<ModFolderWatcher>().SubscribeTo(holder);
+    app.Services.GetRequiredService<ModFolderWatcher>().Subscribe();
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings

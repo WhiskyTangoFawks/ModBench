@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
 namespace MEditService.Index;
 
@@ -11,18 +10,16 @@ public interface IRefreshIndex
     /// watcher holds this for the batch rather than per plugin.</summary>
     IndexWriteGate WriteGate { get; }
 
-    /// <summary>None once the store is closed: a batch that settles after that has nowhere to
+    /// <summary>True once the store is closed: a batch that settles after that has nowhere to
     /// land.</summary>
-    LoadOrderStatus Status { get; }
+    bool Closed { get; }
 
-    long Sequence { get; }
-
-    /// <summary>Everything projected inside the scope advances <see cref="Sequence"/> once.</summary>
+    /// <summary>Everything projected inside the scope advances the Index's sequence once.</summary>
     IDisposable BeginProjection();
 
-    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed, so
-    /// nothing names a sequence the store has not reached.</summary>
-    void Announce(Action publish);
+    /// <summary>ADR-0013 invariant 1's one verb: registrations made equal to the snapshot, never-held
+    /// copies indexed, one winner sweep. Runs on the caller's thread and never throws.</summary>
+    void Reconcile(LoadOrderSnapshot snapshot, long version);
 
     /// <summary>The narrow signal: re-project exactly these keys from the source tree.</summary>
     void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys);

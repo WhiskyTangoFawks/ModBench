@@ -26,8 +26,6 @@
     <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
     <!-- Drawn: a driving adapter's kernel reads are drawn, not the band's rule (ADR-0014). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
-    <!-- Drawn: a driving adapter's kernel reads are drawn, not the band's rule (ADR-0014). -->
-    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
   </ItemGroup>
 
 </Project>

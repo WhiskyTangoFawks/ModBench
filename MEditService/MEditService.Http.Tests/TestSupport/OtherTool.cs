@@ -49,6 +49,16 @@ internal static class OtherTool
             throw new InvalidOperationException($"chmod {mode} {path} failed: {chmod.StandardError.ReadToEnd()}");
     }
 
+    /// <summary>The user reverting one document to what the repository last saw: a write under the
+    /// source tree that git makes rather than Modbench.</summary>
+    internal static void RevertsASourceDocument(string modFolder, string plugin, string textItCarries)
+    {
+        var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
+        GitProbe.Run(
+            Path.Combine(modFolder, ".git"), modFolder,
+            "restore", "--", Path.GetRelativePath(modFolder, document).Replace('\\', '/'));
+    }
+
     internal static string SourceDocumentCarrying(string modFolder, string plugin, string text) =>
         Directory
             .EnumerateFiles(SourceRepository.RootIn(modFolder, plugin), "*.json", SearchOption.AllDirectories)

@@ -60,6 +60,21 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
+    // The rival this pins: a bytes-taking door that reads the disk again anyway, which is the
+    // second read the load-time probe already made.
+    [Fact]
+    public void Handle_OverBytesTheCallerRead_ClassifiesThoseBytes_AndReadsNoBinaryItself()
+    {
+        var changed = "changed-by-xedit"u8.ToArray();
+        File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
+
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder, [(SourceEditFixture.PluginName, changed)]);
+
+        Assert.Equal(TrackedModSettledOutcome.QuestionOpened, outcome);
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal([SourceEditFixture.PluginName], pending.Plugins);
+    }
+
     [Fact]
     public void Handle_LeavesTheMarkerAlone_WhenAPluginCannotBeRead()
     {

@@ -3,18 +3,18 @@ using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.SourceRepo;
-using MEditService.Watcher;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using FakeClock = Microsoft.Extensions.Time.Testing.FakeTimeProvider;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Watcher.Tests.TestSupport;
 
-/// <summary>A real mod tree under a live watch, driven by real file events and a clock the test
-/// owns. Nothing settles until the test advances that clock.</summary>
+/// <summary>A real mod tree under a live watch, driven by real file events, load-order changes
+/// through the holder, and a clock the test owns. Nothing settles until the test advances that
+/// clock.</summary>
 internal sealed class WatchedTree : IDisposable
 {
     private static readonly TimeSpan DefaultQuiet = TimeSpan.FromMilliseconds(300);
@@ -26,16 +26,23 @@ internal sealed class WatchedTree : IDisposable
     // Whichever timer is armed is due after this, so one turn closes any open batch.
     private TimeSpan PastBothWindows => MaxWindow + Quiet;
 
-    // The one bound in this harness: how long the operating system may take to deliver an event.
-    // Exceeding it fails the wait rather than passing it.
+    // The one bound in this harness: how long the operating system may take to deliver an event,
+    // or a dedicated thread to run. Exceeding it fails the wait rather than passing it.
     internal static readonly TimeSpan DeliveryBound = TimeSpan.FromSeconds(30);
 
     internal FakeClock Clock { get; } = new(DateTimeOffset.UnixEpoch);
     internal RecordingRefreshIndex Index { get; }
     internal InMemoryNotificationPublisher Notifications { get; } = new();
     internal LoadOrderHolder Holder { get; } = new();
-    internal List<LogEntry> LogEntries { get; } = [];
     internal ModFolderWatcher Watcher { get; }
+
+    private readonly List<LogEntry> _log = [];
+
+    /// <summary>What the watcher reported: everything above the Debug trace lines.</summary>
+    internal IReadOnlyList<LogEntry> LogEntries
+    {
+        get { lock (_log) return [.. _log.Where(e => e.Level > LogLevel.Debug)]; }
+    }
 
     internal string InstanceRoot { get; }
     internal string GameDirectory { get; }
@@ -44,9 +51,8 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>The watcher's verb as the composition root builds it, over the port this tree
     /// reads.</summary>
-    internal static TrackedModSettled Settled(INotificationPublisher notifications) =>
-        new ServiceCollection()
-            .AddSingleton(notifications)
+    internal static TrackedModSettled Settled(InMemoryNotificationPublisher notifications) =>
+        notifications.RegisterIn(new ServiceCollection())
             .AddCommandHandlers()
             .BuildServiceProvider()
             .GetRequiredService<TrackedModSettled>();
@@ -59,7 +65,8 @@ internal sealed class WatchedTree : IDisposable
         InstanceRoot = Directory.CreateTempSubdirectory("medit-watch-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Watcher = new ModFolderWatcher(
-            Holder, Index, Notifications, Settled(Notifications), new CollectingLogger(LogEntries), Quiet, MaxWindow, Clock);
+            Holder, Index, Settled(Notifications), new CollectingLogger(_log), Quiet, MaxWindow, Clock);
+        Watcher.Subscribe();
     }
 
     /// <summary>A mod folder holding one plugin binary, registered in the load order this tree
@@ -67,39 +74,43 @@ internal sealed class WatchedTree : IDisposable
     internal string AddMod(string origin, string pluginName, byte[]? bytes = null)
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", origin)).FullName;
-        var pluginPath = Path.Combine(modFolder, pluginName);
-        File.WriteAllBytes(pluginPath, bytes ?? "a plugin binary"u8.ToArray());
-        _copies.Add(new RegisteredCopy(pluginName, origin, pluginPath, Slot: _copies.Count, Enabled: true, Winning: true));
+        AddCopy(origin, modFolder, pluginName, bytes);
         return modFolder;
     }
 
     /// <summary>A second plugin in a mod folder that already exists.</summary>
-    internal void AddCopy(string origin, string modFolder, string pluginName)
+    internal void AddCopy(string origin, string modFolder, string pluginName, byte[]? bytes = null)
     {
         var pluginPath = Path.Combine(modFolder, pluginName);
-        File.WriteAllBytes(pluginPath, "a plugin binary"u8.ToArray());
+        File.WriteAllBytes(pluginPath, bytes ?? "a plugin binary"u8.ToArray());
         _copies.Add(new RegisteredCopy(pluginName, origin, pluginPath, Slot: _copies.Count, Enabled: true, Winning: true));
     }
 
     internal static string PluginPath(string modFolder, string pluginName) => Path.Combine(modFolder, pluginName);
 
     /// <summary>The bytes on disk as the Index would hash them, for seeding a copy as already
-    /// indexed.</summary>
+    /// indexed and for parking a compile.</summary>
     internal static string ContentHashOf(string path) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
 
-    /// <summary>What makes a mod folder tracked is a repository in it, so this is git and the
-    /// layout the repository itself names — never a hand-spelled source path.</summary>
+    /// <summary>A repository in the mod folder, written in Track's own order: the repository first,
+    /// then each plugin's source root. Each binary is parked as its last compile, so unchanged
+    /// bytes classify as nothing changed.</summary>
     internal static void Track(string modFolder, params string[] plugins)
     {
-        foreach (var plugin in plugins) Directory.CreateDirectory(SourceRepository.RootIn(modFolder, plugin));
         var gitDir = Path.Combine(modFolder, ".git");
         GitProbe.Run(gitDir, modFolder, "init", "-q", "-b", "main");
         GitProbe.Run(gitDir, modFolder, "config", "user.email", "watch@example.invalid");
         GitProbe.Run(gitDir, modFolder, "config", "user.name", "Watch Fixture");
         GitProbe.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
+        foreach (var plugin in plugins) Directory.CreateDirectory(SourceRepository.RootIn(modFolder, plugin));
         GitProbe.Run(gitDir, modFolder, "add", "-A");
         GitProbe.Run(gitDir, modFolder, "commit", "-q", "--allow-empty", "-m", "tracked");
+        foreach (var plugin in plugins)
+        {
+            var path = PluginPath(modFolder, plugin);
+            if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(modFolder, plugin, "HEAD", ContentHashOf(path));
+        }
     }
 
     /// <summary>Drops a copy from the load order this tree applies, for a reconcile whose plugin
@@ -110,7 +121,30 @@ internal sealed class WatchedTree : IDisposable
     internal LoadOrderSnapshot Snapshot() =>
         new(GameDirectory, InstanceRoot, GameRelease.Fallout4, [.. _copies]);
 
-    internal void ApplyLoadOrder() => Holder.Apply(Snapshot());
+    /// <summary>Hands the load order to the holder and returns once the watcher has reconciled it
+    /// and every tracked mod's load-time settle has run, the two awaited on their own since they
+    /// run beside each other.</summary>
+    internal async Task ApplyLoadOrder()
+    {
+        var reconciled = Index.Reconciles.Count;
+        var expected = LoadSettles() + TrackedModsInSnapshot();
+        Holder.Apply(Snapshot());
+        Assert.True(await Reached(() => Index.Reconciles.Count > reconciled), "the load-order change never reconciled");
+        Assert.True(await Reached(() => LoadSettles() >= expected), "a tracked mod's load-time settle never ran");
+    }
+
+    private int TrackedModsInSnapshot() =>
+        _copies.Select(c => LoadOrderSnapshot.ModFolderOf(c.Origin, c.Path))
+            .Where(folder => folder is not null && SourceRepository.IsTracked(folder))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+    // The watcher's own trace line per tracked mod, one level below anything a test reads as a
+    // report.
+    private int LoadSettles()
+    {
+        lock (_log) return _log.Count(e => e.Message.StartsWith("Load-time settle of ", StringComparison.Ordinal));
+    }
 
     /// <summary>A document whose body names the record it carries, which is what lets the batch be
     /// refreshed by key rather than validated whole.</summary>
@@ -139,12 +173,18 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>Advances by <paramref name="perTurn"/> until <paramref name="reached"/> holds, for a
     /// test whose subject is which of the two windows closed the batch.</summary>
-    internal async Task<bool> Settles(Func<bool> reached, TimeSpan perTurn)
+    internal Task<bool> Settles(Func<bool> reached, TimeSpan perTurn) =>
+        Reached(() =>
+        {
+            Clock.Advance(perTurn);
+            return reached();
+        });
+
+    internal static async Task<bool> Reached(Func<bool> reached)
     {
         var bound = Stopwatch.StartNew();
         while (bound.Elapsed < DeliveryBound)
         {
-            Clock.Advance(perTurn);
             if (reached()) return true;
             await Task.Delay(10);
         }
@@ -153,24 +193,15 @@ internal sealed class WatchedTree : IDisposable
 
     internal void AdvancePastBothWindows() => Clock.Advance(PastBothWindows);
 
-    private const string ProbeOrigin = "DeliveryProbe";
     private const string ProbePlugin = "Probe.esp";
 
-    /// <summary>A second watch over the same mod folder, registered for a plugin the subject never
-    /// sees, so its probe settles a batch of its own without projecting into the subject's.</summary>
-    internal DeliveryOracle ArmOracleIn(string modFolder)
+    /// <summary>A second, recursive watch over the same mod folder, for a probe the subject never
+    /// registers: its delivery says everything written before it has reached a watch on this folder
+    /// too.</summary>
+    internal static DeliveryOracle ArmOracleIn(string modFolder)
     {
-        var probePath = Path.Combine(modFolder, ProbePlugin);
         Directory.CreateDirectory(SourceRepository.RootIn(modFolder, ProbePlugin));
-
-        // The probe copy lives only in the oracle's own load order: the subject never registers it,
-        // so nothing the probe does can appear at the subject's doors.
-        var probeOnly = new LoadOrderSnapshot(
-            GameDirectory, InstanceRoot, GameRelease.Fallout4,
-            [new RegisteredCopy(ProbePlugin, ProbeOrigin, probePath, Slot: 0, Enabled: true, Winning: true)]);
-        var oracle = new DeliveryOracle(probeOnly, modFolder, Quiet, MaxWindow);
-        oracle.Watcher.WatchSourceOf(ProbeOrigin);
-        return oracle;
+        return new DeliveryOracle(modFolder);
     }
 
     public void Dispose()
@@ -183,43 +214,38 @@ internal sealed class WatchedTree : IDisposable
 
     internal sealed class DeliveryOracle : IDisposable
     {
-        private readonly FakeClock _clock = new(DateTimeOffset.UnixEpoch);
-        private readonly RecordingRefreshIndex _index = new();
+        private readonly FileSystemWatcher _watcher;
         private readonly string _modFolder;
+        private readonly object _gate = new();
+        private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
         private int _probes;
 
-        internal ModFolderWatcher Watcher { get; }
-
-        private readonly TimeSpan _past;
-
-        internal DeliveryOracle(LoadOrderSnapshot snapshot, string modFolder, TimeSpan quiet, TimeSpan maxWindow)
+        internal DeliveryOracle(string modFolder)
         {
             _modFolder = modFolder;
-            _past = quiet + maxWindow;
-            var holder = new LoadOrderHolder();
-            holder.Apply(snapshot);
-            var notifications = new InMemoryNotificationPublisher();
-            Watcher = new ModFolderWatcher(
-                holder, _index, notifications, Settled(notifications), NullLogger.Instance, quiet, maxWindow, _clock);
+            _watcher = new FileSystemWatcher(modFolder)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+            };
+            _watcher.Created += (_, e) => Seen(e.FullPath);
+            _watcher.Changed += (_, e) => Seen(e.FullPath);
+            _watcher.EnableRaisingEvents = true;
         }
 
-        /// <summary>Writes a probe and settles on it. One watch delivers in order, so the probe
-        /// landing says everything written before it has been observed too.</summary>
+        private void Seen(string path)
+        {
+            lock (_gate) _seen.Add(path);
+        }
+
+        /// <summary>Writes a probe under the probe plugin's source root and waits for its event: the
+        /// kernel queues each write to every watch on the folder in order.</summary>
         internal async Task<bool> Delivered()
         {
-            var before = _index.Of("projection").Count;
-            WriteUnnamedDocument(_modFolder, ProbePlugin, $"probe-{++_probes}.json");
-
-            var bound = Stopwatch.StartNew();
-            while (bound.Elapsed < DeliveryBound)
-            {
-                _clock.Advance(_past);
-                if (_index.Of("projection").Count > before) return true;
-                await Task.Delay(10);
-            }
-            return false;
+            var probe = WriteUnnamedDocument(_modFolder, ProbePlugin, $"probe-{++_probes}.json");
+            return await Reached(() => { lock (_gate) return _seen.Contains(probe); });
         }
 
-        public void Dispose() => Watcher.Dispose();
+        public void Dispose() => _watcher.Dispose();
     }
 }

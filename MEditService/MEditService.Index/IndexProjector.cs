@@ -117,6 +117,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
     public IndexWriteGate WriteGate { get; } = new();
 
+    public bool Closed => Status.State is LoadOrderState.None;
+
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
     public IRecordReads RequireReads() => RequireScopeCore().Index.At(RecordRef.Effective);

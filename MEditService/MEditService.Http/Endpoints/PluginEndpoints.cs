@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.SourceRepo;
-using MEditService.Watcher;
 
 namespace MEditService.Http.Endpoints;
 
@@ -224,18 +223,13 @@ public static class PluginEndpoints
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, LoadOrderHolder holder, TrackHandler trackHandler,
-        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
+        TrackRequest req, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
-
-        // ADR-0015 invariant 2: before the write, so the tree Track commits comes back through the
-        // watch instead of waiting for a client to reconcile.
-        watcher.WatchSourceOf(req.Origin);
 
         try
         {
@@ -320,7 +314,7 @@ public static class PluginEndpoints
     // the baseline it commits covers the whole mod in one go.
     internal static async Task<IResult> AbsorbExternalChange(
         ExternalChangeActionRequest req, LoadOrderHolder holder, AbsorbExternalChangeHandler handler,
-        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -333,8 +327,6 @@ public static class PluginEndpoints
         try
         {
             var result = await handler.AbsorbAsync(modFolder, plugins, loadOrder);
-            if (result.Applied)
-                foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
             var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
         }
@@ -349,7 +341,7 @@ public static class PluginEndpoints
     // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
     internal static IResult KeepExternalChange(
         ExternalChangeActionRequest req, LoadOrderHolder holder, KeepExternalChangeHandler handler,
-        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -362,8 +354,6 @@ public static class PluginEndpoints
         try
         {
             var result = handler.Keep(modFolder, plugins, loadOrder.GameRelease);
-            if (result.Applied)
-                foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

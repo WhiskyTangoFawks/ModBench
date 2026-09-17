@@ -126,15 +126,15 @@ public sealed class ArchitectureTests
     }
 
     // ADR-0013 invariant 1: the create and put-load-order handlers are the only writers, the
-    // composition root's own subscription the only reconciler — a second of either makes the
-    // Index's Status lie.
+    // watcher's own subscription the only reconciler — a second of either makes the Index's
+    // Status lie.
     [Fact]
-    public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheCompositionRoot()
+    public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheWatcher()
     {
         var root = SolutionDirectory();
         // Create never reconciles: its copy reaches the Index through the next snapshot. The
-        // composition root is the one caller of the reconcile door. debt #946: the watcher takes the call.
-        string[] reconcilers = ["Program.cs"];
+        // watcher, the one listener to the change, is the one caller of the reconcile door.
+        string[] reconcilers = ["ModFolderWatcher.cs", "WatcherSinks.cs"];
         string[] writers = ["CreatePluginHandler.cs", "PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);

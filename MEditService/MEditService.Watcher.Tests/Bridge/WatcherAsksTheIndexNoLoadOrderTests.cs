@@ -2,9 +2,8 @@ using System.Reflection;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using MEditService.Watcher;
 
-namespace MEditService.Tests.Bridge;
+namespace MEditService.Watcher.Tests.Bridge;
 
 /// <summary>ADR-0013 invariant 4: one load order, the kernel's. The watcher reads it from the holder
 /// and holds only the Index surface that answers nothing about it.</summary>
@@ -37,8 +36,9 @@ public sealed class WatcherAsksTheIndexNoLoadOrderTests
     [Fact]
     public void TheRefreshSurface_HoldsOnlyMembersTheWatcherCalls()
     {
-        var watcherSource = File.ReadAllText(
-            Path.Combine(RepoRoot.SolutionDirectory(), "MEditService.Watcher", "ModFolderWatcher.cs"));
+        var watcherSource = string.Concat(
+            SourceTree.CSharpFiles(Path.Combine(RepoRoot.SolutionDirectory(), "MEditService.Watcher"))
+                .Select(File.ReadAllText));
 
         var uncalled = typeof(IRefreshIndex).GetProperties().Select(m => m.Name)
             .Concat(typeof(IRefreshIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name))
@@ -49,6 +49,21 @@ public sealed class WatcherAsksTheIndexNoLoadOrderTests
 
         Assert.True(uncalled.Count == 0,
             $"{nameof(IRefreshIndex)} carries members the watcher never calls:\n" + string.Join("\n", uncalled));
+    }
+
+    // The interface is subscribe and dispose: a public verb beyond those is a message something
+    // outside would send it, and every settle is then a path a caller has to remember.
+    [Fact]
+    public void TheWatcher_TakesNoMessage_BeyondSubscribeAndDispose()
+    {
+        var verbs = typeof(ModFolderWatcher)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(m => !m.IsSpecialName)
+            .Select(m => m.Name)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal([nameof(IDisposable.Dispose), nameof(ModFolderWatcher.Subscribe)], verbs);
     }
 
     private const BindingFlags EveryMember =

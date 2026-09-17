@@ -23,11 +23,18 @@ public sealed class TrackedModSettled
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every handler.
     internal TrackedModSettled(INotificationPublisher notifications) => _notifications = notifications;
 
-    public TrackedModSettledOutcome Handle(LoadOrderSnapshot loadOrder, string modFolder)
-    {
-        if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } plugins)
-            return TrackedModSettledOutcome.NoQuestion;
+    /// <summary>Reads every plugin the load order holds in the mod off disk, then classifies. A
+    /// plugin caught mid-write is no verdict.</summary>
+    public TrackedModSettledOutcome Handle(LoadOrderSnapshot loadOrder, string modFolder) =>
+        ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is { } plugins
+            ? Handle(loadOrder, modFolder, plugins)
+            : TrackedModSettledOutcome.NoQuestion;
 
+    /// <summary>Classifies from bytes the caller already read, so a load-time readability probe and
+    /// the settle share one read of each tracked binary.</summary>
+    public TrackedModSettledOutcome Handle(
+        LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins)
+    {
         switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
         {
             case ExternalChangeClassification.ExternalChange change:

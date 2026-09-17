@@ -1,10 +1,10 @@
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.Watcher.Tests.TestSupport;
 
-namespace MEditService.Tests.Bridge;
+namespace MEditService.Watcher.Tests.Bridge;
 
-/// <summary>ADR-0014 and ADR-0015 invariant 2: what one mod folder settled together, and which
-/// projection the watcher asked the Index for. The clock closes every batch here.</summary>
+/// <summary>ADR-0015 invariant 2: what one mod folder settled together, and which projection the
+/// watcher asked the Index for. The clock closes every batch here.</summary>
 public sealed class SourceBatchTests
 {
     private const string Origin = "OneMod";
@@ -16,15 +16,20 @@ public sealed class SourceBatchTests
 
     private static int Scopes(WatchedTree tree) => tree.Index.Of("projection").Count;
 
+    private static async Task<string> OneTrackedMod(WatchedTree tree, params string[] plugins)
+    {
+        var modFolder = tree.AddMod(Origin, plugins[0]);
+        foreach (var plugin in plugins.Skip(1)) tree.AddCopy(Origin, modFolder, plugin);
+        WatchedTree.Track(modFolder, plugins);
+        await tree.ApplyLoadOrder();
+        return modFolder;
+    }
+
     [Fact]
     public async Task WritesToTwoPluginsOfOneMod_InOneWindow_SettleAsOneBatchNamingBoth()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        tree.AddCopy(Origin, modFolder, "B.esp");
-        WatchedTree.Track(modFolder, "A.esp", "B.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp", "B.esp");
 
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
         WatchedTree.WriteUnnamedDocument(modFolder, "B.esp");
@@ -36,7 +41,8 @@ public sealed class SourceBatchTests
     }
 
     // The rival this pins: a watcher-wide timer, which would coalesce two mods' writes into one
-    // batch because both land before any single window closes.
+    // batch. Which mod settles first is the operating system's delivery order, so the two batches
+    // are asserted as a set.
     [Fact]
     public async Task WritesToTwoDifferentMods_InOneWindow_SettleAsTwoSeparateBatches()
     {
@@ -45,17 +51,16 @@ public sealed class SourceBatchTests
         var modB = tree.AddMod("ModB", "B.esp");
         WatchedTree.Track(modA, "A.esp");
         WatchedTree.Track(modB, "B.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf("ModA");
-        tree.Watcher.WatchSourceOf("ModB");
+        await tree.ApplyLoadOrder();
 
         WatchedTree.WriteUnnamedDocument(modA, "A.esp");
         WatchedTree.WriteUnnamedDocument(modB, "B.esp");
 
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count >= 2));
         Assert.Equal(2, Scopes(tree));
-        Assert.Equal(["A.esp"], ValidatedIn(tree, 1));
-        Assert.Equal(["B.esp"], ValidatedIn(tree, 2));
+        Assert.Equal(
+            [["A.esp"], ["B.esp"]],
+            new[] { ValidatedIn(tree, 1), ValidatedIn(tree, 2) }.OrderBy(batch => batch[0], StringComparer.Ordinal));
     }
 
     // Quiet is far longer than the bounding window here, so the quiet timer can never be what
@@ -66,11 +71,8 @@ public sealed class SourceBatchTests
         var quiet = TimeSpan.FromSeconds(10);
         var maxWindow = TimeSpan.FromSeconds(1);
         using var tree = new WatchedTree(quiet: quiet, maxWindow: maxWindow);
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
-        using var oracle = tree.ArmOracleIn(modFolder);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
 
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
         Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
@@ -93,10 +95,7 @@ public sealed class SourceBatchTests
     public async Task ADocumentThatNamesItsRecord_IsRefreshedByKey_NotValidatedWhole()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
 
         WatchedTree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
 
@@ -111,11 +110,7 @@ public sealed class SourceBatchTests
     public async Task ARefMove_ValidatesEveryPluginOfTheModWhole()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        tree.AddCopy(Origin, modFolder, "B.esp");
-        WatchedTree.Track(modFolder, "A.esp", "B.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp", "B.esp");
 
         WatchedTree.MoveRef(modFolder);
 
@@ -130,10 +125,7 @@ public sealed class SourceBatchTests
     public async Task ADocumentNamingNoRecord_ValidatesTheCopyWhole()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
 
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
 
@@ -145,10 +137,7 @@ public sealed class SourceBatchTests
     public async Task AnUnrelatedFileUnderTheModFolder_ReachesTheIndexNotAtAll()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
 
         // A .json outside the source root, so passing takes more than the carries-no-record filter
         // the extension alone would trip.
@@ -168,12 +157,9 @@ public sealed class SourceBatchTests
     public async Task ADeletedRepository_LeavesTheSourceWriteUnprojected()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        using var oracle = tree.ArmOracleIn(modFolder);
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         Directory.Delete(Path.Combine(modFolder, ".git"), recursive: true);
         Assert.False(SourceRepository.IsTracked(modFolder));
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
@@ -193,11 +179,8 @@ public sealed class SourceBatchTests
     public async Task AfterTheIndexCloses_AWatchThatFires_ProjectsNothingAndLogsNothing()
     {
         using var tree = new WatchedTree();
-        var modFolder = tree.AddMod(Origin, "A.esp");
-        WatchedTree.Track(modFolder, "A.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
-        using var oracle = tree.ArmOracleIn(modFolder);
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         tree.Index.Closed = true;
 
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
