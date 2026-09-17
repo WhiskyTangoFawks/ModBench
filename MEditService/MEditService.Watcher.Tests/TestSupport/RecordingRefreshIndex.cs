@@ -1,8 +1,7 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Watcher.Tests.TestSupport;
 
 /// <summary>What the watcher asked the Index for, in order, with the projection scope it was
 /// inside.</summary>
@@ -15,6 +14,8 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
 {
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
+    private readonly List<(LoadOrderSnapshot Snapshot, long Version)> _reconciles = [];
+    private readonly List<(PluginCopyKey Key, string Path)> _binaryPokes = [];
     private readonly Dictionary<PluginCopyKey, string> _indexedHashes = new(PluginCopyKey.Comparer);
     private int _scope;
 
@@ -24,14 +25,17 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
     /// has nowhere to land.</summary>
     public bool Closed { get; set; }
 
-    public LoadOrderStatus Status =>
-        new(Closed ? LoadOrderState.None : LoadOrderState.Ready, 0, [], ConflictsComputed: true, []);
-
-    public long Sequence => 0;
-
     /// <summary>Makes the index refuse the way a torn-down load order does, so the watcher's own
     /// answer to a projection it could not land is observable.</summary>
     public bool Refuses { get; set; }
+
+    /// <summary>Fails the way a store that cannot open a scope does, so the watcher's answer to a
+    /// callback it cannot complete is observable.</summary>
+    public bool RefusesProjectionScope { get; set; }
+
+    /// <summary>Set, a validate blocks until it is signalled: the shape of a sink still running
+    /// when the watcher is told to go.</summary>
+    public ManualResetEventSlim? HoldsValidateUntil { get; set; }
 
     public IReadOnlyList<RecordedProjection> Projections
     {
@@ -41,9 +45,18 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
     public IReadOnlyList<RecordedProjection> Of(string verb) =>
         [.. Projections.Where(p => p.Verb == verb)];
 
-    /// <summary>Fails the way a store that cannot open a scope does, so the watcher's answer to a
-    /// callback it cannot complete is observable.</summary>
-    public bool RefusesProjectionScope { get; set; }
+    /// <summary>Every reconcile the watcher asked for, in order, with the version it named.</summary>
+    public IReadOnlyList<(LoadOrderSnapshot Snapshot, long Version)> Reconciles
+    {
+        get { lock (_gate) return [.. _reconciles]; }
+    }
+
+    /// <summary>Every binary poke, whether or not the bytes turned out to differ: what the watcher
+    /// asked for is its own fact, where the answer is this recorder's.</summary>
+    public IReadOnlyList<(PluginCopyKey Key, string Path)> BinaryPokes
+    {
+        get { lock (_gate) return [.. _binaryPokes]; }
+    }
 
     public IDisposable BeginProjection()
     {
@@ -56,7 +69,10 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
         }
     }
 
-    public void Announce(Action publish) => publish();
+    public void Reconcile(LoadOrderSnapshot snapshot, long version)
+    {
+        lock (_gate) _reconciles.Add((snapshot, version));
+    }
 
     public void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys)
     {
@@ -67,6 +83,7 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
     public IReadOnlyList<ValidationReport> ValidateIndex(PluginCopyKey? plugin)
     {
         Refuse();
+        HoldsValidateUntil?.Wait(TimeSpan.FromSeconds(30));
         Record("validate", plugin, []);
         return [];
     }
@@ -74,15 +91,6 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
     /// <summary>Seeds this copy as already indexed with this hash — the state a prior reconcile
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
     public void SeedIndexed(PluginCopyKey key, string hash) => _indexedHashes[key] = hash;
-
-    /// <summary>Every binary poke, whether or not the bytes turned out to differ: what the watcher
-    /// asked for is its own fact, where the answer is this recorder's.</summary>
-    public IReadOnlyList<(PluginCopyKey Key, string Path)> BinaryPokes
-    {
-        get { lock (_gate) return [.. _binaryPokes]; }
-    }
-
-    private readonly List<(PluginCopyKey Key, string Path)> _binaryPokes = [];
 
     public Task<bool> RefreshBinary(PluginCopyKey key, string path)
     {

@@ -192,7 +192,7 @@ public static class LoadOrderEndpoints
         return Results.Ok(index.Status);
     }
 
-    private static IResult GetSequence(IRefreshIndex index) => Results.Ok(index.Sequence);
+    private static IResult GetSequence(IndexProjector index) => Results.Ok(index.Sequence);
 
     // An absent directory is a bad request, not an empty answer: "no implicit masters" and "that
     // folder isn't there" want opposite responses from the caller.

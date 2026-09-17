@@ -3,4 +3,3 @@
 # calling thread on exactly the same hazard, so this list is the work remaining rather than
 # permission. It shrinks as each caller learns to await, and when it is empty the ban grows the
 # entries and this gate goes. A line added here is a new block that needs the maintainer's ruling.
-MEditService.Watcher/ModFolderWatcher.cs: GetAwaiter().GetResult(): 1

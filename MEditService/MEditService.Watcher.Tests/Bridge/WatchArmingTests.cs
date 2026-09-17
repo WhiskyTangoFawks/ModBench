@@ -1,70 +1,114 @@
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.Watcher.Tests.TestSupport;
 
-namespace MEditService.Tests.Bridge;
+namespace MEditService.Watcher.Tests.Bridge;
 
-/// <summary>ADR-0014 invariant 3 and ADR-0015: which folders a load order puts under watch, and
-/// the registration Track makes before it writes a byte.</summary>
+/// <summary>The Mod watcher's arming: which folders a load order puts under watch, and the
+/// upgrade a watch makes for itself when a source tree or a repository appears under an untracked
+/// mod.</summary>
 public sealed class WatchArmingTests
 {
     private const string Origin = "TrackedMod";
     private const string PluginName = "Tracked.esp";
 
-    // The rival this pins: a SubscribeTo that never wires Changed, leaving every plugin unwatched
+    // The rival this pins: a Subscribe that never wires Changed, leaving every plugin unwatched
     // when a load order arrives through Apply.
     [Fact]
-    public async Task SubscribeTo_ArmsTheWatch_WhenTheLoadOrderChanges()
+    public async Task Subscribe_ArmsTheWatch_WhenTheLoadOrderChanges()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod("Untracked", "Mirrored.esp", "original"u8.ToArray());
-        tree.Watcher.SubscribeTo(tree.Holder);
 
-        tree.ApplyLoadOrder();
+        await tree.ApplyLoadOrder();
 
-        // Rearm runs off the caller's thread, so the write is retried until the watch is live.
-        Assert.True(await tree.Settles(() =>
-        {
-            File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Mirrored.esp"), Guid.NewGuid().ToByteArray());
-            return tree.Index.Of("reindex").Count > 0;
-        }));
+        File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Mirrored.esp"), "changed-by-xedit"u8.ToArray());
+        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
         Assert.Equal("Mirrored.esp", (Assert.Single(tree.Index.Of("reindex")).Plugin
             ?? throw new InvalidOperationException("a reindex names no plugin")).Name);
     }
 
-    // The rival this pins: a registration made after Track's commit, which has no ref move left to
-    // see, so the tree Track just wrote never reaches the Index.
+    // The rival this pins: a subscription that reconciles but never arms, or arms without
+    // reconciling — each change is exactly one of each.
+    [Fact]
+    public async Task ALoadOrderChange_ReconcilesTheIndexExactlyOnce_WithTheVersionTheHolderNamed()
+    {
+        using var tree = new WatchedTree();
+        tree.AddMod("Untracked", "Mirrored.esp");
+
+        var version = tree.Holder.Apply(tree.Snapshot());
+        Assert.True(await WatchedTree.Reached(() => tree.Index.Reconciles.Count > 0));
+
+        var reconcile = Assert.Single(tree.Index.Reconciles);
+        Assert.Equal(version, reconcile.Version);
+        Assert.Same(tree.Holder.Current, reconcile.Snapshot);
+    }
+
+    // The rival this pins: a top-level watch that stays top-level, so the tree Track writes under
+    // an untracked mod never reaches the Index until the next load-order change.
     [Fact]
     public async Task TrackingAModUnderALiveWatch_ValidatesItWhole_WithNoReconcile()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName);
-        tree.ApplyLoadOrder();
-        tree.Watcher.Rearm(tree.Holder.Current);
+        await tree.ApplyLoadOrder();
 
-        // The endpoint's own order: the registration upgrades the watch before Track writes.
-        tree.Watcher.WatchSourceOf(Origin);
         WatchedTree.Track(modFolder, PluginName);
 
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
         Assert.Equal(PluginName, (tree.Index.Of("validate")[0].Plugin
             ?? throw new InvalidOperationException("a validate names no plugin")).Name);
+        Assert.Single(tree.Index.Reconciles);
     }
 
-    // The rival this pins: unregistering the source root on a settle that finds no repository,
-    // which takes Track's registration with it while Track is still writing.
+    // The upgrade is what lets a document written after Track reach the Index by name: the watch
+    // that saw the tree appear now sees everything under it.
+    [Fact]
+    public async Task ADocumentWrittenAfterTheTreeAppeared_ReachesTheIndexByKey()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, PluginName);
+        await tree.ApplyLoadOrder();
+        WatchedTree.Track(modFolder, PluginName);
+        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
+
+        WatchedTree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
+
+        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
+        Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
+    }
+
+    // ADR-0003: another tool removed the repository, the roots outlived it, and a re-Track writes
+    // the repository alone. The rival this pins: an upgrade that rides only on a root appearing.
+    [Fact]
+    public async Task ReTrackingAModWhoseRootsOutlivedTheRepository_ReachesTheIndexByKey()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, PluginName);
+        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
+        await tree.ApplyLoadOrder();
+
+        WatchedTree.Track(modFolder, PluginName);
+        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
+
+        WatchedTree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
+
+        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
+        Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
+    }
+
+    // The rival this pins: unregistering the source root on a settle that finds no repository.
+    // The root here appears before the repository, the reverse of Track's own order.
     [Fact]
     public async Task ASettleBeforeTheRepositoryExists_KeepsTheRegistration()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName);
-        tree.ApplyLoadOrder();
-        tree.Watcher.Rearm(tree.Holder.Current);
-        tree.Watcher.WatchSourceOf(Origin);
+        await tree.ApplyLoadOrder();
 
         // A write under the source root while the mod is still untracked: a batch opens and closes
         // with nothing to project from.
         Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
-        using var oracle = tree.ArmOracleIn(modFolder);
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         WatchedTree.WriteUnnamedDocument(modFolder, PluginName);
         Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
         tree.AdvancePastBothWindows();
@@ -77,26 +121,24 @@ public sealed class WatchArmingTests
             ?? throw new InvalidOperationException("a validate names no plugin")).Name);
     }
 
-    // A mod folder the gesture registering it is about to create has nothing to watch yet, so that
-    // tree's own burst is lost; the rival this pins is registering once and never again.
+    // A mod folder not on disk when the load order names it has nothing to watch, so that
+    // folder's later burst is lost; the next load-order change is what arms it.
     [Fact]
-    public async Task AModFolderNotOnDiskYet_ArmsNothing_UntilItIsRegisteredAgain()
+    public async Task AModFolderNotOnDiskAtLoad_ArmsNothing_UntilTheNextLoadOrderChange()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName);
-        tree.ApplyLoadOrder();
         Directory.Delete(modFolder, recursive: true);
-
-        tree.Watcher.WatchSourceOf(Origin);
+        await tree.ApplyLoadOrder();
 
         Directory.CreateDirectory(modFolder);
         WatchedTree.Track(modFolder, PluginName);
-        using var oracle = tree.ArmOracleIn(modFolder);
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         Assert.True(await oracle.Delivered(), "the tree never reached a watch on the mod folder");
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Projections);
 
-        tree.Watcher.WatchSourceOf(Origin);
+        await tree.ApplyLoadOrder();
         WatchedTree.WriteUnnamedDocument(modFolder, PluginName);
 
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));

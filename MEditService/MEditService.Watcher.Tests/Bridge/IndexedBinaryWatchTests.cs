@@ -1,35 +1,34 @@
-using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Ports;
-using MEditService.Tests.TestSupport;
+using MEditService.SourceRepo;
+using MEditService.Watcher.Tests.TestSupport;
 
-namespace MEditService.Tests.Bridge;
+namespace MEditService.Watcher.Tests.Bridge;
 
 /// <summary>ADR-0009: every indexed binary the load order holds, tracked or not, is watched. The
-/// Index owns the comparison, so what the watcher does is poke it with the key and the path.</summary>
+/// Index owns the comparison and the announcement, so what the watcher does is poke it with the
+/// key and the path.</summary>
 public sealed class IndexedBinaryWatchTests
 {
     private const string Origin = "Untracked";
     private const string PluginName = "Mirrored.esp";
     private static readonly PluginCopyKey Copy = new(PluginName, Origin);
 
-    // Untracked, so Rearm takes the indexed-binary route for it, and seeded as a prior reconcile
-    // would have left it: already indexed at the bytes on disk now.
-    private static (WatchedTree Tree, string PluginPath) Watching(bool seeded = true)
+    // Untracked, so the load order arms the indexed-binary route for it, and seeded as a prior
+    // reconcile would have left it: already indexed at the bytes on disk now.
+    private static async Task<(WatchedTree Tree, string PluginPath)> Watching(bool seeded = true)
     {
         var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName, "original"u8.ToArray());
         var pluginPath = WatchedTree.PluginPath(modFolder, PluginName);
         if (seeded) tree.Index.SeedIndexed(Copy, WatchedTree.ContentHashOf(pluginPath));
-        tree.ApplyLoadOrder();
-        tree.Watcher.Rearm(tree.Holder.Current);
+        await tree.ApplyLoadOrder();
         return (tree, pluginPath);
     }
 
     [Fact]
     public async Task AnIndexedBinaryWhoseBytesChange_IsReindexed()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
         File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
@@ -39,26 +38,31 @@ public sealed class IndexedBinaryWatchTests
         Assert.Empty(tree.Index.Of("unindex"));
     }
 
-    // Content, never events: the watcher pokes with the key and the path and publishes only when
-    // the Index says something landed, so identical bytes announce nothing.
+    // Content, never events: the watcher pokes with the key and the path, and Commands hears
+    // nothing of an untracked mod, so identical bytes raise nothing anywhere.
     [Fact]
-    public async Task AnIndexedBinaryRewrittenWithIdenticalBytes_IsPokedButAnnouncesNothing()
+    public async Task AnIndexedBinaryRewrittenWithIdenticalBytes_IsPokedAndNothingElse()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
+        using var oracle = WatchedTree.ArmOracleIn(Path.GetDirectoryName(pluginPath) ?? throw new InvalidOperationException("no folder"));
 
         File.WriteAllBytes(pluginPath, "original"u8.ToArray());
+        // Every event one write raises is queued before the window closes, so the one poke is one
+        // window's rather than the operating system's event count.
+        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
 
-        Assert.True(await tree.Settles(() => tree.Index.BinaryPokes.Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal((Copy, pluginPath), Assert.Single(tree.Index.BinaryPokes));
-        Assert.Empty(tree.Notifications.Notifications);
+        Assert.Empty(tree.Notifications.Published);
     }
 
     // A deletion is its own verb: the Index must forget the copy, not re-read a file that is gone.
     [Fact]
     public async Task AnIndexedBinaryThatIsDeleted_IsUnindexed()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
         File.Delete(pluginPath);
@@ -72,7 +76,7 @@ public sealed class IndexedBinaryWatchTests
     [Fact]
     public async Task AnIndexedBinaryThatComesBack_IsReindexed()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
         File.Delete(pluginPath);
@@ -89,7 +93,7 @@ public sealed class IndexedBinaryWatchTests
     [Fact]
     public async Task ACopyTheIndexHasNeverIndexed_IsArmedAnyway()
     {
-        var (tree, pluginPath) = Watching(seeded: false);
+        var (tree, pluginPath) = await Watching(seeded: false);
         using var _ = tree;
 
         File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
@@ -98,35 +102,19 @@ public sealed class IndexedBinaryWatchTests
         Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
     }
 
-    // ADR-0014: "whenever the plugin watcher re-indexes a binary" is exactly the trigger this
-    // notification names, and it carries the copy so a client knows what to re-read.
-    [Fact]
-    public async Task AnIndexedBinaryWhoseBytesChange_PublishesPluginChanged()
-    {
-        var (tree, pluginPath) = Watching();
-        using var _ = tree;
-
-        File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-
-        Assert.True(await tree.Settles(() => tree.Notifications.Notifications.Count > 0));
-        var changed = Assert.IsType<PluginChangedNotification>(Assert.Single(tree.Notifications.Notifications));
-        Assert.Equal(Copy, changed.Plugin);
-    }
-
     // A watch must not outlive the load order that asked for it, or a copy the load order has
     // dropped would keep re-indexing itself into the Index.
     [Fact]
     public async Task ACopyTheLoadOrderHasDropped_StopsReachingTheIndex()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new InvalidOperationException("the plugin has no folder");
-        using var oracle = tree.ArmOracleIn(modFolder);
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
 
         tree.RemoveCopy(PluginName);
-        tree.ApplyLoadOrder();
-        tree.Watcher.Rearm(tree.Holder.Current);
+        await tree.ApplyLoadOrder();
 
         File.WriteAllBytes(pluginPath, "changed-after-the-load-order-dropped-it"u8.ToArray());
         Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
@@ -139,7 +127,7 @@ public sealed class IndexedBinaryWatchTests
     [Fact]
     public async Task AChangeTheIndexCouldNotTake_IsProjectedAgainOnTheNextSettle()
     {
-        var (tree, pluginPath) = Watching();
+        var (tree, pluginPath) = await Watching();
         using var _ = tree;
         tree.Index.Refuses = true;
 
@@ -162,10 +150,9 @@ public sealed class IndexedBinaryWatchTests
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod("Tracked", "Tracked.esp");
         WatchedTree.Track(modFolder, "Tracked.esp");
-        tree.ApplyLoadOrder();
-        tree.Watcher.Rearm(tree.Holder.Current);
+        await tree.ApplyLoadOrder();
 
-        using var oracle = tree.ArmOracleIn(modFolder);
+        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Tracked.esp"), "changed-by-xedit"u8.ToArray());
         Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
 
@@ -173,5 +160,6 @@ public sealed class IndexedBinaryWatchTests
 
         Assert.Empty(tree.Index.BinaryPokes);
         Assert.Empty(tree.Index.Of("reindex"));
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(modFolder));
     }
 }

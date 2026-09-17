@@ -37,7 +37,6 @@
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
     <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
-    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
     <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
   </ItemGroup>
 

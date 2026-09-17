@@ -13,11 +13,16 @@ public sealed class CollectingLoggerProvider(List<LogEntry> entries) : ILoggerPr
     public void Dispose() { }
 }
 
+/// <summary>Appends under the list's own lock: a watcher or timer thread logs while the test thread
+/// reads, so a reader takes the same lock.</summary>
 public sealed class CollectingLogger(List<LogEntry> entries) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => true;
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
         Exception? exception, Func<TState, Exception?, string> formatter)
-        => entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
+    {
+        var entry = new LogEntry(logLevel, formatter(state, exception), exception);
+        lock (entries) entries.Add(entry);
+    }
 }
