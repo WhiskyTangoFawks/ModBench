@@ -183,9 +183,8 @@ describe('the legacy project holds every file not yet moved', () => {
     expect(testFiles('mo2Codecs').length).toBeGreaterThan(5);
   });
 
-  // Rival this catches: a test left beside its source rather than under the box's `test/`, which
-  // the legacy project's per-box exclusion swallows and the box's own project excludes — so it
-  // compiles in neither and lints in neither.
+  // Rival: a test left beside its source rather than under the box's `test/`. The legacy
+  // project's glob swallows it and the box's own project excludes it, so it compiles in neither.
   it.each(BOXES)('compiles every test on disk under %s', (box) => {
     const compiled = new Set(fileNames(LEGACY_PROJECT));
     expect(testFilesOnDisk(box).filter((f) => !compiled.has(f))).toEqual([]);
