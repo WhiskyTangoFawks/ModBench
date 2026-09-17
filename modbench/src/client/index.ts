@@ -8,6 +8,7 @@ export type {
   PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult, ExternalChangeActionResult, LoadOrderStatus,
   UnansweredExternalChange, PluginLoadFailure,
 } from './MEditClient';
+export type { RecordEditEnvelope } from './MEditClient';
 export { isRefused, isCrashRepairReason } from './MEditClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
 export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';
