@@ -18,7 +18,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger, TimeProvider? tim
 
     /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0008,
     /// xEdit's canonical form) rather than leaving it to Mutagen's undefined default.</summary>
-    public static Task<PreparedPluginSave> PrepareAsync(
+    private static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         GameRelease gameRelease,
         IReadOnlyList<string>? loadOrder = null,

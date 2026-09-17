@@ -65,6 +65,23 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         }
     }
 
+    public bool CanRead(ModPath modPath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(modPath.Path);
+            stream.CopyTo(Stream.Null);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
+        ImplicitPlugins.In(dataFolder, gameRelease);
+
     public (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {

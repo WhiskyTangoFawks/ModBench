@@ -30,6 +30,15 @@ public interface IPluginAdapter
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
+    /// <summary>Whether the plugin's bytes read end to end right now — the file is there and nothing
+    /// holds it against a reader (ADR-0003). Never a parse.</summary>
+    bool CanRead(ModPath modPath);
+
+    /// <summary>The plugins the install at <paramref name="dataFolder"/> loads with no load-order
+    /// line naming them (ADR-0013): the release's implicit masters present there, then that folder's
+    /// Creation Club catalog. Claimed by both, named once.</summary>
+    IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease);
+
     /// <summary>What a copy's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> is the throw that stopped a full walk: the count is a readout, not a
     /// gate.</summary>
