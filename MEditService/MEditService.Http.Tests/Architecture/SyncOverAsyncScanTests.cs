@@ -4,13 +4,13 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Architecture;
 
 /// <summary>A task's result is reached by awaiting it. BannedSymbols.txt forbids `.Result`, and
-/// these two spellings block the calling thread on the same hazard, so both are counted against an
+/// these spellings block the calling thread on the same hazard, so each is counted against an
 /// allowlist that only shrinks.</summary>
 public sealed class SyncOverAsyncScanTests
 {
-    // A Wait carrying a timeout asks whether the work arrived, which is a different question, so
-    // only the no-argument form counts.
-    private static readonly string[] Forms = ["GetAwaiter().GetResult()", ".Wait()"];
+    // The three spellings that take a task's result without awaiting it. A Wait carrying a timeout
+    // asks whether the work arrived, which is a different question, so it is not one of them.
+    private static readonly string[] Forms = ["GetAwaiter().GetResult()", ".Wait()", "Task.WaitAll("];
 
     // Each block leaves with the box ticket that rewrites its caller, so a failure reads as work
     // remaining rather than as a rule with no owner.
@@ -105,13 +105,14 @@ public sealed class SyncOverAsyncScanTests
             Directory.CreateDirectory(Path.Combine(root, "P", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "P", "Blocking.cs"),
-                "var a = FirstAsync().GetAwaiter().GetResult();\nvar b = SecondAsync().GetAwaiter().GetResult();\n_gate.Wait();\n");
+                "var a = FirstAsync().GetAwaiter().GetResult();\nvar b = SecondAsync().GetAwaiter().GetResult();\n_gate.Wait();\nTask.WaitAll(a, b);\n");
             File.WriteAllText(Path.Combine(root, "P", "Timed.cs"), "if (!gate.Wait(750)) return;");
             File.WriteAllText(Path.Combine(root, "P", "obj", "Generated.cs"), "x.GetAwaiter().GetResult();");
             File.WriteAllText(Path.Combine(root, "P", "Clean.cs"), "await FirstAsync();");
 
             Assert.Equal(
-                ["P/Blocking.cs: .Wait(): 1", "P/Blocking.cs: GetAwaiter().GetResult(): 2"],
+                ["P/Blocking.cs: .Wait(): 1", "P/Blocking.cs: GetAwaiter().GetResult(): 2",
+                 "P/Blocking.cs: Task.WaitAll(: 1"],
                 Counts(root, ["P"]));
         }
         finally
