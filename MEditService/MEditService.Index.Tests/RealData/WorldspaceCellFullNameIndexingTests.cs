@@ -1,18 +1,13 @@
-using MEditService.Commands;
-using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Tests.RealData;
 
 /// <summary>Indexes a real Cell through the real <see cref="DuckDbRecordIndex"/> pipeline rather
 /// than stubbing the DTO layer: the JSON-path guess driving <c>json_extract_string</c> is unproven
@@ -58,9 +53,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
         _index.Reconcile(holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_index, holder, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
+        TrackedMods.Track(pluginPath, _gameDirectory);
     }
 
     public void Dispose()

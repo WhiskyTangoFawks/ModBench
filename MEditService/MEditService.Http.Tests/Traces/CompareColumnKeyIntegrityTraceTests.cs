@@ -1,7 +1,5 @@
-using System.Reflection;
 using System.Text.Json;
 using MEditService.Index;
-using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,102 +12,16 @@ namespace MEditService.Tests.Traces;
 [Collection(WebHostCollection.Name)]
 public sealed class CompareColumnKeyIntegrityTraceTests : HostedTests
 {
-    // Reflection-derived from CompareResult's own DTO graph, so a hand-typed allowlist cannot let a
-    // column-keyed dictionary go unchecked. The attribute is matched by name, not by type, because
-    // ColumnKeyedAttribute is Queries' own internal.
-    private static readonly (HashSet<string> Direct, HashSet<string> Nested) ColumnDictProperties = BuildColumnDictProperties();
+    // The wire's own column-keyed dictionaries on a FieldDiff node, wherever one appears: nothing
+    // in the JSON schema names them, so a client hardcodes these four the same way this test does.
+    private static readonly HashSet<string> ColumnKeyedProperties = new(StringComparer.Ordinal)
+    {
+        "values", "cellStates", "resolutions", "checkErrors",
+    };
 
     private ScatteredFixtureData? _fixture;
 
     protected override void DisposeFixtures() => _fixture?.Dispose();
-
-    private static (HashSet<string> Direct, HashSet<string> Nested) BuildColumnDictProperties()
-    {
-        var direct = new HashSet<string>(StringComparer.Ordinal);
-        var nested = new HashSet<string>(StringComparer.Ordinal);
-        CollectColumnKeyedProperties(typeof(CompareResult), direct, nested, []);
-        return (direct, nested);
-    }
-
-    private static void CollectColumnKeyedProperties(
-        Type type, HashSet<string> direct, HashSet<string> nested, HashSet<Type> visited)
-    {
-        if (!IsOwnDtoType(type) || !visited.Add(type)) return;
-
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            VisitProperty(prop, direct, nested, visited);
-    }
-
-    private static void VisitProperty(
-        PropertyInfo prop, HashSet<string> direct, HashSet<string> nested, HashSet<Type> visited)
-    {
-        if (TryGetStringDictValueType(prop.PropertyType, out var dictValueType))
-        {
-            VisitDictionaryProperty(prop, dictValueType, direct, nested, visited);
-            return;
-        }
-
-        var nextType = TryGetEnumerableElementType(prop.PropertyType, out var elementType) ? elementType : prop.PropertyType;
-        CollectColumnKeyedProperties(nextType, direct, nested, visited);
-    }
-
-    private static bool IsColumnKeyed(PropertyInfo prop) =>
-        prop.GetCustomAttributes(inherit: false).Any(a => a.GetType().Name == "ColumnKeyedAttribute");
-
-    // A [ColumnKeyed] dictionary whose own *value* type is itself a string-keyed dictionary is the
-    // double-nested case (FieldCellStates/FieldResolutions) — detected structurally here, not via a
-    // second attribute flavor, and recorded in `nested` instead of `direct`.
-    private static void VisitDictionaryProperty(
-        PropertyInfo prop, Type dictValueType, HashSet<string> direct, HashSet<string> nested, HashSet<Type> visited)
-    {
-        if (!IsColumnKeyed(prop))
-        {
-            CollectColumnKeyedProperties(dictValueType, direct, nested, visited);
-            return;
-        }
-
-        var jsonName = JsonNamingPolicy.CamelCase.ConvertName(prop.Name);
-        if (TryGetStringDictValueType(dictValueType, out var innerValueType))
-        {
-            nested.Add(jsonName);
-            CollectColumnKeyedProperties(innerValueType, direct, nested, visited);
-        }
-        else
-        {
-            direct.Add(jsonName);
-            CollectColumnKeyedProperties(dictValueType, direct, nested, visited);
-        }
-    }
-
-    // Only walk our own DTOs (MEditService.*) — never BCL/Mutagen types (string, object,
-    // enums, ConflictThis, etc.), which is what stops the recursion at every leaf.
-    private static bool IsOwnDtoType(Type type) =>
-        !type.IsEnum && !type.IsPrimitive
-        && type.Namespace is { } ns && ns.StartsWith("MEditService.", StringComparison.Ordinal);
-
-    private static bool TryGetStringDictValueType(Type type, out Type valueType)
-    {
-        var dictInterface = CandidateInterfaces(type).FirstOrDefault(i =>
-            i.IsGenericType
-            && (i.GetGenericTypeDefinition() == typeof(IDictionary<,>) || i.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>))
-            && i.GetGenericArguments()[0] == typeof(string));
-        valueType = dictInterface?.GetGenericArguments()[1] ?? typeof(object);
-        return dictInterface != null;
-    }
-
-    private static bool TryGetEnumerableElementType(Type type, out Type elementType)
-    {
-        elementType = typeof(object);
-        if (type == typeof(string)) return false;
-        var ienum = CandidateInterfaces(type)
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
-        if (ienum == null) return false;
-        elementType = ienum.GetGenericArguments()[0];
-        return true;
-    }
-
-    private static IEnumerable<Type> CandidateInterfaces(Type type) =>
-        type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
     [Fact]
     public async Task GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
@@ -201,30 +113,11 @@ public sealed class CompareColumnKeyIntegrityTraceTests : HostedTests
 
     private static void AssertProperty(JsonProperty prop, HashSet<string> validKeys)
     {
-        if (prop.Value.ValueKind == JsonValueKind.Object)
+        if (prop.Value.ValueKind == JsonValueKind.Object && ColumnKeyedProperties.Contains(prop.Name))
         {
-            if (ColumnDictProperties.Direct.Contains(prop.Name))
-                AssertColumnKeyedEntries(prop.Value, validKeys);
-            else if (ColumnDictProperties.Nested.Contains(prop.Name))
-                AssertNestedColumnKeyedEntries(prop.Value, validKeys);
+            foreach (var entry in prop.Value.EnumerateObject())
+                Assert.Contains(entry.Name, validKeys);
         }
         AssertEveryColumnDictKeyIsValid(prop.Value, validKeys);
-    }
-
-    private static void AssertColumnKeyedEntries(JsonElement dict, HashSet<string> validKeys)
-    {
-        foreach (var entry in dict.EnumerateObject())
-            Assert.Contains(entry.Name, validKeys);
-    }
-
-    // The outer key here is a field id ("function", "runOn", "param:0", …), not a column — only
-    // each field id's own value (the inner dictionary) is column-keyed.
-    private static void AssertNestedColumnKeyedEntries(JsonElement dict, HashSet<string> validKeys)
-    {
-        foreach (var fieldEntry in dict.EnumerateObject())
-        {
-            if (fieldEntry.Value.ValueKind == JsonValueKind.Object)
-                AssertColumnKeyedEntries(fieldEntry.Value, validKeys);
-        }
     }
 }
