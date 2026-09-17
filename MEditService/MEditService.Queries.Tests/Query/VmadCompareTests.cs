@@ -1,13 +1,15 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 /// <summary>Scripts, properties and alias scripts are keyed arrays aligned by key, so a plugin
 /// carrying fewer scripts reads as absences at those keys rather than shifting rows.</summary>

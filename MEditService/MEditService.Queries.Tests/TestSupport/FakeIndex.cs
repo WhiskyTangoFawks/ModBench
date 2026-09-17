@@ -2,7 +2,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>One plugin's committed copy of one record, the unit <see cref="FakeReads"/> is built
 /// from — carrying only the documents a test needs, never a whole plugin's worth.</summary>
@@ -70,8 +70,14 @@ internal sealed class FakeReads(
         rows.Where(r => r.Document.ParseDiagnosis != null).Select(r => ColumnKey.Of(r.Plugin.Name, r.Plugin.Origin))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-    public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
+    // Projecting a diagnosis and deciding which copies were derived from a source tree are the real
+    // Index's own behaviour; a test states the rows it wants read back.
+    public IReadOnlyList<PluginDiagnosisRow> Diagnoses { get; set; } = [];
+
+    public IReadOnlySet<PluginCopyKey> Tracked { get; set; } = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
+
+    public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => Diagnoses;
+    public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => Tracked;
     public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey plugin) => new HashSet<string>();
     public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey) => [];

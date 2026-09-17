@@ -2,12 +2,13 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>Everything a built fixture hands the test: the load order's own copies, what the Index
 /// would have opened, and the documents each copy holds.</summary>

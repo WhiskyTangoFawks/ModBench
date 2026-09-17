@@ -1,12 +1,14 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 // ADR-0012: the compare grid is xEdit parity, the record's in-game resolution stack. A file-level
 // loser is a file the game never loads, so it is not a column, though it stays indexed and
