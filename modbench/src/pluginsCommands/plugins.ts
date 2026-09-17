@@ -62,10 +62,10 @@ export function appendPlugin(
   return modifyPlugins(instanceRoot, profile, (text) => appendPluginInText(text, pluginName));
 }
 
-export interface PluginLinesDelta {
-  /** Real on-disk names to append, disabled, ascending case-folded. */
+interface PluginLinesDelta {
+  // Real on-disk names to append, disabled, ascending case-folded.
   append: string[];
-  /** plugins.txt names (as written) whose line goes. */
+  // plugins.txt names (as written) whose line goes.
   prune: string[];
 }
 
@@ -73,9 +73,9 @@ export type PluginsReconcileResult =
   | { applied: true; wrote: boolean; append: string[]; prune: string[] }
   | { applied: false; refusal: string };
 
-/** `inData` is presence only, never an append source; `undefined` — an unresolved game
- *  directory — makes presence unknowable, so nothing is pruned. */
-export function pluginLinesDelta(
+// `inData` is presence only, never an append source; `undefined` — an unresolved game
+// directory — makes presence unknowable, so nothing is pruned.
+function pluginLinesDelta(
   listed: readonly string[],
   provided: ReadonlyMap<string, string>,
   inData: ReadonlySet<string> | undefined,

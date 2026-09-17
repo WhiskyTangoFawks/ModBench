@@ -143,9 +143,9 @@ async function deleteArchive(
     )) === 'Delete');
 }
 
-/** Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
- *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
-export async function deleteArchives(
+// Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
+// Cancel is a silent no-op for the whole batch, matching the single-file contract.
+async function deleteArchives(
   instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
 ): Promise<void> {
   if (names.length === 1) {

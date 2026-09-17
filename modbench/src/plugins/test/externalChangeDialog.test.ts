@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buttonsInDefaultOrder, messageFor, runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
+  messageFor, runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../client';
 import type { AskQuestion } from '../../ports/dialog';
@@ -13,27 +13,9 @@ function unanswered(overrides: Partial<UnansweredExternalChange> = {}): Unanswer
   };
 }
 
-describe('buttonsInDefaultOrder', () => {
-  it('leads with baseline when the tell fired', () => {
-    expect(buttonsInDefaultOrder(unanswered({ metaChanged: true }))).toEqual([BASELINE_BUTTON, APPLY_BUTTON]);
-  });
-
-  it('leads with apply when the tell did not fire', () => {
-    expect(buttonsInDefaultOrder(unanswered({ metaChanged: false }))).toEqual([APPLY_BUTTON, BASELINE_BUTTON]);
-  });
-
-  it('leads with apply when there is no meta trailer at all (also metaChanged: false on the wire)', () => {
-    expect(buttonsInDefaultOrder(unanswered({ metaChanged: false, oldVersion: null }))).toEqual([APPLY_BUTTON, BASELINE_BUTTON]);
-  });
-
-  it('both buttons are always present, in either order', () => {
-    for (const metaChanged of [true, false]) {
-      const buttons = buttonsInDefaultOrder(unanswered({ metaChanged }));
-      expect(buttons).toContain(BASELINE_BUTTON);
-      expect(buttons).toContain(APPLY_BUTTON);
-    }
-  });
-});
+// buttonsInDefaultOrder is not exported: runExternalChangeDialogs is its one caller, and its own
+// tests below already drive both orderings (metaChanged true and false) through show()'s call
+// args — "shows exactly one modal..." and "shows one modal per distinct notification...".
 
 describe('messageFor', () => {
   it('message is always the mod name alone', () => {

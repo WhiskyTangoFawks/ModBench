@@ -105,7 +105,7 @@ export function normalizeFormKeyQuery(query: string): string {
 // Seeded with the current reference so it is visible instead of an empty-query default; setting
 // `.value` does not fire onDidChangeValue, so the seed is searched explicitly. A stale in-flight
 // search is dropped by a sequence guard.
-export async function pickFormKeyViaQuickPick(
+async function pickFormKeyViaQuickPick(
   deps: FormKeyPickerDeps, seed: string, validTypes: string[],
 ): Promise<string | null> {
   const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem & { formKey: string }>();

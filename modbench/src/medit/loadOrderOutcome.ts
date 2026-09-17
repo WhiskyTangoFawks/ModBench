@@ -79,9 +79,9 @@ export async function applyLoadOrderOutcome(
   await deps.applyReconciled(failures, totalPlugins);
 }
 
-/** What a synced filter read needs reported once it resolves — a read failure degrades to
- *  inactive and warns (never throws); otherwise the readout just states what the backend holds. */
-export function applyFilterSyncResult(
+// What a synced filter read needs reported once it resolves — a read failure degrades to
+// inactive and warns (never throws); otherwise the readout just states what the backend holds.
+function applyFilterSyncResult(
   result: string | null | WriteRefused,
   deps: { warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },
 ): void {

@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
-import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseLibraryFoldersVdf, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
+import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
 
 // A fixture, not a platform lock (CLAUDE.md): the real facts come from gamePaths.ts and
 // loadOrderDestination.ts; this module takes them as data and names no game itself.
@@ -43,43 +43,6 @@ const VDF_WITHOUT_FO4 = `
 }
 `;
 
-describe('parseLibraryFoldersVdf', () => {
-  it('returns library path when the app id is present', () => {
-    const result = parseLibraryFoldersVdf(VDF_WITH_FO4, FO4_APP_ID);
-    expect(result).toBe('/mnt/games/steam');
-  });
-
-  it('returns null when the app id is absent', () => {
-    const result = parseLibraryFoldersVdf(VDF_WITHOUT_FO4, FO4_APP_ID);
-    expect(result).toBeNull();
-  });
-
-  it('handles multiple libraries and returns the one containing the app id', () => {
-    const vdf = `
-"libraryfolders"
-{
-  "1"
-  {
-    "path"    "/default/steam"
-    "apps"
-    {
-      "220"    "1"
-    }
-  }
-  "2"
-  {
-    "path"    "/mnt/games/steam"
-    "apps"
-    {
-      "${FO4_APP_ID}"    "2"
-    }
-  }
-}
-`;
-    expect(parseLibraryFoldersVdf(vdf, FO4_APP_ID)).toBe('/mnt/games/steam');
-  });
-});
-
 describe('detectGamePaths (Linux)', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -105,8 +68,8 @@ describe('detectGamePaths (Linux)', () => {
   });
 });
 
-// The Proton prefix root, factored out of `detectLinux` so gameDirectory.ts's Wine drive-letter
-// translation reuses the library lookup instead of re-deriving it.
+// The Proton prefix root, factored out of `detectLinux` for gameDirectory.ts's Wine translation.
+// Also parseLibraryFoldersVdf's seam now that it is not exported: no fs.access to also stub.
 describe('detectWinePrefix', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -134,6 +97,34 @@ describe('detectWinePrefix', () => {
     const result = await detectWinePrefix(FO4_APP_ID);
 
     expect(result).toBeNull();
+  });
+
+  it('handles multiple libraries and returns the one containing the app id', async () => {
+    vi.mocked(fs.readFile).mockResolvedValue(`
+"libraryfolders"
+{
+  "1"
+  {
+    "path"    "/default/steam"
+    "apps"
+    {
+      "220"    "1"
+    }
+  }
+  "2"
+  {
+    "path"    "/mnt/games/steam"
+    "apps"
+    {
+      "${FO4_APP_ID}"    "2"
+    }
+  }
+}
+`);
+
+    const result = await detectWinePrefix(FO4_APP_ID);
+
+    expect(result).toBe('/mnt/games/steam/steamapps/compatdata/377160/pfx');
   });
 });
 

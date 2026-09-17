@@ -12,9 +12,9 @@ export const APPLY_BUTTON = `Apply to working tree on ${EDIT_BRANCH_NAME}`;
 
 export type ExternalChangeDialogAnswer = 'absorb' | 'keep' | 'defer';
 
-/** Button order carries the default — VS Code's modal focuses the first — never a separate flag:
- *  baseline leads when the tell (meta.ini's version move) fired (ADR-0003). */
-export function buttonsInDefaultOrder(change: UnansweredExternalChange): [string, string] {
+// Button order carries the default — VS Code's modal focuses the first — never a separate flag:
+// baseline leads when the tell (meta.ini's version move) fired (ADR-0003).
+function buttonsInDefaultOrder(change: UnansweredExternalChange): [string, string] {
   return change.metaChanged ? [BASELINE_BUTTON, APPLY_BUTTON] : [APPLY_BUTTON, BASELINE_BUTTON];
 }
 
