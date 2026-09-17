@@ -262,6 +262,36 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
     }
 
+    // The record editor renders the column read-only from this member alone, so the compare wire
+    // has to carry the diagnosis the Index put on the document rather than only the tree's listings.
+    [Fact]
+    public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith()
+    {
+        const string diagnosis = "could not be read";
+        FormKey npcKey = default;
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod => npcKey = mod.Npcs.AddNew("Unreadable").FormKey)
+            .Build("Aggression");
+        var (_, svc) = Build(fixture with
+        {
+            Rows = [.. fixture.Rows.Select(r => r with { Document = r.Document with { ParseDiagnosis = diagnosis } })],
+        });
+
+        var compare = svc.GetCompare(npcKey.ToString());
+
+        Assert.NotNull(compare);
+        Assert.Equal(diagnosis, Assert.Single(compare.Overrides).ParseDiagnosis);
+    }
+
+    [Fact]
+    public void GetCompare_LeavesAReadableRecordsColumnWithoutADiagnosis()
+    {
+        var compare = _svc.GetCompare(_npc01Key.ToString());
+
+        Assert.NotNull(compare);
+        Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
+    }
+
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {
