@@ -600,7 +600,11 @@ describe('modbench.openEditorBeside', () => {
       { formKey: 'Fallout4.esm:000062', label: 'Multi C' },
     ];
     await vscode.commands.executeCommand('modbench.openEditorBeside', selection[0], selection);
-    await waitFor('every multi-selected tab', () => selection.every((s) => openTabs().some((t) => t.label === s.label)) || undefined);
+    // Both conditions: a tab can carry its label before the group it landed in finishes
+    // settling, and settling into one group (not one per record) is the behavior under test.
+    await waitFor('every multi-selected tab in one new group', () =>
+      (selection.every((s) => openTabs().some((t) => t.label === s.label))
+        && vscode.window.tabGroups.all.length === groupsBefore + 1) || undefined);
 
     const groupsAfter = vscode.window.tabGroups.all.length;
     const tabs = openTabs();
