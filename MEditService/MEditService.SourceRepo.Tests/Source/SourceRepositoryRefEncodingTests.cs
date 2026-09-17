@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Git ref names forbid spaces and brackets, which almost every real Fallout 4 plugin
 /// filename contains; the Track/Compile suites' fixtures happen to use ref-safe names.</summary>

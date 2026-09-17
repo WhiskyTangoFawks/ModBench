@@ -1,8 +1,9 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.SourceRepo.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The load-bearing claim is "no checkout at all": the edit branch's working tree, index
 /// and HEAD come out byte-identical, dirt included.</summary>

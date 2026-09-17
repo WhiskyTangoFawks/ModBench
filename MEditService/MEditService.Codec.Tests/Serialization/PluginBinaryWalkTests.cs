@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using MEditService.Codec.Serialization;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Tests.Serialization;
 
 public sealed class PluginBinaryWalkTests
 {

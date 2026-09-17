@@ -167,7 +167,7 @@ public sealed partial class SourceRepository
     {
         if (CarriesNoRecord(relativePath)) return null;
 
-        if (FormKeyDeclaredIn(text, relativePath, HeaderDocumentFor(pluginFileName), pluginFileName)
+        if (FormKeyDeclaredIn(text, relativePath, pluginFileName)
             is not { } formKey)
             return null;
 

@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Cleanup removes more than <c>.git</c>: the <c>.gitignore</c> and the pristine tree under
 /// <c>source/</c> are written before <c>add</c>/<c>commit</c> ever run.</summary>

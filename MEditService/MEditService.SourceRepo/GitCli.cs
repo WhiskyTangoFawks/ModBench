@@ -73,16 +73,20 @@ internal static class GitCli
         psi.Environment["GIT_WORK_TREE"] = workTree;
         if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
 
-        // Both streams read concurrently: draining one to completion before the other is the classic .NET
-        // Process deadlock once a child fills a ~64 KB pipe buffer, and payloads here are not bounded.
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        Task.WaitAll(stdoutTask, stderrTask);
+
+        // Draining one stream to completion before the other is the classic .NET Process deadlock once
+        // a child fills a ~64 KB pipe buffer. A thread, so this call blocks on a process, never a task.
+        var stderr = string.Empty;
+        var drainStderr = new Thread(() => stderr = process.StandardError.ReadToEnd()) { IsBackground = true };
+        drainStderr.Start();
+        var stdout = process.StandardOutput.ReadToEnd();
+        drainStderr.Join();
+
         process.WaitForExit();
-        return (process.ExitCode, stdoutTask.GetAwaiter().GetResult(), stderrTask.GetAwaiter().GetResult());
+        return (process.ExitCode, stdout, stderr);
     }
 }
 

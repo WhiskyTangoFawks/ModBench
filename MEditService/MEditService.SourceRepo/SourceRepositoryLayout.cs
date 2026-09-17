@@ -31,7 +31,7 @@ public sealed partial class SourceRepository
 
     /// <summary>The whole-mod door's own name for a container's field file, and for the header's
     /// document at the plugin tree's root.</summary>
-    public const string RecordDataFileName = "RecordData.json";
+    internal const string RecordDataFileName = "RecordData.json";
 
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
@@ -185,11 +185,59 @@ public sealed partial class SourceRepository
     /// <summary>Whether <paramref name="leaf"/> names the record with <paramref name="formKey"/> — asked
     /// in the one unambiguous direction, since an EditorID containing <c>" - "</c> makes splitting a
     /// name undecidable.</summary>
-    public static bool NameCarriesFormKey(string leaf, string formKey)
+    internal static bool NameCarriesFormKey(string leaf, string formKey)
     {
         var filesafe = FilesafeFormKey(formKey);
         return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
     }
+
+    /// <summary>Which of <paramref name="paths"/> holds <paramref name="formKey"/>'s document, or null
+    /// when none does. Both separators are read, so a git listing and a walk of the working tree ask
+    /// alike.</summary>
+    public static string? PathCarrying(IEnumerable<string> paths, string pluginFileName, string formKey)
+    {
+        foreach (var path in paths)
+        {
+            var segments = Segments(path);
+            if (segments.Length == 0) continue;
+            var leaf = segments[^1];
+
+            if (leaf.Equals(RecordDataFileName, StringComparison.Ordinal))
+            {
+                // The header's document has a fixed path and a name that carries no FormKey; every
+                // other one is named by the directory holding it.
+                if (IsHeaderDocumentPath(segments, pluginFileName))
+                {
+                    if (formKey.Equals(HeaderFormKeyOf(pluginFileName), StringComparison.Ordinal)) return path;
+                    continue;
+                }
+
+                if (segments.Length < 2) continue;
+                leaf = segments[^2];
+            }
+
+            if (NameCarriesFormKey(leaf, formKey)) return path;
+        }
+        return null;
+    }
+
+    /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
+    /// equality: the caller may spell it absolute, relative to the mod folder, or as git does.</summary>
+    internal static bool IsHeaderDocumentPath(string path, string pluginFileName) =>
+        IsHeaderDocumentPath(Segments(path), pluginFileName);
+
+    private static bool IsHeaderDocumentPath(string[] segments, string pluginFileName) =>
+        EndsWith(segments, Segments(HeaderDocumentFor(pluginFileName)));
+
+    internal static string HeaderFormKeyOf(string pluginFileName) =>
+        PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
+
+    private static string[] Segments(string path) =>
+        path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool EndsWith(string[] segments, string[] tail) =>
+        segments.Length >= tail.Length
+        && segments.AsSpan(segments.Length - tail.Length).SequenceEqual(tail);
 
     // The whole-mod door's two name shapes: the filesafe FormKey alone, or "<EditorID> - " ahead of it.
     // Anchored at both ends so a name that merely embeds the text cannot match.

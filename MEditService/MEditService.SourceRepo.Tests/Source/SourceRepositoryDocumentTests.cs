@@ -1,10 +1,11 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.SourceRepo.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The repository's document verbs against a real tracked tree with no index anywhere in
 /// the fixture: a mod folder, git, and the files Track committed (ADR-0014 invariant 5).</summary>

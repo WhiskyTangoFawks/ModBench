@@ -1,11 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
@@ -20,7 +18,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     internal ValidationReport Validate(PluginCopyKey key, string modFolder)
     {
         var failures = new List<string>();
-        var sourceRoot = Path.Combine(modFolder, SourceRepository.RootFor(key.Name));
+        var sourceRoot = SourceRepository.RootIn(modFolder, key.Name);
 
         // Tracked but holding no tree for this plugin: nothing here can say what its rows should be,
         // and the caller's whole-plugin path already knows how to fall back to the binary.
@@ -96,7 +94,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
 
             if (blobs.Contains(SourceRepository.ContentHash(Encoding.UTF8.GetBytes(headBody)))) continue;
 
-            if (CommittedPathFor(listing.Keys, key.Name, formKey) != null) drifted.Add(formKey);
+            if (SourceRepository.PathCarrying(listing.Keys, key.Name, formKey) != null) drifted.Add(formKey);
             else goneAtHead.Add(formKey);
         }
 
@@ -109,36 +107,6 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         return goneAtHead;
     }
 
-    // Asked in the one decidable direction (SourceRepository.NameCarriesFormKey): a leaf may embed
-    // an EditorID that itself contains the separator, so a name cannot be split, only tested.
-    private static string? CommittedPathFor(IEnumerable<string> committedPaths, string pluginFileName, string formKey)
-    {
-        var headerPath = ToGitPath(Path.Combine(SourceRepository.RootFor(pluginFileName), SourceRepository.RecordDataFileName));
-
-        foreach (var path in committedPaths)
-        {
-            var leaf = path[(path.LastIndexOf('/') + 1)..];
-            if (leaf.Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal))
-            {
-                // The header's document has a fixed path and a name that carries no FormKey; every
-                // other RecordData.json is named by the directory holding it.
-                if (path.Equals(headerPath, StringComparison.Ordinal))
-                {
-                    if (formKey.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)), StringComparison.Ordinal))
-                        return path;
-                    continue;
-                }
-                var container = path[..(path.LastIndexOf('/') + 1)].TrimEnd('/');
-                leaf = container[(container.LastIndexOf('/') + 1)..];
-            }
-
-            if (SourceRepository.NameCarriesFormKey(leaf, formKey)) return path;
-        }
-        return null;
-    }
-
-    private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
-
     private string? HeadBody(PluginCopyKey key, string formKey) =>
         DuckDbSql.ScalarString(connection,
             "SELECT body FROM records_head WHERE form_key = $1 AND plugin = $2 AND origin = $3",
@@ -150,7 +118,6 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead)
     {
         fullyRead = true;
-        var headerPath = Path.Combine(sourceRoot, SourceRepository.RecordDataFileName);
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
@@ -171,7 +138,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 continue;
             }
 
-            if (SourceRepository.FormKeyDeclaredIn(text, file, headerPath, pluginFileName) is not { } formKey)
+            if (SourceRepository.FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
             {
                 failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
                 fullyRead = false;

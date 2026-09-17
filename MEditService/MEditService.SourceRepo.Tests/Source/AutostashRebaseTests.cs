@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The rival this guards: reading git's own 0 exit as Clean even though the autostash's
 /// reapply conflicted and left the change in the stash — a silent wrong state (ADR-0019).</summary>

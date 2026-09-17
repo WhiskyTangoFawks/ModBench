@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The parked ref points at the baseline commit's own SHA (no second commit object) since
 /// the tree is literally the same content at Track time (ADR-0003).</summary>

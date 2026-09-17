@@ -40,12 +40,16 @@ public static class GitProbe
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         process.StandardInput.Close();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        Task.WaitAll(stdoutTask, stderrTask);
+
+        // Draining one stream to completion before the other is the classic .NET Process deadlock once
+        // a child fills a ~64 KB pipe buffer. A thread, so this call blocks on a process, never a task.
+        var stderr = string.Empty;
+        var drainStderr = new Thread(() => stderr = process.StandardError.ReadToEnd()) { IsBackground = true };
+        drainStderr.Start();
+        var stdout = process.StandardOutput.ReadToEnd();
+        drainStderr.Join();
+
         process.WaitForExit();
-        var stdout = stdoutTask.GetAwaiter().GetResult();
-        var stderr = stderrTask.GetAwaiter().GetResult();
         if (throwOnFailure && process.ExitCode != 0)
         {
             var subcommand = args.Length > 0 ? args[0] : "(no subcommand)";

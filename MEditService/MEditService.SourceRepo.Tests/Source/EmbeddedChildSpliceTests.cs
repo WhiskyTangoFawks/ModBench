@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The repository edits an embedded child by splicing its owner's text. The oracle is a
 /// member no record type declares: the codec drops one on a round trip, so a document still

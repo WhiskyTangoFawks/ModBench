@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Uncommitted state through the two public doors that surface it: a rebase's own refusal,
 /// and the tracked-files-outside-source query (ADR-0003).</summary>

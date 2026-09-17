@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -9,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The reader hands the index the documents the tree already holds. A child embedded in
 /// its owner's document has no file of its own, so its text is cut back out of the owner's.</summary>

@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -11,11 +12,11 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The repository's document verbs for the records no path names: a container's own
-/// directory, and a child inlined in another record's document. No index anywhere (ADR-0014
-/// invariant 9).</summary>
+/// directory, and a child inlined in another document. Turning an identity into a path is its work
+/// alone (ADR-0014 invariant 5).</summary>
 public sealed class SourceRepositoryEmbeddedTests : IDisposable
 {
     private const string PluginName = "Embedded.esp";

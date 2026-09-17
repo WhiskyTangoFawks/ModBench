@@ -261,7 +261,7 @@ public sealed partial class SourceRepository
         if (!path.UnderWorldspaceBlockLevels) return null;
 
         var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, RecordDataFileName);
-        if (FormKeyDeclaredBy(worldspaceDocument, _modFolder, plugin.Name) is not { } worldspace) return null;
+        if (FormKeyDeclaredBy(worldspaceDocument, plugin.Name) is not { } worldspace) return null;
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);

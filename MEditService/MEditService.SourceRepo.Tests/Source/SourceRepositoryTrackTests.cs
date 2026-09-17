@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Against a real git repo in a scratch mod folder, never a mocked git (ADR-0007).</summary>
 public sealed class SourceRepositoryTrackTests

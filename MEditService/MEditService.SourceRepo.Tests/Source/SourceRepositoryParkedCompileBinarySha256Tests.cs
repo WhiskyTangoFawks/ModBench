@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 public sealed class SourceRepositoryParkedCompileBinarySha256Tests
 {
