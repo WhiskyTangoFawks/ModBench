@@ -260,9 +260,8 @@ export class ModListProvider
     }
   }
 
-  // "Drop X onto Y" gives X the visual slot of Y: before Y in the winning-first file when
-  // winning-at-top, after it when the view runs opposite. Past the last row is whichever end
-  // the view has at its bottom.
+  // "Drop X onto Y" gives X the visual slot of Y: before Y when the view runs winning-first
+  // like the file, after it when the view runs opposite.
   private dropOnto(targetName: string | undefined): ModlistDrop {
     if (targetName === undefined) return this.winningAtTop ? { kind: 'losingEnd' } : { kind: 'winningEnd' };
     return { kind: this.winningAtTop ? 'before' : 'after', name: targetName };

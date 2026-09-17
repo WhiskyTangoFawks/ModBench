@@ -50,9 +50,8 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
   return picked?.choice;
 }
 
-/** What installing the clicked row needs beyond the row itself: the name only the user can give
- *  a new mod, already validated against the instance, and the FOMOD notice. Both are the
- *  composition root's, which is what lets this view call install itself. */
+/** The composition root's two answers, which is what lets this view call install itself: the
+ *  name only the user can give a new mod, and the FOMOD notice. */
 export interface DownloadInstallDeps {
   /** `undefined` is the user declining to name it, which installs nothing. */
   nameNewMod: (defaultName: string) => Thenable<string | undefined>;
