@@ -2,7 +2,7 @@
 // a root solution over both. The reference lists are the maintainer's, drawn in
 // target-architecture-references.d2.
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
@@ -68,6 +68,16 @@ const referencePaths = (relativePath: string): string[] =>
 const testFiles = (box: string): string[] =>
   fileNames(kernelProject(box)).concat(fileNames(LEGACY_PROJECT))
     .filter((f) => f.startsWith(join('src', box) + '/') && f.includes('.test.'));
+
+// Off the disk, not off a project's file list: a test belonging to no project is invisible to
+// every list there is, which is the very state this has to catch.
+function testFilesOnDisk(box: string): string[] {
+  const walk = (dir: string): string[] => readdirSync(join(MODBENCH, dir), { withFileTypes: true })
+    .flatMap((entry) => (entry.isDirectory()
+      ? walk(join(dir, entry.name))
+      : (entry.name.endsWith('.test.ts') ? [join(dir, entry.name)] : [])));
+  return walk(join('src', box));
+}
 
 describe('one composite project per box', () => {
   it.each(BOXES)('%s has its own tsconfig', (box) => {
@@ -173,10 +183,16 @@ describe('the legacy project holds every file not yet moved', () => {
     expect(testFiles('mo2Codecs').length).toBeGreaterThan(5);
   });
 
-  // The same vacuity, one level down: a view's tests sit under its own `test/`, and the legacy
-  // project's per-box exclusion is a glob that would swallow one left beside the source.
-  it.each(Object.keys(VIEW_BOXES))('finds %s’s own tests', (box) => {
-    expect(testFiles(box).length).toBeGreaterThan(0);
+  // Rival this catches: a test left beside its source rather than under the box's `test/`, which
+  // the legacy project's per-box exclusion swallows and the box's own project excludes — so it
+  // compiles in neither and lints in neither.
+  it.each(BOXES)('compiles every test on disk under %s', (box) => {
+    const compiled = new Set(fileNames(LEGACY_PROJECT));
+    expect(testFilesOnDisk(box).filter((f) => !compiled.has(f))).toEqual([]);
+  });
+
+  it.each(Object.keys(VIEW_BOXES))('finds %s’s own tests on disk', (box) => {
+    expect(testFilesOnDisk(box).length).toBeGreaterThan(0);
   });
 });
 
