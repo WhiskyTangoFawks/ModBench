@@ -5,7 +5,7 @@ namespace MEditService.Tests.TestSupport;
 
 /// <summary>An index over the committed cut-down Fallout 4 plugin: real game data without the
 /// 316 MB master, so the fixture is hermetic. `CutDownPluginGenerator` in
-/// MEditService.CrossBox.Tests regenerates the file when the schema or curation changes.</summary>
+/// MEditService.TestSupport regenerates the file when the schema or curation changes.</summary>
 public sealed class CutDownPluginFixture : IDisposable
 {
     public static readonly PluginCopyKey Plugin = new(RealDataPlugin.PluginFileName, PluginOrigin.DataDirectory);

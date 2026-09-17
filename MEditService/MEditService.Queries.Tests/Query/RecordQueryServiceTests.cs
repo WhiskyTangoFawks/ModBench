@@ -57,6 +57,29 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
+    // The plugin row's "has a failure below it" comes from the Index's own set of copies holding an
+    // unreadable record, so one copy carries the flag and its neighbour does not.
+    [Fact]
+    public void GetPlugins_MarksOnlyThePluginHoldingAnUnreadableRecord()
+    {
+        const string otherPlugin = "Other.esp";
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Unreadable"))
+            .WithPlugin(otherPlugin, mod => mod.Npcs.AddNew("Readable"))
+            .Build("Aggression");
+        var (_, svc) = Build(fixture with
+        {
+            Rows = [.. fixture.Rows.Select(r => r.Plugin.Name == PluginName
+                ? r with { Document = r.Document with { ParseDiagnosis = "could not be read" } }
+                : r)],
+        });
+
+        var plugins = svc.GetPlugins();
+
+        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).HasParseFailure);
+        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).HasParseFailure);
+    }
+
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
@@ -260,6 +283,36 @@ public sealed class RecordQueryServiceTests
 
         Assert.NotNull(compare);
         Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+    }
+
+    // The record editor renders the column read-only from this member alone, so the compare wire
+    // has to carry the diagnosis the Index put on the document rather than only the tree's listings.
+    [Fact]
+    public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith()
+    {
+        const string diagnosis = "could not be read";
+        FormKey npcKey = default;
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod => npcKey = mod.Npcs.AddNew("Unreadable").FormKey)
+            .Build("Aggression");
+        var (_, svc) = Build(fixture with
+        {
+            Rows = [.. fixture.Rows.Select(r => r with { Document = r.Document with { ParseDiagnosis = diagnosis } })],
+        });
+
+        var compare = svc.GetCompare(npcKey.ToString());
+
+        Assert.NotNull(compare);
+        Assert.Equal(diagnosis, Assert.Single(compare.Overrides).ParseDiagnosis);
+    }
+
+    [Fact]
+    public void GetCompare_LeavesAReadableRecordsColumnWithoutADiagnosis()
+    {
+        var compare = _svc.GetCompare(_npc01Key.ToString());
+
+        Assert.NotNull(compare);
+        Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
     }
 
     [Fact]
@@ -600,6 +653,26 @@ public sealed class RecordQueryServiceTests
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal(RecordCount, npc.Count);
         Assert.All(result, r => Assert.True(r.Count > 0));
+    }
+
+    // The record-type node's "has a failure below it" is the count row's own flag, so the type
+    // holding the unreadable record carries it and its sibling does not.
+    [Fact]
+    public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
+    {
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] =
+            [
+                new RecordTypeCount("perk", 1, HasParseFailure: true),
+                new RecordTypeCount("npc_", 1, HasParseFailure: false),
+            ],
+        };
+
+        var result = _svc.GetPluginRecordTypes(PluginName);
+
+        Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
+        Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
     }
 
     [Fact]
