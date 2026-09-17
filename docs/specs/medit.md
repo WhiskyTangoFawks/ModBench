@@ -95,8 +95,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   once a load order exists (ADR-0017), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). The backend launches at
   activation and loads the active modlist as the load order; there is no Launch/Close command
-  and no `modbench.backendRunning` context key. Per the maintainer's ruling, mEdit is
-  "an option on the plugins view", not a workspace action
+  and no `modbench.backendRunning` context key, so mEdit is not a workspace action at all
   ([containers.md](containers.md)).
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,

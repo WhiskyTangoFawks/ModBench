@@ -59,10 +59,19 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
                      Referenced By; imports the mEdit client and nothing from the MO2 side
   src/medit/         The mEdit client — one port over the backend's commands, queries,
                      notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0014)
-MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
-  MEditService.Core/   Mutagen for plugin I/O; DuckDB as an index over per-record JSON documents;
-                       the source codec, Track, compile and git layer
-  MEditService.Api/    HTTP host, OpenAPI via Swashbuckle
+MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
+                   per box of docs/architecture/
+  MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
+                              Swashbuckle, and mEdit's composition root
+  MEditService.Watcher/       one watcher per mod folder in the load order
+  MEditService.Commands/      one handler per gesture: edit, create, track, compile, put load order
+  MEditService.Queries/       compare, references, children — the only readers of the read model
+  MEditService.LoadOrder/     the kernel: the load-order snapshot and who wins
+  MEditService.Codec/         the kernel: record text to document and back, and the schema
+  MEditService.Ports/         the kernel: the notification port and its payloads
+  MEditService.Index/         DuckDB as an index over per-record JSON documents
+  MEditService.SourceRepo/    the per-record source tree and its git layer
+  MEditService.PluginAdapter/ Mutagen for plugin I/O
 ```
 
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists
@@ -75,8 +84,8 @@ The UX rules are borrowed, not invented: Mod Management follows MO2, record edit
 ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every
 interaction uses the native VS Code surface that already does the job
 ([ADR-0017](docs/adr/0017-mo2-is-the-reference-for-mod-management.md)). Decisions live in
-[docs/adr/](docs/adr/); numbering gaps are reversed decisions, whose story is in the
-*Alternatives rejected* section of whatever replaced them.
+[docs/adr/](docs/adr/); a decision that was reversed keeps its number, and the story is in the
+*Alternatives rejected* section of whatever replaced it.
 
 ## Getting started
 
@@ -99,9 +108,9 @@ npm run build          # type-check + bundle extension and webview
 npm run test:unit
 ```
 
-You don't run the backend yourself — the extension spawns it when you open the editor
-(`Modbench: Launch mEdit`). For the API on its own: `dotnet run --project MEditService.Api`,
-then `http://localhost:5172/swagger`.
+You don't run the backend yourself — the extension spawns it at activation and hands it the
+active modlist as the load order. For the API on its own:
+`dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
 
 **Launch the extension** from the repo root (F5 is unreliable in this environment; use the CLI):
 
@@ -110,9 +119,9 @@ code --extensionDevelopmentPath="$(pwd)/modbench" "<path to an MO2 instance dire
 ```
 
 The workspace folder you open **is** the MO2 instance — the directory containing
-`ModOrganizer.ini`, `mods/` and `profiles/`. There is no separate instance-path setting
-([modbench/CLAUDE.md](modbench/CLAUDE.md) § Invariants). Run any Modbench command from the palette
-to activate the extension; the Modbench views appear in the activity bar.
+`ModOrganizer.ini`, `mods/` and `profiles/`. There is no separate instance-path setting. The
+extension activates on `onStartupFinished`, so the Modbench views are in the activity bar as soon
+as the window is ready — no command is needed to wake it.
 
 Regenerating the typed API client after a backend change: `npm run generate-api` against a
 freshly started backend (the `/regenerate-api` skill has the exact sequence).

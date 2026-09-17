@@ -1,6 +1,8 @@
 # Loadout gesture. Install drops a folder; the Instance's watcher registers it, and the
-# modlist adoption is a command handed the value, the way the plugins reconcile is. mEdit
-# learns of the folder the same way: by watching.
+# modlist adoption is a command handed the value, the way the plugins reconcile is. Nothing
+# watches mods/ on the mEdit side, so mEdit learns of the new plugin the way it learns of
+# every other load-order change: the adopted line makes a new snapshot and the tail of this
+# trace is enable-a-mod's.
 ...@../styles
 shape: sequence_diagram
 downloads: @../target-architecture.modbench_driving.downloads
@@ -18,10 +20,14 @@ instance.label: Instance
 views: "every view" {class: driving}
 modlist: @../target-architecture.modbench_core.modlist
 modlist.label: modlist commands
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: "Mod watcher\nmEdit's own, one per mod"
-projector: @../target-architecture.medit_driven.index.projector
-projector.label: Projector
+toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 
 downloads -> install: install this {class: loadout}
 install -> codecs: "meta.ini: the meta it knows" {class: loadout}
@@ -35,5 +41,8 @@ modlist -> codecs: "modlist.txt: lines to add" {class: loadout}
 codecs -> modlist: bytes {class: loadout}
 modlist -> mo2files: "put modlist.txt" {class: loadout}
 mo2files -> mo2: bytes, then forget {class: loadout}
-mo2 -> watcher: bytes {class: signal}
-watcher -> projector: plugin changed {class: signal}
+mo2 -> instance: "watch: the adopted line" {class: signal}
+instance -> toolbox: "load order snapshot, on change" {class: loadout}
+toolbox -> client: "load order snapshot" {class: loadout}
+client -> http: load order snapshot {class: loadout}
+http -> commands: put load order {class: loadout}

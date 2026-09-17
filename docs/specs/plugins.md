@@ -10,8 +10,8 @@ load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl
 types, records, the spatial worldspace/cell hierarchy — whenever the backend is running.
 One provider serves the tree (`plugins/PluginsTreeProvider.ts`): it builds the rows from the
 Instance and delegates a row's children to the record browser, which speaks none of Mod
-Management's vocabulary ([CONTEXT.md](../../CONTEXT.md), each context's own
-`CONTEXT.md`). That structural check is what answers ADR-0017's objection to merging these views:
+Management's vocabulary ([CONTEXT.md](../../CONTEXT.md) is the glossary, both contexts in
+one file). That structural check is what answers ADR-0017's objection to merging these views:
 the merge is not a conflation of contexts.
 
 **Vocabulary note:** "load order" is ambiguous across Modbench's two contexts and this spec
@@ -263,7 +263,7 @@ there is no separate load-order step.
   than treated as "past the last row", which would silently move the dragged plugins to the end
   of the load order.
 
-### Progressive load ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md))
+### Progressive load ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md) invariant 3)
 
 The load is progressive: rows land as each plugin finishes indexing rather than all at once at the
 end.
@@ -294,7 +294,7 @@ end.
   `423 Locked` ("this instance's index is open in another Modbench window") and holds nothing; the
   frontend surfaces that message as the load failure. No read-only mode, no waiting, never a second
   index file ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md)
-  point 6).
+  invariant 5).
 - **Mechanism: subscribe, don't poll.** The load POST stays blocking, and progress rides the
   `load-order-status` notification on the SSE stream (ADR-0014 invariant 2) alongside the
   still in-flight `PUT /load-order`, which remains the completion signal. The extension's
@@ -405,7 +405,7 @@ end.
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md); same degrade-and-warn convention as other
   secondary reads). The failure is non-fatal to launch.
 - Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as
-  user-written SQL — **no structured toggle UI**. Per ADR-0007/ADR-0011 the per-type names are
+  user-written SQL — **no structured toggle UI**. Per ADR-0011 invariant 1 the per-type names are
   generated `json_extract` **views** over the one `records` documents table, so existing
   per-type filter SQL keeps working by name. View columns are **scalar leaves only** with types
   preserved via casts: primitives, plain enums, FormLinks, translated strings (their `Value`),
@@ -537,21 +537,22 @@ what stayed, SQL-only; one winner sweep). An identical snapshot is a no-op. Ther
 no confirmation, no command, and no user-facing "drift" or "re-read" concept — a mod-level change
 that moves which copy wins is just the `winning` flag moving on two rows the backend already holds.
 
-**How a change reaches the backend.** Every trigger calls `loadOrderSync.request()`
-(`src/loadOrderReconcile.ts`, a composition-root joiner that imports from neither context — the
-pattern `nameFilter` already uses, enforced by
-`src/test/contextBoundary.test.ts`): Mod Management's own watchers — `profiles/*/modlist.txt`
-(rewritten by install, uninstall and reprioritise alike), `mods/**` (a folder appearing or
-vanishing without one) and `profiles/*/plugins.txt` (a reorder or an enable/disable, whether
-Modbench wrote it or MO2/the user did) — plus the checkbox toggle's own explicit ask and the
-profile switch's. No polling. Requests coalesce (a 250 ms debounce covers a drag's write plus its
-watcher event, or two watchers firing for one install), and a request that lands mid-PUT becomes
-exactly one more PUT after it, never a race. The sync has no health pre-check: a PUT against a
-backend that is not attached is refused by the transport and reported as a failed reconcile, and
-a failed reconcile tears nothing down. One PUT is one reconcile
-(`createReconcileSequencer`, folded into `loadOrderSync` itself — `src/loadOrderReconcile.ts`):
-snapshot → the mEdit client's own `putLoadOrder` → filter sync → the tree hand-off, the same sequence
-the activation-time launch runs (via `loadOrderSync.flush()`) after the backend comes up.
+**How a change reaches the backend.** Nothing calls the backend from a file event. The Instance
+owns every MO2-side watcher — `profiles/*/modlist.txt` (rewritten by install, uninstall and
+reprioritise alike), `mods/**` (a folder appearing or vanishing without one),
+`profiles/*/plugins.txt` (a reorder or an enable/disable, whether Modbench wrote it or MO2/the
+user did) and `ModOrganizer.ini` — and a burst across any of them settles into one whole recompute
+([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md) invariant 7). No
+polling. Toolbox, the composition root that joins the two contexts, builds the snapshot from each
+landed value (`loadOrderSnapshotOf`) and hands it to the mEdit client's sender
+(`medit/client/loadOrderSender.ts`), which holds the sequencing: connect before the first PUT, one
+PUT at a time, and the newest snapshot is the one that lands — a snapshot superseded before it is
+sent resolves `abandoned` and never reaches the wire, so a value arriving mid-PUT becomes exactly
+one more PUT after it and never a race. There is no health pre-check: a PUT against a backend that
+is not attached waits on the connect, and a transport refusal is reported as a failed reconcile
+that tears nothing down. One PUT is one reconcile: snapshot → the client's own `putLoadOrder`
+→ filter sync → the tree hand-off (`applyReconciled`), the same sequence the activation-time
+launch runs once the backend comes up.
 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
 (ADR-0019's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or
@@ -632,7 +633,7 @@ overflow, then native **Collapse All** last.
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
   workspace-scope Refresh on the [Toolbox](containers.md), which re-reads every
-  Mod-Management source together and also drops and rebuilds the Index (ADR-0014) — the one
+  Mod-Management source together and also drops and rebuilds the Index (ADR-0009 invariant 4) — the one
   reload gesture, distinct from the ordinary per-change reconcile (ADR-0013).
 - **Refresh is not how the tab recovers from an external edit.** The `mods/**`,
   `profiles/*/modlist.txt` and `profiles/*/plugins.txt` watchers each invalidate this tree as
@@ -642,8 +643,8 @@ overflow, then native **Collapse All** last.
   the same way: it writes `modlist.txt`, which is one of the same three signals. Manual Refresh
   remains for the case where a view *looks* stale, not as the mechanism that makes it correct
   (the never-assume-exclusive-ownership invariant in `CLAUDE.md`). The composition happens in
-  `wirePluginListInvalidation.ts`, which adds the invalidation alongside the existing
-  `sync.request()` fan-out rather than replacing it — no watcher was added.
+  `toolbox.ts`, where the landed Instance value that produces the snapshot invalidates this tree
+  on the same pass — no watcher of this tree's own was added.
 - **Rows are exactly `plugins.txt`'s lines; the file converges on disk.** The tree never
   merges disk into the file's inventory — a plugin file with no `plugins.txt` line has no row.
   Instead a **plugins reconcile** (`commands/plugins.ts`, the plugins twin of the Mods tree's
@@ -763,7 +764,7 @@ overflow, then native **Collapse All** last.
   `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no
   release is one of the unknowables above.
 - **Load-order-derived master classification** (ADR-0012): `MasterResolution.Classify`
-  (`MEditService.Core/Queries/`), a pure function over data the load order already has
+  (`MEditService.Queries/`), a pure function over data the load order already has
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per
   `GET /plugins` call and reported on `PluginResponse.MasterIssues`; distinguishes `DirectlyMissing`
   from `Unloadable` and never cascades (only a plugin's own `Masters` list is consulted).
@@ -791,10 +792,10 @@ overflow, then native **Collapse All** last.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).
   - reorder: single-row and multi-row (contiguous and non-contiguous selection) moves,
     byte-faithful.
-- **Implicit-master unit tests** (`MEditService.Tests/Api/ForcedPluginsTests.cs`): an implicit
+- **Implicit-master unit tests** (`MEditService.Http.Tests/Api/ForcedPluginsTests.cs`): an implicit
   master present in the Data folder is listed, one missing from it is not, the Creation Club
   catalog follows in its own order, and a plugin neither source claims is absent.
-- **Load-order-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):
+- **Load-order-derived master classification unit tests** (`MEditService.Queries.Tests/Query/MasterResolutionTests.cs`):
   master absent from both the loaded and failed sets → `DirectlyMissing`; master present in the
   failed set → `Unloadable`; master successfully loaded → no issue; a plugin whose master's own
   master is missing is not itself flagged (no cascade). The tree's rendering of this, and its
@@ -827,9 +828,9 @@ overflow, then native **Collapse All** last.
 - **The view-header progress indicator (AC2) has no automated test.** `withProgress` returns
   nothing readable and leaves no observable state in the extension host — the same absence of a
   seam as `showCollapseAll` ([containers.md](containers.md) title-bar rule 7). It is verified by reading the
-  call sites (`makeEnterEditing`'s and `makeLoadOrderSync`'s `withPluginsViewProgress`, and that
-  `modbench.modList.launchMedit` does not wrap the launch in a second indicator) and by
-  `/manual-test` against a real load order. Recorded here as a known untested
+  call sites (`toolbox.ts`'s `makeEnterEditing` and `makeReconcile`, each wrapping its own work
+  in `withPluginsViewProgress` and nothing else in a second indicator) and by `/manual-test`
+  against a real load order. Recorded here as a known untested
   surface rather than covered by a test that would only restate the call.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `statusChecker.test.ts` — same
   fixture-in/value-out style; instance fixtures live under
@@ -844,7 +845,7 @@ overflow, then native **Collapse All** last.
   restored once a reconcile reports no filter at all rather than staying stuck hidden (the
   "map outlives the filter state" regression) — the pruning
   rule itself (record types and records pruned, a plugin row never removed by `GetPlugins()`
-  itself) is backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock
+  itself) is backend-tested (`MEditService.Queries.Tests`), not re-proven here, since this suite's mock
   backend drives `GET /plugins` directly rather than through a real `POST /load-order/filter`; Reveal in
   Explorer dispatches; read failure renders the error tree node.
 

@@ -1,7 +1,7 @@
 # xEdit's conflict model, read from the TES5Edit source
 
 Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas` that inform
-[ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) invariant 5 and divergences 9 and 10.
+[ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) invariant 4 and divergences 6 and 9.
 
 ## Two independent axes
 

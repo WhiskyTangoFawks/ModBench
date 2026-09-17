@@ -36,9 +36,10 @@ which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.m
    value, Profile and Deployment, with the workspace-scope actions in its title bar, because VS
    Code has no container-title contribution point to hang them on
    ([containers.md](../specs/containers.md)). Platform limitation.
-2. **Downloads starts collapsed**, with a status-bar item for the ambient glance. Downloads is
-   occasional, unlike Mods and Plugins. That is the argument for staying collapsed, not for a
-   different surface. Maintainer ruling.
+2. **Downloads starts collapsed.** Downloads is occasional, unlike Mods and Plugins. That is the
+   argument for staying collapsed, not for a different surface. The status-bar item for the
+   ambient glance is deferred to Nexus integration, with the `nxm://` handler
+   ([downloads.md](../specs/downloads.md)). Maintainer ruling.
 3. **There is no Archives view.** Modbench never builds a merged view
    ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 

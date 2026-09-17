@@ -1,6 +1,6 @@
 # Repair — Surface Specification (malformed-plugin repair)
 
-**Status: Specced — not built.** The ruling is [ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) invariant 7; the engine's design is this spec. Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
+**Status: Specced — not built.** The ruling is [ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) invariant 7; the engine's design is this spec. Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Codec.Tests/RealData/RoundTripSurvey.cs`.
 
 Editing context — operates on plugins, records and subrecords; never on mods or downloads
 ([CONTEXT.md](../../CONTEXT.md)). Vocabulary: **Diagnosis**, **Malformed plugin**,
@@ -192,17 +192,19 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
 
 ## Implementation Decisions
 
-- **Placement**: `MEditService.Core` module beside `PluginWriter`/`TrackService` (logic lives
-  in the service; the extension is a thin view — [CLAUDE.md](../../CLAUDE.md)). Exposed as
+- **Placement**: the repair engine is deliberately absent from
+  [the target architecture](../architecture/target-architecture.md), so which box owns it is a
+  decision of the ticket that builds it; the logic lives in the service either way, and the
+  extension is a thin view ([CLAUDE.md](../../CLAUDE.md)). Exposed as
   one endpoint pair — *diagnose* (read-only, returns the diagnosis list with repairability)
   and *repair* (takes the selected diagnosis ids, returns the verification result). The
   extension command is a wrapper over the two; a CLI, if ever wanted, is a second thin front
   over the same module and is not part of this spec.
-- **Engine origin**: the `RoundTripSurvey` walker (`Walk`, `Subrecords`, `Inflate`) is the
-  reference implementation, promoted to Core once and shared by the subrecord inventory, the
-  diagnosis and this — one walker.
+- **Engine origin**: the survey's walker is already promoted, as
+  `MEditService.Codec/Serialization/PluginBinaryWalk.cs` (`WalkRecords`, `WalkSubrecords`,
+  `Inflate`), and is shared by the subrecord inventory, the diagnosis and this — one walker.
 - **Detectors are the diagnosis's**; Repair adds only the operation column. The table
-  is data (a static registry in Core, per game release), not configuration.
+  is data (a static registry beside the diagnosis, per game release), not configuration.
 - **Compressed records**: inflate, operate, deflate with Mutagen's own level so the bytes
   match what Compile would later write; the size fields cascade (record → GRUPs) exactly as
   the survey's walker already computes them.

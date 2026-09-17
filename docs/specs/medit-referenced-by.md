@@ -222,10 +222,9 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   batch `GET /records/{formKeys}/references`-style endpoint; today's endpoint is single-FormKey,
   so an N-record selection would be N round trips. The grouping model already supports the result
   shape (collapse-by-FormKey over a larger input) — only the backend call is missing.
-- **Reference validation at edit time** — that is a backend concern (ADR-0007: FormLinks
-  validate at edit time), surfaced by whichever command made the edit, not
-  here.
-- **A referrer whose record type has no schema** — `SchemaReflector.ExcludedTables` is a deliberate
+- **Reference validation at edit time** — that is a backend concern, surfaced by whichever
+  command made the edit, not here.
+- **A referrer whose record type has no schema** — `SchemaAnnotations.ExcludedSignatures` is a deliberate
   product filter (`land`, `navm`, `navi`, plus the collapsed xEdit REFR-signature variants `pgre`,
   `pmis`, `parw`, `pbar`, `pbea`, `pcon`, `pfla`, `phzd`). Ingest walks the schema's tables, so a
   record of an excluded type gets no document, no `records` row, and no `form_references` rows at

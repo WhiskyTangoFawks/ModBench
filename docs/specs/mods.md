@@ -166,9 +166,11 @@ requires a deploy.**
   badges, deploy/purge, launching executables as tasks, the modlist source-adapter model,
   profile switching, and the editing-backend lifecycle hook this surface owns.
 - The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It
-  is file/HTTP/JSON work and **never parses plugin binaries** beyond the tiny TES4-header
-  master read; the C# backend stays a pure Mutagen + DuckDB record-editing service
-  ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)).
+  is file/HTTP/JSON work and **parses no plugin binary at all**: a plugin's declared masters,
+  and which plugins load with no `plugins.txt` line, come from the backend through the
+  generated client, and `pluginBinaryScan.test.ts` is the gate. The C# backend stays a pure
+  Mutagen + DuckDB record-editing service
+  ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md) invariant 1).
 - The **Plugin load-order** tree is a *separate* Mod-Management surface, specified in
   [plugins.md](plugins.md) — not a mode of this view.
 
@@ -284,7 +286,7 @@ The extension owns the editing backend process
 - **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0013): every physical
   plugin copy in the instance as `(name, path, origin, slot, enabled, winning)` — disabled
   entries included (ADR-0013) — with vanilla masters prepended by the backend. One backend,
-  one load order — a second load on the same instance is refused (ADR-0009 point 5).
+  one load order — a second load on the same instance is refused (ADR-0009 invariant 5).
 - **Teardown** — closing the workspace; there is no Close command. Restarted on crash. **Switching profile or modlist is not a
   teardown** — it sends the new profile's snapshot to the running backend as the next
   reconcile (ADR-0013); the backend keeps running (see *Profiles* above and *Profile
@@ -398,7 +400,7 @@ The extension owns the editing backend process
 - **A new mod** is one rename: meta.ini is written into the staged tree first, then the whole
   tree lands in one filesystem event, so the folder is never seen
   half-built. The installer writes **no `modlist.txt` line**. The Instance's recompute off
-  `mods/**` lands a value the mods reconcile (`modmanager/modsReconcileTrigger.ts`) reads,
+  `mods/**` lands a value the modlist adoption (`modmanager/modAdoptionTrigger.ts`) reads,
   registering the new folder as a **disabled** entry — the same path a folder dropped in by MO2
   or by hand takes — so an install is one signal with one owner.
 - **An upgrade** replaces the folder in place: every entry but `.git` is removed,
@@ -445,7 +447,7 @@ The extension owns the editing backend process
 ### Deploy / purge (Modbench-4)
 
 Deploy is a module of the [Toolbox](containers.md) (`modmanager/commands/deployment.ts` plus
-the hardlink/manifest/purge core in `modmanager/deployer.ts`), offering deploy, purge and
+the hardlink/manifest/purge core in `modmanager/mo2Files.ts`), offering deploy, purge and
 status (the manifest's presence) — one strategy, hardlinks, with no strategy interface: the
 symlink fallback stays a requirement, not a second implementation, until it actually ships.
 

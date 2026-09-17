@@ -40,14 +40,24 @@ CS_PROJECTS = {
     "MEditService/MEditService.Queries": "MEditService.Queries",
     "MEditService/MEditService.SourceRepo": "MEditService.SourceRepo",
     "MEditService/MEditService.Watcher": "MEditService.Watcher",
-    "MEditService/MEditService.Tests": "MEditService.Tests",
+    "MEditService/MEditService.Codec.Tests": "MEditService.Codec.Tests",
+    "MEditService/MEditService.Commands.Tests": "MEditService.Commands.Tests",
+    "MEditService/MEditService.Http.Tests": "MEditService.Http.Tests",
+    "MEditService/MEditService.Index.Tests": "MEditService.Index.Tests",
+    "MEditService/MEditService.LoadOrder.Tests": "MEditService.LoadOrder.Tests",
+    "MEditService/MEditService.PluginAdapter.Tests": "MEditService.PluginAdapter.Tests",
+    "MEditService/MEditService.Ports.Tests": "MEditService.Ports.Tests",
+    "MEditService/MEditService.Queries.Tests": "MEditService.Queries.Tests",
+    "MEditService/MEditService.SourceRepo.Tests": "MEditService.SourceRepo.Tests",
+    "MEditService/MEditService.Watcher.Tests": "MEditService.Watcher.Tests",
+    "MEditService/MEditService.TestSupport": "MEditService.TestSupport",
 }
 # These two never reach the SARIF log even at 'suggestion' severity; only `dotnet format`
 # reports them.
 FORMAT_ONLY_DIAGNOSTICS = ("IDE1006", "RCS1226")
 # --- Frontend: extension package that carries the ESLint config. --------------
 TS_PACKAGE = "modbench"
-TS_IGNORE = ("src/generated/", "out/", "webview/dist/", "node_modules/")
+TS_IGNORE = ("src/medit/generated/", "out/", "webview/dist/", "node_modules/")
 
 MAX_LINES = 40  # cap feedback so a large backlog can't flood the turn
 

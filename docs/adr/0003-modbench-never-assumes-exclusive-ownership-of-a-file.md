@@ -15,8 +15,8 @@ Modbench cannot classify on its own is a question for the user, never a silent r
    a tracked plugin's bytes are compared against what Modbench last wrote.
 2. **Watchers are never trusted alone.** Every watched state also validates at load and on
    reconcile, and a watcher overflow triggers validation
-   ([ADR-0014](0014-modules-are-layered-and-call-adjacent-layers-through-ports.md)
-   invariant 6).
+   ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)
+   invariant 4).
 3. **A tracked mod's external change is one question per mod.** A mod has changed externally
    when a plugin's bytes differ from what Modbench last wrote, or a file git tracks outside
    `source/` differs from git's view of the edit branch. One classification runs per mod, against
