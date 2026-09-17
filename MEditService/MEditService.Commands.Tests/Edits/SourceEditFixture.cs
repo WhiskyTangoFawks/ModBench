@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
@@ -50,7 +51,9 @@ public sealed class SourceEditFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private SourceEditFixture(bool track, string pluginName, bool isLight)
+    private SourceEditFixture(
+        bool track, string pluginName, bool isLight,
+        SourcePreset preset = SourcePreset.Edits, Action<string>? beforeTrack = null)
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
@@ -77,8 +80,9 @@ public sealed class SourceEditFixture : IDisposable
         // working tree is the thing under test, and no mock can answer that.
         if (track)
         {
+            beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
 
@@ -94,6 +98,12 @@ public sealed class SourceEditFixture : IDisposable
     }
 
     public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
+
+    /// <summary>Tracked under the Everything preset, so assets alongside the plugin are git-tracked
+    /// too. <paramref name="beforeTrack"/> writes any asset files into the mod folder before Track's
+    /// own initial commit picks them up.</summary>
+    public static SourceEditFixture TrackedEverything(Action<string>? beforeTrack = null) =>
+        new(track: true, PluginName, isLight: false, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
 
     public static SourceEditFixture TrackedLight(string pluginName = PluginName) =>
         new(track: true, pluginName, isLight: true);
@@ -130,6 +140,15 @@ public sealed class SourceEditFixture : IDisposable
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
         SourceRepository.RaiseExternalChangeQuestion(ModFolder, question);
     }
+
+    public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
+        Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));
+
+    public string NpcSourceFile => SourceFileFor(Npc, "npc_", NpcEditorId);
+
+    public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
+        Path.GetRelativePath(ModFolder, SourceDocumentPath.Of(
+            ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
     public IReadOnlyList<string> GitStatus() =>
         GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")

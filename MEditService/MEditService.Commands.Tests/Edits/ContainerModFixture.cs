@@ -27,6 +27,7 @@ public sealed class ContainerModFixture : IDisposable
     public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
+    public CreateRecordHandler CreateHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -190,6 +191,7 @@ public sealed class ContainerModFixture : IDisposable
         RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
+        CreateHandler = TestEditService.CreateHandler(holder);
     }
 
     private readonly string _instanceRoot;

@@ -2,9 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -18,40 +16,14 @@ using Noggog;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Reading a container in a tracked plugin is served from the indexed document, degraded
-/// and logged, never a crash; create refuses with a typed
-/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500.</summary>
+/// <summary>Create refuses a container with a typed
+/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500; edit, delete
+/// and renumber write and read back through the Source repository.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
-    private readonly IndexedContainerFixture _fixture = new();
+    private readonly ContainerModFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
-
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Index, _fixture.Holder);
-
-    private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Index, _fixture.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
-
-    // ---- Reads never throw on a container ----
-
-    [Fact]
-    public void ReadingACellInATrackedPlugin_DoesNotThrow_AndServesTheIndexedDocument()
-    {
-        var record = Reads().GetRecord(_fixture.Cell.ToString());
-
-        Assert.NotNull(record);
-        Assert.Equal(ContainerModFixture.CellEditorId, record.EditorId);
-    }
-
-    [Fact]
-    public void ReadingACellsCompareGrid_DoesNotThrow()
-    {
-        // A second real read path over the same container, not a duplicate assertion of GetRecord's.
-        Assert.Null(Record.Exception(() => Reads().GetCompare(_fixture.Cell.ToString())));
-    }
-
-    // ---- Point writes refuse ----
 
     private string CellSourceFile => _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
 
@@ -62,7 +34,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains("\"WaterHeight\": 100.0", before, StringComparison.Ordinal);
 
-        var result = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("250.0"));
+        var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
         // Every untouched byte is compared, which makes "only that field's lines diff" a measurement
@@ -70,11 +42,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
-        // The source unit's own indexed document moved with the file.
-        var document = _fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin);
-        Assert.NotNull(document);
-        Assert.NotNull(document.Body);
-        Assert.Contains("250.0", document.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -98,7 +65,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var oldDirectory = PathShape.DirectoryOf(CellSourceFile);
         Assert.EndsWith(ContainerModFixture.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
-        var result = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
+        var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
@@ -132,16 +99,16 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void DeletingACell_Succeeds()
     {
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
     }
 
     [Fact]
     public void CreatingANewCell_RefusesWithTheContainerRefusal()
     {
-        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
+        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
@@ -150,7 +117,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void CreatingANewCell_RefusalMessage_NamesOnlyCreationAsUnsupported()
     {
-        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
+        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
         Assert.False(result.Applied);
         Assert.DoesNotContain("structural gesture", result.Message, StringComparison.Ordinal);
@@ -161,12 +128,12 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void RenumberingACell_Succeeds()
     {
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
         var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected RenumberRecord to set NewFormKey on success.");
-        Assert.NotNull(_fixture.Index.Projected().GetDocument(newFormKey, _fixture.Plugin));
+        Assert.NotNull(_fixture.Document(newFormKey));
     }
 
     [Fact]
@@ -175,7 +142,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         // Positive control: the container guard must not blanket-refuse renumber for a plugin that
         // merely *holds* a cell elsewhere — only the record actually being touched (target or
         // referencer) is checked.
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Npc.ToString());
+        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
     }
@@ -189,7 +156,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
         TestEditService.AbsorbHandler().Absorb(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), _fixture.Holder.Current);
+            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), _fixture.LoadOrder);
 
         var afterMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
@@ -210,7 +177,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -229,7 +196,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -252,7 +219,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         });
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -264,7 +231,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void KeepingAnExternalChange_CollidingWithACellsOwnWorkingTreeEdit_RefusesTheWholeGesture()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var editResult = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("500.0"));
+        var editResult = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("500.0"));
         Assert.True(editResult.Applied, editResult.Message);
         var myOwnEditText = File.ReadAllText(CellSourceFile);
 
@@ -274,7 +241,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -301,7 +268,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var handler = TestEditService.KeepHandler(
             b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
 
-        var result = handler.Keep(_fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = handler.Keep(_fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);
