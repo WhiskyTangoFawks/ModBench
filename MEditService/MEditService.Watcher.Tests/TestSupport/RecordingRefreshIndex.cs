@@ -4,25 +4,28 @@ using MEditService.Ports;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>What the watcher asked the Index for, in order, with the projection scope it was inside
-/// and how long after the recorder started.</summary>
+/// <summary>What the watcher asked the Index for, in order, with the projection scope it was
+/// inside.</summary>
 internal sealed record RecordedProjection(
-    string Verb, PluginCopyKey? Plugin, IReadOnlyList<string> Keys, int Scope, TimeSpan At);
+    string Verb, PluginCopyKey? Plugin, IReadOnlyList<string> Keys, int Scope);
 
 /// <summary>The Index as a recorder: the watcher's routing is what it asked for, so a test reads the
 /// verb and the copy rather than the delegate that carried it.</summary>
-internal sealed class RecordingRefreshIndex : IRefreshIndex
+internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : IRefreshIndex
 {
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
-    private readonly System.Diagnostics.Stopwatch _since = System.Diagnostics.Stopwatch.StartNew();
     private readonly Dictionary<PluginCopyKey, string> _indexedHashes = new(PluginCopyKey.Comparer);
     private int _scope;
 
-    public IndexWriteGate WriteGate { get; init; } = new();
+    public IndexWriteGate WriteGate { get; } = writeGate ?? new IndexWriteGate();
 
-    public LoadOrderStatus Status { get; } =
-        new(LoadOrderState.Ready, 0, [], ConflictsComputed: true, []);
+    /// <summary>Closed the way a torn-down load order leaves the store: a batch settling after that
+    /// has nowhere to land.</summary>
+    public bool Closed { get; set; }
+
+    public LoadOrderStatus Status =>
+        new(Closed ? LoadOrderState.None : LoadOrderState.Ready, 0, [], ConflictsComputed: true, []);
 
     public long Sequence => 0;
 
@@ -38,8 +41,13 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     public IReadOnlyList<RecordedProjection> Of(string verb) =>
         [.. Projections.Where(p => p.Verb == verb)];
 
+    /// <summary>Fails the way a store that cannot open a scope does, so the watcher's answer to a
+    /// callback it cannot complete is observable.</summary>
+    public bool RefusesProjectionScope { get; set; }
+
     public IDisposable BeginProjection()
     {
+        if (RefusesProjectionScope) throw new InvalidOperationException("the store could not open a scope");
         lock (_gate)
         {
             _scope++;
@@ -67,8 +75,19 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
     public void SeedIndexed(PluginCopyKey key, string hash) => _indexedHashes[key] = hash;
 
+    /// <summary>Every binary poke, whether or not the bytes turned out to differ: what the watcher
+    /// asked for is its own fact, where the answer is this recorder's.</summary>
+    public IReadOnlyList<(PluginCopyKey Key, string Path)> BinaryPokes
+    {
+        get { lock (_gate) return [.. _binaryPokes]; }
+    }
+
+    private readonly List<(PluginCopyKey Key, string Path)> _binaryPokes = [];
+
     public Task<bool> RefreshBinary(PluginCopyKey key, string path)
     {
+        lock (_gate) _binaryPokes.Add((key, path));
+
         if (!File.Exists(path))
         {
             Record("unindex", key, []);
@@ -103,7 +122,7 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
 
     private void Record(string verb, PluginCopyKey? plugin, IReadOnlyList<string> keys)
     {
-        lock (_gate) _projections.Add(new RecordedProjection(verb, plugin, keys, _scope, _since.Elapsed));
+        lock (_gate) _projections.Add(new RecordedProjection(verb, plugin, keys, _scope));
     }
 
     // The scope number only has to distinguish one batch's projections from the next batch's, which
