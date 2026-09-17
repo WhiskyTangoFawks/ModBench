@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using MEditService.LoadOrder;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 
