@@ -1,6 +1,7 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -43,8 +44,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(File.Exists(result.Copy.Path));
     }
 
-    // ADR-0007: a created plugin is a member at once, reaching every reader through this one
-    // snapshot change; a copy the reconcile cannot open is not a row, so the file comes first.
+    // A created plugin reaches every reader through this one snapshot change; a copy the
+    // reconcile cannot open is not a row, so the file comes first.
     [Fact]
     public async Task CreatePlugin_RegistersTheCopy_OnlyOnceItsFileExists()
     {
@@ -85,6 +86,23 @@ public sealed class CreatePluginHandlerTests : IDisposable
         await Assert.ThrowsAsync<IOException>(() => Create("Occupied.esp", modFolder, "OccupiedMod"));
 
         Assert.Same(before, _holder.Current);
+    }
+
+    // Track refuses when nothing readable carries the origin; the file is residue, but the load
+    // order every reader holds is the one this gesture found.
+    [Fact]
+    public async Task CreatePlugin_WhoseTrackRefuses_LeavesTheLoadOrderAsItWas()
+    {
+        var modFolder = ModFolder("RefusedMod");
+        var handler = TestEditService.PluginCreateHandler(_holder, new UnreadableAfterWriteAdapter("Refused.esp"));
+        var before = _holder.Current;
+
+        var result = await handler.CreatePlugin("Refused.esp", Path.Combine(modFolder, "Refused.esp"), "RefusedMod");
+
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.NoPluginWithOrigin, result.Track.Require().Refusal);
+        Assert.Same(before, _holder.Current);
+        Assert.Null(_holder.Current.Copy(result.Copy.Key));
     }
 
     [Fact]
@@ -209,6 +227,17 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var ex = await Assert.ThrowsAsync<IOException>(() => Create("Duplicate.esp", modFolder, "DupMod"));
 
         Assert.Contains("already exists", ex.Message, StringComparison.Ordinal);
+    }
+
+    // The real adapter, except that the file it just wrote cannot be read back: what another tool
+    // holding the new file against a reader looks like to Track.
+    private sealed class UnreadableAfterWriteAdapter(string name) : ReadOnlyPluginAdapter
+    {
+        public override bool CanRead(ModPath modPath) =>
+            !modPath.ModKey.FileName.String.Equals(name, StringComparison.OrdinalIgnoreCase) && base.CanRead(modPath);
+
+        public override Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
+            MutagenPluginAdapter.Instance.CreateAndWriteAsync(modKey, destinationPath, gameRelease, smallMaster);
     }
 
     private static IModFlagsGetter Written(string modFolder, string name) =>

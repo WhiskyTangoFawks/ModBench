@@ -82,7 +82,7 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
-    public Task CreateAndWriteAsync(
+    public virtual Task CreateAndWriteAsync(
         ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 }

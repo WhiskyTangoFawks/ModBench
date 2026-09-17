@@ -63,8 +63,8 @@ internal static class TestEditService
     internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<ContinueRebaseEditBranchHandler>();
 
-    internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CreatePluginHandler>();
+    internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
+        Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
     internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<PeekNextFreeFormKeyHandler>();

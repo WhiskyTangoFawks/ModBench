@@ -125,10 +125,11 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013: the handler is the only writer, the composition root's own subscription the only
-    // reconciler — a second one of either makes the Index's Status lie.
+    // ADR-0013 invariant 1: the create and put-load-order handlers are the only writers, the
+    // composition root's own subscription the only reconciler — a second of either makes the
+    // Index's Status lie.
     [Fact]
-    public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
+    public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheCompositionRoot()
     {
         var root = SolutionDirectory();
         // Create never reconciles: its copy reaches the Index through the next snapshot. The

@@ -113,6 +113,25 @@ public sealed class RenumberRollbackTests
         Assert.Equal(before, TreeSnapshot.Of(referencer.ModFolder));
     }
 
+    // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
+    // a container whose EditorID carries a NUL has no path a rename can land on.
+    [Fact]
+    public void ARenumberThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
+    {
+        using var fixture = new SourceContainerFixture();
+        var worldspaceDocument = fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId);
+        File.WriteAllText(
+            worldspaceDocument,
+            File.ReadAllText(worldspaceDocument).Replace(
+                $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal));
+        var before = TreeSnapshot.Of(fixture.ModFolder);
+
+        Assert.Throws<ArgumentException>(() =>
+            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+
+        Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
+    }
+
     // ---- ordering and containers ----
 
     [Fact]

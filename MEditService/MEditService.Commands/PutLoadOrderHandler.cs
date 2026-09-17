@@ -7,7 +7,7 @@ namespace MEditService.Commands;
 
 /// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2) and
 /// applies the result to Load order state. Reconciling into the Index and re-arming the watcher
-/// are subscriptions wired at composition (ADR-0014 invariant 3).</summary>
+/// are subscriptions wired at composition.</summary>
 public sealed class PutLoadOrderHandler
 {
     private readonly LoadOrderHolder _holder;
