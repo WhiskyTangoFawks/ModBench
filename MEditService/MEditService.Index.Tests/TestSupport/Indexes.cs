@@ -56,6 +56,31 @@ internal static class Indexes
         }
     }
 
+    /// <summary>The SQL door (ADR-0011): the filter is arbitrary SQL yielding form_key, so what it
+    /// matches is the relational schema's own answer. The filter is cleared after, the door being
+    /// shared.</summary>
+    internal static int Matching(this IndexProjector index, string sql)
+    {
+        index.SetFilter(sql);
+        try
+        {
+            return index.RequireReads().Search(new RecordQuery(Limit: 1)).Total;
+        }
+        finally
+        {
+            index.ClearFilter();
+        }
+    }
+
+    /// <summary>Whether a filter may name the relations and columns in <paramref name="sql"/>: the
+    /// door refuses SQL it cannot resolve.</summary>
+    internal static bool Accepts(this IndexProjector index, string sql)
+    {
+        if (Record.Exception(() => index.SetFilter(sql)) is not null) return false;
+        index.ClearFilter();
+        return true;
+    }
+
     /// <summary>One record type's row count for one copy, zero when the copy holds none.</summary>
     internal static int CountOf(this IRecordReads reads, PluginCopyKey plugin, string recordType) =>
         reads.GetRecordTypeCounts(plugin)

@@ -1,10 +1,7 @@
-using System.Globalization;
 using System.Text;
-using DuckDB.NET.Data;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Index;
-using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
@@ -39,9 +36,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void EveryEmbeddedChildRecord_IsItsOwnQueryableRecord_OnBothPaths()
     {
-        var embeddedTypes = new[] { "refr", "achr", "navm", "land", "cell", "pgre", "pmis", "phzd" };
-
-        foreach (var type in embeddedTypes)
+        foreach (var type in (string[])["refr", "achr", "navm", "land", "cell", "pgre", "pmis", "phzd"])
         {
             var binary = CountOf(fixture.FromBinary, type);
             if (binary == 0) continue;
@@ -54,19 +49,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.True(CountOf(fixture.FromBinary, "refr") > 0, "fixture holds no placed references");
         Assert.True(CountOf(fixture.FromBinary, "cell") > 0, "fixture holds no cells");
     }
-
-    // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
-    // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
-    private List<string> AllFormKeys(IndexProjector index) =>
-        [.. index.RequireReads()
-            .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
-            .Items.Select(i => i.FormKey)];
-
-    private int CountOf(IndexProjector index, string recordType) =>
-        index.RequireReads().GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
-
-    private Dictionary<string, RecordDocument> DocumentsByFormKey(IndexProjector index) =>
-        index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
 
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
@@ -92,15 +74,11 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind
         // the same count.
-        var binaryBody = binaryDocuments[mismatched[0]].Body
-            ?? throw new InvalidOperationException("Expected the binary-path document to carry a body.");
-        var sourceBody = sourceDocuments[mismatched[0]].Body
-            ?? throw new InvalidOperationException("Expected the source-path document to carry a body.");
+        var binaryBody = binaryDocuments[mismatched[0]].BodyOf();
+        var sourceBody = sourceDocuments[mismatched[0]].BodyOf();
         Assert.Contains("\"Break2\"", binaryBody, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Break2\"", sourceBody, StringComparison.Ordinal);
-        Assert.Equal(
-            StripVersioningBlock(binaryBody),
-            StripVersioningBlock(sourceBody));
+        Assert.Equal(StripVersioningBlock(binaryBody), StripVersioningBlock(sourceBody));
     }
 
     [Fact]
@@ -123,81 +101,87 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Contains("\"MasterReferences\"", binary.Body, StringComparison.Ordinal);
 
         Assert.Equal(binary.Body, source.Body);
-        Assert.Equal(ContentHashOf(fixture.BinaryInstanceRoot, headerFormKey), ContentHashOf(fixture.SourceInstanceRoot, headerFormKey));
 
-        // The third arm: against the tracked plugin's own file on disk, as raw bytes. `records.body`
-        // is VARCHAR, so this is the only comparison here that is genuinely about bytes.
+        // The third arm: against the tracked plugin's own file on disk, as raw bytes. A document's
+        // body is text, so this is the only comparison here that is genuinely about bytes.
         var headerFile = Path.Combine(fixture.ModFolder, "source", CutDownPluginFixture.PluginFileName, "RecordData.json");
         Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
-        var sourceBody = source.Body
-            ?? throw new InvalidOperationException("Expected the source header document to carry a body.");
-        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(sourceBody));
+        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.BodyOf()));
     }
-
-    private static string ContentHashOf(string instanceRoot, string formKey) =>
-        Assert.IsType<string>(StoreFile.Scalar(instanceRoot, "SELECT content_hash FROM records WHERE form_key = $1", formKey));
-
-    private static string StripVersioningBlock(string body) =>
-        System.Text.RegularExpressions.Regex.Replace(
-            body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
 
     [Fact]
     public void PlacementAndCellLocationRows_AreIdentical_TrackedAndUntracked()
     {
-        var placed = AssertTableIdentical("placement");
-        var located = AssertTableIdentical("cell_location");
+        var keys = AllFormKeys(fixture.FromBinary);
+        var placed = 0;
+        var located = 0;
+        foreach (var formKey in keys)
+        {
+            var binaryPlacement = fixture.FromBinary.RequireReads().GetPlacement(formKey, fixture.Plugin);
+            Assert.Equal(binaryPlacement, fixture.FromSource.RequireReads().GetPlacement(formKey, fixture.Plugin));
+            if (binaryPlacement is not null) placed++;
 
-        // Positive controls: two empty tables are trivially equal on both sides.
-        Assert.True(placed > 0, "fixture produced no placement rows");
-        Assert.True(located > 0, "fixture produced no cell_location rows");
+            var binaryLocation = fixture.FromBinary.RequireReads().GetCellLocation(fixture.Plugin, formKey);
+            Assert.Equal(binaryLocation, fixture.FromSource.RequireReads().GetCellLocation(fixture.Plugin, formKey));
+            if (binaryLocation is not null) located++;
+        }
+
+        // Positive controls: two empty answers are trivially equal on both sides.
+        Assert.True(placed > 0, "fixture produced no placements");
+        Assert.True(located > 0, "fixture produced no cell locations");
     }
 
     [Fact]
     public void FormLookupAndReferenceRows_AreIdentical_TrackedAndUntracked()
     {
-        AssertTableIdentical("form_lookup");
-        var referenced = AssertTableIdentical("form_references", "source_plugin", "source_origin");
+        var referenced = 0;
+        foreach (var formKey in AllFormKeys(fixture.FromBinary))
+        {
+            Assert.Equal(
+                fixture.FromBinary.RequireReads().Resolve(formKey),
+                fixture.FromSource.RequireReads().Resolve(formKey));
 
-        Assert.True(referenced > 0, "fixture produced no form_references rows");
+            var binaryReferences = Ordered(fixture.FromBinary.RequireReads().GetReferencedBy(formKey));
+            Assert.Equal(binaryReferences, Ordered(fixture.FromSource.RequireReads().GetReferencedBy(formKey)));
+            referenced += binaryReferences.Count;
+        }
+
+        Assert.True(referenced > 0, "fixture produced no references");
     }
 
     [Fact]
     public void ContainerChildRows_AreIdentical_TrackedAndUntracked()
     {
-        var children = AssertTableIdentical("container_child");
-
-        Assert.True(children > 0, "fixture produced no container_child rows");
-    }
-
-    private int AssertTableIdentical(string table, string pluginColumn = "plugin", string originColumn = "origin")
-    {
-        var binary = Rows(fixture.BinaryInstanceRoot, table, pluginColumn, originColumn);
-        var source = Rows(fixture.SourceInstanceRoot, table, pluginColumn, originColumn);
-
-        var firstDifference = Enumerable.Range(0, Math.Max(binary.Count, source.Count))
-            .FirstOrDefault(i => i >= binary.Count || i >= source.Count || binary[i] != source[i], -1);
-        Assert.True(firstDifference < 0,
-            $"{table} differs: {binary.Count} binary rows vs {source.Count} source rows; first difference at row {firstDifference}: " +
-            $"binary=[{binary.ElementAtOrDefault(firstDifference) ?? "(missing)"}] source=[{source.ElementAtOrDefault(firstDifference) ?? "(missing)"}]");
-        return binary.Count;
-    }
-
-    private List<string> Rows(string instanceRoot, string table, string pluginColumn, string originColumn)
-    {
-        using var connection = StoreFile.Open(instanceRoot);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"SELECT * FROM {table} WHERE {pluginColumn} = $1 AND {originColumn} = $2 ORDER BY ALL";
-        cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<string>();
-        var values = new object[reader.FieldCount];
-        while (reader.Read())
+        var children = 0;
+        foreach (var formKey in AllFormKeys(fixture.FromBinary))
         {
-            reader.GetValues(values);
-            rows.Add(string.Join("|", values.Select(v => v is DBNull ? "<NULL>" : Convert.ToString(v, CultureInfo.InvariantCulture))));
+            var binaryChildren = fixture.FromBinary.RequireReads().GetContainerChildren(fixture.Plugin, formKey);
+            Assert.Equal(binaryChildren, fixture.FromSource.RequireReads().GetContainerChildren(fixture.Plugin, formKey));
+            Assert.Equal(
+                fixture.FromBinary.RequireReads().GetContainerParent(fixture.Plugin, formKey),
+                fixture.FromSource.RequireReads().GetContainerParent(fixture.Plugin, formKey));
+            children += binaryChildren.Count;
         }
-        return rows;
+
+        Assert.True(children > 0, "fixture produced no container children");
     }
+
+    // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
+    // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
+    private List<string> AllFormKeys(IndexProjector index) =>
+        [.. index.RequireReads()
+            .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
+            .Items.Select(i => i.FormKey)];
+
+    private int CountOf(IndexProjector index, string recordType) =>
+        index.RequireReads().CountOf(fixture.Plugin, recordType);
+
+    private Dictionary<string, RecordDocument> DocumentsByFormKey(IndexProjector index) =>
+        index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
+
+    private static List<ReferenceResult> Ordered(IEnumerable<ReferenceResult> references) =>
+        [.. references.OrderBy(r => r.FormKey, StringComparer.Ordinal).ThenBy(r => r.FieldPath, StringComparer.Ordinal)];
+
+    private static string StripVersioningBlock(string body) =>
+        Regex.Replace(body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
 }

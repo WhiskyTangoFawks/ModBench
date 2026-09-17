@@ -57,7 +57,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
             return [$"{where}: the codec could not read its own document — {ex.Message}"];
         }
 
-        return reserialized == stored ? [] : [$"{where}: {Golden.FirstDifference(stored, reserialized)}"];
+        return reserialized == stored ? [] : [$"{where}: {FirstDifference(stored, reserialized)}"];
     }
 
     private static async Task<string> RoundTripRecord(RecordTextCodec codec, string recordType, string stored)
@@ -65,6 +65,20 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
         var record = await codec.DeserializeFromBytesAsync(
             Encoding.UTF8.GetBytes(stored), GameRelease.Fallout4, recordType);
         return Encoding.UTF8.GetString(await codec.SerializeToBytesAsync(record, GameRelease.Fallout4));
+    }
+
+    private static string FirstDifference(string expected, string actual)
+    {
+        var expectedLines = expected.Split('\n');
+        var actualLines = actual.Split('\n');
+        for (var i = 0; i < Math.Max(expectedLines.Length, actualLines.Length); i++)
+        {
+            var left = i < expectedLines.Length ? expectedLines[i] : "(no line)";
+            var right = i < actualLines.Length ? actualLines[i] : "(no line)";
+            if (!string.Equals(left, right, StringComparison.Ordinal))
+                return $"line {i + 1}: stored '{left}' vs reserialized '{right}'";
+        }
+        return "no line differs";
     }
 
     // A ModHeader is not an IMajorRecordGetter, so the per-record codec has no path to it; the
