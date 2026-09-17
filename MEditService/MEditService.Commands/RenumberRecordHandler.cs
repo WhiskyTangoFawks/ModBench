@@ -84,9 +84,9 @@ public sealed class RenumberRecordHandler
         var targetRewrite = computedTargetRewrite
             ?? throw new InvalidOperationException("Expected ComputeTargetRewrite to compute a target when it does not refuse.");
 
-        // Phase two: recorded in one transaction (ADR-0007), rolled back whatever fails. Each
-        // fault gets what it deserves: a tree not as phase one found it is a refusal (ADR-0014
-        // invariant 4), a filesystem fault the write failure it is, anything else the bug it is.
+        // Phase two: one transaction, rolled back whatever fails (ADR-0007 invariant 8). A tree not
+        // as phase one found it is a refusal (ADR-0014 invariant 4); a filesystem fault is a write
+        // failure; anything else is a bug.
         var transaction = new SourceRepository.SourceTransaction();
         try
         {

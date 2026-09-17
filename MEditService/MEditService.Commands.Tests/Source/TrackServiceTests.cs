@@ -45,9 +45,8 @@ public sealed class TrackServiceTests
         }
     }
 
-    // A registered copy the Plugin adapter cannot read has no bytes to deep-parse, so Track passes
-    // over it instead of failing the whole origin on it. The adapter answers, not the disk: the
-    // rival is a handler asking whether the file exists, which this one does.
+    // A copy the Plugin adapter cannot read has no bytes to deep-parse, so Track passes over it
+    // rather than failing the origin. The adapter answers, not the disk: this file exists.
     [Fact]
     public async Task TrackAsync_SkipsARegisteredCopyTheAdapterCannotRead()
     {

@@ -20,7 +20,7 @@ public sealed class CreatePluginHandler
 
     /// <summary><paramref name="pluginPath"/> is where the file goes, as Mod Management resolved
     /// it. Throws <see cref="NoLoadOrderException"/> with nothing written when no load order is
-    /// held; a file the adapter refuses to write throws as the adapter does, nothing registered.</summary>
+    /// held; a write the adapter refuses throws as the adapter does, nothing registered.</summary>
     public async Task<PluginCreateResult> CreatePlugin(string name, string pluginPath, string origin)
     {
         var previous = _holder.Require();
