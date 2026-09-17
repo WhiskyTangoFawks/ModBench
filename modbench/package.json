@@ -929,7 +929,7 @@
     "test:integration": "tsc -p tsconfig.integration.json && env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a vscode-test",
     "lint": "eslint src webview/src",
     "prepackage": "cp ../LICENSE ./LICENSE",
-    "package": "vsce package"
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
