@@ -52,14 +52,14 @@ public sealed class RefreshBinaryTests : IDisposable
         File.WriteAllText(_pluginPath, "not a plugin");
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
         Assert.Contains(_index.Status.Failures, f => f.Name == PluginName);
-        Assert.Null(_index.IndexedContentHash(_key));
+        Assert.Empty(_index.RequireReads().GetDocuments(_key));
 
         WriteValidPlugin(_pluginPath);
         await _index.RefreshBinary(_key, _pluginPath);
 
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.Status.IndexedPlugins, p => p.Name == PluginName && p.Origin == Origin);
-        Assert.NotNull(_index.IndexedContentHash(_key));
+        Assert.NotEmpty(_index.RequireReads().GetDocuments(_key));
     }
 
     [Fact]
@@ -67,11 +67,10 @@ public sealed class RefreshBinaryTests : IDisposable
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
-        var indexedHash = _index.IndexedContentHash(_key);
-        Assert.NotNull(indexedHash);
+        var landed = _index.Sequence;
 
         Assert.False(await _index.RefreshBinary(_key, _pluginPath));
-        Assert.Equal(indexedHash, _index.IndexedContentHash(_key));
+        Assert.Equal(landed, _index.Sequence);
     }
 
     [Fact]
@@ -79,14 +78,13 @@ public sealed class RefreshBinaryTests : IDisposable
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
-        var indexedHash = _index.IndexedContentHash(_key);
 
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("ArrivedExternally");
         mod.WriteToBinary(_pluginPath);
 
         Assert.True(await _index.RefreshBinary(_key, _pluginPath));
-        Assert.NotEqual(indexedHash, _index.IndexedContentHash(_key));
+        Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "ArrivedExternally");
     }
 
     [Fact]
@@ -94,12 +92,12 @@ public sealed class RefreshBinaryTests : IDisposable
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
-        Assert.NotNull(_index.IndexedContentHash(_key));
+        Assert.NotEmpty(_index.RequireReads().GetDocuments(_key));
 
         File.Delete(_pluginPath);
         Assert.True(await _index.RefreshBinary(_key, _pluginPath));
 
-        Assert.Null(_index.IndexedContentHash(_key));
+        Assert.Empty(_index.RequireReads().GetDocuments(_key));
     }
 
     // The rival this pins: answering true for any missing path, which would tell a reader

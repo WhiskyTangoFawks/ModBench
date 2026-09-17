@@ -25,8 +25,7 @@ public sealed class ReconcileScatteredTests
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads;
-        Assert.NotNull(reads);
+        var reads = manager.RequireReads();
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("B.esp", "Data"))
@@ -50,7 +49,7 @@ public sealed class ReconcileScatteredTests
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var reads = manager.RequireReads();
         var winner = reads.GetDocument(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
@@ -67,12 +66,11 @@ public sealed class ReconcileScatteredTests
 
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var firstRepo = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var firstRepo = manager.RequireReads();
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Same(firstRepo, manager.Reads);
+        Assert.Same(firstRepo, manager.RequireReads());
         Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data")));
     }
 
@@ -92,7 +90,7 @@ public sealed class ReconcileScatteredTests
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var reads = manager.RequireReads();
         Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);

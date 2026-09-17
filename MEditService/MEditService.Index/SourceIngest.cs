@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>A tracked plugin's read model is seeded from its source, never the compiled artifact
-/// (ADR-0003). The tree reads as documents, so tracked and untracked plugins share one
+/// (ADR-0007 invariant 3). The tree reads as documents, so tracked and untracked plugins share one
 /// indexing call.</summary>
 internal static class SourceIngest
 {
@@ -37,7 +37,7 @@ internal static class SourceIngest
 
         var timer = Stopwatch.StartNew();
         using (var documents = repository.OpenDocuments(key, schemas))
-            index.Index(documents, registration, key, binaryPath);
+            index.Index(documents, registration, key, binaryPath, DerivedFrom.SourceTree);
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
@@ -95,7 +95,7 @@ internal static class SourceIngest
     }
 
     // Diffs HEAD's documents against the working tree's by FormKey, needing no path identity
-    // (ADR-0003). A schema-unpublished type is skipped on the deletion side only: a
+    // (ADR-0007 invariant 3). A schema-unpublished type is skipped on the deletion side: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
         SourceRepository repository, PluginCopyKey key,

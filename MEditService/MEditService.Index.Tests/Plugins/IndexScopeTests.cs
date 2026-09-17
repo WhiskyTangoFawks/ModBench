@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -19,17 +20,17 @@ public class IndexScopeTests(TestPluginFixture fixture)
     private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
-    // typed, actionable exception rather than a FileNotFoundException from inside Initialize.
+    // typed, actionable message rather than a FileNotFoundException's from inside Initialize.
     [Fact]
-    public void Load_ForUnsupportedGameRelease_ThrowsUnsupportedGameReleaseException()
+    public void Load_ForUnsupportedGameRelease_FailsNamingTheRelease()
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
 
-        var ex = Assert.Throws<UnsupportedGameReleaseException>(
-            () => manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE));
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
 
-        Assert.Contains("SkyrimSE", ex.Message);
+        Assert.Equal(LoadOrderState.Failed, manager.Status.State);
+        Assert.Contains("SkyrimSE", manager.Status.Message);
     }
 
     [Fact]
@@ -39,8 +40,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads;
-        Assert.NotNull(reads);
+        var reads = manager.RequireReads();
         Assert.Equal(TestPluginFixture.PluginName, Assert.Single(reads.OpenedCopies).Key.Name);
     }
 
@@ -70,16 +70,15 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Unload_ClearsReferencesAndDisposesRepository()
+    public void Dispose_ClearsReferencesAndDisposesRepository()
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads before closing.");
-        manager.Close();
+        var oldRepo = manager.RequireReads();
+        manager.Dispose();
 
-        Assert.Null(manager.Reads);
+        Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
         Assert.ThrowsAny<Exception>(() =>
             oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
@@ -90,12 +89,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var firstRepo = manager.Reads;
+        var firstRepo = manager.RequireReads();
 
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         // ADR-0013: a snapshot for the same instance reconciles in place — nothing is replaced.
-        Assert.Same(firstRepo, manager.Reads);
+        Assert.Same(firstRepo, manager.RequireReads());
     }
 
     // --- SetFilter / ClearFilter ---
@@ -143,7 +142,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // path that can change which records match has to re-run it.
 
     [Fact]
-    public async Task ReindexPlugin_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
+    public async Task RefreshBinary_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -161,8 +160,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
-            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
-            await manager.ReindexPlugin(pluginKey);
+            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
+            await manager.RefreshBinary(plugin.KeyOf(), plugin.Path);
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
@@ -171,7 +170,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public async Task ReindexPlugin_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
+    public async Task RefreshBinary_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -189,8 +188,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
-            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
-            await manager.ReindexPlugin(pluginKey);
+            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
+            await manager.RefreshBinary(plugin.KeyOf(), plugin.Path);
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
@@ -200,7 +199,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // A filter valid over the rows it was set on and not over the rows a re-index lands: the one
     // way a re-materialization can fail after the write it follows is already durable.
     [Fact]
-    public async Task ReindexPlugin_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
+    public async Task RefreshBinary_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -222,8 +221,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
-            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
-            var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin(pluginKey));
+            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
+            var ex = await Record.ExceptionAsync(() => manager.RefreshBinary(plugin.KeyOf(), plugin.Path));
 
             Assert.Null(ex);
             Assert.Contains(entries, e =>
@@ -250,8 +249,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var oldRepo = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads before reconciling against a different instance.");
+        var oldRepo = manager.RequireReads();
 
         // ADR-0013: only a snapshot for another instance replaces what is held; the same instance
         // reconciles in place (Reconcile_SameInstance_KeepsTheStore).
@@ -268,8 +266,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads before disposing.");
+        var oldRepo = manager.RequireReads();
 
         manager.Dispose();
 

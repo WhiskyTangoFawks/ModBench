@@ -36,7 +36,17 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         new("cell_location", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("container_child", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("record_type_failure", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
+        new(CopySourceTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
+        new(PluginDiagnosisTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
     ];
+
+    /// <summary>One row per indexed copy naming which truth its rows came from, its source tree or
+    /// its binary: tracked-ness as a row, in the mirror because it is the rows' own fact.</summary>
+    internal const string CopySourceTable = "copy_source";
+
+    /// <summary>The Kind B diagnoses a copy's binary proved when it was hashed, one row each, in
+    /// record order.</summary>
+    internal const string PluginDiagnosisTable = "plugin_diagnosis";
 
     /// <summary>The winners relation, bare — no schema prefix — because it is load-order-derived
     /// state, not a file mirror: it lives in <c>main</c> beside <c>registrations</c>.</summary>
@@ -72,6 +82,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
+        CreateCopySourceTable(connection);
+        CreatePluginDiagnosisTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
@@ -85,8 +97,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateHeadView(connection);
     }
 
-    // ADR-0014: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional, and this
-    // count must roll back with the rows it describes. The seed is a no-op past the first open.
+    // ADR-0015 invariant 3: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
+    // and this count must roll back with the rows it describes. The seed is a no-op past the first
+    // open.
     private static void CreateSequenceTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -267,6 +280,29 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 content_hash  VARCHAR NOT NULL,
                 index_version VARCHAR NOT NULL,
                 PRIMARY KEY (plugin, origin)
+            )
+            """);
+
+    internal static void CreateCopySourceTable(DuckDBConnection connection) =>
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.{CopySourceTable} (
+                plugin       VARCHAR NOT NULL,
+                origin       VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                derived_from VARCHAR NOT NULL,
+                PRIMARY KEY (plugin, origin)
+            )
+            """);
+
+    internal static void CreatePluginDiagnosisTable(DuckDBConnection connection) =>
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDiagnosisTable} (
+                plugin       VARCHAR NOT NULL,
+                origin       VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                ordinal      INTEGER NOT NULL,
+                anchor       VARCHAR,
+                defect_class VARCHAR NOT NULL,
+                tail         VARCHAR,
+                message      VARCHAR NOT NULL
             )
             """);
 

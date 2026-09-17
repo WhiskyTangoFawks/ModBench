@@ -33,7 +33,6 @@ public class IndexAtomicityTests
         Assert.Equal(0, reads.CountOf(key, "npc_"));
         Assert.Empty(reads.GetDocuments(key));
         Assert.Empty(reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items);
-        Assert.Null(index.IndexedContentHash(key));
     }
 
     // Real documents up to a point, then the throw an unreadable record would raise mid-plugin.

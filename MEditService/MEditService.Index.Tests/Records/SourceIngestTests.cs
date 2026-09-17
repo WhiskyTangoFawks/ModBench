@@ -184,7 +184,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public async Task ReindexPlugin_OnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
+    public async Task ABinaryChangeOnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
         using var index = Opened();
 
@@ -193,7 +193,8 @@ public sealed class SourceIngestTests : IDisposable
 
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
-        await index.ReindexPlugin(Plugin);
+        PluginBinaries.Touch(_entry.Path);
+        Assert.True(await index.RefreshBinary(Plugin, _entry.Path));
 
         Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
     }
@@ -230,7 +231,8 @@ public sealed class SourceIngestTests : IDisposable
         // The half-written root document surfaces as the JSON reader's own failure, propagated
         // rather than swallowed into a null downstream. Its subclass is not public, so the base
         // is what a caller can match.
-        await Assert.ThrowsAnyAsync<JsonException>(() => index.ReindexPlugin(Plugin));
+        PluginBinaries.Touch(_entry.Path);
+        await Assert.ThrowsAnyAsync<JsonException>(() => index.RefreshBinary(Plugin, _entry.Path));
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.

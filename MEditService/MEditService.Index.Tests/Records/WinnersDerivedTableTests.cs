@@ -96,7 +96,6 @@ public sealed class WinnersDerivedTableTests : IDisposable
     {
         Reconcile([.. _fixture.Plugins.Where(p => p.Name != OverKey.Name)]);
 
-        Assert.NotNull(_index.IndexedContentHash(OverKey));
         Assert.Equal(BaseKey, WinnerOf(_npc));
         Assert.Empty(Reads.GetDocuments(OverKey));
     }

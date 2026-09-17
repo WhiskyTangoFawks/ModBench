@@ -15,6 +15,8 @@ public sealed class IndexWriteSerializationTests : IDisposable
 
     private IndexProjector Index => _mod.Index;
 
+    private string PluginPath => Path.Combine(_mod.ModFolder, _mod.ActualPluginName);
+
     private IRecordQueryService Reads() =>
         new RecordQueryService(_mod.Index, _mod.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -34,28 +36,30 @@ public sealed class IndexWriteSerializationTests : IDisposable
     // --- AC2: the external-change watcher's timer-driven index writes take the gate ---
 
     [Fact]
-    public async Task UnindexPlugin_WaitsForAnInFlightWriteToRelease()
+    public async Task RefreshBinary_OfAGoneFile_WaitsForAnInFlightWriteToRelease()
     {
+        File.Delete(PluginPath);
         Task work;
         using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Index.UnindexPlugin(_mod.Plugin), BlockedWindow);
-            Assert.False(finished, "UnindexPlugin wrote to the index without taking the write gate");
+            (work, finished) = RunAndWait(() => Index.RefreshBinary(_mod.Plugin, PluginPath).GetAwaiter().GetResult(), BlockedWindow);
+            Assert.False(finished, "the gone-file refresh wrote to the index without taking the write gate");
         }
 
         await work.WaitAsync(Generous);
     }
 
     [Fact]
-    public async Task ReindexPlugin_WaitsForAnInFlightWriteToRelease()
+    public async Task RefreshBinary_OfChangedBytes_WaitsForAnInFlightWriteToRelease()
     {
+        PluginBinaries.Touch(PluginPath);
         Task work;
         using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Index.ReindexPlugin(_mod.Plugin), BlockedWindow);
-            Assert.False(finished, "ReindexPlugin wrote to the index without taking the write gate");
+            (work, finished) = RunAndWait(() => Index.RefreshBinary(_mod.Plugin, PluginPath).GetAwaiter().GetResult(), BlockedWindow);
+            Assert.False(finished, "the changed-bytes refresh wrote to the index without taking the write gate");
         }
 
         await work.WaitAsync(Generous);

@@ -20,24 +20,23 @@ internal interface IRecordIndex : IDisposable
 
     void Initialize(GameRelease release);
 
-    /// <summary>ADR-0014: one monotonic counter, advanced in the same transaction as any row
-    /// change — ingest, a working-tree push, a registration or a winner sweep. Zero until the
-    /// first change lands.</summary>
+    /// <summary>ADR-0015 invariant 3: one monotonic counter, advanced in the same transaction as
+    /// any row change — ingest, a working-tree push, a registration or a winner sweep. Zero until
+    /// the first change lands.</summary>
     long Sequence { get; }
 
-    /// <summary>ADR-0014: everything projected inside the scope advances <see cref="Sequence"/> once,
-    /// when the outermost scope closes, so a whole-plugin projection and a settled batch are each
-    /// one advance. Nested scopes count.</summary>
+    /// <summary>ADR-0015 invariant 3: everything projected inside the scope advances
+    /// <see cref="Sequence"/> once, when the outermost scope closes, so a whole-plugin projection
+    /// and a settled batch are each one advance. Nested scopes count.</summary>
     IDisposable BeginProjection();
 
     /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:
     /// immediately outside a scope, after that scope's advance inside one.</summary>
     void Announce(Action publish);
 
-    /// <summary>Indexes one plugin's documents, replacing whatever <paramref name="key"/> held.
-    /// ADR-0009: <paramref name="filePath"/> is stamped with its content hash so the rows are
-    /// validatable at the next open; omitting it claims no file backs them.</summary>
-    void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null);
+    /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
+    /// hash and diagnosis (ADR-0009 invariant 4); a null path claims no file backs the rows.</summary>
+    void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath, DerivedFrom derivedFrom);
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
     /// index holds no validated rows for it. Independent of registration, so a returning profile
@@ -89,7 +88,7 @@ internal interface IRecordIndex : IDisposable
     /// <c>form_key</c> column; state is unchanged on failure.</summary>
     void SetFilter(string? sql);
 
-    /// <summary>ADR-0014: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
+    /// <summary>ADR-0015 invariant 3: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
     /// both refs from the Source repository, idempotent by content. A key held at neither ref
     /// re-derives the whole copy.</summary>
     void RefreshByKeys(PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys);

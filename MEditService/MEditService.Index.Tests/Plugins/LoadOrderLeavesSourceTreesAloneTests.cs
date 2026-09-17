@@ -43,7 +43,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
                 GameRelease.Fallout4);
 
             // Positive control: the load really happened and really indexed the present plugin.
-            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+            var reads = manager.RequireReads();
             Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("StillHere.esp", "ModA"))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 

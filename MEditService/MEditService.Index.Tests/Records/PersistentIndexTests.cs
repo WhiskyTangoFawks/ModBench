@@ -72,7 +72,6 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotNull(second.Index.IndexedContentHash(alpha.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
@@ -90,9 +89,14 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.Equal(0, second.Opens.OpenedTotal);
         Assert.False(second.Index.Registers(alpha.KeyOf()));
         Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
-        Assert.NotNull(second.Index.IndexedContentHash(alpha.KeyOf()));
         Assert.True(second.Index.Registers(beta.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
+
+        // Alpha's rows outlived its registration: naming it again costs no open.
+        second.Dispose();
+        using var third = Launched([alpha, beta]);
+        Assert.Equal(0, third.Opens.OpenedTotal);
+        Assert.NotEmpty(third.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
     // Content, never clock: the changed plugin is re-read on the next launch, and its neighbour,
@@ -143,7 +147,6 @@ public sealed class PersistentIndexTests : IDisposable
         File.Delete(alpha.Path);
 
         using var second = Launched([alpha]);
-        Assert.Null(second.Index.IndexedContentHash(alpha.KeyOf()));
         Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
         Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
     }
@@ -169,9 +172,8 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha, beta]);
         Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
-        Assert.NotNull(second.Index.IndexedContentHash(alpha.KeyOf()));
-        Assert.NotNull(second.Index.IndexedContentHash(beta.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
     }
 
     // A file DuckDB cannot open at all — a storage-format change on upgrade, a truncated
@@ -186,7 +188,6 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.NotNull(second.Index.IndexedContentHash(alpha.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
@@ -200,7 +201,6 @@ public sealed class PersistentIndexTests : IDisposable
 
         Launched([alpha]).Dispose();
 
-        Assert.NotNull(holder.Index.IndexedContentHash(alpha.KeyOf()));
         Assert.NotEmpty(holder.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 }

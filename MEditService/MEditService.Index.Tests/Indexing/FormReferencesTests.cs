@@ -70,7 +70,8 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        await index.ReindexPlugin(new PluginCopyKey("Reindex.esp", "Data"));
+        PluginBinaries.Touch(fixture.Plugins.Single().Path);
+        Assert.True(await index.RefreshBinary(new PluginCopyKey("Reindex.esp", "Data"), fixture.Plugins.Single().Path));
 
         Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
     }

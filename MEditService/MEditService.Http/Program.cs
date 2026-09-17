@@ -103,10 +103,12 @@ try
 
     var app = builder.Build();
 
-    // ADR-0013/ADR-0014 invariant 3: the Index and the watcher each subscribe to Load order
-    // state independently — the endpoint names neither, and each handles its own failures.
+    // The Index has no subscribe door: the change reaches its reconcile door from here, off the
+    // writer's thread. debt #946: the watcher, the one listener to the load-order change, makes this call.
     var holder = app.Services.GetRequiredService<LoadOrderHolder>();
-    app.Services.GetRequiredService<IndexProjector>().SubscribeTo(holder);
+    var projector = app.Services.GetRequiredService<IndexProjector>();
+    holder.Changed += (snapshot, version) => Task.Factory.StartNew(
+        () => projector.Reconcile(snapshot, version), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     app.Services.GetRequiredService<ModFolderWatcher>().SubscribeTo(holder);
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure

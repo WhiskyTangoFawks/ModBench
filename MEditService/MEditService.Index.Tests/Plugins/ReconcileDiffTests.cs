@@ -32,7 +32,7 @@ public sealed class ReconcileDiffTests
             .BuildScattered();
 
     private static IRecordReads ReadsOf(IndexProjector index) =>
-        index.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        index.RequireReads();
 
     private static RecordOverrides OverrideStackOf(IndexProjector index, string formKey) =>
         ReadsOf(index).GetOverrideStack(formKey)
@@ -189,7 +189,6 @@ public sealed class ReconcileDiffTests
         Assert.False(index.Registers(bKey));
         Assert.Empty(readsAfterLeaving.GetDocuments(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
-        Assert.NotNull(index.IndexedContentHash(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -275,12 +274,12 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
-        var first = index.Reads;
+        var first = index.RequireReads();
         var otherInstance = Directory.CreateDirectory(Path.Combine(fx.Root, "other-instance")).FullName;
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.NotSame(first, index.Reads);
+        Assert.NotSame(first, index.RequireReads());
         Assert.Equal(otherInstance, holder.Current.InstanceRoot);
     }
 }

@@ -44,7 +44,8 @@ public sealed class HeadRelationDisjointnessTests : IDisposable
         var before = Assert.Single(stackBefore.Entries);
         Assert.True(before.HasWorkingTreeChange);
 
-        await index.ReindexPlugin(_key);
+        PluginBinaries.Touch(_entry.Path);
+        Assert.True(await index.RefreshBinary(_key, _entry.Path));
 
         // The edit survives: Effective still serves the working tree's text, not the binary's
         // untouched one (the binary was written by the fixture and has never been compiled since).
@@ -67,12 +68,12 @@ public sealed class HeadRelationDisjointnessTests : IDisposable
         var reads = index.RequireReads();
         var committed = reads.DocumentOf(_formKey, _key);
         index.Edit(_entry, committed, committed.BodyOf().Replace("OriginalName", "EditedName", StringComparison.Ordinal));
-        Assert.NotNull(index.IndexedContentHash(_key));
+        Assert.NotEmpty(reads.GetDocuments(_key));
 
         File.Delete(_entry.Path);
         Assert.True(await index.RefreshBinary(_key, _entry.Path));
 
         Assert.Null(reads.HeadDocument(_formKey, _key));
-        Assert.Null(index.IndexedContentHash(_key));
+        Assert.Empty(reads.GetDocuments(_key));
     }
 }

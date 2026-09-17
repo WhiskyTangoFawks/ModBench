@@ -5,6 +5,4 @@
 # entries and this gate goes. A line added here is a new block that needs the maintainer's ruling.
 MEditService.Commands/AbsorbExternalChangeHandler.cs: GetAwaiter().GetResult(): 1
 MEditService.Commands/Edits/PluginCompileService.cs: GetAwaiter().GetResult(): 3
-MEditService.Index/IndexProjector.cs: .Wait(): 1
-MEditService.Index/IndexProjector.cs: GetAwaiter().GetResult(): 1
 MEditService.Watcher/ModFolderWatcher.cs: GetAwaiter().GetResult(): 1

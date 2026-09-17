@@ -79,6 +79,7 @@ public sealed class SpatialParseFailurePrefixTests
         internal static readonly PluginCopyKey Plugin = new(PluginName, Origin);
 
         private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
+        private readonly string _path;
         private readonly DiagnosingAdapter _adapter = new();
         private readonly IndexProjector _index;
 
@@ -113,12 +114,12 @@ public sealed class SpatialParseFailurePrefixTests
             PlacedFormKey = placed.FormKey.ToString();
             InteriorCellFormKey = interior.FormKey.ToString();
 
-            var path = Path.Combine(_dataFolder, PluginName);
-            mod.WriteToBinary(path);
+            _path = Path.Combine(_dataFolder, PluginName);
+            mod.WriteToBinary(_path);
 
             _index = Indexes.Reconciled(
                 _dataFolder,
-                [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
+                [new LoadOrderEntry(PluginName, _path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 adapter: _adapter);
         }
 
@@ -127,7 +128,8 @@ public sealed class SpatialParseFailurePrefixTests
         internal void MarkUnreadable(string formKey)
         {
             _adapter.Unreadable = formKey;
-            _index.ReindexPlugin(Plugin).GetAwaiter().GetResult();
+            PluginBinaries.Touch(_path);
+            Assert.True(_index.RefreshBinary(Plugin, _path).GetAwaiter().GetResult());
         }
 
         public void Dispose()
