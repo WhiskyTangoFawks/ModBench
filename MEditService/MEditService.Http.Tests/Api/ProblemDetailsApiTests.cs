@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 
@@ -49,7 +49,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [Fact]
     public async Task PutLoadOrder_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
-        await using var app = new WebApplicationFactory<Program>();
+        await using var app = new MEditHost();
         var client = app.CreateClient();
 
         var resp = await client.PutAsJsonAsync("/load-order", new
@@ -108,7 +108,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     // via .ProducesProblem(503).
     public async Task Endpoint_NoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
-        await using var app = new WebApplicationFactory<Program>();
+        await using var app = new MEditHost();
         var client = app.CreateClient();
 
         var realPluginPath = Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName);

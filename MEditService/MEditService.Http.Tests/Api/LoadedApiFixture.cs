@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
@@ -9,7 +8,7 @@ namespace MEditService.Tests.Api;
 public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     where TPlugin : IApiPluginFixture<TPlugin>
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private HttpClient? _client;
 
     public HttpClient Client

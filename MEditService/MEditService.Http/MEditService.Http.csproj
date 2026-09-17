@@ -20,15 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Http.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.CrossBox.Tests</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
     <!-- The composition root references every box below it by definition (ADR-0014). -->

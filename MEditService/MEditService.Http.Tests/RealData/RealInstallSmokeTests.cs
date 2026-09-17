@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http;
 using MEditService.Tests.Api;
-using Microsoft.AspNetCore.Mvc.Testing;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 
@@ -48,7 +48,7 @@ public sealed class RealInstallSmokeTests
             Directory.CreateDirectory(instanceRoot);
             try
             {
-                await using var app = new WebApplicationFactory<Program>();
+                await using var app = new MEditHost();
                 var client = app.CreateClient();
                 client.Timeout = TimeSpan.FromMinutes(10);
 
