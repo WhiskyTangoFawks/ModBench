@@ -236,8 +236,6 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
     expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, append: [], prune: [] });
   });
 
-  // Both unknowables reach here the same way: an unresolved game directory and a Data folder the
-  // value could not list are one `undefined`, and pruning against either would delete every line.
   // A resolved folder nobody could read is not "nothing is there": appending against half an
   // answer would list a plugin the game already loads, so the run refuses with the read's reason.
   it('refuses when the Data folder resolved and could not be read, writing nothing', async () => {
@@ -254,7 +252,9 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
     expect(await run(UNREADABLE, null)).toEqual({ applied: true, wrote: false, append: [], prune: [] });
   });
 
-  it('with the Data folder unknown, still appends but prunes nothing', async () => {
+  // A game directory that never resolved is the other unknowable, and a milder one: pruning
+  // against it would delete every line, so nothing is pruned and appending goes on.
+  it('with the game directory unresolved, still appends but prunes nothing', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
 
