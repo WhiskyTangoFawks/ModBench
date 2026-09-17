@@ -152,3 +152,10 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+/// <summary>The entry point a test host names to find this assembly's host builder; top-level
+/// statements would otherwise compile it as internal.</summary>
+public partial class Program
+{
+    private Program() { }
+}
