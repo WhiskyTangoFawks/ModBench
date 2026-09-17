@@ -165,4 +165,15 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Null(SourceRepository.PathCarrying(
             ["source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
     }
+
+    // A listing is read from git and from a directory walk, and neither is promised to be free of an
+    // empty line: the door answers for one rather than throwing past its caller.
+    [Fact]
+    public void PathCarrying_APathWithNoSegments_IsPassedOver()
+    {
+        string[] paths = ["", "/", "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
+
+        Assert.Equal(paths[2], SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
+        Assert.Null(SourceRepository.PathCarrying(["", "/"], "Vendor.esp", "000800:Vendor.esp"));
+    }
 }

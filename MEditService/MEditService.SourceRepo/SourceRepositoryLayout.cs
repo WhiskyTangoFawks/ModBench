@@ -196,24 +196,19 @@ public sealed partial class SourceRepository
     /// alike.</summary>
     public static string? PathCarrying(IEnumerable<string> paths, string pluginFileName, string formKey)
     {
-        var headerDocument = Segments(HeaderDocumentFor(pluginFileName));
-
         foreach (var path in paths)
         {
             var segments = Segments(path);
+            if (segments.Length == 0) continue;
             var leaf = segments[^1];
 
             if (leaf.Equals(RecordDataFileName, StringComparison.Ordinal))
             {
                 // The header's document has a fixed path and a name that carries no FormKey; every
                 // other one is named by the directory holding it.
-                if (EndsWith(segments, headerDocument))
+                if (IsHeaderDocumentPath(segments, pluginFileName))
                 {
-                    if (formKey.Equals(
-                        PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)), StringComparison.Ordinal))
-                    {
-                        return path;
-                    }
+                    if (formKey.Equals(HeaderFormKeyOf(pluginFileName), StringComparison.Ordinal)) return path;
                     continue;
                 }
 
@@ -225,6 +220,17 @@ public sealed partial class SourceRepository
         }
         return null;
     }
+
+    /// <summary>Whether <paramref name="path"/> names the header's own document. A suffix, not an
+    /// equality: the caller may spell it absolute, relative to the mod folder, or as git does.</summary>
+    internal static bool IsHeaderDocumentPath(string path, string pluginFileName) =>
+        IsHeaderDocumentPath(Segments(path), pluginFileName);
+
+    private static bool IsHeaderDocumentPath(string[] segments, string pluginFileName) =>
+        EndsWith(segments, Segments(HeaderDocumentFor(pluginFileName)));
+
+    internal static string HeaderFormKeyOf(string pluginFileName) =>
+        PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
     private static string[] Segments(string path) =>
         path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);

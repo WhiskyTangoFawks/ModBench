@@ -25,7 +25,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         if (!Directory.Exists(sourceRoot))
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
 
-        var onDisk = DocumentsOnDisk(modFolder, sourceRoot, key.Name, failures, out var treeFullyRead);
+        var onDisk = DocumentsOnDisk(sourceRoot, key.Name, failures, out var treeFullyRead);
         var held = HeldDocuments(key);
 
         // A document the index never saw, or a held record with no document: either moves which
@@ -115,7 +115,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     // Keyed by the FormKey the document declares, never by its path: a file name carries an EditorID
     // that may contain the separator, so a path is not a decidable identity.
     private static Dictionary<string, string> DocumentsOnDisk(
-        string modFolder, string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead)
+        string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead)
     {
         fullyRead = true;
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -138,7 +138,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 continue;
             }
 
-            if (SourceRepository.FormKeyDeclaredIn(text, file, modFolder, pluginFileName) is not { } formKey)
+            if (SourceRepository.FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
             {
                 failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
                 fullyRead = false;

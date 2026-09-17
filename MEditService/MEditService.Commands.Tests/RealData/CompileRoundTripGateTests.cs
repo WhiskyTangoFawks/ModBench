@@ -182,10 +182,10 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     }
 
     // The layout is the repository's, so which file holds a record is asked of it rather than
-    // spelled here.
+    // spelled here. Asked one path at a time, so Single still fails a tree holding two.
     internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
-        SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, formKey)
-            ?? throw new InvalidOperationException($"No document in the tracked tree holds {formKey}.");
+        documents.Single(
+            f => SourceRepository.PathCarrying([f], CutDownPluginFixture.PluginFileName, formKey) != null);
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.

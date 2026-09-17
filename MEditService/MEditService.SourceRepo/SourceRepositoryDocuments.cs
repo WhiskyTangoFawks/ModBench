@@ -35,7 +35,7 @@ public sealed partial class SourceRepository
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
-    public static string? FormKeyDeclaredBy(string filePath, string modFolder, string pluginFileName)
+    public static string? FormKeyDeclaredBy(string filePath, string pluginFileName)
     {
         byte[] bytes;
         try
@@ -49,22 +49,17 @@ public sealed partial class SourceRepository
             return null;
         }
 
-        return FormKeyDeclaredIn(
-            Encoding.UTF8.GetString(StripUtf8Bom(bytes)), filePath, modFolder, pluginFileName);
+        return FormKeyDeclaredIn(Encoding.UTF8.GetString(StripUtf8Bom(bytes)), filePath, pluginFileName);
     }
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
-    public static string? FormKeyDeclaredIn(
-        string text, string filePath, string modFolder, string pluginFileName)
-    {
+    public static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
-        if (filePath.Equals(HeaderDocumentIn(modFolder, pluginFileName), StringComparison.Ordinal))
-            return PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
-
-        return RootStringIn(text, "FormKey");
-    }
+        IsHeaderDocumentPath(filePath, pluginFileName)
+            ? HeaderFormKeyOf(pluginFileName)
+            : RootStringIn(text, "FormKey");
 
     // A member of the document's own root object, as a string. Malformed text declares nothing.
     internal static string? RootStringIn(string text, string member)

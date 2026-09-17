@@ -105,7 +105,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var own = Path.Combine(worldspaceDirectory, SourceRepository.RecordDataFileName);
             foreach (var document in DocumentsAt(own, cell: null)) yield return document;
 
-            var worldspaceFormKey = SourceRepository.FormKeyDeclaredBy(own, _modFolder, _pluginFileName);
+            var worldspaceFormKey = SourceRepository.FormKeyDeclaredBy(own, _pluginFileName);
             foreach (var blockDirectory in Directory.EnumerateDirectories(worldspaceDirectory))
             {
                 var (blockX, blockY) = Coordinates(Path.GetFileName(blockDirectory));
@@ -147,7 +147,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             ?? _containers.RecordTypeNamed(SourceRepository.RootStringIn(text, MutagenObjectTypeMember))
             ?? throw new UnreadableSourceDocumentException(file, "neither its path nor its text names a record type");
 
-        var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _headerRelativePath, _pluginFileName)
+        var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
