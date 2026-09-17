@@ -1,7 +1,7 @@
 import type {
   LoadOrderOutcome, LoadOrderPluginInput, PluginLoadFailure, WriteRefused,
-} from './client';
-import { isRefused } from './client';
+} from '../client';
+import { isRefused } from '../client';
 import { reportIndexRefusal } from './loadOrderProgress';
 import { reportSkippedPlugins } from './pluginFailures';
 

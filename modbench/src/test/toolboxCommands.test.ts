@@ -28,8 +28,8 @@ const { deployMods, purgeMods, listProfiles, switchProfile } = vi.hoisted(() => 
   switchProfile: vi.fn(),
 }));
 
-vi.mock('../modmanager/commands/deployment', () => ({ deployMods, purgeMods }));
-vi.mock('../modmanager/commands/profile', () => ({ listProfiles, switchProfile }));
+vi.mock('../deploy/deployment', () => ({ deployMods, purgeMods }));
+vi.mock('../instanceCommands/profile', () => ({ listProfiles, switchProfile }));
 vi.mock('../workspaceConfig', () => ({ meditConfig: () => ({ get: () => undefined }) }));
 
 import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';

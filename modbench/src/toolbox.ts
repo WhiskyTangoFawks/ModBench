@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import type {
   LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
-} from './medit/client';
-import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
+} from './client';
+import { createLoadOrderSender, type LoadOrderSender } from './client';
 import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
 import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOrderProgress';
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
@@ -25,8 +25,8 @@ import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
-import { adoptMods } from './modmanager/commands/modlist';
+import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './pluginsCommands/plugins';
+import { adoptMods } from './modlist/modlist';
 import { registerModAdoption } from './modmanager/modAdoptionTrigger';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
@@ -421,10 +421,11 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const runPluginsReconcile = async (
-    profile: string, provided: ReadonlyMap<string, string>, folder: string | undefined, gameName: string,
+    profile: string, provided: ReadonlyMap<string, string>, inData: ReadonlySet<string> | undefined,
+    folder: string | undefined, gameName: string,
   ) => {
     const result = await reconcilePlugins(
-      instanceRoot, profile, provided, folder, () => implicitMastersIn(folder, gameName),
+      instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName),
       (msg) => outputChannel.debug(msg));
     if (!result.applied) {
       outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);

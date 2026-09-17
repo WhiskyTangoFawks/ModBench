@@ -9,7 +9,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instance/instance';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
-import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
+import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 
@@ -85,9 +85,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
   const games: string[] = [];
-  registerPluginsReconcile(instance, (profile, provided, dataFolder, gameName) => {
+  registerPluginsReconcile(instance, (profile, provided, inData, _dataFolder, gameName) => {
     games.push(gameName);
-    const run = reconcilePlugins(root, profile, provided, dataFolder, () => Promise.resolve([]), () => {});
+    const run = reconcilePlugins(root, profile, provided, inData, () => Promise.resolve([]), () => {});
     reconciles.push(run);
     return run;
   });
@@ -142,6 +142,20 @@ describe('the plugins reconcile and the Instance close a loop that settles', () 
     expect(writes).toBe(0);
     expect(quiescent).toBe(true);
     expect(await plugins()).toBe('*Base.esp\r\n');
+  });
+
+  // Rival: hand the run no Data-folder presence. Nothing is then prunable, so the dead line
+  // below stays and the DLC line survives for the wrong reason.
+  it('prunes against the Data-folder presence the value carries, keeping what Data provides', async () => {
+    const { root, instance, reconciles, plugins } = await wiredInstance();
+    await writeFile(join(root, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
+    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n*DLCCoast.esm\r\n*Gone.esp\r\n');
+
+    watcherFor('profiles/*/plugins.txt').fireChange();
+    const { quiescent } = await driveToQuiescence(instance, reconciles, 8);
+
+    expect(quiescent).toBe(true);
+    expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 
   // The implicit-master set is per game, and only the Instance knows which game this is. A run

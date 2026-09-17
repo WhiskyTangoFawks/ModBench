@@ -4,7 +4,7 @@ import {
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
 import type { Reporter } from '../ports/reporter';
-import type { RecordSummary, MEditClient } from '../medit/client';
+import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {

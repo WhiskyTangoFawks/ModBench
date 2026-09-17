@@ -12,11 +12,11 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 // prove it touched nothing else. A verb without one is unproven.
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
-    'modmanager/commands/downloads.ts', 'modmanager/commands/modlist.ts',
-    'modmanager/commands/plugins.ts', 'modmanager/commands/profile.ts',
+    'install/downloadSidecar.ts', 'modlist/modlist.ts',
+    'pluginsCommands/plugins.ts', 'instanceCommands/profile.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
-  const corpus = walk(join(SRC, 'modmanager')).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
+  const corpus = walk(SRC).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setModEnabled');

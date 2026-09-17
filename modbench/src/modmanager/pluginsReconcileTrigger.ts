@@ -8,11 +8,12 @@ import { providedPluginsOf } from '../instance/loadOrderSnapshot';
 export function registerPluginsReconcile(
   instance: Pick<Instance, 'subscribe'>,
   run: (
-    profile: string, provided: ReadonlyMap<string, string>, dataFolder: string | undefined, gameName: string,
+    profile: string, provided: ReadonlyMap<string, string>, inData: ReadonlySet<string> | undefined,
+    dataFolder: string | undefined, gameName: string,
   ) => Promise<unknown>,
 ): vscode.Disposable {
   return instance.subscribe((value) =>
     void run(
-      value.activeProfile, providedPluginsOf(value.plugins),
+      value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
       value.gameDirectory?.dataFolder, value.gameRelease));
 }

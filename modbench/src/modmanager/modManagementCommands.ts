@@ -20,8 +20,8 @@ import {
   moveModToSeparator,
   renameSeparator,
   uninstallMod,
-} from './commands/modlist';
-import { installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from './commands/install';
+} from '../modlist/modlist';
+import { installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from '../install/install';
 import { collidingModName } from './modNameCollision';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
@@ -52,6 +52,13 @@ export function registerModListCoreCommands(modListProvider: ModListProvider): v
       }),
   ];
 }
+/** What the Downloads view hears back: whether a mod landed, and — when one did — the sidecar
+ *  write that failed beside it. */
+export interface InstallFromArchiveOutcome {
+  installed: boolean;
+  downloadRefusal?: string;
+}
+
 export interface ModInstallDeps {
   instanceRoot: string;
   instance: Pick<Instance, 'value'>;
@@ -73,7 +80,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
         archivePath?: string, modID?: string, fileID?: string, version?: string,
         choice: InstallChoice = { kind: 'new' },
-      ): Promise<boolean> => {
+      ): Promise<InstallFromArchiveOutcome> => {
+        let downloadRefusal: string | undefined;
         let archive = archivePath;
         if (!archive) {
           const picked = await vscode.window.showOpenDialog({
@@ -83,18 +91,21 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
           });
           archive = picked?.[0]?.fsPath;
         }
-        if (!archive) return false;
+        if (!archive) return { installed: false };
         const resolvedArchive = archive;
         const target = await resolveTarget(choice, path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''));
-        if (!target) return false;
+        if (!target) return { installed: false };
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${target.name}".`, async () => {
-          const outcome = await installFromArchive(instanceRoot, target, resolvedArchive, { modID, fileID, version });
+          const outcome = await installFromArchive(
+            instanceRoot, target, resolvedArchive,
+            { gameName: instance.value.gameRelease, modID, fileID, version });
           if (!outcome.applied) throw new Error(outcome.refusal);
           warnIfFomod(target.name, outcome.isFomod);
+          downloadRefusal = outcome.downloadRefusal;
           succeeded = true;
         });
-        return succeeded;
+        return { installed: succeeded, downloadRefusal };
       }),
       vscode.commands.registerCommand('modbench.modList.installFromFolder', async () => {
         const picked = await vscode.window.showOpenDialog({
@@ -108,7 +119,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         const target = await resolveTarget({ kind: 'new' }, path.basename(folder));
         if (!target) return;
         await runModAction('installFromFolder', `Failed to install "${target.name}".`, async () => {
-          const outcome = await installFromFolder(instanceRoot, target, folder);
+          const outcome = await installFromFolder(instanceRoot, target, folder, { gameName: instance.value.gameRelease });
           if (!outcome.applied) throw new Error(outcome.refusal);
           warnIfFomod(target.name, outcome.isFomod);
         });
@@ -224,7 +235,7 @@ export function registerCreateEmptyModCommand(
     if (!name) return;
     await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
       const profile = instance.value.activeProfile;
-      applyOrThrow(await createEmptyMod(instanceRoot, profile, name));
+      applyOrThrow(await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders));
     });
   });
 }

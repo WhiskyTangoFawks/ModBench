@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { trackProgressMessage } from '../trackProgress';
-import type { TrackStatus } from '../client';
+import type { TrackStatus } from '../../client';
 
 // Track serializes each plugin through one whole-plugin call, so the wire status counts plugins,
 // not records, and the fixture values below follow that.

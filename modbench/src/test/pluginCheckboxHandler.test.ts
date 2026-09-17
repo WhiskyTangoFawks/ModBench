@@ -20,7 +20,7 @@ import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
 import { PluginNode } from '../plugins/PluginsTreeProvider';
 import { RecordNode } from '../plugins/PluginTreeProvider';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
-import { recordSummaryFixture } from '../medit/client/test/fixtures';
+import { recordSummaryFixture } from '../client/test/fixtures';
 
 beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
 

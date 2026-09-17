@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/instanceCommands"
+  },
+  "references": [
+    { "path": "../mo2Codecs" },
+    { "path": "../mo2Files" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

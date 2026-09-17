@@ -5,7 +5,7 @@ import type * as vscode from 'vscode';
 import { errnoCode } from '../ports/errno';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import type { PluginEntry } from '../mo2Codecs/pluginsText';
-import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, foldPath, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { createDebouncedFsWatcher } from './fsWatcher';
 import { createModsWatcher } from './modsWatcher';
@@ -21,9 +21,10 @@ import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
   downloadFile, downloadSidecarFile, downloadsDir, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
-  pluginsFile, settingsFile,
+  pluginsFile, profilesDir, settingsFile,
 } from '../mo2Files/layout';
 import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirectory';
+import { isPluginFile } from '../mo2Files/pluginFile';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { exists, get, listDir, manifestFile } from '../mo2Files/files';
@@ -57,6 +58,11 @@ export interface InstanceValue {
    *  Disjoint from `mods` and rendered by no tree: it is what adoption is handed, so that no
    *  command walks the instance (ADR-0015 invariant 1). */
   readonly unlistedFolders: readonly string[];
+  /** Every directory under mods/, listed or not: the new-empty-mod refusal's own input. */
+  readonly modFolders: readonly string[];
+  /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
+   *  one. */
+  readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
@@ -73,6 +79,10 @@ export interface InstanceValue {
   readonly gameRelease: string;
   /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
   readonly gameDirectory: GameDirectory | undefined;
+  /** Case-folded names of the plugin files sitting at the root of the game's Data folder —
+   *  presence, never provision. `undefined` when the folder is unresolved or unreadable, which
+   *  is what makes presence unknowable. */
+  readonly dataFolderPlugins: ReadonlySet<string> | undefined;
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
   /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
@@ -136,6 +146,34 @@ async function readPluginEntries(instanceRoot: string, profile: string): Promise
   return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
 }
 
+// An instance with no profiles/ offers no profile rather than failing the recompute, as a
+// missing mods/ lists no mod.
+async function readProfileNames(instanceRoot: string): Promise<string[]> {
+  try {
+    const dirents = await listDir(profilesDir(instanceRoot));
+    return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch (err) {
+    if (errnoCode(err) === 'ENOENT') return [];
+    throw err;
+  }
+}
+
+// A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent. An
+// unreadable Data folder is unknown presence, not a failed recompute: the whole value would go
+// stale over a folder no MO2 file names.
+async function readDataFolderPlugins(
+  dataFolder: string | undefined, log: (msg: string) => void,
+): Promise<ReadonlySet<string> | undefined> {
+  if (dataFolder === undefined) return undefined;
+  try {
+    const dirents = await listDir(dataFolder);
+    return new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => foldPath(d.name)));
+  } catch (err) {
+    log(`[instance] the game's Data folder could not be listed, so plugin presence there is unknown: ${message(err)}`);
+    return undefined;
+  }
+}
+
 const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
   downloadsDir: downloadsDir(instanceRoot),
@@ -145,6 +183,8 @@ const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePat
 const emptyValue = (instanceRoot: string): InstanceValue => ({
   mods: [],
   unlistedFolders: [],
+  modFolders: [],
+  profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   plugins: [],
@@ -152,6 +192,7 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   activeProfile: '',
   gameRelease: '',
   gameDirectory: undefined,
+  dataFolderPlugins: undefined,
   deployed: false,
   modStatuses: new Map(),
   overwriteFileCount: 0,
@@ -309,17 +350,19 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames] = await Promise.all([
+    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames, profiles] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
       exists(manifestFile(instanceRoot)),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
+      readProfileNames(instanceRoot),
     ]);
     // The ini is read once above and handed to the resolver as-is, so a rewrite between it and
     // activeProfile/gameRelease below cannot land two generations in one value.
     const gameDirectory = await resolveGameDirectory(iniText);
+    const dataFolderPlugins = await readDataFolderPlugins(gameDirectory?.dataFolder, log);
     // Both derive from the same index generation, so they run concurrently.
     const [plugins, modStatuses] = await Promise.all([
       // An unresolved game directory loses only the Data-folder copies' paths: every
@@ -342,6 +385,8 @@ export class Instance implements vscode.Disposable {
     return {
       mods: entries,
       unlistedFolders: unlistedModNames(modFolderNames, entries),
+      modFolders: modFolderNames,
+      profiles,
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
@@ -355,6 +400,7 @@ export class Instance implements vscode.Disposable {
       activeProfile: profile,
       gameRelease: readGameName(iniText),
       gameDirectory,
+      dataFolderPlugins,
       deployed,
       modStatuses,
       overwriteFileCount,

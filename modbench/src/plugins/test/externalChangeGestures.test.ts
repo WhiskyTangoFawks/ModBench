@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runRebase, handleUnanswered } from '../externalChangeGestures';
 import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
-import type { MEditClient, UnansweredExternalChange } from '../../medit/client';
+import type { MEditClient, UnansweredExternalChange } from '../../client';
 
 type RebaseClient = Partial<Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>>;
 

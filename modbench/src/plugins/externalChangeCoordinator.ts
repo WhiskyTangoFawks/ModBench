@@ -1,4 +1,4 @@
-import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../medit/client';
+import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { handleUnanswered } from './externalChangeGestures';
 

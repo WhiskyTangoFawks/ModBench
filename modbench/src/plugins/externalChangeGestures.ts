@@ -1,6 +1,6 @@
 import type { ExternalChangeDialogAnswer } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
-import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
+import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../client';
 import type { ExternalChangeCoordinatorDeps } from './externalChangeCoordinator';
 
 // The coordinator decides *when* to call this; this decides what each dialog answer does — Absorb

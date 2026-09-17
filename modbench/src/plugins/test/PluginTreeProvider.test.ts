@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage } from '../../medit/client';
+import { InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage } from '../../client';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({

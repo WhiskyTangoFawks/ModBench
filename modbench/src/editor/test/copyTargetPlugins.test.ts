@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { copyTargetPlugins } from '../copyTargetPlugins';
-import type { PluginMetadata } from '../../medit/client';
+import type { PluginMetadata } from '../../client';
 
 // The exclusion rule differs per gesture: a plugin cannot hold two overrides of the same record,
 // but copying into a fresh record with its own FormID is the ordinary way to author one.

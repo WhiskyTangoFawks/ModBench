@@ -1,6 +1,6 @@
 import type { RecordDecorationProvider } from './RecordDecorationProvider';
 import { recordResourceUri } from '../medit/recordResourceUri';
-import type { WorkingTreeState } from '../medit/client';
+import type { WorkingTreeState } from '../client';
 
 /** Editor's own view of whatever tree needs to hear about a landed edit — a structural shape,
  *  not `PluginTreeProvider` itself: Editor names no Plugins-view type, and the real tree

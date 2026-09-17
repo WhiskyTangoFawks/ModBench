@@ -1,4 +1,4 @@
-import type { TrackStatus } from './client';
+import type { TrackStatus } from '../client';
 
 /** Pure, so it is testable without a VS Code harness. The counts are plugins, not records —
  *  Track serializes a whole plugin in one call, with no per-record progress to report — and this

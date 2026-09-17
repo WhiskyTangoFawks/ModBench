@@ -2,8 +2,8 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../commands/plugins';
-import { switchProfile } from '../commands/profile';
+import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
+import { switchProfile } from '../../instanceCommands/profile';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
   readModlistEntries, readPluginLines, snapshotTree,
@@ -77,7 +77,7 @@ describe('plugins.txt + profile corpus', () => {
   // must stay byte-identical across a switch.
   it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
     const before = await snapshotTree(dir);
-    await switchProfile(dir, 'Secondary');
+    await switchProfile(dir, 'Secondary', ['Default', 'Secondary']);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([INI]));
 

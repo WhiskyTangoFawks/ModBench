@@ -1,4 +1,5 @@
 import type { LogOutputChannel } from 'vscode';
+import type { BackendStream } from '../client';
 
 type LeveledChannel = Pick<LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
 
@@ -12,8 +13,6 @@ const isSerilogTag = (tag: string | undefined): tag is SerilogTag => tag !== und
 
 // `[HH:mm:ss LVL] ` — the leading half of Serilog's default console template.
 const TAG = /^\[\d{2}:\d{2}:\d{2} ([A-Z]{3})\] /;
-
-export type BackendStream = 'stdout' | 'stderr';
 
 // Serilog tags everything it writes to stdout; untagged stderr is the runtime itself (a crash dump).
 const UNTAGGED: Record<BackendStream, keyof LeveledChannel> = { stdout: 'info', stderr: 'error' };

@@ -23,7 +23,7 @@ vi.mock('../extendedFieldEditor', () => ({
 
 import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); });

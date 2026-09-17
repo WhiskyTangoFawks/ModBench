@@ -7,6 +7,12 @@
     { "path": "./src/ports" },
     { "path": "./src/mo2Files" },
     { "path": "./src/instance" },
+    { "path": "./src/modlist" },
+    { "path": "./src/pluginsCommands" },
+    { "path": "./src/instanceCommands" },
+    { "path": "./src/install" },
+    { "path": "./src/deploy" },
+    { "path": "./src/client" },
     { "path": "./tsconfig.legacy.json" }
   ]
 }

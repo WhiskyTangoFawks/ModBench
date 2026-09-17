@@ -1,4 +1,4 @@
-import type { MEditClient } from './medit/client';
+import type { MEditClient } from './client';
 
 // toolbox.ts's own wiring is `vscode`-heavy to import, so each of its port-facing calls is
 // pulled out here, vscode-free, testable with the in-memory adapter directly.

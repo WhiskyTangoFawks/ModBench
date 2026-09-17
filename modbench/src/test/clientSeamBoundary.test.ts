@@ -5,11 +5,11 @@ import { extname, join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
 
 // ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
-// stream's endpoint path live only under medit/client/. The webview also calls the backend
+// stream's endpoint path live only under the client box. The webview also calls the backend
 // directly (RecordPanelClient.ts, ADR-0007) but sits outside modbench/src, unreached here.
 
 const SRC = join(__dirname, '..');
-const CLIENT_DIR = join('medit', 'client');
+const CLIENT_DIR = 'client';
 const GENERATED_DIR = 'generated';
 
 function importsOf(source: string): string[] {
@@ -32,7 +32,7 @@ function isTestSupport(relativePath: string): boolean {
 }
 
 function isClientFolder(relativePath: string): boolean {
-  return relativePath.split(sep).slice(0, 2).join(sep) === CLIENT_DIR;
+  return relativePath.split(sep)[0] === CLIENT_DIR;
 }
 
 // Pre-existing, narrow, type-only reads of the generated schema, neither the HTTP adapter: the
@@ -54,18 +54,18 @@ function findOffenders(root: string): Offense[] {
     const imports = importsOf(text);
 
     if (imports.some((s) => s.split('/').includes(GENERATED_DIR)) && !GENERATED_TYPE_ONLY_EXCEPTIONS.includes(relPath)) {
-      offenses.push({ path: relPath, reason: 'imports the generated client outside medit/client' });
+      offenses.push({ path: relPath, reason: 'imports the generated client outside the client box' });
     }
-    if (imports.includes('openapi-fetch')) offenses.push({ path: relPath, reason: 'imports openapi-fetch outside medit/client' });
-    if (imports.includes('undici')) offenses.push({ path: relPath, reason: 'imports undici outside medit/client' });
+    if (imports.includes('openapi-fetch')) offenses.push({ path: relPath, reason: 'imports openapi-fetch outside the client box' });
+    if (imports.includes('undici')) offenses.push({ path: relPath, reason: 'imports undici outside the client box' });
     if (text.includes('/notifications/stream')) {
-      offenses.push({ path: relPath, reason: 'names the notification stream path outside medit/client' });
+      offenses.push({ path: relPath, reason: 'names the notification stream path outside the client box' });
     }
     // Never a dotted call (`x.fetch(...)`), an identifier merely containing "fetch"
     // (`undiciFetch(...)`), or a local `fetch` parameter/variable shadowing the global.
     const declaresLocalFetch = /[(,]\s*fetch\s*[,):]/.test(text) || /\b(?:const|let|var)\s+fetch\b/.test(text);
     if (!declaresLocalFetch && /(?<![.\w])fetch\(/.test(text)) {
-      offenses.push({ path: relPath, reason: 'calls fetch outside medit/client' });
+      offenses.push({ path: relPath, reason: 'calls fetch outside the client box' });
     }
   }
   return offenses;
@@ -81,10 +81,10 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
   });
 
   it('the client folder itself is excluded, not merely empty of offenses', () => {
-    expect(isClientFolder(join('medit', 'client', 'HttpMEditClient.ts'))).toBe(true);
+    expect(isClientFolder(join('client', 'HttpMEditClient.ts'))).toBe(true);
   });
 
-  describe('a plant in each shape is caught, and the same plant inside medit/client is not', () => {
+  describe('a plant in each shape is caught, and the same plant inside the client box is not', () => {
     function withPlantedTree(run: (root: string) => void): void {
       const root = mkdtempSync(join(tmpdir(), 'medit-client-seam-boundary-'));
       try {
@@ -118,7 +118,7 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
       });
     });
 
-    it('a raw fetch call planted outside medit/client is caught', () => {
+    it('a raw fetch call planted outside the client box is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'plugins'), { recursive: true });
         writeFileSync(
@@ -142,11 +142,11 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
       });
     });
 
-    it('the same generated-client import and fetch call, planted inside medit/client, are not caught', () => {
+    it('the same generated-client import and fetch call, planted inside the client box, are not caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'medit', 'client'), { recursive: true });
+        mkdirSync(join(root, 'client'), { recursive: true });
         writeFileSync(
-          join(root, 'medit', 'client', 'apiClient.ts'),
+          join(root, 'client', 'apiClient.ts'),
           "import type { components } from '../generated/api';\nimport createClient from 'openapi-fetch';\n"
           + "function f() { return fetch('http://localhost:5172/plugins'); }\n",
         );
@@ -178,11 +178,11 @@ describe('the port has exactly two adapters', () => {
     expect(tsFiles(SRC).length).toBeGreaterThan(150);
   });
 
-  it('nothing outside medit/client declares a class implementing MEditClient', () => {
+  it('nothing outside the client box declares a class implementing MEditClient', () => {
     expect(classDeclarers(SRC)).toEqual([]);
   });
 
-  it('medit/client itself declares exactly HttpMEditClient and InMemoryMEditClient', () => {
+  it('the client box itself declares exactly HttpMEditClient and InMemoryMEditClient', () => {
     const declarers = tsFiles(join(SRC, CLIENT_DIR))
       .filter((path) => classesImplementing(readFileSync(path, 'utf8')))
       .map((path) => relative(SRC, path).split(sep).pop());

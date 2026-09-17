@@ -12,8 +12,8 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance, type InstanceValue } from '../instance/instance';
 import { instanceValueFixture } from './test/instanceValueFixture';
 import { registerModAdoption, type ModAdoptionOutcome } from './modAdoptionTrigger';
-import { adoptMods } from './commands/modlist';
-import { installFromFolder } from './commands/install';
+import { adoptMods } from '../modlist/modlist';
+import { installFromFolder } from '../install/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
 import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
 import { present } from '../ports/present';
@@ -97,7 +97,7 @@ describe('registerModAdoption — driven by the Instance value', () => {
     const sourceFolder = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
     try {
       await writeFile(join(sourceFolder, 'Installed.esp'), 'plugin bytes');
-      const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
+      const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: 'Fallout 4' });
       expect(outcome).toMatchObject({ applied: true });
       expect(await modlistText(root)).not.toContain(MOD); // the installer wrote no line
 

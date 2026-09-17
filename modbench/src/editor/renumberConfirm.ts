@@ -1,4 +1,4 @@
-import type { ReferenceResult } from '../medit/client';
+import type { ReferenceResult } from '../client';
 
 /** A legal renumber cascades automatically behind one up-front confirm stating the blast radius.
  *  Null when nothing references the record. Plugins dedupe case-insensitively — a filename is not

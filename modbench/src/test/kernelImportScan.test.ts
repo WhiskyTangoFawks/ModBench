@@ -21,6 +21,18 @@ const DRIVEN_BOXES: Record<string, string[]> = {
   instance: ['mo2Codecs', 'mo2Files', 'ports'],
 };
 
+// The core column, read off the same picture.
+const CORE_BOXES: Record<string, string[]> = {
+  modlist: ['mo2Codecs', 'mo2Files', 'ports'],
+  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files'],
+  instanceCommands: ['mo2Codecs', 'mo2Files'],
+  install: ['mo2Codecs', 'mo2Files', 'ports'],
+  deploy: ['instance', 'mo2Files'],
+  client: ['wire'],
+};
+
+const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES };
+
 const boxRoot = (box: string): string => join(SRC, box);
 
 // A box's production files: the box directory's own tree minus its tests, which live under
@@ -84,20 +96,24 @@ function offenders(): Record<string, string[]> {
   return found;
 }
 
-// A driven box may reach the boxes the diagram draws an arrow to, and node: builtins including
-// the file system — MO2 files is the one door onto the instance, and it is one of these.
+// A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
+// including the file system — MO2 files is the one door onto the instance, and it is one of
+// these. A bare specifier that is not `vscode` is a package, which only the client may name:
+// its HTTP adapter is the one place a dependency of the wire lives.
+const PACKAGE_IMPORTERS = new Set(['client']);
+
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
   if (spec === 'vscode') return box === 'instance';
-  if (!spec.startsWith('.')) return false;
+  if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
-  const roots = [boxRoot(box), ...present(DRIVEN_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
+  const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
   return roots.some((root) => resolved === root || resolved.startsWith(root + '/'));
 }
 
 function drivenOffenders(): Record<string, string[]> {
   const found: Record<string, string[]> = {};
-  for (const box of Object.keys(DRIVEN_BOXES)) {
+  for (const box of Object.keys(REFERENCING_BOXES)) {
     for (const path of productionFiles(boxRoot(box))) {
       const bad = importSpecifiers(readFileSync(path, 'utf8'), path)
         .filter((spec) => !isAllowedDrivenSpecifier(spec, path, box));
@@ -174,13 +190,18 @@ describe('a kernel box references nothing', () => {
   });
 });
 
-describe('a driven box reaches only the boxes the diagram draws an arrow to', () => {
+describe('a driven or core box reaches only the boxes the diagram draws an arrow to', () => {
   it('names the two boxes the driven band draws', () => {
     expect(Object.keys(DRIVEN_BOXES)).toEqual(['mo2Files', 'instance']);
   });
 
+  it('names the six boxes the core band draws', () => {
+    expect(Object.keys(CORE_BOXES))
+      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'deploy', 'client']);
+  });
+
   it('every box is a real directory holding production files', () => {
-    for (const box of Object.keys(DRIVEN_BOXES)) {
+    for (const box of Object.keys(REFERENCING_BOXES)) {
       expect(existsSync(boxRoot(box))).toBe(true);
       expect(productionFiles(boxRoot(box)).length).toBeGreaterThan(0);
     }
@@ -205,9 +226,26 @@ describe('a driven box reaches only the boxes the diagram draws an arrow to', ()
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('mo2Files'), 'planted.ts'), 'mo2Files')).toBe(false);
   });
 
+  // Rival: the client taking a VS Code type for a callback, which is what would make a tool
+  // handler or a test need an extension host to call it (ADR-0002).
+  it('refuses vscode in the mEdit client and in every command box', () => {
+    for (const box of Object.keys(CORE_BOXES)) {
+      expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'planted.ts'), box)).toBe(false);
+    }
+  });
+
+  // Rival: a command reaching for the HTTP adapter's packages, or the client's own `openapi-fetch`
+  // spreading past the seam clientSeamBoundary.test.ts draws.
+  it('allows a package only in the client', () => {
+    expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('client'), 'p.ts'), 'client')).toBe(true);
+    expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+  });
+
   it('allows the boxes each one does reference', () => {
     expect(isAllowedDrivenSpecifier('../mo2Files/layout', join(boxRoot('instance'), 'p.ts'), 'instance')).toBe(true);
     expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
     expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
+    expect(isAllowedDrivenSpecifier('../instance/fileConflictIndex', join(boxRoot('deploy'), 'p.ts'), 'deploy')).toBe(true);
+    expect(isAllowedDrivenSpecifier('../instance/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });

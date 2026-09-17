@@ -10,7 +10,13 @@
     { "path": "./src/wire" },
     { "path": "./src/ports" },
     { "path": "./src/mo2Files" },
-    { "path": "./src/instance" }
+    { "path": "./src/instance" },
+    { "path": "./src/modlist" },
+    { "path": "./src/pluginsCommands" },
+    { "path": "./src/instanceCommands" },
+    { "path": "./src/install" },
+    { "path": "./src/deploy" },
+    { "path": "./src/client" }
   ],
   "include": ["src"],
   "exclude": [
@@ -23,6 +29,12 @@
     "src/wire/generated",
     "src/ports/*.ts",
     "src/mo2Files/*.ts",
-    "src/instance/*.ts"
+    "src/instance/*.ts",
+    "src/modlist/*.ts",
+    "src/pluginsCommands/*.ts",
+    "src/instanceCommands/*.ts",
+    "src/install/*.ts",
+    "src/deploy/*.ts",
+    "src/client/*.ts"
   ]
 }
