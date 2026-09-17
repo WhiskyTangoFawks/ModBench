@@ -17,6 +17,8 @@
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },
     { "path": "./src/editor" },
-    { "path": "./tsconfig.legacy.json" }
+    { "path": "./src" },
+    { "path": "./webview" },
+    { "path": "./tsconfig.test.json" }
   ]
 }

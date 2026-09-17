@@ -8,8 +8,7 @@ import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOr
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
-import { Instance, SETTLE_MS, loadOrderSnapshotOf } from './instance/instance';
-import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
+import { Instance, loadOrderSnapshotOf } from './instance/instance';
 import { gameDirectoryResolver } from './mo2Files/gameDirectory';
 import { isMo2Instance } from './mo2Files/files';
 import { ModListProvider } from './mods/ModListProvider';
@@ -34,7 +33,7 @@ import { registerModInstallCommands, registerModContextCommands, registerSeparat
 import { createModListView, registerDownloadsView, registerNotMo2InstanceWelcome } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
-import { gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
+import { GAME_DIRECTORY_SECTION, gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
 import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
@@ -393,9 +392,11 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   const instance = own(new Instance({
     instanceRoot, log, resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));
-  // The Instance watches files only, so the root is what turns an edited setting into a recompute.
-  own(refreshOnGameDirectoryChange(
-    vscode.workspace.onDidChangeConfiguration, () => instance.refresh(), SETTLE_MS));
+  // The Instance watches files only, so an edited setting is the root's to hand to the same
+  // recompute Refresh's re-read runs; the Instance's own queue coalesces a burst.
+  own(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration(GAME_DIRECTORY_SECTION)) void instance.refresh();
+  }));
   // The value's own resolution, read fresh per call: a config change is a recompute trigger like
   // any watched file, so the folder a view reads can never be a generation behind the rows.
   const dataFolder = (): Promise<string | undefined> =>

@@ -18,7 +18,7 @@ import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
-import { meditConfig } from './workspaceConfig';
+import { GAME_DIRECTORY_SECTION, meditConfig } from './workspaceConfig';
 import { isTracked } from './mo2Files/files';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
@@ -61,7 +61,7 @@ function wireAutoLaunch(
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('modbench.mods.gameDirectory') && client.status !== 'attached') void launch();
+      if (e.affectsConfiguration(GAME_DIRECTORY_SECTION) && client.status !== 'attached') void launch();
     }),
   );
 }
