@@ -1,7 +1,10 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>An index over the committed cut-down Fallout 4 plugin: real game data without the
 /// 316 MB master, so the fixture is hermetic. `CutDownPluginGenerator` in

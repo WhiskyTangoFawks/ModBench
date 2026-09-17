@@ -1,7 +1,10 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>The user is never shown a Mutagen class name, so labels are the wire contract: a
 /// frontend humanizer cannot know the union's base type.</summary>

@@ -1,8 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>The real cut-down plugin indexed twice from one folder: once before the tree exists, so
 /// the binary overlay is what got ingested, and once after, so the source tree is.</summary>

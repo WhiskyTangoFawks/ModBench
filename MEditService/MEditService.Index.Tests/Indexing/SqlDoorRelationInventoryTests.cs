@@ -1,6 +1,8 @@
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>ADR-0011: a typed read reconstitutes through the codec, so the relations a filter may
 /// name are the record types and the side tables, never a decomposition of a record's own

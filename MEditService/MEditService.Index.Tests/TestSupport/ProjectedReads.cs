@@ -1,7 +1,10 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>ADR-0015 invariant 2: a write reaches the Index through the projector, never a push, so
 /// a test that writes and then reads asks for the projection first. Validate is the channel with no

@@ -1,8 +1,11 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>Every struct names the Loqui/CLR class it is, out of the same vocabulary a union's
 /// discriminator values come from.</summary>

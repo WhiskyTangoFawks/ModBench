@@ -1,6 +1,9 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 public class FormKeyResolutionCacheTests
 {

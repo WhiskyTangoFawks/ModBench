@@ -1,9 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 // ADR-0012: the IndexProjector-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.

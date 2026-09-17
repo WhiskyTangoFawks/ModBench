@@ -1,12 +1,14 @@
 using DuckDB.NET.Data;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // ADR-0009: one persistent file per MO2 instance, validating itself against the disk by content,
 // never by clock. Each test is two launches over the same instance.
@@ -192,7 +194,7 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     // DuckDB.NET shares one database instance per path in a process, so a second open here joins
-    // the first rather than contending; the cross-process refusal (ADR-0009 point 5) is out of reach.
+    // the first rather than contending; the cross-process refusal (ADR-0009 invariant 5) is out of reach.
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {

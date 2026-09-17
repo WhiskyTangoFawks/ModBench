@@ -1,9 +1,11 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>ADR-0011: the per-type relations are the contract for user filter SQL, so they are
 /// asked through the filter door over real game data rather than against literals.</summary>

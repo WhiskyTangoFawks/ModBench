@@ -1,10 +1,12 @@
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // End to end: the reconcile's GameRelease has to reach FormKeyResolution.From through BuildFields and
 // CheckErrorBuilder.Build for the exemption to take effect on a real read.

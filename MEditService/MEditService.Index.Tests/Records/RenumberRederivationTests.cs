@@ -1,16 +1,18 @@
 using MEditService.Codec.Serialization;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
-/// <summary>A renumber writes trees and nothing else (ADR-0014): container_child, placement and
+/// <summary>A renumber writes trees and nothing else (ADR-0007 invariant 8): container_child, placement and
 /// cell_location rows are the Index's own re-derivation, driven here through RefreshKeys and
 /// ReindexPlugin, the write side's signals for it.</summary>
 public sealed class RenumberRederivationTests : IDisposable

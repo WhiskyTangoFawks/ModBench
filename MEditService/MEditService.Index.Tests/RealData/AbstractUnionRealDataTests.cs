@@ -1,12 +1,14 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Real records read through the index, where a union's document names the leaf each value
 /// turned out to be. Quest aliases are the real overlay proof: Mutagen materializes

@@ -1,8 +1,11 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>Two per-game facts reflection cannot read off a property: which parameter members each
 /// function uses, and that Run On's Reference target is live under only one Run On value.</summary>

@@ -1,9 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // Tracked-ness is a read: a copy whose rows were derived from its source tree is tracked, a copy
 // derived from its bytes is not, and the answer is scoped by registration like every row.

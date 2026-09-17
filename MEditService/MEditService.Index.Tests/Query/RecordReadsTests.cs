@@ -1,14 +1,16 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Index.Tests.Query;
 
 [Collection(TestPluginFixtureCollection.Name)]
 public class RecordReadsTests(TestPluginFixture fixture)

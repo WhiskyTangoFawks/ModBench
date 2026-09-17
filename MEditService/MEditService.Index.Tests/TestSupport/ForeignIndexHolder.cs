@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>Another process holding an index file. It has to be a process: DuckDB's lock is per
 /// process and DuckDB.NET shares one instance per path, so a connection would join.</summary>
