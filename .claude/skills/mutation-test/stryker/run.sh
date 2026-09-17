@@ -11,10 +11,8 @@
 #   bash ../.claude/skills/mutation-test/stryker/run.sh --box <Box> --diff-only    # narrow to diffed lines
 #
 # <Box> is one of the ten production projects (Codec, Commands, Http, Index, LoadOrder,
-# PluginAdapter, Ports, Queries, SourceRepo, Watcher) — never MEditService.CrossBox.Tests, which
-# holds no production code and is excluded from every run by construction: the generated config
-# names exactly one test project, MEditService.<Box>.Tests, and mutates exactly one production
-# project, MEditService.<Box>.
+# PluginAdapter, Ports, Queries, SourceRepo, Watcher). The generated config names exactly one test
+# project, MEditService.<Box>.Tests, and mutates exactly one production project, MEditService.<Box>.
 #
 # Exit: 0/1/2/3 — see stryker.md's table. 1 and 3 are not failures (survivors await
 # disposition; nothing in scope is a clean skip).
@@ -122,8 +120,7 @@ echo "Scope: $SCOPE"
 
 # --- generate the run config from the template; never patch a checked-in one ---
 # The template names no box — this fills it in for exactly one box's production project and
-# exactly that box's own test project, so a run can never reach MEditService.CrossBox.Tests or
-# another box's internals.
+# exactly that box's own test project, so a run can never reach another box's tests.
 # Bash indirect expansion: the box-specific exclusion variable declared above (or empty).
 BOX_EXCLUSION_VAR="BOX_EXCLUSIONS_${BOX}"
 BOX_EXCLUSION="${!BOX_EXCLUSION_VAR:-}"

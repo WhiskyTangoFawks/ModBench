@@ -84,6 +84,20 @@ internal static class TrackedMods
         index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
     }
 
+    /// <summary>The working tree's copy of <paramref name="document"/> moved to the name
+    /// <paramref name="newEditorId"/> computes and rewritten there, then the narrow signal for
+    /// it.</summary>
+    internal static void Rename(
+        this IndexProjector index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
+    {
+        var repository = RepositoryOf(entry);
+        repository.Rename(
+            entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId), newEditorId);
+        repository.Put(
+            entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
+        index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
+    }
+
     /// <summary>A document the working tree gains, then the narrow signal for it.</summary>
     internal static void Create(this IndexProjector index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {

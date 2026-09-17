@@ -26,6 +26,7 @@ internal sealed class ContainerMod : IDisposable
     public const string WorldspaceEditorId = "EmbedWorld";
     public const string TopCellEditorId = "EmbedTopCell";
     public const string TopCellRefEditorId = "TopCellRef";
+    public const string NpcEditorId = "FixtureNpc";
 
     private readonly ScatteredFixtureData _fixture;
 
@@ -40,11 +41,12 @@ internal sealed class ContainerMod : IDisposable
     public FormKey Worldspace { get; }
     public FormKey TopCell { get; }
     public FormKey TopCellRef { get; }
+    public FormKey Npc { get; }
 
     public ContainerMod()
     {
         FormKey cell = default, embedCell = default, temporaryRef = default, persistentRef = default;
-        FormKey worldspace = default, topCell = default, topCellRef = default;
+        FormKey worldspace = default, topCell = default, topCellRef = default, npc = default;
 
         _fixture = new PluginFixtureBuilder("container-mod")
             .WithPlugin(PluginName, mod =>
@@ -87,6 +89,10 @@ internal sealed class ContainerMod : IDisposable
                 world.TopCell = top;
                 mod.Worldspaces.Add(world);
                 (worldspace, topCell, topCellRef) = (world.FormKey, top.FormKey, topRef.FormKey);
+
+                // Allocated last, so every container FormKey above keeps the value it had before a
+                // flat record joined the fixture.
+                npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
             }, origin: Origin)
             .BuildScattered()
             .Tracked();
@@ -95,6 +101,7 @@ internal sealed class ContainerMod : IDisposable
         Cell = cell;
         (EmbedCell, TemporaryRef, PersistentRef) = (embedCell, temporaryRef, persistentRef);
         (Worldspace, TopCell, TopCellRef) = (worldspace, topCell, topCellRef);
+        Npc = npc;
     }
 
     /// <summary>Any document of the tree: a container's own file, or the file that inlines an
@@ -134,6 +141,7 @@ internal sealed class IndexedContainerMod : IDisposable
 
     public string Cell => _mod.Cell.ToString();
     public string EmbedCell => _mod.EmbedCell.ToString();
+    public string Npc => _mod.Npc.ToString();
     public string TemporaryRef => _mod.TemporaryRef.ToString();
     public string PersistentRef => _mod.PersistentRef.ToString();
     public string Worldspace => _mod.Worldspace.ToString();

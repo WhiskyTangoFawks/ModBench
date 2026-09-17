@@ -59,7 +59,7 @@ public sealed class BannedApiScopeTests
 
         Assert.All(
             new[] { "MEditService.Index", "MEditService.Commands", "MEditService.Codec", "MEditService.PluginAdapter",
-                "MEditService.TestSupport", "MEditService.CrossBox.Tests" },
+                "MEditService.TestSupport" },
             project => Assert.Equal(ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
     }
 

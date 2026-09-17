@@ -13,7 +13,8 @@ public class WorldspaceQueryServiceTests
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
-        CellReferences? cellRefs = null) : IRecordReads
+        CellReferences? cellRefs = null,
+        IReadOnlySet<string>? failedWorldspaces = null) : IRecordReads
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey)
         {
@@ -44,7 +45,7 @@ public class WorldspaceQueryServiceTests
         public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => new HashSet<string>();
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
         public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int l, int o)
@@ -272,5 +273,41 @@ public class WorldspaceQueryServiceTests
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
+    }
+    // The tree's "has a failure below it": a cell row's own flag reaches its sub-block and its
+    // block, so a collapsed node still shows the error beneath it.
+    [Fact]
+    public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock()
+    {
+        var svc = Service([
+            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, null, HasParseFailure: true),
+            new CellLocationSummary("bbb:M.esp", "CellB", 1, 0, 0, 0, 2, 2),
+        ]);
+
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+
+        var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
+        Assert.True(failing.HasParseFailure);
+        Assert.True(failing.SubBlocks.Single().HasParseFailure);
+        Assert.True(failing.SubBlocks.Single().Cells.Single().HasParseFailure);
+
+        var clean = result.Blocks.Single(b => b is { X: 1, Y: 0 });
+        Assert.False(clean.HasParseFailure);
+        Assert.False(clean.SubBlocks.Single().HasParseFailure);
+    }
+
+    [Fact]
+    public void GetWorldspaces_MarksOnlyTheWorldspaceWithAFailureBelowIt()
+    {
+        var reader = new StubReader([], [
+            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
+            new RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
+        ], failedWorldspaces: new HashSet<string>(StringComparer.Ordinal) { "0001:M.esp" });
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
+
+        var result = svc.GetWorldspaces("M.esp");
+
+        Assert.True(result.Single(w => w.FormKey == "0001:M.esp").HasParseFailure);
+        Assert.False(result.Single(w => w.FormKey == "0002:M.esp").HasParseFailure);
     }
 }
