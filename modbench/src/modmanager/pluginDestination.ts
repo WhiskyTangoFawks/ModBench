@@ -1,8 +1,9 @@
-// Pure path arithmetic over an MO2 instance root — no vscode import, no backend call
-// (Mod Management never calls it, CLAUDE.md) — so it is unit-testable without a VS Code harness.
+// Where a new plugin lands, read off the Instance's own value — no vscode import, no backend
+// call (Mod Management never calls it, CLAUDE.md), and no path joined here.
 
-import { OVERWRITE_ORIGIN } from './loadOrderSnapshot';
-import { OVERWRITE_DIR_NAME, modDir, overwriteDir } from '../mo2Codecs/layout';
+import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
+import type { InstanceValue } from '../instance/instance';
+import { OVERWRITE_ORIGIN } from '../instance/loadOrderSnapshot';
 
 export type PluginDestinationChoice =
   | { kind: 'overwrite' }
@@ -21,8 +22,12 @@ export const PLUGIN_DESTINATION_OPTIONS: readonly { label: string; description?:
   { label: 'Existing mod…', choice: 'existingMod' },
 ];
 
-/** Path arithmetic only — no filesystem access. */
-export function resolvePluginDestination(instanceRoot: string, choice: PluginDestinationChoice): PluginDestination {
-  if (choice.kind === OVERWRITE_DIR_NAME) return { path: overwriteDir(instanceRoot), origin: OVERWRITE_ORIGIN };
-  return { path: modDir(instanceRoot, choice.modName), origin: choice.modName };
+/** `undefined` when the value names no folder for the chosen mod — a mod that left the modlist
+ *  between the pick and the answer. */
+export function resolvePluginDestination(
+  value: Pick<InstanceValue, 'paths'>, choice: PluginDestinationChoice,
+): PluginDestination | undefined {
+  if (choice.kind === OVERWRITE_DIR_NAME) return { path: value.paths.overwriteDir, origin: OVERWRITE_ORIGIN };
+  const path = value.paths.modDirs.get(choice.modName);
+  return path === undefined ? undefined : { path, origin: choice.modName };
 }

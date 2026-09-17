@@ -1,5 +1,5 @@
-import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { listDir } from '../../mo2Files/files';
 import { present } from '../../ports/present';
 
 /** Top-level folder names that mean "this level is already the mod's data root"
@@ -18,7 +18,7 @@ export async function detectRoot(
 ): Promise<{ sourceDir: string; isFomod: boolean }> {
   let level = stagingDir;
   for (let depth = 0; depth < 32; depth++) {
-    const entries = await readdir(level, { withFileTypes: true });
+    const entries = await listDir(level);
 
     const fomodDir = entries.find((e) => e.isDirectory() && e.name.toLowerCase() === 'fomod');
     if (fomodDir && (await hasModuleConfig(join(level, fomodDir.name)))) {
@@ -44,6 +44,6 @@ export async function detectRoot(
 }
 
 async function hasModuleConfig(fomodDir: string): Promise<boolean> {
-  const entries = await readdir(fomodDir, { withFileTypes: true });
+  const entries = await listDir(fomodDir);
   return entries.some((e) => e.isFile() && e.name.toLowerCase() === 'moduleconfig.xml');
 }

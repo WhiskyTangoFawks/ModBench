@@ -5,10 +5,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseModlist } from '../mo2Codecs/modlistText';
-import { parseManifest } from './mo2Files';
+import { parseManifest } from '../mo2Files/files';
 import { deployMods, purgeMods } from './commands/deployment';
-import { buildFileConflictIndex } from './fileConflictIndex';
-import type { GameDirectory } from './gameDirectory';
+import { buildFileConflictIndex } from '../instance/fileConflictIndex';
+import type { GameDirectory } from '../mo2Files/gameDirectory';
 import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from './test/corpusFixture';
 
 const MANIFEST = 'mods/.medit-manifest.json';
@@ -48,7 +48,7 @@ describe('deploy/purge corpus', () => {
   }
 
   async function deployReal() {
-    return deployMods(dir, { activeProfile: 'Default', files: await realFiles(), gameDirectory }, undefined);
+    return deployMods(dir, { activeProfile: 'Default', files: await realFiles(), gameDirectory });
   }
 
   it('deploy hardlinks only real mod content into Data/, excluding a tracked mod\'s .git/ and source/, touching nothing else', async () => {

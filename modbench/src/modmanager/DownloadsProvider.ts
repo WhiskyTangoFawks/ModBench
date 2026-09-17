@@ -10,8 +10,7 @@ import {
   type DownloadSortColumn,
   type DownloadStatus,
 } from '../mo2Codecs/downloads';
-import { downloadFile } from '../mo2Codecs/layout';
-import type { InstanceValue, InstanceView } from './instance';
+import type { DownloadFile, InstanceValue, InstanceView } from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
 import type { Reporter } from '../ports/reporter';
@@ -56,7 +55,7 @@ function downloadTooltip(row: DownloadRow): vscode.MarkdownString {
  *  label, and a `.meta` name change would then silently drop the user's tree selection. */
 export class DownloadNode extends vscode.TreeItem {
   readonly kind = 'download' as const;
-  constructor(public readonly row: DownloadRow, instanceRoot: string) {
+  constructor(public readonly row: DownloadFile) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
     this.id = row.name;
     this.iconPath = downloadStatusIcon(row.status);
@@ -64,14 +63,13 @@ export class DownloadNode extends vscode.TreeItem {
     this.tooltip = downloadTooltip(row);
     this.contextValue = downloadContextValue(row);
     // Decoration hook — the dimming FileDecorationProvider keys off this URI.
-    this.resourceUri = vscode.Uri.file(downloadFile(instanceRoot, row.name));
+    this.resourceUri = vscode.Uri.file(row.path);
   }
 }
 
 export type DownloadsTreeNode = DownloadNode | ErrorNode;
 
 export interface DownloadsProviderOptions {
-  instanceRoot: string;
   /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
    *  (ADR-0015). */
   instance: InstanceView;
@@ -85,7 +83,6 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly instanceRoot: string;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -102,7 +99,6 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private filterLower = '';
 
   constructor(options: DownloadsProviderOptions) {
-    this.instanceRoot = options.instanceRoot;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance, options.reporter);
@@ -170,6 +166,6 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     // Hidden-filtering applies first, then sort — the acceptance criterion the two compose by.
     const filtered = filterHiddenRows(this.instanceValue.downloads, this.showHidden);
     const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
-    return rows.map((row) => new DownloadNode(row, this.instanceRoot));
+    return rows.map((row) => new DownloadNode(row));
   }
 }

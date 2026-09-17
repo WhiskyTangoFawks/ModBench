@@ -8,14 +8,16 @@ import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOr
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
-import { Instance, loadOrderSnapshotOf } from './modmanager/instance';
-import { isMo2Instance } from './modmanager/detectMo2Instance';
+import { Instance, SETTLE_MS, loadOrderSnapshotOf } from './instance/instance';
+import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
+import { gameDirectoryResolver } from './mo2Files/gameDirectory';
+import { isMo2Instance } from './mo2Files/files';
 import { ModListProvider } from './modmanager/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
-import { originFolder } from './modmanager/loadOrderSnapshot';
+import { originFolder } from './instance/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
@@ -30,7 +32,7 @@ import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
-import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceContext } from './workspaceConfig';
+import { gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
 import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
@@ -384,14 +386,14 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   }
   setMo2InstanceContext(true);
   const modListReporter = reporterFor('modList');
-  const detectPaths = makeDetectPaths(instanceRoot);
-  const detectWinePrefix = makeDetectWinePrefix(instanceRoot);
-  // ADR-0015: the one Instance over MO2's files, its own watchers and its game-directory
-  // resolution included — the only resolution there is.
+  // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
+  // resolver MO2 files answers "where is the game" with.
   const instance = own(new Instance({
-    instanceRoot, log,
-    config: meditConfig, detectPaths, detectWinePrefix, onConfigChange: vscode.workspace.onDidChangeConfiguration,
+    instanceRoot, log, resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));
+  // The Instance watches files only, so the root is what turns an edited setting into a recompute.
+  own(refreshOnGameDirectoryChange(
+    vscode.workspace.onDidChangeConfiguration, () => instance.refresh(), SETTLE_MS));
   // The value's own resolution, read fresh per call: a config change is a recompute trigger like
   // any watched file, so the folder a view reads can never be a generation behind the rows.
   const dataFolder = (): Promise<string | undefined> =>

@@ -1,4 +1,4 @@
-import type { Instance } from './instance';
+import type { Instance } from '../instance/instance';
 
 /** Install's refusal when a new mod's folder is already there, shared with the name prompt so
  *  both readings of the same collision say the same thing. */

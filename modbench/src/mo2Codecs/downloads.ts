@@ -2,8 +2,10 @@
 // `removed=true` flag means HIDDEN and is a separate axis from Status, which
 // `uninstalled=true` carries.
 
-import { DOWNLOAD_SIDECAR_SUFFIX } from './layout';
 import { lineRanges } from './lineScan';
+
+/** Appended to a download's filename to name its sidecar. */
+export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -40,11 +42,11 @@ export interface DownloadRow {
 
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
-export function sortDownloadRows(
-  rows: readonly DownloadRow[],
+export function sortDownloadRows<T extends DownloadRow>(
+  rows: readonly T[],
   column: DownloadSortColumn,
   descending: boolean,
-): DownloadRow[] {
+): T[] {
   // Negate the comparator for descending, don't reverse the sorted array —
   // reversing would also reverse tied rows, undoing the sort's stability.
   const dir = descending ? -1 : 1;
@@ -135,7 +137,7 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 
 /** A view concern, so it runs over already-built rows. `showHidden` keeps the
  *  flags intact, so the dimming decoration can still tell hidden rows apart. */
-export function filterHiddenRows(rows: readonly DownloadRow[], showHidden: boolean): DownloadRow[] {
+export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], showHidden: boolean): T[] {
   return showHidden ? [...rows] : rows.filter((r) => !r.hidden);
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { collidingModName } from './modNameCollision';
-import type { Instance, InstanceValue } from './instance';
+import type { Instance, InstanceValue } from '../instance/instance';
 import { instanceValueFixture } from './test/instanceValueFixture';
 
 const instanceWith = (mods: InstanceValue['mods']): Pick<Instance, 'value'> => ({

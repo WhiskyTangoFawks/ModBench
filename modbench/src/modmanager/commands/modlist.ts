@@ -15,8 +15,8 @@ import {
   setEnabledInText,
 } from '../../mo2Codecs/modlistText';
 import { markDownloadUninstalled } from './downloads';
-import { modDir, modlistFile } from '../../mo2Codecs/layout';
-import { ensureDir, exists, putIfChanged, remove } from '../mo2Files';
+import { modDir, modlistFile } from '../../mo2Files/layout';
+import { ensureDir, exists, putIfChanged, remove } from '../../mo2Files/files';
 import { present } from '../../ports/present';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no

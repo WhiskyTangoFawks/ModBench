@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_DIR_NAME, overwriteDir } from '../mo2Codecs/layout';
+import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
-import type { ModStatus, ModStatusResult } from './statusChecker';
+import type { ModStatus, ModStatusResult } from '../instance/statusChecker';
 // Pure drop-index reconciliation, shared with PluginsTreeProvider. A neutral
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from '../mo2Codecs/pluginsText';
 import type { Reporter } from '../ports/reporter';
-import type { InstanceValue, InstanceView } from './instance';
+import type { InstanceValue, InstanceView } from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
 import {
@@ -325,7 +325,7 @@ export class ModListProvider
   private overwriteNode(): OverwriteNode | undefined {
     const count = this.instanceValue.overwriteFileCount;
     if (count <= 0) return undefined;
-    return new OverwriteNode(vscode.Uri.file(overwriteDir(this.instanceRoot)), count);
+    return new OverwriteNode(vscode.Uri.file(this.instanceValue.paths.overwriteDir), count);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));

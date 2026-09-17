@@ -4,8 +4,8 @@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { GameDirectory } from '../gameDirectory';
-import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
+import type { GameDirectory } from '../../mo2Files/gameDirectory';
+import { FileConflictLookup, type FileConflictIndex } from '../../instance/fileConflictIndex';
 
 export interface DeployerFixture {
   instanceRoot: string;

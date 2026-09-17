@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plugins';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
-import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
-import type { InstanceValue } from '../../modmanager/instance';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instance/loadOrderSnapshot';
+import type { InstanceValue } from '../../instance/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type WorldspaceBlocks, type CellPage, type RecordSummary,

@@ -40,7 +40,7 @@ export interface SummaryRow {
 
 type Summarizer = (row: SummaryRow) => string;
 
-// ── Fallout 4 conditions ─────────────────────────────────────────────────────
+// ── Conditions ───────────────────────────────────────────────────────────────
 //
 // xEdit's own wbConditionToStr (TES5Edit Core/wbDefinitionsCommon.pas) — the reading a condition
 // already has everywhere it is read today.
@@ -73,8 +73,7 @@ const enumLabel = (meta: FieldMetadata | undefined, value: unknown): string =>
   meta?.enumMembers.find(m => m.value === value)?.label ?? toStr(value);
 
 // The function member's own value, or — on the leaf that declares no function member because it
-// *is* one function (Fallout 4's GetEventData) — that leaf's own type name, which is the
-// function's name.
+// *is* one function (GetEventData) — that leaf's own type name, which is the function's name.
 function functionName(row: SummaryRow): string {
   const fn = row.member('Data', 'Function');
   const data = row.member('Data');
@@ -112,7 +111,7 @@ const floatComparison = (row: SummaryRow): string =>
 
 const globalComparison = (row: SummaryRow): string => row.member('ComparisonValue').shortName;
 
-// ── Fallout 4 scripts ────────────────────────────────────────────────────────
+// ── Scripts ──────────────────────────────────────────────────────────────────
 //
 // xEdit's own wbScriptEntry / wbScriptProperty / wbScriptPropertyObject summaries
 // (wbDefinitionsFO4.pas). Each is a `wbStructSK` whose sort-key member leads the summary unless the

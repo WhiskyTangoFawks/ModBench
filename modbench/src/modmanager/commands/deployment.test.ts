@@ -22,7 +22,7 @@ describe('deployMods / purgeMods', () => {
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
-    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory });
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
@@ -38,7 +38,7 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'modlist.txt'), '-ModB\n');
     const files = makeIndex({ 'textures/bar.dds': winner }).files;
 
-    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory });
 
     // modlist.txt disables ModB; a rebuild would deploy nothing. The handed-in `files` wins.
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/bar.dds'))).toBe(true);
@@ -50,7 +50,10 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'plugins.txt'), '*Foo.esp\n');
     const target = join(fx.gameDirectory.root, 'plugins.txt');
 
-    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files: makeIndex({}).files, gameDirectory: fx.gameDirectory }, target);
+    await deployMods(fx.instanceRoot, {
+      activeProfile: PROFILE, files: makeIndex({}).files,
+      gameDirectory: { ...fx.gameDirectory, loadOrderFile: target },
+    });
 
     expect(await exists(target)).toBe(true);
   });
@@ -61,7 +64,7 @@ describe('deployMods / purgeMods', () => {
     const rootFile = await fx.writeModFile('F4SE', 'root/f4se_loader.exe', 'EXE');
     const files = makeIndex({ 'textures/foo.dds': dataFile, 'root/f4se_loader.exe': rootFile }).files;
 
-    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory });
 
     await expect(stat(join(fx.gameDirectory.dataFolder, 'root/f4se_loader.exe'))).rejects.toThrow();
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
@@ -72,7 +75,7 @@ describe('deployMods / purgeMods', () => {
     const rootFile = await fx.writeModFile('ModA', 'root', 'ROOTFILE');
     const files = makeIndex({ root: rootFile }).files;
 
-    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory });
 
     expect(await exists(join(fx.gameDirectory.dataFolder, 'root'))).toBe(true);
   });
@@ -82,7 +85,7 @@ describe('deployMods / purgeMods', () => {
   it('refuses without a game directory, and touches nothing', async () => {
     fx = await makeDeployerFixture();
 
-    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files: makeIndex({}).files, gameDirectory: undefined }, undefined);
+    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files: makeIndex({}).files, gameDirectory: undefined });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
@@ -102,7 +105,7 @@ describe('deployMods / purgeMods', () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
-    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory });
 
     const outcome = await purgeMods(fx.instanceRoot, { gameDirectory: fx.gameDirectory });
 
@@ -119,7 +122,7 @@ describe('deployMods / purgeMods', () => {
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const [deployed, purged] = await Promise.all([
-      deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined),
+      deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }),
       purgeMods(fx.instanceRoot, { gameDirectory: fx.gameDirectory }),
     ]);
 

@@ -9,20 +9,19 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeW
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from './instance';
+import { Instance, type InstanceValue } from '../instance/instance';
 import { instanceValueFixture } from './test/instanceValueFixture';
 import { registerModAdoption, type ModAdoptionOutcome } from './modAdoptionTrigger';
 import { adoptMods } from './commands/modlist';
 import { installFromFolder } from './commands/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
-import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
-import type { ConfigChangeEvent } from './gameDirectory';
+import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
 import { present } from '../ports/present';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
-const noDetectWinePrefix: DetectWinePrefix = () => Promise.resolve(null);
-const autodetectsDataFolder: DetectPaths = () => Promise.resolve({ dataFolder: DATA_FOLDER, pluginsTxt: DATA_FOLDER });
+const resolvesDataFolder: GameDirectoryResolver = () =>
+  Promise.resolve({ root: '/game', dataFolder: DATA_FOLDER });
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -63,13 +62,9 @@ async function wiredInstance(): Promise<{
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
-  const config: ConfigLike = { get: () => undefined };
   const instance = new Instance({
     instanceRoot: root,
-    config: () => config,
-    detectPaths: autodetectsDataFolder,
-    detectWinePrefix: noDetectWinePrefix,
-    onConfigChange: (_listener: (e: ConfigChangeEvent) => void) => ({ dispose: () => {} }),
+    resolveGameDirectory: resolvesDataFolder,
     log: () => {},
   });
   instances.push(instance);

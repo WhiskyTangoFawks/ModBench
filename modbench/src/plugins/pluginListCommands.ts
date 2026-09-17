@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../medit/client';
-import type { Instance } from '../modmanager/instance';
+import type { Instance } from '../instance/instance';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
-import { OVERWRITE_DIR_NAME } from '../mo2Codecs/layout';
+import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
 import { appendPlugin } from '../modmanager/commands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -30,17 +30,17 @@ export function registerRevealInExplorerCommand(
 }
 
 async function pickPluginDestination(
-  instance: Pick<Instance, 'value'>, instanceRoot: string,
+  instance: Pick<Instance, 'value'>,
 ): Promise<{ path: string; origin: string } | undefined> {
   const picked = await vscode.window.showQuickPick(PLUGIN_DESTINATION_OPTIONS, {
     placeHolder: 'Where should the new plugin live?',
   });
   if (!picked) return undefined;
-  if (picked.choice === OVERWRITE_DIR_NAME) return resolvePluginDestination(instanceRoot, { kind: OVERWRITE_DIR_NAME });
+  if (picked.choice === OVERWRITE_DIR_NAME) return resolvePluginDestination(instance.value, { kind: OVERWRITE_DIR_NAME });
 
   const modNames = instance.value.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
   const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });
-  return modName ? resolvePluginDestination(instanceRoot, { kind: 'existingMod', modName }) : undefined;
+  return modName ? resolvePluginDestination(instance.value, { kind: 'existingMod', modName }) : undefined;
 }
 
 function promptPluginName(): Thenable<string | undefined> {
@@ -88,7 +88,7 @@ export function registerCreatePluginCommand(
     const name = await promptPluginName();
     if (!name) return;
 
-    const destination = await pickPluginDestination(mo2.instance, mo2.instanceRoot);
+    const destination = await pickPluginDestination(mo2.instance);
     if (!destination) return; // user cancelled a prompt
 
     const result = await client.createPlugin(name, destination.path, destination.origin);

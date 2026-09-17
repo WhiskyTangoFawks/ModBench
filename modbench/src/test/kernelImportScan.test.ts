@@ -7,11 +7,19 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+import { present } from '../ports/present';
 
 const SRC = join(__dirname, '..');
 
 // One directory per kernel box, as the zoom-out draws the Modbench kernel band.
 const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+
+// The driven column, each with the boxes target-architecture-references.d2 lets it reach: the
+// arrows that leave it, plus its column's kernel by the band's rule.
+const DRIVEN_BOXES: Record<string, string[]> = {
+  mo2Files: ['mo2Codecs', 'ports', 'tables'],
+  instance: ['mo2Codecs', 'mo2Files', 'ports'],
+};
 
 const boxRoot = (box: string): string => join(SRC, box);
 
@@ -70,6 +78,29 @@ function offenders(): Record<string, string[]> {
   for (const box of KERNEL_BOXES) {
     for (const path of productionFiles(boxRoot(box))) {
       const bad = disallowedSpecifiers(path, boxRoot(box));
+      if (bad.length > 0) found[relative(SRC, path)] = bad;
+    }
+  }
+  return found;
+}
+
+// A driven box may reach the boxes the diagram draws an arrow to, and node: builtins including
+// the file system — MO2 files is the one door onto the instance, and it is one of these.
+function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
+  if (spec.startsWith('node:')) return true;
+  if (spec === 'vscode') return box === 'instance';
+  if (!spec.startsWith('.')) return false;
+  const resolved = resolve(dirname(fromFile), spec);
+  const roots = [boxRoot(box), ...present(DRIVEN_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
+  return roots.some((root) => resolved === root || resolved.startsWith(root + '/'));
+}
+
+function drivenOffenders(): Record<string, string[]> {
+  const found: Record<string, string[]> = {};
+  for (const box of Object.keys(DRIVEN_BOXES)) {
+    for (const path of productionFiles(boxRoot(box))) {
+      const bad = importSpecifiers(readFileSync(path, 'utf8'), path)
+        .filter((spec) => !isAllowedDrivenSpecifier(spec, path, box));
       if (bad.length > 0) found[relative(SRC, path)] = bad;
     }
   }
@@ -140,5 +171,43 @@ describe('a kernel box references nothing', () => {
 
   it('allows a file inside the same box', async () => {
     expect(await plantedSpecifiers("import { lineRanges } from './lineScan';\n")).toEqual([]);
+  });
+});
+
+describe('a driven box reaches only the boxes the diagram draws an arrow to', () => {
+  it('names the two boxes the driven band draws', () => {
+    expect(Object.keys(DRIVEN_BOXES)).toEqual(['mo2Files', 'instance']);
+  });
+
+  it('every box is a real directory holding production files', () => {
+    for (const box of Object.keys(DRIVEN_BOXES)) {
+      expect(existsSync(boxRoot(box))).toBe(true);
+      expect(productionFiles(boxRoot(box)).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every production file imports only node: builtins, its own box and the boxes it references', () => {
+    expect(drivenOffenders()).toEqual({});
+  });
+
+  // Rival: the Instance reaching up into a view or a command, which is what makes the read model
+  // an input to the write side.
+  it('flags an import of a box no arrow reaches', () => {
+    const planted = join(boxRoot('instance'), 'planted.ts');
+    expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instance')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../tables/gamePaths', planted, 'instance')).toBe(false);
+  });
+
+  // Rival: MO2 files taking a VS Code type, which puts the extension host behind the one door
+  // onto the instance. The Instance owns the watchers, so vscode is its alone.
+  it('allows vscode in the Instance and refuses it in MO2 files', () => {
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instance'), 'planted.ts'), 'instance')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('mo2Files'), 'planted.ts'), 'mo2Files')).toBe(false);
+  });
+
+  it('allows the boxes each one does reference', () => {
+    expect(isAllowedDrivenSpecifier('../mo2Files/layout', join(boxRoot('instance'), 'p.ts'), 'instance')).toBe(true);
+    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
+    expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
   });
 });
