@@ -159,7 +159,6 @@ async function readProfileNames(instanceRoot: string): Promise<string[]> {
   }
 }
 
-
 const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
   downloadsDir: downloadsDir(instanceRoot),

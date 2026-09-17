@@ -125,8 +125,8 @@ export async function uninstallMod(
 }
 
 /** A folder under `mods/` plus a disabled modlist.txt line — nothing else. `modFolders` is the
- *  value's own listing of `mods/` (ADR-0015 invariant 1), and a name already among them is
- *  refused. */
+ *  value's own listing of `mods/`, handed in rather than read here, and a name already among
+ *  them is refused. */
 export async function createEmptyMod(
   instanceRoot: string, profile: string, name: string, modFolders: readonly string[],
 ): Promise<ModlistCommandResult> {
@@ -138,7 +138,7 @@ export async function createEmptyMod(
 }
 
 /** The value's unlisted folders get a line each, disabled, at the winning end, in one write.
- *  Which folders need one is the value's answer, never a command's (ADR-0015 invariant 1). */
+ *  Which folders need one is the value's answer, never a command's. */
 export async function adoptMods(
   instanceRoot: string, profile: string, folderNames: readonly string[],
 ): Promise<{ applied: true; added: string[] } | { applied: false; refusal: string }> {

@@ -91,7 +91,7 @@ export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
 
 /** plugins.txt is the inventory the Plugins tree reads, so when disk disagrees the file is
  *  updated (docs/specs/plugins.md). `provided` is the value's winners and `inData` its
- *  Data-folder presence (ADR-0015 invariant 1) — this walks nothing. */
+ *  Data-folder presence, both handed in — this walks nothing. */
 export async function reconcilePlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,

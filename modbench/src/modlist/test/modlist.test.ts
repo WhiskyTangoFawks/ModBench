@@ -23,7 +23,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile };
 });
 
-import { cp, mkdtemp, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -253,12 +253,14 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     // Rival: probe `mods/<name>/` instead of reading the argument. The folder below is on disk
-    // and absent from what the caller was handed, so a probe lets the name through.
+    // with no line of its own, so a probe refuses where the argument lets it through.
     it('refuses only on the folders it is handed, never on what it finds under mods/', async () => {
-      const outcome = await createEmptyMod(dir, 'Default', 'Harder VATS', ['Something Else']);
+      await mkdir(join(dir, 'mods', 'Dropped In Behind Modbench'));
+
+      const outcome = await createEmptyMod(dir, 'Default', 'Dropped In Behind Modbench', ['Something Else']);
 
       expect(outcome).toEqual({ applied: true, wrote: true });
-      expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(true);
+      expect((await readModlist()).some((e) => e.name === 'Dropped In Behind Modbench')).toBe(true);
     });
 
     // Rival: refuse only what the modlist lists. A folder MO2 dropped in with no line would
