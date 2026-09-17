@@ -1,85 +1,85 @@
 {
   "conflicted-conditions": {
-    "ConflictAll": "Override",
-    "DiffFieldCount": 1,
-    "Diffs": [
+    "conflictAll": "Override",
+    "diffFieldCount": 1,
+    "diffs": [
       {
-        "CellStates": {
+        "cellStates": {
           "Top.esp": "Override"
         },
-        "CheckErrors": {
+        "checkErrors": {
           "Base.esm": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: ",
           "Top.esp": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: "
         },
-        "Children": [
+        "children": [
           {
-            "CellStates": {
+            "cellStates": {
               "Top.esp": "Override"
             },
-            "CheckErrors": {
+            "checkErrors": {
               "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: ",
               "Top.esp": "Data.ParameterOneRecord: Found a NULL reference, expected: "
             },
-            "Children": [
+            "children": [
               {
-                "CellStates": {
+                "cellStates": {
                   "Top.esp": "Override"
                 },
-                "CheckErrors": {
+                "checkErrors": {
                   "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: ",
                   "Top.esp": "ParameterOneRecord: Found a NULL reference, expected: "
                 },
-                "Children": [
+                "children": [
                   {
-                    "CellStates": {
+                    "cellStates": {
                       "Top.esp": "Override"
                     },
-                    "CheckErrors": null,
-                    "Children": null,
-                    "ConflictAll": "Override",
-                    "FieldName": "RunOnType",
-                    "Resolutions": null,
-                    "Values": {
+                    "checkErrors": null,
+                    "children": null,
+                    "conflictAll": "Override",
+                    "fieldName": "RunOnType",
+                    "resolutions": null,
+                    "values": {
                       "Base.esm": null,
                       "Top.esp": "Target"
                     },
-                    "WinnerColumn": "Top.esp"
+                    "winnerColumn": "Top.esp"
                   },
                   {
-                    "CellStates": {
+                    "cellStates": {
                       "Top.esp": "IdenticalToMaster"
                     },
-                    "CheckErrors": null,
-                    "Children": null,
-                    "ConflictAll": "NoConflict",
-                    "FieldName": "Function",
-                    "Resolutions": null,
-                    "Values": {
+                    "checkErrors": null,
+                    "children": null,
+                    "conflictAll": "NoConflict",
+                    "fieldName": "Function",
+                    "resolutions": null,
+                    "values": {
                       "Base.esm": "GetIsID",
                       "Top.esp": "GetIsID"
                     },
-                    "WinnerColumn": "Top.esp"
+                    "winnerColumn": "Top.esp"
                   },
                   {
-                    "CellStates": {
+                    "cellStates": {
                       "Top.esp": "IdenticalToMaster"
                     },
-                    "CheckErrors": null,
-                    "Children": null,
-                    "ConflictAll": "NoConflict",
-                    "FieldName": "MutagenObjectType",
-                    "Resolutions": null,
-                    "Values": {
+                    "checkErrors": null,
+                    "children": null,
+                    "conflictAll": "NoConflict",
+                    "fieldName": "MutagenObjectType",
+                    "resolutions": null,
+                    "values": {
                       "Base.esm": "FunctionConditionData",
                       "Top.esp": "FunctionConditionData"
                     },
-                    "WinnerColumn": "Top.esp"
+                    "winnerColumn": "Top.esp"
                   }
                 ],
-                "ConflictAll": "Override",
-                "FieldName": "Data",
-                "Resolutions": null,
-                "Values": {
+                "conflictAll": "Override",
+                "fieldName": "Data",
+                "resolutions": null,
+                "values": {
                   "Base.esm": {
                     "Function": "GetIsID",
                     "MutagenObjectType": "FunctionConditionData"
@@ -90,18 +90,18 @@
                     "RunOnType": "Target"
                   }
                 },
-                "WinnerColumn": "Top.esp"
+                "winnerColumn": "Top.esp"
               },
               {
-                "CellStates": {
+                "cellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "Flags",
-                "Resolutions": null,
-                "Values": {
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "Flags",
+                "resolutions": null,
+                "values": {
                   "Base.esm": [
                     "OR"
                   ],
@@ -109,58 +109,58 @@
                     "OR"
                   ]
                 },
-                "WinnerColumn": "Top.esp"
+                "winnerColumn": "Top.esp"
               },
               {
-                "CellStates": {
+                "cellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "Unknown1",
-                "Resolutions": null,
-                "Values": {
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "Unknown1",
+                "resolutions": null,
+                "values": {
                   "Base.esm": "0x000000",
                   "Top.esp": "0x000000"
                 },
-                "WinnerColumn": "Top.esp"
+                "winnerColumn": "Top.esp"
               },
               {
-                "CellStates": {
+                "cellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "ComparisonValue",
-                "Resolutions": null,
-                "Values": {
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "ComparisonValue",
+                "resolutions": null,
+                "values": {
                   "Base.esm": 1.0,
                   "Top.esp": 1.0
                 },
-                "WinnerColumn": "Top.esp"
+                "winnerColumn": "Top.esp"
               },
               {
-                "CellStates": {
+                "cellStates": {
                   "Top.esp": "IdenticalToMaster"
                 },
-                "CheckErrors": null,
-                "Children": null,
-                "ConflictAll": "NoConflict",
-                "FieldName": "MutagenObjectType",
-                "Resolutions": null,
-                "Values": {
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "MutagenObjectType",
+                "resolutions": null,
+                "values": {
                   "Base.esm": "ConditionFloat",
                   "Top.esp": "ConditionFloat"
                 },
-                "WinnerColumn": "Top.esp"
+                "winnerColumn": "Top.esp"
               }
             ],
-            "ConflictAll": "Override",
-            "FieldName": "[0]",
-            "Resolutions": null,
-            "Values": {
+            "conflictAll": "Override",
+            "fieldName": "[0]",
+            "resolutions": null,
+            "values": {
               "Base.esm": {
                 "ComparisonValue": 1.0,
                 "Data": {
@@ -187,13 +187,13 @@
                 "Unknown1": "0x000000"
               }
             },
-            "WinnerColumn": "Top.esp"
+            "winnerColumn": "Top.esp"
           }
         ],
-        "ConflictAll": "Override",
-        "FieldName": "Conditions",
-        "Resolutions": null,
-        "Values": {
+        "conflictAll": "Override",
+        "fieldName": "Conditions",
+        "resolutions": null,
+        "values": {
           "Base.esm": [
             {
               "ComparisonValue": 1.0,
@@ -224,14 +224,14 @@
             }
           ]
         },
-        "WinnerColumn": "Top.esp"
+        "winnerColumn": "Top.esp"
       }
     ],
-    "Overrides": [
+    "overrides": [
       {
-        "ConflictThis": "Master",
-        "EditorId": "ConflictedRecipe",
-        "Fields": {
+        "conflictThis": "Master",
+        "editorId": "ConflictedRecipe",
+        "fields": {
           "Categories": null,
           "Components": null,
           "Conditions": [
@@ -262,18 +262,18 @@
           "Version2": null,
           "WorkbenchKeyword": null
         },
-        "FormKey": "000803:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": false,
-        "LoadOrderIndex": 0,
-        "Origin": "Data",
-        "Plugin": "Base.esm",
-        "RecordType": "cobj"
+        "formKey": "000803:Base.esm",
+        "isPartialForm": false,
+        "isWinner": false,
+        "loadOrderIndex": 0,
+        "origin": "Data",
+        "plugin": "Base.esm",
+        "recordType": "cobj"
       },
       {
-        "ConflictThis": "Override",
-        "EditorId": "ConflictedRecipe",
-        "Fields": {
+        "conflictThis": "Override",
+        "editorId": "ConflictedRecipe",
+        "fields": {
           "Categories": null,
           "Components": null,
           "Conditions": [
@@ -305,31 +305,31 @@
           "Version2": null,
           "WorkbenchKeyword": null
         },
-        "FormKey": "000803:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": true,
-        "LoadOrderIndex": 2,
-        "Origin": "Data",
-        "Plugin": "Top.esp",
-        "RecordType": "cobj"
+        "formKey": "000803:Base.esm",
+        "isPartialForm": false,
+        "isWinner": true,
+        "loadOrderIndex": 2,
+        "origin": "Data",
+        "plugin": "Top.esp",
+        "recordType": "cobj"
       }
     ]
   },
   "conflicted-npc": {
-    "ConflictAll": "Conflict",
-    "DiffFieldCount": 4,
-    "Diffs": [
+    "conflictAll": "Conflict",
+    "diffFieldCount": 4,
+    "diffs": [
       {
-        "CellStates": {
+        "cellStates": {
           "Mid.esp": "ConflictLoses",
           "Top.esp": "ConflictWins"
         },
-        "CheckErrors": null,
-        "Children": null,
-        "ConflictAll": "Conflict",
-        "FieldName": "Name",
-        "Resolutions": null,
-        "Values": {
+        "checkErrors": null,
+        "children": null,
+        "conflictAll": "Conflict",
+        "fieldName": "Name",
+        "resolutions": null,
+        "values": {
           "Base.esm": {
             "TargetLanguage": "English",
             "Value": "Base name"
@@ -343,68 +343,68 @@
             "Value": "Top name"
           }
         },
-        "WinnerColumn": "Top.esp"
+        "winnerColumn": "Top.esp"
       },
       {
-        "CellStates": {
+        "cellStates": {
           "Mid.esp": "IdenticalToMaster",
           "Top.esp": "ConflictWins"
         },
-        "CheckErrors": {
+        "checkErrors": {
           "Base.esm": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
           "Mid.esp": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
           "Top.esp": "[000901:Base.esm] \u003CError: Could not be resolved\u003E"
         },
-        "Children": null,
-        "ConflictAll": "Conflict",
-        "FieldName": "Race",
-        "Resolutions": {
+        "children": null,
+        "conflictAll": "Conflict",
+        "fieldName": "Race",
+        "resolutions": {
           "Base.esm": {
-            "EditorId": null,
-            "RecordType": null,
-            "State": "Unresolved"
+            "editorId": null,
+            "recordType": null,
+            "state": "Unresolved"
           },
           "Mid.esp": {
-            "EditorId": null,
-            "RecordType": null,
-            "State": "Unresolved"
+            "editorId": null,
+            "recordType": null,
+            "state": "Unresolved"
           },
           "Top.esp": {
-            "EditorId": null,
-            "RecordType": null,
-            "State": "Unresolved"
+            "editorId": null,
+            "recordType": null,
+            "state": "Unresolved"
           }
         },
-        "Values": {
+        "values": {
           "Base.esm": "000900:Base.esm",
           "Mid.esp": "000900:Base.esm",
           "Top.esp": "000901:Base.esm"
         },
-        "WinnerColumn": "Top.esp"
+        "winnerColumn": "Top.esp"
       },
       {
-        "CellStates": {
+        "cellStates": {
           "Mid.esp": "ConflictLoses",
           "Top.esp": "ConflictWins"
         },
-        "CheckErrors": null,
-        "Children": null,
-        "ConflictAll": "Conflict",
-        "FieldName": "CalculatedHealth",
-        "Resolutions": null,
-        "Values": {
+        "checkErrors": null,
+        "children": null,
+        "conflictAll": "Conflict",
+        "fieldName": "CalculatedHealth",
+        "resolutions": null,
+        "values": {
           "Base.esm": 100,
           "Mid.esp": 250,
           "Top.esp": 999
         },
-        "WinnerColumn": "Top.esp"
+        "winnerColumn": "Top.esp"
       }
     ],
-    "Overrides": [
+    "overrides": [
       {
-        "ConflictThis": "Master",
-        "EditorId": "ConflictedNPC",
-        "Fields": {
+        "conflictThis": "Master",
+        "editorId": "ConflictedNPC",
+        "fields": {
           "ActivateTextOverride": null,
           "ActorEffect": null,
           "Aggression": null,
@@ -503,18 +503,18 @@
           "Weight": null,
           "XpValueOffset": null
         },
-        "FormKey": "000800:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": false,
-        "LoadOrderIndex": 0,
-        "Origin": "Data",
-        "Plugin": "Base.esm",
-        "RecordType": "npc_"
+        "formKey": "000800:Base.esm",
+        "isPartialForm": false,
+        "isWinner": false,
+        "loadOrderIndex": 0,
+        "origin": "Data",
+        "plugin": "Base.esm",
+        "recordType": "npc_"
       },
       {
-        "ConflictThis": "ConflictLoses",
-        "EditorId": "ConflictedNPC",
-        "Fields": {
+        "conflictThis": "ConflictLoses",
+        "editorId": "ConflictedNPC",
+        "fields": {
           "ActivateTextOverride": null,
           "ActorEffect": null,
           "Aggression": null,
@@ -613,18 +613,18 @@
           "Weight": null,
           "XpValueOffset": null
         },
-        "FormKey": "000800:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": false,
-        "LoadOrderIndex": 1,
-        "Origin": "Data",
-        "Plugin": "Mid.esp",
-        "RecordType": "npc_"
+        "formKey": "000800:Base.esm",
+        "isPartialForm": false,
+        "isWinner": false,
+        "loadOrderIndex": 1,
+        "origin": "Data",
+        "plugin": "Mid.esp",
+        "recordType": "npc_"
       },
       {
-        "ConflictThis": "ConflictWins",
-        "EditorId": "ConflictedNPC",
-        "Fields": {
+        "conflictThis": "ConflictWins",
+        "editorId": "ConflictedNPC",
+        "fields": {
           "ActivateTextOverride": null,
           "ActorEffect": null,
           "Aggression": null,
@@ -723,25 +723,25 @@
           "Weight": null,
           "XpValueOffset": null
         },
-        "FormKey": "000800:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": true,
-        "LoadOrderIndex": 2,
-        "Origin": "Data",
-        "Plugin": "Top.esp",
-        "RecordType": "npc_"
+        "formKey": "000800:Base.esm",
+        "isPartialForm": false,
+        "isWinner": true,
+        "loadOrderIndex": 2,
+        "origin": "Data",
+        "plugin": "Top.esp",
+        "recordType": "npc_"
       }
     ]
   },
   "injected-npc": {
-    "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 2,
-    "Diffs": [],
-    "Overrides": [
+    "conflictAll": "OnlyOne",
+    "diffFieldCount": 2,
+    "diffs": [],
+    "overrides": [
       {
-        "ConflictThis": "OnlyOne",
-        "EditorId": "InjectedNPC",
-        "Fields": {
+        "conflictThis": "OnlyOne",
+        "editorId": "InjectedNPC",
+        "fields": {
           "ActivateTextOverride": null,
           "ActorEffect": null,
           "Aggression": null,
@@ -840,25 +840,25 @@
           "Weight": null,
           "XpValueOffset": null
         },
-        "FormKey": "000800:Mid.esp",
-        "IsPartialForm": false,
-        "IsWinner": true,
-        "LoadOrderIndex": 1,
-        "Origin": "Data",
-        "Plugin": "Mid.esp",
-        "RecordType": "npc_"
+        "formKey": "000800:Mid.esp",
+        "isPartialForm": false,
+        "isWinner": true,
+        "loadOrderIndex": 1,
+        "origin": "Data",
+        "plugin": "Mid.esp",
+        "recordType": "npc_"
       }
     ]
   },
   "sole-npc": {
-    "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 2,
-    "Diffs": [],
-    "Overrides": [
+    "conflictAll": "OnlyOne",
+    "diffFieldCount": 2,
+    "diffs": [],
+    "overrides": [
       {
-        "ConflictThis": "OnlyOne",
-        "EditorId": "SoleNPC",
-        "Fields": {
+        "conflictThis": "OnlyOne",
+        "editorId": "SoleNPC",
+        "fields": {
           "ActivateTextOverride": null,
           "ActorEffect": null,
           "Aggression": null,
@@ -954,25 +954,25 @@
           "Weight": null,
           "XpValueOffset": null
         },
-        "FormKey": "000802:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": true,
-        "LoadOrderIndex": 0,
-        "Origin": "Data",
-        "Plugin": "Base.esm",
-        "RecordType": "npc_"
+        "formKey": "000802:Base.esm",
+        "isPartialForm": false,
+        "isWinner": true,
+        "loadOrderIndex": 0,
+        "origin": "Data",
+        "plugin": "Base.esm",
+        "recordType": "npc_"
       }
     ]
   },
   "unchanged-weapon": {
-    "ConflictAll": "NoConflict",
-    "DiffFieldCount": 2,
-    "Diffs": [],
-    "Overrides": [
+    "conflictAll": "NoConflict",
+    "diffFieldCount": 2,
+    "diffs": [],
+    "overrides": [
       {
-        "ConflictThis": "Master",
-        "EditorId": "UnchangedWeapon",
-        "Fields": {
+        "conflictThis": "Master",
+        "editorId": "UnchangedWeapon",
+        "fields": {
           "AccuracyBonus": null,
           "ActionPointCost": null,
           "AimModel": null,
@@ -1049,18 +1049,18 @@
           "Weight": 2.5,
           "Zoom": null
         },
-        "FormKey": "000801:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": false,
-        "LoadOrderIndex": 0,
-        "Origin": "Data",
-        "Plugin": "Base.esm",
-        "RecordType": "weap"
+        "formKey": "000801:Base.esm",
+        "isPartialForm": false,
+        "isWinner": false,
+        "loadOrderIndex": 0,
+        "origin": "Data",
+        "plugin": "Base.esm",
+        "recordType": "weap"
       },
       {
-        "ConflictThis": "IdenticalToMaster",
-        "EditorId": "UnchangedWeapon",
-        "Fields": {
+        "conflictThis": "IdenticalToMaster",
+        "editorId": "UnchangedWeapon",
+        "fields": {
           "AccuracyBonus": null,
           "ActionPointCost": null,
           "AimModel": null,
@@ -1137,13 +1137,13 @@
           "Weight": 2.5,
           "Zoom": null
         },
-        "FormKey": "000801:Base.esm",
-        "IsPartialForm": false,
-        "IsWinner": true,
-        "LoadOrderIndex": 1,
-        "Origin": "Data",
-        "Plugin": "Mid.esp",
-        "RecordType": "weap"
+        "formKey": "000801:Base.esm",
+        "isPartialForm": false,
+        "isWinner": true,
+        "loadOrderIndex": 1,
+        "origin": "Data",
+        "plugin": "Mid.esp",
+        "recordType": "weap"
       }
     ]
   }

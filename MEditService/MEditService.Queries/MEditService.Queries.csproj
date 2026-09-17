@@ -18,15 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Queries.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.CrossBox.Tests</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- Drawn: queries -> record index (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
     <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->

@@ -8,7 +8,7 @@ namespace MEditService.Tests.TestSupport;
 
 /// <summary>Goldens were captured from a known-good implementation and reviewed by hand, so
 /// they are independent of what the code emits. <c>MEDIT_GOLDEN_UPDATE=1</c> regenerates.</summary>
-internal static class Golden
+public static class Golden
 {
     private const string UpdateVariable = "MEDIT_GOLDEN_UPDATE";
 
@@ -18,7 +18,7 @@ internal static class Golden
         new() { WriteIndented = false, Converters = { new JsonStringEnumConverter() } };
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
-    internal static void Verify(string name, object? value, [CallerFilePath] string here = "")
+    public static void Verify(string name, object? value, [CallerFilePath] string here = "")
     {
         var path = Path.Combine(GoldenDirectory(here), name + ".json");
         var actual = Canonical(value);
@@ -38,9 +38,8 @@ internal static class Golden
         Assert.Fail($"Golden '{name}' differs from {path}:\n{FirstDifference(expected, actual)}");
     }
 
-    // MEditService.CrossBox.Tests carries no TestData of its own (MEditService.TestSupport's is the
-    // one committed copy, referenced by every project that needs it), so this walks up one more
-    // level than a same-project Golden.cs would.
+    // The caller's own file (CallerFilePath), two levels up from any TestProject/Subfolder/File.cs,
+    // reaches this project's sibling TestData — the one committed copy every test project shares.
     private static string GoldenDirectory(string callerFile) =>
         Path.Combine(PathShape.DirectoryOf(callerFile), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
 

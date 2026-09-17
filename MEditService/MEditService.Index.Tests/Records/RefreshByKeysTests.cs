@@ -63,6 +63,23 @@ public sealed class RefreshByKeysTests : IDisposable
         Assert.Equal("RenamedByHand", entry.Head.EditorId);
     }
 
+    // GetDocument answers from the Index's last projection, never a live re-read of the source
+    // file — a hand-edit made outside Modbench is invisible until Refresh is told to look.
+    [Fact]
+    public void AHandEditMadeBeforeAnyRefresh_LeavesTheServedDocumentUnchanged()
+    {
+        var before = Reads.DocumentOf(_npc, _mod.KeyOf()).Body;
+
+        _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
+
+        Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
+        Assert.Equal("FixtureNpc", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
+
+        Refresh(_npc);
+
+        Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
+    }
+
     // A create's whole-file side, made without the write API: the document is in the tree and
     // nothing has told the Index about it.
     [Fact]

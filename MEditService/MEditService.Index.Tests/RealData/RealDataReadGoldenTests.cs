@@ -1,9 +1,6 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.Tests.TestSupport;
-using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 
@@ -16,9 +13,6 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     private const int PerType = 3;
     // Larger than the record count of any type in the cut-down plugin (info, the largest, has 2,873).
     private const int WholeType = 5000;
-
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static readonly string[] Types =
         ["achr", "acti", "armo", "cell", "dial", "dlbr", "fact", "glob", "info", "kywd", "misc", "npc_", "qust", "race", "refr", "scen", "weap", "wrld"];
@@ -144,5 +138,5 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         Golden.Verify("realdata-references", captured);
     }
 
-    private const string TestPluginName = CutDownPluginFixture.PluginFileName;
+    private const string TestPluginName = RealDataPlugin.PluginFileName;
 }
