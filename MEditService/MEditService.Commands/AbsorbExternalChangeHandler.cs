@@ -20,9 +20,9 @@ public sealed class AbsorbExternalChangeHandler
     internal AbsorbExternalChangeHandler(IPluginAdapter adapter, ILogger<AbsorbExternalChangeHandler> logger) =>
         (_adapter, _logger) = (adapter, logger);
 
-    public AbsorbResult Absorb(string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
+    public async Task<AbsorbResult> AbsorbAsync(string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
     {
-        var result = Run(_adapter, modFolder, plugins, loadOrder);
+        var result = await Run(_adapter, modFolder, plugins, loadOrder);
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", modFolder, result.RefusalReason);
@@ -32,7 +32,7 @@ public sealed class AbsorbExternalChangeHandler
     }
 
     // Static because none of it reads this handler's state beyond the port it is handed.
-    private static AbsorbResult Run(
+    private static async Task<AbsorbResult> Run(
         IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
     {
         var allPristineFiles = new List<TreeFile>();
@@ -45,10 +45,9 @@ public sealed class AbsorbExternalChangeHandler
             // mod-folder-only strings overload applies.
             try
             {
-                var tree = adapter.ReadPristineFilesAsync(
+                var tree = await adapter.ReadPristineFilesAsync(
                     new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path),
-                    loadOrder.GameRelease, PluginStrings.In(modFolder))
-                    .GetAwaiter().GetResult();
+                    loadOrder.GameRelease, PluginStrings.In(modFolder));
                 allPristineFiles.AddRange(SourceRepository.PristineFilesOf(plugin.Name, tree));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)

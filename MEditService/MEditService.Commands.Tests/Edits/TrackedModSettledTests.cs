@@ -18,6 +18,8 @@ public sealed class TrackedModSettledTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
+    private TrackedModSettled Settled => TestEditService.Settled(_notifications);
+
     private static void WriteExternalBinaryChange(SourceEditFixture mod, float newHeightMax)
     {
         var externalMod = new Fallout4Mod(ModKey.FromFileName(SourceEditFixture.PluginName), Fallout4Release.Fallout4);
@@ -35,7 +37,7 @@ public sealed class TrackedModSettledTests : IDisposable
     {
         WriteExternalBinaryChange(_mod, 0.9f);
 
-        var outcome = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.QuestionOpened, outcome);
         var question = SourceRepository.UnansweredExternalChange(_mod.ModFolder);
@@ -51,7 +53,7 @@ public sealed class TrackedModSettledTests : IDisposable
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question whose change is gone");
 
-        var outcome = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
         Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
@@ -64,7 +66,7 @@ public sealed class TrackedModSettledTests : IDisposable
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question the binary cannot answer for now");
         File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
 
-        var outcome = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
         Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
@@ -74,15 +76,15 @@ public sealed class TrackedModSettledTests : IDisposable
     // The two prompts must never both fire for one event: a crash recovery verdict is the repair
     // offer's own state, so a question already open stands exactly as it was.
     [Fact]
-    public void Handle_ReturnsCrashRecovery_AndTouchesNoMarker_ForAnInterruptedCompile()
+    public async Task Handle_ReturnsCrashRecovery_AndTouchesNoMarker_ForAnInterruptedCompile()
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question already open before the crash");
-        Assert.ThrowsAny<Exception>(() =>
-            CompileJournal.RunBatch(_mod.ModFolder, [SourceEditFixture.PluginName],
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await CompileJournal.RunBatchAsync(_mod.ModFolder, [SourceEditFixture.PluginName],
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 
-        var outcome = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.CrashRecovery, outcome);
         Assert.Equal("a question already open before the crash", SourceRepository.UnansweredExternalChange(_mod.ModFolder));
@@ -104,7 +106,7 @@ public sealed class TrackedModSettledTests : IDisposable
         File.WriteAllText(Path.Combine(mod.ModFolder, "texture.dds"), "changed-by-the-release");
         var noCopies = new LoadOrderSnapshot(mod.GameDirectory, mod.InstanceRoot, GameRelease.Fallout4, []);
 
-        var outcome = TrackedModSettled.Handle(noCopies, mod.ModFolder, _notifications);
+        var outcome = Settled.Handle(noCopies, mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.QuestionOpened, outcome);
         var question = SourceRepository.UnansweredExternalChange(mod.ModFolder);
@@ -119,9 +121,9 @@ public sealed class TrackedModSettledTests : IDisposable
     {
         WriteExternalBinaryChange(_mod, 0.9f);
 
-        var first = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var first = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
         var firstNotification = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
-        var second = TrackedModSettled.Handle(_mod.LoadOrder, _mod.ModFolder, _notifications);
+        var second = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
         var secondNotification = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>().Skip(1));
 
         Assert.Equal(first, second);

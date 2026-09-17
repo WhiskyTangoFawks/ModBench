@@ -1,8 +1,8 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>Where the shared kernel keeps the current load order. The load-order and create-plugin
-/// endpoints are the only callers of <see cref="Apply"/> (ADR-0013: one arrival); everything else
-/// reads Current.</summary>
+/// <summary>Where the shared kernel keeps the current load order. The put-load-order and
+/// create-plugin handlers are the only callers of <see cref="Apply"/> (ADR-0013 invariant 1: one
+/// arrival); everything else reads Current.</summary>
 public sealed class LoadOrderHolder
 {
     // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous value whole rather

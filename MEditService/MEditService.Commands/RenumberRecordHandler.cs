@@ -84,21 +84,30 @@ public sealed class RenumberRecordHandler
         var targetRewrite = computedTargetRewrite
             ?? throw new InvalidOperationException("Expected ComputeTargetRewrite to compute a target when it does not refuse.");
 
-        // Phase two: everything that can still fail is genuine I/O, recorded in one transaction
-        // (ADR-0007).
+        // Phase two: one transaction, rolled back whatever fails (ADR-0007 invariant 8). A tree not
+        // as phase one found it is a refusal (ADR-0014 invariant 4); a filesystem fault is a write
+        // failure; anything else is a bug.
         var transaction = new SourceRepository.SourceTransaction();
         try
         {
             foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite);
             WriteTargetRewrite(transaction, plugin, targetRewrite, targetFormKey);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {
-            // Unfiltered so an unexpected fault is rolled back and disclosed rather than falling
-            // through to the endpoint's InvalidOperationException handler ("no usable load order").
-            // Rethrown as IOException so it reaches the client as the same 500 every write fault does.
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             throw new IOException(
                 RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex), ex);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogError(ex, "{Report}", RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex));
+            throw;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))

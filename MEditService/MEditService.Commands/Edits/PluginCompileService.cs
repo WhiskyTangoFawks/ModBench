@@ -21,7 +21,7 @@ public sealed class PluginCompileService(
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
-    public CompileResult Compile(PluginCopyKey plugin, CompileSource source)
+    public async Task<CompileResult> CompileAsync(PluginCopyKey plugin, CompileSource source)
     {
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Copies.Count == 0)
@@ -53,7 +53,7 @@ public sealed class PluginCompileService(
                 $"{plugin.Name} has no source tree at {atRef ?? "the working tree"}, so there is nothing to compile.");
         }
 
-        var (parsedTree, deserializeRefusal) = DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
+        var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
         if (deserializeRefusal != null)
             return CompileResult.Refused(deserializeRefusal);
         var tree = parsedTree
@@ -95,7 +95,7 @@ public sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, files);
+        var roundTripRefusal = await RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, files);
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
@@ -112,11 +112,11 @@ public sealed class PluginCompileService(
         // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
         // until Commit(), so refusing is safe.
         string? writeRefusal = null;
-        CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
+        await CompileJournal.RunBatchAsync(modFolder, [plugin.Name], async _ =>
         {
             try
             {
-                tree.SaveThroughAsync(writer, copy.Path, loadOrderNames).GetAwaiter().GetResult();
+                await tree.SaveThroughAsync(writer, copy.Path, loadOrderNames);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -304,10 +304,10 @@ public sealed class PluginCompileService(
 
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
     // deliberately unfiltered and the message uniform.
-    private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
+    private async Task<(CompiledTree? Tree, string? RefusalReason)> DeserializeSource(
         IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
-        var read = adapter.ReadTreeAsync(files, codec, release).GetAwaiter().GetResult();
+        var read = await adapter.ReadTreeAsync(files, codec, release);
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
@@ -322,11 +322,10 @@ public sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(
+    private static async Task<string?> RefuseIfSourceDoesNotRoundTrip(
         CompiledTree tree, string pluginName, IReadOnlyList<TreeFile> sourceFiles)
     {
-        var regeneratedFiles = SourceRepository.PristineFilesOf(
-            pluginName, tree.SerializeTreeAsync().GetAwaiter().GetResult());
+        var regeneratedFiles = SourceRepository.PristineFilesOf(pluginName, await tree.SerializeTreeAsync());
         var headerDocument = SourceRepository.HeaderDocumentFor(pluginName);
         var read = sourceFiles.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
 

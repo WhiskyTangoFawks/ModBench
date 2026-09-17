@@ -14,13 +14,13 @@ public sealed class CompilePluginHandler
     internal CompilePluginHandler(WriteTargets targets, PluginCompileService compileService) =>
         (_targets, _compileService) = (targets, compileService);
 
-    public CompileResult Compile(PluginCopyKey plugin, CompileSource source)
+    public Task<CompileResult> CompileAsync(PluginCopyKey plugin, CompileSource source)
     {
         // Only the deferral is the door's to refuse here: an untracked or unknown plugin gets
         // compile's own refusal, which names the source it lacks rather than a Track it cannot run.
         if (_targets.RefuseIfBlocked(plugin, out _, out _) is { Refusal: RecordEditRefusal.ExternalChangeUnanswered } blocked)
-            return CompileResult.Refused(blocked);
+            return Task.FromResult(CompileResult.Refused(blocked));
 
-        return _compileService.Compile(plugin, source);
+        return _compileService.CompileAsync(plugin, source);
     }
 }

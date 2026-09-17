@@ -27,7 +27,7 @@ public sealed class RegisteredPluginSpellingTests
         using var scratch = new ModFolderScratch();
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(scratch.LoadOrder, [scratch.Plugin], Origin, SourcePreset.Edits);
+            .TrackAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
 
         Assert.True(result.Applied, result.Message);
         // git's index is case-sensitive on every platform, so the committed paths are the portable
@@ -39,12 +39,12 @@ public sealed class RegisteredPluginSpellingTests
     }
 
     [Fact]
-    public void Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
+    public async Task Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
     {
         using var scratch = new ModFolderScratch();
         scratch.TrackFromPristineFiles();
 
-        var result = CompileServices.Over(scratch.LoadOrder).Compile(scratch.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(scratch.LoadOrder).CompileAsync(scratch.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }

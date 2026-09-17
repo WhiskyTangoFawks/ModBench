@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>The journal wired in through the real <see cref="PluginCompileService.Compile"/> door;
+/// <summary>The journal wired in through the real <see cref="PluginCompileService.CompileAsync"/> door;
 /// <c>CompileJournalTests</c> covers the primitive in isolation.</summary>
 public sealed class PluginCompileServiceJournalTests : IDisposable
 {
@@ -17,9 +17,9 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         _mod.CompileService();
 
     [Fact]
-    public void Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()
+    public async Task Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()
     {
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
@@ -29,12 +29,12 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     // keeps separate permissions) is made unwritable so PluginWriter's backup-then-write sequence
     // throws partway through.
     [Fact]
-    public void Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
+    public async Task Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
         Chmod(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
         try
         {
-            Assert.ThrowsAny<Exception>(() => CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree()));
+            await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree()));
         }
         finally
         {

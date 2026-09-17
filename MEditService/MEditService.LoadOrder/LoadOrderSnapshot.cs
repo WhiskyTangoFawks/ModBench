@@ -20,6 +20,12 @@ public sealed record RegisteredCopy(
     public static RegisteredCopy Of(LoadOrderEntry entry, int slotOffset = 0) =>
         new(entry.Name, entry.Origin, entry.Path,
             entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);
+
+    /// <summary>A plugin the install loads with no list line of its own (ADR-0013 invariant 2): in
+    /// the game's own Data directory, enabled, winning and forced, at the slot the game gives it.
+    /// </summary>
+    public static RegisteredCopy Forced(string dataFolder, string name, int slot) =>
+        new(name, PluginOrigin.DataDirectory, System.IO.Path.Combine(dataFolder, name), slot, Enabled: true, Winning: true, IsForced: true);
 }
 
 /// <summary>ADR-0013 invariant 4: the load order is state, sent by Mod Management, held in the

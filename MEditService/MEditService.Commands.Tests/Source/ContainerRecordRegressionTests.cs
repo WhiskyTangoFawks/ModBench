@@ -150,12 +150,12 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     // ---- External-change exits ----
 
     [Fact]
-    public void AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
+    public async Task AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
         var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        TestEditService.AbsorbHandler().Absorb(
+        await TestEditService.AbsorbHandler().AbsorbAsync(
             _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), _fixture.LoadOrder);
 
         var afterMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();

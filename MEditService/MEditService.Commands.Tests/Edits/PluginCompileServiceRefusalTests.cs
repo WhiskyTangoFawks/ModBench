@@ -21,27 +21,27 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     // Two different states with two different remedies: wait for Mod Management's snapshot, or add
     // the plugin to a load order that has already arrived.
     [Fact]
-    public void Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
+    public async Task Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
     {
-        var result = CompileServices.Over(LoadOrderSnapshot.Empty).Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal("No load order has been received.", result.RefusalReason);
     }
 
     [Fact]
-    public void Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
+    public async Task Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
     {
         var stranger = new PluginCopyKey("Stranger.esp", CompileFixture.Origin);
 
-        var result = _mod.CompileService().Compile(stranger, new CompileSource.WorkingTree());
+        var result = await _mod.CompileService().CompileAsync(stranger, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal("Stranger.esp is not in the load order.", result.RefusalReason);
     }
 
     [Fact]
-    public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
+    public async Task Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
         // Two distinct source files, same FormKey — nothing the edit path can produce (a
         // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
@@ -51,7 +51,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
         File.WriteAllText(collidingPath, npcSourceText);
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
@@ -60,7 +60,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     [Fact]
-    public void Compile_WithTwoFilesInOneGroupFolderClaimingTheSameFormKey_RefusesNamingTheFormKey()
+    public async Task Compile_WithTwoFilesInOneGroupFolderClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
         // Asked of the tree, not the compiled mod: the whole-mod read ends each group with a
         // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
@@ -74,7 +74,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
@@ -83,11 +83,11 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     // Never exclusive owners of the tree (ADR-0003): a document another program is holding open is
     // content this compile does not have, and omitting it would write a binary missing that record.
     [Fact]
-    public void Compile_WithASourceFileItCannotRead_RefusesNamingTheFile()
+    public async Task Compile_WithASourceFileItCannotRead_RefusesNamingTheFile()
     {
         using var held = new FileStream(_mod.NpcSourceFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains(
@@ -95,11 +95,11 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     [Fact]
-    public void Compile_WithUnparsableSourceFile_RefusesPointingAtReTrack()
+    public async Task Compile_WithUnparsableSourceFile_RefusesPointingAtReTrack()
     {
         File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains("Re-Track", result.RefusalReason);
@@ -110,13 +110,13 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     // The generated deserializer is lenient both ways — an unrecognized property is skipped, a
     // missing one left at its default — so a renamed key reproduces a breaking codec change exactly.
     [Fact]
-    public void Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFile()
+    public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFile()
     {
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         Assert.Contains("\"Race\"", npcSourceText);
         File.WriteAllText(_mod.NpcSourceFile, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains("Re-Track", result.RefusalReason);

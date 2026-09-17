@@ -77,8 +77,8 @@ public sealed class CopyFixture : IDisposable
         ];
         LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
-        Track(DestinationOrigin, DestinationPlugin);
-        if (trackSource) Track(SourceOrigin, SourcePlugin);
+        Track(DestinationOrigin);
+        if (trackSource) Track(SourceOrigin);
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
@@ -87,9 +87,9 @@ public sealed class CopyFixture : IDisposable
         CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);
     }
 
-    private void Track(string origin, PluginCopyKey plugin) =>
+    private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
     public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>

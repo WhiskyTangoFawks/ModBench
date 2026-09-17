@@ -146,8 +146,7 @@ public static class LoadOrderEndpoints
                     p.Enabled ?? throw new InvalidOperationException("Expected a validated plugin to state Enabled."),
                     p.Winning ?? throw new InvalidOperationException("Expected a validated plugin to state Winning.")))
                 .ToList();
-            var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
-            var result = handler.Put(snapshot);
+            var result = handler.Put(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

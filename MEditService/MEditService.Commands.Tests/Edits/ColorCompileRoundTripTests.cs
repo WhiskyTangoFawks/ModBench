@@ -23,10 +23,10 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private EditRecordHandler EditService() => _fixture.EditHandler;
 
-    private IFallout4ModGetter CompileAndReparse()
+    private async Task<IFallout4ModGetter> CompileAndReparse()
     {
-        var result = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.ModFolder, ColorCompileFixture.PluginName);
@@ -43,11 +43,11 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     // ── AC #4: a second common Color carrier, on the 3-leaf (wbByteColors) shape ───────────────
 
     [Fact]
-    public void Light_ColorEdit_CompilesAndReparsesTheNewRgb()
+    public async Task Light_ColorEdit_CompilesAndReparsesTheNewRgb()
     {
         Edit(_fixture.Light, "Color", "\"#C86432\"");
 
-        var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
+        var light = (await CompileAndReparse()).Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(200, light.Color.R);
         Assert.Equal(100, light.Color.G);
         Assert.Equal(50, light.Color.B);
@@ -55,11 +55,11 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     // The document spells a color with its alpha byte, and an edit in that spelling keeps it.
     [Fact]
-    public void Light_ColorEdit_InTheDocumentsOwnSpelling_KeepsTheAlphaByteItNames()
+    public async Task Light_ColorEdit_InTheDocumentsOwnSpelling_KeepsTheAlphaByteItNames()
     {
         Edit(_fixture.Light, "Color", "\"#89C86432\"");
 
-        var light = CompileAndReparse().Lights.Single(l => l.FormKey == _fixture.Light);
+        var light = (await CompileAndReparse()).Lights.Single(l => l.FormKey == _fixture.Light);
         Assert.Equal(ColorCompileFixture.SeededLightAlpha, light.Color.A);
         Assert.Equal((200, 100, 50), (light.Color.R, light.Color.G, light.Color.B));
     }
@@ -71,7 +71,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [InlineData("lcrt")]
     [InlineData("aact")]
     [InlineData("lctn")]
-    public void AllowlistedColorField_AlphaEdit_CompilesAndReparsesAllFourComponents(string table)
+    public async Task AllowlistedColorField_AlphaEdit_CompilesAndReparsesAllFourComponents(string table)
     {
         var record = table switch
         {
@@ -84,7 +84,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
         Edit(record, "Color", "\"#A0285078\"");
 
-        var mod = CompileAndReparse();
+        var mod = await CompileAndReparse();
         var actual = table switch
         {
             "kywd" => mod.Keywords.Single(r => r.FormKey == record).Color,
@@ -101,11 +101,11 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     // ── The float-encoded storage, against a real compile ──────────────────────────────────────
 
     [Fact]
-    public void FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()
+    public async Task FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()
     {
         Edit(_fixture.MaterialObject, "SinglePassColor", "\"#01FE7F\"");
 
-        var materialObject = CompileAndReparse().MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
+        var materialObject = (await CompileAndReparse()).MaterialObjects.Single(m => m.FormKey == _fixture.MaterialObject);
         Assert.Equal(1, materialObject.SinglePassColor.R);
         Assert.Equal(254, materialObject.SinglePassColor.G);
         Assert.Equal(127, materialObject.SinglePassColor.B);

@@ -99,6 +99,7 @@ try
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IRefreshIndex>(),
         sp.GetRequiredService<INotificationPublisher>(),
+        sp.GetRequiredService<TrackedModSettled>(),
         sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 
     var app = builder.Build();

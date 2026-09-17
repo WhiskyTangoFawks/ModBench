@@ -60,11 +60,11 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster()
+    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster()
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = compileService.Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);
@@ -73,11 +73,11 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
+    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = compileService.Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));

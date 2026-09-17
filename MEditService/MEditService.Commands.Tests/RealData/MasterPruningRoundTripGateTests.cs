@@ -194,7 +194,7 @@ public sealed class MasterPruningRoundTripGateTests
 
         public Task<TrackResult> TrackAsync() =>
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(_loadOrder, [.. _loadOrder.Copies.Select(c => c.Key)], _origin, SourcePreset.Edits);
+                .TrackAsync(_loadOrder, _origin, SourcePreset.Edits);
 
         public void Dispose()
         {

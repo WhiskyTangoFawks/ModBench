@@ -64,8 +64,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
-        trackService.TrackAsync(_loadOrder, [_target], TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-        trackService.TrackAsync(_loadOrder, [_host], HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+        trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+        trackService.TrackAsync(_loadOrder, HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
     public void Dispose()
@@ -91,8 +91,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             GameRelease.Fallout4,
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
-    private CompileResult CompileHost() =>
-        CompileServices.Over(_loadOrder).Compile(_host, new CompileSource.WorkingTree());
+    private async Task<CompileResult> CompileHost() =>
+        await CompileServices.Over(_loadOrder).CompileAsync(_host, new CompileSource.WorkingTree());
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
@@ -104,11 +104,11 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfAPluginHoldingADanglingLink_WritesThePlugin_AndNamesTheRecordAndMember()
+    public async Task Compile_OfAPluginHoldingADanglingLink_WritesThePlugin_AndNamesTheRecordAndMember()
     {
         PointTheNpcAt(FormKey.Factory(Dangling));
 
-        var result = CompileHost();
+        var result = await CompileHost();
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains(Dangling, StringComparison.Ordinal));
@@ -118,9 +118,9 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     }
 
     [Fact]
-    public void Compile_WhenEveryLinkResolvesAgainstTheLoadOrdersFiles_ReportsNoLinkDiagnostic()
+    public async Task Compile_WhenEveryLinkResolvesAgainstTheLoadOrdersFiles_ReportsNoLinkDiagnostic()
     {
-        var result = CompileHost();
+        var result = await CompileHost();
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -130,12 +130,12 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     // The target is tracked, so it has a working tree to disagree with its file. The file is what
     // the game loads, and it is what answers the link.
     [Fact]
-    public void Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
+    public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
         File.Delete(SourceDocumentPath.Of(
             _targetFolder, TargetName, "kywd", _targetKeyword.ToString(), TargetKeywordEditorId, GameRelease.Fallout4));
 
-        var result = CompileHost();
+        var result = await CompileHost();
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -145,11 +145,11 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     // ADR-0019: a file that could not be read is a fact the author is told, not one the records are
     // blamed for. Both halves: the file is named, and the link into it says why it is unchecked.
     [Fact]
-    public void Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
+    public async Task Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
     {
         File.WriteAllText(Path.Combine(_targetFolder, TargetName), "not a plugin at all");
 
-        var result = CompileHost();
+        var result = await CompileHost();
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var aboutTheFile = Assert.Single(
@@ -165,10 +165,10 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     // The plugin is written and parked before the links are read, so a fault in the check is the
     // report's failure, never the compile's.
     [Fact]
-    public void Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
+    public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
-        var result = CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
-            .Compile(_host, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
+            .CompileAsync(_host, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -192,7 +192,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     // A record this compile's own source holds resolves through the file this compile just wrote,
     // which is why the write comes first.
     [Fact]
-    public void Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
+    public async Task Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
     {
         var ownKeyword = new Keyword(FormKey.Factory($"000801:{HostName}"), Fallout4Release.Fallout4)
         {
@@ -201,7 +201,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
         SourceEdits.Write(Repository(_hostFolder), _host, ownKeyword, "kywd", GameRelease.Fallout4);
         PointTheNpcAt(ownKeyword.FormKey);
 
-        var result = CompileHost();
+        var result = await CompileHost();
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(

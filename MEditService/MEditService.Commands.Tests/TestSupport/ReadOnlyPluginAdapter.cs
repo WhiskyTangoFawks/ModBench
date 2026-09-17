@@ -31,9 +31,9 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         Real.ReadContent(modPath, gameRelease, strings);
 
-    public bool CanRead(ModPath modPath) => Real.CanRead(modPath);
+    public virtual bool CanRead(ModPath modPath) => Real.CanRead(modPath);
 
-    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
+    public virtual IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
         Real.ImplicitPluginsIn(dataFolder, gameRelease);
 
     public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) =>
@@ -82,7 +82,7 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
-    public Task CreateAndWriteAsync(
+    public virtual Task CreateAndWriteAsync(
         ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 }

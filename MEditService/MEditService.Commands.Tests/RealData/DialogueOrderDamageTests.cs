@@ -32,7 +32,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
             SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(loadOrder, [_plugin], _plugin.Origin, SourcePreset.Edits)
+            .TrackAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

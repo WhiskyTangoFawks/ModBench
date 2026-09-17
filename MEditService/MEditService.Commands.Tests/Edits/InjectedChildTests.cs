@@ -89,8 +89,8 @@ public sealed class InjectedChildTests : IDisposable
             ]));
 
         var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
-        foreach (var (plugin, origin) in new[] { (_base, BaseOrigin), (_injector, InjectorOrigin) })
-            track.TrackAsync(_loadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
+        foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
+            track.TrackAsync(_loadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
     private (FormKey Container, FormKey Child) Case(string injection) => injection switch
@@ -104,31 +104,31 @@ public sealed class InjectedChildTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public void AfterTrackAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injection)
+    public async Task AfterTrackAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injection)
     {
         var (container, child) = Case(injection);
 
-        using var compiled = CompileAndReimport(_injector, _injectorModFolder);
+        using var compiled = await CompileAndReimport(_injector, _injectorModFolder);
 
         Assert.Contains(child, ChildrenOf(compiled, container));
     }
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public void AfterTrackAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injection)
+    public async Task AfterTrackAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injection)
     {
         var (container, child) = Case(injection);
 
-        using var compiled = CompileAndReimport(_base, _baseModFolder);
+        using var compiled = await CompileAndReimport(_base, _baseModFolder);
 
         var own = ChildrenOf(compiled, container);
         Assert.DoesNotContain(child, own);
         Assert.NotEmpty(own);
     }
 
-    private IModDisposeGetter CompileAndReimport(PluginCopyKey plugin, string modFolder)
+    private async Task<IModDisposeGetter> CompileAndReimport(PluginCopyKey plugin, string modFolder)
     {
-        var result = CompileServices.Over(_loadOrder).Compile(plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_loadOrder).CompileAsync(plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         return ModFactory.ImportGetter(

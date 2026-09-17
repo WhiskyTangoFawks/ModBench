@@ -15,6 +15,7 @@ public sealed class ModFolderWatcher : IDisposable
     private readonly LoadOrderHolder _holder;
     private readonly IRefreshIndex _index;
     private readonly INotificationPublisher _notifications;
+    private readonly TrackedModSettled _settled;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
     private readonly TimeSpan _quiet;
@@ -32,6 +33,7 @@ public sealed class ModFolderWatcher : IDisposable
         LoadOrderHolder holder,
         IRefreshIndex index,
         INotificationPublisher notifications,
+        TrackedModSettled settled,
         ILogger logger,
         TimeSpan? quiet = null,
         TimeSpan? maxWindow = null,
@@ -40,6 +42,7 @@ public sealed class ModFolderWatcher : IDisposable
         _holder = holder;
         _index = index;
         _notifications = notifications;
+        _settled = settled;
         _logger = logger;
         _time = timeProvider ?? TimeProvider.System;
         _quiet = quiet ?? TimeSpan.FromMilliseconds(300);
@@ -109,8 +112,7 @@ public sealed class ModFolderWatcher : IDisposable
             {
                 // Unreadable: a repair offer, never Commands' own external-change question.
                 _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
-                TrackedModSettled.RaiseCrashRepair(
-                    order, modFolder, [plugin.Name], CrashRepairReason.MissingOrUnreadableBinary, _notifications);
+                _settled.RaiseCrashRepair(order, modFolder, [plugin.Name], CrashRepairReason.MissingOrUnreadableBinary);
                 continue;
             }
 
@@ -129,7 +131,7 @@ public sealed class ModFolderWatcher : IDisposable
     // question or offer Handle found, it already published.
     private void SettleAtLoad(LoadOrderSnapshot order, string modFolder)
     {
-        switch (TrackedModSettled.Handle(order, modFolder, _notifications))
+        switch (_settled.Handle(order, modFolder))
         {
             case TrackedModSettledOutcome.QuestionOpened:
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -423,7 +425,7 @@ public sealed class ModFolderWatcher : IDisposable
         }
 
         if (batch.Count > 0) RaiseSafely(() => ProjectSourceBatch(batch));
-        if (classify) RaiseSafely(() => TrackedModSettled.Handle(_holder.Current, mod.ModFolder, _notifications));
+        if (classify) RaiseSafely(() => _settled.Handle(_holder.Current, mod.ModFolder));
         foreach (var plugin in indexedTouched) SettleIndexed(plugin);
     }
 

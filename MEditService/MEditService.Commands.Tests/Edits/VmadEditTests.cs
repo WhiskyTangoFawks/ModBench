@@ -630,7 +630,7 @@ public sealed class VmadEditTests : IDisposable
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 
             holder.Apply(LoadOrder);

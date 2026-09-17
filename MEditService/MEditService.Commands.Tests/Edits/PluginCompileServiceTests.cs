@@ -25,16 +25,15 @@ public sealed class PluginCompileServiceTests : IDisposable
     private PluginCompileService CompileService() =>
         _mod.CompileService();
 
-    private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
+    private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
-        handle = overlay;
-        return (IFallout4ModGetter)overlay;
+        return ((IFallout4ModGetter)overlay, overlay);
     }
 
     private List<string> NpcFiles() =>
@@ -44,11 +43,11 @@ public sealed class PluginCompileServiceTests : IDisposable
             .Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void Compile_AfterAnEdit_WritesABinaryThatReparsesWithTheChangeLanded()
+    public async Task Compile_AfterAnEdit_WritesABinaryThatReparsesWithTheChangeLanded()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -62,10 +61,10 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     [Fact]
-    public void Compile_LeavesUntouchedRecordsUnchanged()
+    public async Task Compile_LeavesUntouchedRecordsUnchanged()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -81,16 +80,16 @@ public sealed class PluginCompileServiceTests : IDisposable
     // carries genuinely unset FormLink fields, which CheckErrorBuilder already flags for the editor;
     // compile surfaces the same diagnostics rather than re-deriving a second definition of "broken".
     [Fact]
-    public void Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
+    public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
     [Fact]
-    public void Compile_AfterDeletingTheFirstOfTwoSameTypeRecords_Succeeds_AndTheBinaryReflectsTheDelete()
+    public async Task Compile_AfterDeletingTheFirstOfTwoSameTypeRecords_Succeeds_AndTheBinaryReflectsTheDelete()
     {
         var survivorNameBefore = NpcFiles()
             .Single(n => n.StartsWith(CompileFixture.OtherNpcEditorId, StringComparison.Ordinal));
@@ -100,7 +99,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         // The survivor's file was not renamed for its sibling's departure.
         Assert.Equal([survivorNameBefore], NpcFiles());
 
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             var survivor = Assert.Single(mod.Npcs);
@@ -110,12 +109,12 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AfterRenumberingTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
+    public async Task Compile_AfterRenumberingTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
     {
         var renumbered = _mod.Renumber(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, RenumberedNpcId);
         Assert.Equal(2, NpcFiles().Count);
 
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
@@ -125,7 +124,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AfterStackedDeletesCreatesAndARenumber_Succeeds_WithExactlyTheSurvivors()
+    public async Task Compile_AfterStackedDeletesCreatesAndARenumber_Succeeds_WithExactlyTheSurvivors()
     {
         var created1 = _mod.CreateNpc("Created1", CreatedNpcId);
         _mod.CreateNpc("Created2", CreatedNpcId + 1);
@@ -134,7 +133,7 @@ public sealed class PluginCompileServiceTests : IDisposable
             _mod.OtherNpc, CompileFixture.NpcRecordType, CompileFixture.OtherNpcEditorId, RenumberedNpcId);
         _mod.Remove(created1, CompileFixture.NpcRecordType, "Created1");
 
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             Assert.Equal(2, mod.Npcs.Count);
@@ -148,14 +147,14 @@ public sealed class PluginCompileServiceTests : IDisposable
     // The previous layout minted a group document the reader now skips silently. A file the codec
     // would not regenerate is a divergence named by path; re-Track is the recovery (ADR-0006).
     [Fact]
-    public void Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
+    public async Task Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
     {
         var leftover = Path.Combine(
             _mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
         Assert.False(File.Exists(leftover));
         File.WriteAllText(leftover, "{\"MEditChildOrder\": {\"Npcs\": [\"" + _mod.Npc + "\", \"" + _mod.OtherNpc + "\"]}}");
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);
@@ -165,13 +164,13 @@ public sealed class PluginCompileServiceTests : IDisposable
     // Every write backs up the target plugin first; compile is a new write
     // path, not a new exemption from it.
     [Fact]
-    public void Compile_LeavesATimestampedBackupBesideTheBinary()
+    public async Task Compile_LeavesATimestampedBackupBesideTheBinary()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var originalBytes = File.ReadAllBytes(pluginPath);
 
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var backups = Directory.GetFiles(_mod.ModFolder, $"{Path.GetFileNameWithoutExtension(CompileFixture.PluginName)}.*.bak.esp");
