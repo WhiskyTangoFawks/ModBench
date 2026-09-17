@@ -25,7 +25,7 @@ public sealed class SyncOverAsyncScanTests
         ("MEditService.Watcher", "#946"),
     ];
 
-    // The ticket that empties the list, grows the ban with both forms and deletes this gate.
+    // The ticket that empties the list, grows the ban with every form and deletes this gate.
     private const string EndState = "#947";
 
     private const string AllowlistPath = "MEditService.Http.Tests/Architecture/sync-over-async-allowlist.txt";
