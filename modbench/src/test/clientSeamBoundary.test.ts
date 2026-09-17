@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
+import { tsFiles } from './tsFiles';
 
 // ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
 // stream's endpoint path live only under the client box. The webview calls the backend
@@ -14,17 +15,6 @@ const GENERATED_DIR = 'generated';
 
 function importsOf(source: string): string[] {
   return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => present(m[1], "the import/export statement's module specifier"));
-}
-
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
 }
 
 function isTestSupport(relativePath: string): boolean {

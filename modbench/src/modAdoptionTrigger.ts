@@ -1,5 +1,6 @@
 import type * as vscode from 'vscode';
 import type { Instance } from './instance/instance';
+import { errorMessage } from './ports/errorMessage';
 
 export type ModAdoptionOutcome =
   | { applied: true; added: string[] }
@@ -24,7 +25,7 @@ export function registerModAdoption(
         }
         if (outcome.added.length > 0) invalidate();
       } catch (err) {
-        channel.error(`[modmanager] adopting the unlisted mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
+        channel.error(`[modmanager] adopting the unlisted mods/ folders failed: ${errorMessage(err)}`);
       }
     })();
   });

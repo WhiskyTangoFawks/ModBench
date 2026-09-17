@@ -9,6 +9,7 @@ import {
 import { pluginsFile } from '../mo2Files/layout';
 import type { FileWinners } from '../instance/fileConflictIndex';
 import type { GameDirectory } from '../mo2Files/gameDirectory';
+import { refuse } from '../ports/refuse';
 
 export type { DeployWarning };
 
@@ -48,11 +49,6 @@ function toCommandResult(outcome: DeployOutcome | PurgeOutcome): DeploymentComma
   }
   return { applied: true, wrote: true, warnings: outcome.warnings.length > 0 ? outcome.warnings : undefined };
 }
-
-const refuse = (err: unknown): DeploymentCommandResult => ({
-  applied: false,
-  refusal: err instanceof Error ? err.message : String(err),
-});
 
 /** `value.files` are the Instance's own field, never a fresh walk, and the game directory it
  *  carries names where the game reads its load order; no `loadOrderFile` leaves the load order

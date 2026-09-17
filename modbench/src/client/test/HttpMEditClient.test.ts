@@ -268,7 +268,8 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
 
     const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
-    await new Promise((r) => setTimeout(r, 10));
+    // No wait needed: streamPromise is still unresolved, so nothing — no amount of elapsed
+    // time — could have let the PUT fire yet.
     expect(putFetch).not.toHaveBeenCalled();
 
     const { response, push } = pushableStreamResponse();
@@ -301,7 +302,9 @@ describe('HttpMEditClient — putLoadOrder', () => {
     expect(onProgress).toHaveBeenCalledTimes(2); // the mid-flight tick, then the terminal one that settled the PUT
 
     pushFrame(readyTick());
-    await new Promise((r) => setTimeout(r, 10));
+    // A macrotask boundary, not a microtask one: the pushed chunk still has to unwind through the
+    // stream reader's own read loop before a (wrongly) still-subscribed callback would see it.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onProgress).toHaveBeenCalledTimes(2); // still 2 — the settled PUT's subscription is gone
   });
 

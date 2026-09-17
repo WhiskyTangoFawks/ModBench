@@ -13,6 +13,7 @@ import {
   setModEnabled as setModEnabledCommand,
   type ModlistCommandResult, type ModlistDrop,
 } from '../modlist/modlist';
+import { errorMessage } from '../ports/errorMessage';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
@@ -376,6 +377,6 @@ export class ModListProvider
   }
 
   private err(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 }

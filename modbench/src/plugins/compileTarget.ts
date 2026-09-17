@@ -1,3 +1,4 @@
+import { errorMessage } from '../ports/errorMessage';
 export interface CompileTarget {
   name: string;
   origin: string;
@@ -36,7 +37,7 @@ export async function resolveCompileTarget(
   // Nothing catches below this last tier, so a rejection out of the picker is reported here
   // rather than escaping as a raw, uncaught toast.
   return deps.pickPlugin().catch((error: unknown) => {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = errorMessage(error);
     deps.onError(`Could not determine which plugin to compile: ${detail}`);
     return undefined;
   });

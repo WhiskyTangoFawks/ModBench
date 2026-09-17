@@ -8,21 +8,13 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
 import { present } from '../ports/present';
+import { errorMessage } from '../ports/errorMessage';
+import { applyOrThrow } from '../ports/applyOrThrow';
 
 // The host's trash, the one capability a command cannot hold itself.
 const trashFile = async (path: string): Promise<void> => {
   await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
 };
-
-const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
-// A refusal becomes a throw, so one catch-and-report path serves a rejected promise and an
-// `{ applied: false }` result alike.
-function applyOrThrow<T extends { applied: true } | { applied: false; refusal: string }>(
-  outcome: T,
-): asserts outcome is Extract<T, { applied: true }> {
-  if (!outcome.applied) throw new Error(outcome.refusal);
-}
 
 interface UpgradePickItem extends vscode.QuickPickItem {
   /** What install is told this is: an upgrade naming the chosen mod's own folder, or the
@@ -96,7 +88,7 @@ async function installArchive(
     downloadRefusal = outcome.downloadRefusal;
   } catch (err) {
     // ADR-0019: explicit user action failed -> error notification + log.
-    reporter.report('error', `Failed to install "${name}".`, message(err));
+    reporter.report('error', `Failed to install "${name}".`, errorMessage(err));
     return;
   }
   if (downloadRefusal === undefined) return;
@@ -121,7 +113,7 @@ async function runRowAction(
   try {
     await action();
   } catch (err) {
-    reporter.report('error', `${label} for "${name}" failed.`, message(err));
+    reporter.report('error', `${label} for "${name}" failed.`, errorMessage(err));
   }
 }
 
@@ -151,9 +143,9 @@ async function deleteArchive(
     )) === 'Delete');
 }
 
-/** Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
- *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
-export async function deleteArchives(
+// Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
+// Cancel is a silent no-op for the whole batch, matching the single-file contract.
+async function deleteArchives(
   instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
 ): Promise<void> {
   if (names.length === 1) {

@@ -206,8 +206,9 @@ describe('BackendLifecycle output forwarding', () => {
     await lifecycle.start();
 
     child.stdout.write('[08:30:45 INF] nobody is listening\n');
-    await new Promise((r) => setTimeout(r, 5));
 
+    // readline.createInterface resumes its input stream synchronously on construction, so
+    // flowing mode is already set the moment start() returns — no wait buys anything here.
     expect(child.stdout.readableFlowing).toBe(true);
   });
 });
@@ -270,6 +271,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
   });
 
   it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order', async () => {
+    vi.useFakeTimers();
     const state = { healthy: false };
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; }); // spawn does NOT make it healthy → connect keeps polling
@@ -280,12 +282,15 @@ describe('BackendLifecycle crash-restart / stop', () => {
     const statuses = record(lifecycle);
 
     const startP = lifecycle.start();
-    await new Promise((r) => setTimeout(r, 15)); // let it spawn + begin polling
+    await vi.advanceTimersByTimeAsync(0); // the first health check's microtask resolves and spawn happens
     const stopP = lifecycle.stop();
     present(children[0], 'the first spawned child').emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
     state.healthy = true;                        // backend "comes up" after the user closed
+    await vi.advanceTimersByTimeAsync(1000);
     await Promise.all([startP, stopP]);
-    await new Promise((r) => setTimeout(r, 20)); // let any stray poll fire
+    // The generation stop() bumped is still checked by every already-scheduled poll, so this
+    // advance proves one landing late does not flip status — not merely that none happened to.
+    await vi.advanceTimersByTimeAsync(50);
 
     expect(lifecycle.status).toBe('stopped');
     expect(spawn).toHaveBeenCalledTimes(1);
@@ -293,6 +298,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
   });
 
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
+    vi.useFakeTimers();
     const state = { healthy: false };
     // Every spawned child dies immediately and never becomes healthy.
     const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
@@ -302,8 +308,9 @@ describe('BackendLifecycle crash-restart / stop', () => {
     });
     const statuses = record(lifecycle);
 
-    await lifecycle.start();
-    await new Promise((r) => setTimeout(r, 150)); // let the restart chain settle
+    const startP = lifecycle.start();
+    await vi.advanceTimersByTimeAsync(200);
+    await startP;
 
     expect(spawn.mock.calls.length).toBeLessThanOrEqual(5); // bounded, not infinite
     expect(statuses).toContain('disconnected');

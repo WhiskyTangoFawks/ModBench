@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
 import {
-  runExternalChangeDialogs, buttonsInDefaultOrder, messageFor, BASELINE_BUTTON, APPLY_BUTTON,
+  runExternalChangeDialogs, messageFor, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../plugins/externalChangeDialog';
 import type { UnansweredExternalChange } from '../client';
 import type { RecordEditEnvelope } from '../wire/messages';
@@ -54,7 +54,9 @@ describe('the scripted dialog', () => {
     // that each question reached it whole, in the order the consumer posed them.
     expect(dialog.asked.map((q) => q.message)).toEqual(['ModA', 'ModB']);
     expect(dialog.asked.map((q) => q.detail)).toEqual(changes.map((c) => messageFor(c).detail));
-    expect(dialog.asked.map((q) => q.buttons)).toEqual(changes.map(buttonsInDefaultOrder));
+    // Every fixture here is metaChanged: false, so the default order (pinned by
+    // externalChangeDialog.test.ts) is Apply first for both.
+    expect(dialog.asked.map((q) => q.buttons)).toEqual(changes.map(() => [APPLY_BUTTON, BASELINE_BUTTON]));
   });
 
   it('answers a question the script did not reach with the native cancel', async () => {

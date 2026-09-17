@@ -1,10 +1,11 @@
 // ADR-0016: the extension parses no plugin binary. Every fact about a plugin's contents reaches
 // it through the generated client, so nothing in src/ opens a file for its bytes.
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, extname, basename, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
+import { tsFiles } from './tsFiles';
 
 // The `node:fs` entry points that hand back bytes rather than a directory listing or a decoded
 // string. `readFile` is not among them — it is covered by the encoding rule below.
@@ -198,17 +199,6 @@ function scan(sourceText: string, fileName: string): Offences {
   return { byteReads, undecodedReads };
 }
 
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
-}
-
 // A test file or a fixture helper under a `test/` folder: bytes there are compared, never
 // interpreted, which is how a corpus snapshot proves two trees identical.
 export function isTestSupport(path: string): boolean {
@@ -228,12 +218,12 @@ const SRC = join(__dirname, '..');
 
 describe('the extension opens no plugin file for reading', () => {
   it('covers the whole extension source tree', () => {
-    expect(tsFiles(SRC).length).toBeGreaterThan(100);
+    expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
 
   it('reaches no byte-level fs read anywhere in src', () => {
     const offenders: Record<string, string[]> = {};
-    for (const path of tsFiles(SRC)) {
+    for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
       if (basename(path) === SELF) continue;
       const { byteReads } = scan(readFileSync(path, 'utf8'), path);
       if (byteReads.length > 0) offenders[path] = byteReads;
@@ -243,7 +233,7 @@ describe('the extension opens no plugin file for reading', () => {
 
   it('decodes every file it reads, so no production read can yield a plugin\'s bytes', () => {
     const offenders: Record<string, string[]> = {};
-    for (const path of tsFiles(SRC)) {
+    for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
       if (basename(path) === SELF || isTestSupport(path)) continue;
       const { undecodedReads } = scan(readFileSync(path, 'utf8'), path);
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;

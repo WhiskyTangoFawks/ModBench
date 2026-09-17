@@ -3,6 +3,7 @@ import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reporter } from '../ports/reporter';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 // Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
 // and a length cap keep the result one sane segment; `|| '_'` guards a segment that sanitizes
@@ -86,12 +87,12 @@ export async function openExtendedFieldEditor(
       // (ADR-0019). Awaited so the listener's promise settles only once the file is gone — an
       // orphaned unlink races anything observing the path.
       await unlink(path).catch((err: unknown) => {
-        deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${err instanceof Error ? err.message : String(err)}`);
+        deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${errorMessage(err)}`);
       });
     });
   } catch (err) {
     // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
     // "explicit action failed" row: error notification + log, not a silent swallow.
-    deps.reporter.report('error', 'Could not open the extended editor.', err instanceof Error ? err.message : String(err));
+    deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
   }
 }

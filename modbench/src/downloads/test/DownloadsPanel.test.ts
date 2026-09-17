@@ -37,7 +37,6 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  deleteArchives,
   registerDownloadsHiddenToggleCommands,
   registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands,
@@ -305,9 +304,11 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    // The handler's own missing-modID guard returns before scheduling anything, so the check
+    // needs no wait at all — a wait here would only be proving nothing about a schedule that
+    // was never made.
     invoke('modbench.downloads.visitNexus', node(root, 'foo.7z'));
 
-    await new Promise((r) => setTimeout(r, 50));
     expect(openExternal).not.toHaveBeenCalled();
   });
 
@@ -429,7 +430,9 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 50));
+    // A macrotask boundary, not a microtask one: the resolved pick still has to unwind through
+    // pickUpgradeChoice's and installArchive's own awaits before the early return lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(installFromArchive).not.toHaveBeenCalled();
   });
 
@@ -574,7 +577,9 @@ describe('registerDownloadsMultiRowCommands', () => {
     invoke('modbench.downloads.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 50));
+    // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
+    // confirm's and trashOneArchive's own awaits before the early return lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fsDelete).not.toHaveBeenCalled();
   });
 
@@ -592,8 +597,10 @@ describe('registerDownloadsMultiRowCommands', () => {
   });
 });
 
-// ── deleteArchives — batch delete confirmation ──────────────────────────────
-describe('deleteArchives', () => {
+// ── deleteArchives — batch delete confirmation, driven through the modbench.downloads.delete
+// command (deleteArchives is not exported; a selection array of two-plus names is this seam's
+// only route to it) ──────────────────────────────────────────────────────────
+describe('modbench.downloads.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('confirms once for the whole batch, then trashes every archive (+ its .meta, if present)', async () => {
@@ -603,29 +610,41 @@ describe('deleteArchives', () => {
     await writeMeta(root, 'a.7z');
     const ask = scriptedDialog('Delete');
 
-    await deleteArchives(root, ['a.7z', 'b.7z'], recordingReporter(), ask);
+    registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
+    invoke('modbench.downloads.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
+    await vi.waitFor(() => expect(calledFsPaths(fsDelete)).toEqual(expect.arrayContaining([a, b])));
     assertAskedOnce(ask, { messageContains: '2 items', buttons: ['Delete'] });
-    const trashedPaths = calledFsPaths(fsDelete);
-    expect(trashedPaths).toEqual(expect.arrayContaining([a, b]));
   });
 
   it('on cancel, trashes nothing', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
-    await deleteArchives(root, ['a.7z', 'b.7z'], recordingReporter(), scriptedDialog(undefined));
+    const ask = scriptedDialog(undefined);
 
+    registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
+    invoke('modbench.downloads.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+
+    await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
+    // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
+    // deleteArchives' own await before the early return lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fsDelete).not.toHaveBeenCalled();
   });
 
-  it('a single-item batch reuses the singular per-file confirmation text', async () => {
+  it('a selection array of exactly one item still uses the singular confirmation text', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const ask = scriptedDialog('Delete');
 
-    await deleteArchives(root, ['foo.7z'], recordingReporter(), ask);
+    registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
+    // A one-item *array*, not the no-array fallback the clicked-row-alone test above already
+    // covers — deleteArchives' own names.length === 1 branch either way, reached by a different
+    // selectionNames() path.
+    invoke('modbench.downloads.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
 
+    await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
   });
 });

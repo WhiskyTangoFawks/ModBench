@@ -19,8 +19,8 @@ describe('FormKeyLink — label', () => {
   });
 
   // The <td>'s own ellipsis clips at the boundary of an atomic inline box, never inside a
-  // <button>'s text, so the link carries the ellipsis itself. jsdom has no layout, so this
-  // proves only that the declaration is present.
+  // <button>'s text, so the link carries the ellipsis itself. happy-dom has no layout: this
+  // proves only the declaration is present.
   it('declares its own ellipsis truncation rather than relying on the cell to clip it', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');

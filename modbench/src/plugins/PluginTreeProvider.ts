@@ -8,6 +8,7 @@ import type {
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { present } from '../ports/present';
+import { errorMessage } from '../ports/errorMessage';
 export { headerFormKeyFor } from './formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
@@ -456,7 +457,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private err(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 
   // A failed fetch renders as an ErrorNode in place of the children, never an empty list (ADR-0019).

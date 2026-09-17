@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
+  routeRecordPanelMessage, normalizeFormKeyQuery,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
@@ -333,10 +333,19 @@ describe('normalizeFormKeyQuery', () => {
   });
 });
 
-// The FormKey picker as a native QuickPick — the extension-host half
-// of the bridge pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here,
-// separately from routeRecordPanelMessage's dispatch.
-describe('pickFormKeyViaQuickPick', () => {
+// The FormKey picker as a native QuickPick — the extension-host half of the bridge pickFormKey
+// (webview/src/nativeBridge.ts) talks to. pickFormKeyViaQuickPick is not exported: every case
+// drives it through routeRecordPanelMessage's own OPEN_FORM_KEY_PICKER dispatch, its one caller.
+describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
+  const REQUEST_ID = 'r1';
+
+  function openPicker(seed: string, validTypes: string[], deps: FormKeyPickerDeps): Promise<void> {
+    return routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: REQUEST_ID, seed, validTypes },
+      makeDeps({ formKeyPicker: deps }),
+    );
+  }
+
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })): { deps: FormKeyPickerDeps; searchRecords: typeof searchRecords; reply: ReturnType<typeof vi.fn> } {
     const reply = vi.fn();
     return { deps: { meditClient: { searchRecords }, reply }, searchRecords, reply };
@@ -344,13 +353,21 @@ describe('pickFormKeyViaQuickPick', () => {
 
   afterEach(() => { vi.useRealTimers(); });
 
+  it('with formKeyPicker deps undefined is a no-op', async () => {
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: REQUEST_ID, seed: '', validTypes: [] },
+      makeDeps(),
+    )).resolves.toBeUndefined();
+    expect(createQuickPick).not.toHaveBeenCalled();
+  });
+
   it('seeds the QuickPick value and immediately searches on the seed', async () => {
     const record = makeRecord(1, 'Seeded');
     const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, record.formKey, ['npc_']);
+    const dispatchPromise = openPicker(record.formKey, ['npc_'], deps);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(record.formKey);
@@ -361,7 +378,7 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   // The seed is the composite the cell displays, not the bare FormKey. Search already normalizes
@@ -373,7 +390,7 @@ describe('pickFormKeyViaQuickPick', () => {
     createQuickPick.mockReturnValue(qp);
 
     const composite = `Seeded [${record.formKey}]`;
-    const resultPromise = pickFormKeyViaQuickPick(deps, composite, ['npc_']);
+    const dispatchPromise = openPicker(composite, ['npc_'], deps);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(composite);
@@ -381,7 +398,7 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(qp.activeItems).toEqual([{ label: composite, formKey: record.formKey }]);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   it('an empty seed does not search — items stay empty', async () => {
@@ -389,14 +406,14 @@ describe('pickFormKeyViaQuickPick', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', [], deps);
     await Promise.resolve();
 
     expect(searchRecords).not.toHaveBeenCalled();
     expect(qp.items).toEqual([]);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   // Pasting a whole "EditorID [FormKey]" label copied from a cell searches on the FormKey, not
@@ -407,7 +424,7 @@ describe('pickFormKeyViaQuickPick', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', [], deps);
     searchRecords.mockClear();
 
     typeValue('DogmeatRace [000019:Fallout4.esm]');
@@ -415,7 +432,7 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(searchRecords).toHaveBeenCalledWith('000019:Fallout4.esm', []);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   it('debounces onDidChangeValue by 200ms, searching once with the settled value', async () => {
@@ -425,7 +442,7 @@ describe('pickFormKeyViaQuickPick', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', [], deps);
     searchRecords.mockClear(); // drop the (no-op, empty-seed) call above
 
     typeValue('sw');
@@ -439,7 +456,7 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(searchRecords).toHaveBeenCalledWith('swor', []);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   it('clears items immediately when the value is emptied, without waiting for the debounce', async () => {
@@ -448,7 +465,7 @@ describe('pickFormKeyViaQuickPick', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', [], deps);
     typeValue('sw');
     qp.items = [{ label: 'stale', formKey: 'x' }];
     typeValue('');
@@ -456,7 +473,7 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(qp.items).toEqual([]);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
   it('drops a stale search response that resolves after a newer one', async () => {
@@ -469,7 +486,7 @@ describe('pickFormKeyViaQuickPick', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, 'first', []);
+    const dispatchPromise = openPicker('first', [], deps);
     vi.useFakeTimers();
     typeValue('second');
     await vi.advanceTimersByTimeAsync(200);
@@ -486,75 +503,34 @@ describe('pickFormKeyViaQuickPick', () => {
     expect(qp.items).toEqual([{ label: `Second [${secondRecord.formKey}]`, formKey: secondRecord.formKey }]);
 
     qp.hide();
-    await resultPromise;
+    await dispatchPromise;
   });
 
-  it('resolves with the selected FormKey on accept, and hides/disposes the picker', async () => {
-    const { deps } = fakeDeps();
+  it('opens a QuickPick and replies with the picked FormKey, correlated by requestId, hiding and disposing it', async () => {
+    const { deps, reply } = fakeDeps();
     const { qp, accept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', ['npc_'], deps);
     qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
     accept();
+    await dispatchPromise;
 
-    expect(await resultPromise).toBe('X');
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: REQUEST_ID, formKey: 'X' });
     expect(qp.hide).toHaveBeenCalled();
     expect(qp.dispose).toHaveBeenCalled();
   });
 
-  it('resolves null when hidden without accepting (Escape/blur) — no selection is treated as unchanged', async () => {
-    const { deps } = fakeDeps();
+  it('replies with formKey: null and disposes the picker when dismissed without a selection', async () => {
+    const { deps, reply } = fakeDeps();
     const { qp, hideWithoutAccept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    const dispatchPromise = openPicker('', [], deps);
     hideWithoutAccept();
+    await dispatchPromise;
 
-    expect(await resultPromise).toBeNull();
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: REQUEST_ID, formKey: null });
     expect(qp.dispose).toHaveBeenCalled();
-  });
-});
-
-describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
-  it('with formKeyPicker deps undefined is a no-op', async () => {
-    await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
-      makeDeps(),
-    )).resolves.toBeUndefined();
-    expect(createQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('opens a QuickPick and replies with the picked FormKey, correlated by requestId', async () => {
-    const searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 });
-    const reply = vi.fn();
-    const { qp, accept } = makeFakeQuickPick();
-    createQuickPick.mockReturnValue(qp);
-
-    const dispatchPromise = routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: ['npc_'] },
-      makeDeps({ formKeyPicker: { meditClient: { searchRecords }, reply } }),
-    );
-    qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
-    accept();
-    await dispatchPromise;
-
-    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r1', formKey: 'X' });
-  });
-
-  it('replies with formKey: null when the picker is dismissed without a selection', async () => {
-    const searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 });
-    const reply = vi.fn();
-    const { qp, hideWithoutAccept } = makeFakeQuickPick();
-    createQuickPick.mockReturnValue(qp);
-
-    const dispatchPromise = routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r2', seed: '', validTypes: [] },
-      makeDeps({ formKeyPicker: { meditClient: { searchRecords }, reply } }),
-    );
-    hideWithoutAccept();
-    await dispatchPromise;
-
-    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r2', formKey: null });
   });
 });

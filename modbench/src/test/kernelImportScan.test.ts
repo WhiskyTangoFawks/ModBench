@@ -3,11 +3,12 @@
 // this scan is the readable failure message beside it.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
+import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
 
@@ -24,11 +25,11 @@ const DRIVEN_BOXES: Record<string, string[]> = {
 // The core column, read off the same picture.
 const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'mo2Files', 'ports'],
-  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files'],
-  instanceCommands: ['mo2Codecs', 'mo2Files'],
+  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
+  instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
   install: ['mo2Codecs', 'mo2Files', 'ports'],
-  deploy: ['instance', 'mo2Files'],
-  client: ['wire'],
+  deploy: ['instance', 'mo2Files', 'ports'],
+  client: ['ports', 'wire'],
 };
 
 
@@ -47,16 +48,8 @@ const boxRoot = (box: string): string => join(SRC, box);
 
 // A box's production files: the box directory's own tree minus its tests, which live under
 // `test/` and compile in the test project, not in the box's own.
-function productionFiles(root: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.name === 'test') continue;
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) out.push(...productionFiles(path));
-    else if (extname(entry.name) === '.ts' && !entry.name.endsWith('.test.ts')) out.push(path);
-  }
-  return out;
-}
+const productionFiles = (root: string): string[] =>
+  tsFiles(root, { exclude: ['test'], tsx: false, includeTests: false });
 
 const kernelFiles = (): string[] => KERNEL_BOXES.flatMap((box) => productionFiles(boxRoot(box)));
 
