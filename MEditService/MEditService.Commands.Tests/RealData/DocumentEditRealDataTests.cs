@@ -60,7 +60,14 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private const int Stride = 12;
 
     [Fact]
-    public void EveryStrideRecord_SetOfOneMember_ChangesExactlyThatPath()
+    public void EveryStrideRecord_SetOfOneMember_ChangesExactlyThatPath() => RunSweep(Stride, minIdentities: 300, minGestures: 150);
+
+    // The whole corpus, opt-in: MEDIT_SMOKE=1 keeps the every-Nth sample above as the default gate
+    // and this as the pass a release checks before it ships.
+    [SmokeFact("sweep every record of the cut-down plugin, not a stride sample")]
+    public void EveryRecord_SetOfOneMember_ChangesExactlyThatPath() => RunSweep(stride: 1, minIdentities: 3900, minGestures: 1000);
+
+    private void RunSweep(int stride, int minIdentities, int minGestures)
     {
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
         var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
@@ -71,9 +78,9 @@ public sealed class DocumentEditRealDataTests : IDisposable
             .RecordDocumentsOf(modPath, GameRelease.Fallout4, strings, codec, Schemas)
             .Select(d => d.Identity)
             .Where(i => Schemas.ContainsKey(i.RecordType))
-            .Where((_, index) => index % Stride == 0)
+            .Where((_, index) => index % stride == 0)
             .ToList();
-        Assert.True(identities.Count > 300, $"Expected a substantial sample of the cut-down plugin; got {identities.Count} documents.");
+        Assert.True(identities.Count > minIdentities, $"Expected a substantial sample of the cut-down plugin; got {identities.Count} documents.");
 
         var failures = new List<string>();
         var gestures = 0;
@@ -113,7 +120,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         }
 
         _output.WriteLine($"{identities.Count} records set, {gestures} further gestures, {settledIntoKeyOrder} were first put in key order.");
-        Assert.True(gestures > 150, $"the sample should offer plenty of array and union gestures; it offered {gestures}");
+        Assert.True(gestures > minGestures, $"the sample should offer plenty of array and union gestures; it offered {gestures}");
         Assert.True(failures.Count == 0, $"{failures.Count} gestures did not land as exactly their path:\n{string.Join("\n", failures.Take(20))}");
     }
 
