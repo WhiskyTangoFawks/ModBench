@@ -58,6 +58,35 @@ public sealed class SourceBatchTests
         Assert.Equal(["B.esp"], ValidatedIn(tree, 2));
     }
 
+    // Quiet is far longer than the bounding window here, so the quiet timer can never be what
+    // closes this batch: only the bounding one can, and until it is due nothing settles.
+    [Fact]
+    public async Task AStreamThatNeverGoesQuiet_StillSettlesAtTheMaximumWindow()
+    {
+        var quiet = TimeSpan.FromSeconds(10);
+        var maxWindow = TimeSpan.FromSeconds(1);
+        using var tree = new WatchedTree(quiet: quiet, maxWindow: maxWindow);
+        var modFolder = tree.AddMod(Origin, "A.esp");
+        WatchedTree.Track(modFolder, "A.esp");
+        tree.ApplyLoadOrder();
+        tree.Watcher.WatchSourceOf(Origin);
+        using var oracle = tree.ArmOracleIn(modFolder);
+
+        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
+        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
+
+        var step = maxWindow / 5;
+        for (var elapsed = TimeSpan.Zero; elapsed + step < maxWindow; elapsed += step)
+        {
+            tree.Clock.Advance(step);
+            Assert.Empty(tree.Index.Of("validate"));
+        }
+
+        tree.Clock.Advance(step + step);
+
+        Assert.Single(tree.Index.Of("validate"));
+    }
+
     // The narrow route: a whole-copy validate would land the same rows, so only the verb the Index
     // was asked for tells the two apart.
     [Fact]
@@ -144,14 +173,18 @@ public sealed class SourceBatchTests
         tree.ApplyLoadOrder();
         tree.Watcher.WatchSourceOf(Origin);
 
+        using var oracle = tree.ArmOracleIn(modFolder);
         Directory.Delete(Path.Combine(modFolder, ".git"), recursive: true);
         Assert.False(SourceRepository.IsTracked(modFolder));
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
+        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
 
-        // The batch still opens a scope; what an untracked mod has is nothing to project from, so
-        // neither door is ever reached.
-        Assert.True(await tree.NothingReaches(
-            () => tree.Index.Of("validate").Count > 0 || tree.Index.Of("refresh").Count > 0));
+        tree.AdvancePastBothWindows();
+
+        // The batch opened and closed; what an untracked mod has is nothing to project from, so
+        // neither door was reached.
+        Assert.Empty(tree.Index.Of("validate"));
+        Assert.Empty(tree.Index.Of("refresh"));
     }
 
     // ADR-0015: a closed Index has nowhere for a batch to land, and a refused projection would be
@@ -164,11 +197,15 @@ public sealed class SourceBatchTests
         WatchedTree.Track(modFolder, "A.esp");
         tree.ApplyLoadOrder();
         tree.Watcher.WatchSourceOf(Origin);
+        using var oracle = tree.ArmOracleIn(modFolder);
         tree.Index.Closed = true;
 
         WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
+        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
 
-        Assert.True(await tree.NothingReaches(() => tree.Index.Projections.Count > 0));
+        tree.AdvancePastBothWindows();
+
+        Assert.Empty(tree.Index.Projections);
         Assert.Empty(tree.LogEntries);
     }
 }

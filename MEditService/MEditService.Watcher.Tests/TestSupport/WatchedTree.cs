@@ -1,28 +1,33 @@
 using System.Diagnostics;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Watcher;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using FakeClock = Microsoft.Extensions.Time.Testing.FakeTimeProvider;
 
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>A real mod tree under a live watch, driven by real file events and a clock the test
-/// owns. Nothing settles until <see cref="Settles"/> advances that clock.</summary>
+/// owns. Nothing settles until the test advances that clock.</summary>
 internal sealed class WatchedTree : IDisposable
 {
-    internal static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(300);
-    internal static readonly TimeSpan MaxWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DefaultQuiet = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan DefaultMaxWindow = TimeSpan.FromSeconds(2);
 
-    // Every turn of the settle loop jumps past both windows, so whichever timer is armed is due.
-    private static readonly TimeSpan PastBothWindows = MaxWindow + Quiet;
+    internal TimeSpan Quiet { get; }
+    internal TimeSpan MaxWindow { get; }
 
-    // A bound on the real time the operating system may take to deliver an event, never on when a
-    // batch closes; exceeding it fails the wait rather than passing it.
-    private static readonly TimeSpan DeliveryBound = TimeSpan.FromSeconds(30);
+    // Whichever timer is armed is due after this, so one turn closes any open batch.
+    private TimeSpan PastBothWindows => MaxWindow + Quiet;
+
+    // The one bound in this harness: how long the operating system may take to deliver an event.
+    // Exceeding it fails the wait rather than passing it.
+    internal static readonly TimeSpan DeliveryBound = TimeSpan.FromSeconds(30);
 
     internal FakeClock Clock { get; } = new(DateTimeOffset.UnixEpoch);
-    internal RecordingRefreshIndex Index { get; } = new();
+    internal RecordingRefreshIndex Index { get; }
     internal InMemoryNotificationPublisher Notifications { get; } = new();
     internal LoadOrderHolder Holder { get; } = new();
     internal List<LogEntry> LogEntries { get; } = [];
@@ -33,8 +38,11 @@ internal sealed class WatchedTree : IDisposable
 
     private readonly List<RegisteredCopy> _copies = [];
 
-    internal WatchedTree()
+    internal WatchedTree(IndexWriteGate? writeGate = null, TimeSpan? quiet = null, TimeSpan? maxWindow = null)
     {
+        Quiet = quiet ?? DefaultQuiet;
+        MaxWindow = maxWindow ?? DefaultMaxWindow;
+        Index = new RecordingRefreshIndex(writeGate);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-watch-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Watcher = new ModFolderWatcher(
@@ -81,6 +89,11 @@ internal sealed class WatchedTree : IDisposable
         GitProbe.Run(gitDir, modFolder, "commit", "-q", "--allow-empty", "-m", "tracked");
     }
 
+    /// <summary>Drops a copy from the load order this tree applies, for a reconcile whose plugin
+    /// set has shrunk.</summary>
+    internal void RemoveCopy(string pluginName) =>
+        _copies.RemoveAll(c => c.Name.Equals(pluginName, StringComparison.Ordinal));
+
     internal LoadOrderSnapshot Snapshot() =>
         new(GameDirectory, InstanceRoot, GameRelease.Fallout4, [.. _copies]);
 
@@ -97,9 +110,9 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>A document naming no record, so the batch it lands in can only be a whole-copy
     /// validate.</summary>
-    internal static string WriteUnnamedDocument(string modFolder, string plugin)
+    internal static string WriteUnnamedDocument(string modFolder, string plugin, string name = "record.json")
     {
-        var path = Path.Combine(SourceRepository.RootIn(modFolder, plugin), "record.json");
+        var path = Path.Combine(SourceRepository.RootIn(modFolder, plugin), name);
         File.WriteAllText(path, Guid.NewGuid().ToString());
         return path;
     }
@@ -109,30 +122,42 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>Advances past both windows until <paramref name="reached"/> holds. The clock is the
     /// only thing that closes a batch, so no batch lands between turns.</summary>
-    internal async Task<bool> Settles(Func<bool> reached)
+    internal Task<bool> Settles(Func<bool> reached) => Settles(reached, PastBothWindows);
+
+    /// <summary>Advances by <paramref name="perTurn"/> until <paramref name="reached"/> holds, for a
+    /// test whose subject is which of the two windows closed the batch.</summary>
+    internal async Task<bool> Settles(Func<bool> reached, TimeSpan perTurn)
     {
         var bound = Stopwatch.StartNew();
         while (bound.Elapsed < DeliveryBound)
         {
-            Clock.Advance(PastBothWindows);
+            Clock.Advance(perTurn);
             if (reached()) return true;
             await Task.Delay(10);
         }
         return reached();
     }
 
-    /// <summary>True when <paramref name="projected"/> never holds across a short allowance. Both
-    /// windows are past on the first turn, so this waits out delivery, not a batch.</summary>
-    internal async Task<bool> NothingReaches(Func<bool> projected)
+    internal void AdvancePastBothWindows() => Clock.Advance(PastBothWindows);
+
+    private const string ProbeOrigin = "DeliveryProbe";
+    private const string ProbePlugin = "Probe.esp";
+
+    /// <summary>A second watch over the same mod folder, registered for a plugin the subject never
+    /// sees, so its probe settles a batch of its own without projecting into the subject's.</summary>
+    internal DeliveryOracle ArmOracleIn(string modFolder)
     {
-        var allowance = Stopwatch.StartNew();
-        while (allowance.Elapsed < TimeSpan.FromSeconds(2))
-        {
-            Clock.Advance(PastBothWindows);
-            if (projected()) return false;
-            await Task.Delay(10);
-        }
-        return !projected();
+        var probePath = Path.Combine(modFolder, ProbePlugin);
+        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, ProbePlugin));
+
+        // The probe copy lives only in the oracle's own load order: the subject never registers it,
+        // so nothing the probe does can appear at the subject's doors.
+        var probeOnly = new LoadOrderSnapshot(
+            GameDirectory, InstanceRoot, GameRelease.Fallout4,
+            [new RegisteredCopy(ProbePlugin, ProbeOrigin, probePath, Slot: 0, Enabled: true, Winning: true)]);
+        var oracle = new DeliveryOracle(probeOnly, modFolder, Quiet, MaxWindow);
+        oracle.Watcher.WatchSourceOf(ProbeOrigin);
+        return oracle;
     }
 
     public void Dispose()
@@ -141,5 +166,46 @@ internal sealed class WatchedTree : IDisposable
         try { Directory.Delete(InstanceRoot, recursive: true); }
         catch (IOException) { /* scratch, best-effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }
+    }
+
+    internal sealed class DeliveryOracle : IDisposable
+    {
+        private readonly FakeClock _clock = new(DateTimeOffset.UnixEpoch);
+        private readonly RecordingRefreshIndex _index = new();
+        private readonly string _modFolder;
+        private int _probes;
+
+        internal ModFolderWatcher Watcher { get; }
+
+        private readonly TimeSpan _past;
+
+        internal DeliveryOracle(LoadOrderSnapshot snapshot, string modFolder, TimeSpan quiet, TimeSpan maxWindow)
+        {
+            _modFolder = modFolder;
+            _past = quiet + maxWindow;
+            var holder = new LoadOrderHolder();
+            holder.Apply(snapshot);
+            Watcher = new ModFolderWatcher(
+                holder, _index, new InMemoryNotificationPublisher(), NullLogger.Instance, quiet, maxWindow, _clock);
+        }
+
+        /// <summary>Writes a probe and settles on it. One watch delivers in order, so the probe
+        /// landing says everything written before it has been observed too.</summary>
+        internal async Task<bool> Delivered()
+        {
+            var before = _index.Of("projection").Count;
+            WriteUnnamedDocument(_modFolder, ProbePlugin, $"probe-{++_probes}.json");
+
+            var bound = Stopwatch.StartNew();
+            while (bound.Elapsed < DeliveryBound)
+            {
+                _clock.Advance(_past);
+                if (_index.Of("projection").Count > before) return true;
+                await Task.Delay(10);
+            }
+            return false;
+        }
+
+        public void Dispose() => Watcher.Dispose();
     }
 }

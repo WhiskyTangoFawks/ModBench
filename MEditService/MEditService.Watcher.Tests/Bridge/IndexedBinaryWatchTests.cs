@@ -39,17 +39,19 @@ public sealed class IndexedBinaryWatchTests
         Assert.Empty(tree.Index.Of("unindex"));
     }
 
-    // Content, never events: a rewrite landing identical bytes — a touch, a re-link, a re-extract
-    // of the same archive — costs no re-index at all.
+    // Content, never events: the watcher pokes with the key and the path and publishes only when
+    // the Index says something landed, so identical bytes announce nothing.
     [Fact]
-    public async Task AnIndexedBinaryRewrittenWithIdenticalBytes_ReachesTheIndexNotAtAll()
+    public async Task AnIndexedBinaryRewrittenWithIdenticalBytes_IsPokedButAnnouncesNothing()
     {
         var (tree, pluginPath) = Watching();
         using var _ = tree;
 
         File.WriteAllBytes(pluginPath, "original"u8.ToArray());
 
-        Assert.True(await tree.NothingReaches(() => tree.Index.Projections.Count > 0));
+        Assert.True(await tree.Settles(() => tree.Index.BinaryPokes.Count > 0));
+        Assert.Equal((Copy, pluginPath), Assert.Single(tree.Index.BinaryPokes));
+        Assert.Empty(tree.Notifications.Notifications);
     }
 
     // A deletion is its own verb: the Index must forget the copy, not re-read a file that is gone.
@@ -111,8 +113,29 @@ public sealed class IndexedBinaryWatchTests
         Assert.Equal(Copy, changed.Plugin);
     }
 
-    // The remembered hash must go back on a refusal, or the watcher believes bytes it never landed
-    // are indexed and the stale rows stand silently until the next load.
+    // A watch must not outlive the load order that asked for it, or a copy the load order has
+    // dropped would keep re-indexing itself into the Index.
+    [Fact]
+    public async Task ACopyTheLoadOrderHasDropped_StopsReachingTheIndex()
+    {
+        var (tree, pluginPath) = Watching();
+        using var _ = tree;
+        var modFolder = Path.GetDirectoryName(pluginPath)
+            ?? throw new InvalidOperationException("the plugin has no folder");
+        using var oracle = tree.ArmOracleIn(modFolder);
+
+        tree.RemoveCopy(PluginName);
+        tree.ApplyLoadOrder();
+        tree.Watcher.Rearm(tree.Holder.Current);
+
+        File.WriteAllBytes(pluginPath, "changed-after-the-load-order-dropped-it"u8.ToArray());
+        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        tree.AdvancePastBothWindows();
+
+        Assert.Empty(tree.Index.BinaryPokes);
+        Assert.Empty(tree.Index.Projections);
+    }
+
     [Fact]
     public async Task AChangeTheIndexCouldNotTake_IsProjectedAgainOnTheNextSettle()
     {
@@ -142,8 +165,13 @@ public sealed class IndexedBinaryWatchTests
         tree.ApplyLoadOrder();
         tree.Watcher.Rearm(tree.Holder.Current);
 
+        using var oracle = tree.ArmOracleIn(modFolder);
         File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Tracked.esp"), "changed-by-xedit"u8.ToArray());
+        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
 
-        Assert.True(await tree.NothingReaches(() => tree.Index.Of("reindex").Count > 0));
+        tree.AdvancePastBothWindows();
+
+        Assert.Empty(tree.Index.BinaryPokes);
+        Assert.Empty(tree.Index.Of("reindex"));
     }
 }

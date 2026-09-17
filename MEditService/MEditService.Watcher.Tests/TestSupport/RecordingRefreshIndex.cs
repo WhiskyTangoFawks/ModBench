@@ -11,14 +11,14 @@ internal sealed record RecordedProjection(
 
 /// <summary>The Index as a recorder: the watcher's routing is what it asked for, so a test reads the
 /// verb and the copy rather than the delegate that carried it.</summary>
-internal sealed class RecordingRefreshIndex : IRefreshIndex
+internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : IRefreshIndex
 {
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
     private readonly Dictionary<PluginCopyKey, string> _indexedHashes = new(PluginCopyKey.Comparer);
     private int _scope;
 
-    public IndexWriteGate WriteGate { get; set; } = new();
+    public IndexWriteGate WriteGate { get; } = writeGate ?? new IndexWriteGate();
 
     /// <summary>Closed the way a torn-down load order leaves the store: a batch settling after that
     /// has nowhere to land.</summary>
@@ -75,8 +75,19 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
     public void SeedIndexed(PluginCopyKey key, string hash) => _indexedHashes[key] = hash;
 
+    /// <summary>Every binary poke, whether or not the bytes turned out to differ: what the watcher
+    /// asked for is its own fact, where the answer is this recorder's.</summary>
+    public IReadOnlyList<(PluginCopyKey Key, string Path)> BinaryPokes
+    {
+        get { lock (_gate) return [.. _binaryPokes]; }
+    }
+
+    private readonly List<(PluginCopyKey Key, string Path)> _binaryPokes = [];
+
     public Task<bool> RefreshBinary(PluginCopyKey key, string path)
     {
+        lock (_gate) _binaryPokes.Add((key, path));
+
         if (!File.Exists(path))
         {
             Record("unindex", key, []);

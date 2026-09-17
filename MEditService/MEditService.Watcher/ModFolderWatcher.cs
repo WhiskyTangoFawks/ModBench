@@ -176,9 +176,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>The Source registration: a path under <paramref name="sourceRoot"/> refreshes the
-    /// Index by key; a ref move refreshes the whole plugin.</summary>
-    internal void Watch(string modFolder, string sourceRoot, string pluginName, string origin)
+    // The Source registration: a path under sourceRoot refreshes the Index by key; a ref move
+    // refreshes the whole plugin.
+    private void Watch(string modFolder, string sourceRoot, string pluginName, string origin)
     {
         lock (_gate)
         {
@@ -189,9 +189,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>ADR-0009: every other indexed binary, tracked or not. A settle pokes the Index with
-    /// the key and path; the Index owns the comparison against its own baseline.</summary>
-    internal void WatchIndexed(string pluginName, string origin, string pluginPath)
+    // ADR-0009: every other indexed binary, tracked or not. A settle pokes the Index with the key
+    // and path; the Index owns the comparison against its own baseline.
+    private void WatchIndexed(string pluginName, string origin, string pluginPath)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException($"'{pluginPath}' has no containing directory.", nameof(pluginPath));
@@ -218,9 +218,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>The indexed-binary counterpart of the source unwatch: every reconcile re-decides
-    /// which plugins have a known baseline to watch.</summary>
-    internal void UnwatchAllIndexed()
+    // The indexed-binary counterpart of the source unwatch: every reconcile re-decides which
+    // plugins have a known baseline to watch.
+    private void UnwatchAllIndexed()
     {
         lock (_gate)
         {
@@ -314,9 +314,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>An operating-system overflow drops events, so nothing this mod's watch saw can be
-    /// trusted. A vanished root raises the same event, with nothing left to watch.</summary>
-    internal void Interrupted(string modFolder)
+    // An operating-system overflow drops events, so nothing this mod's watch saw can be trusted.
+    // A vanished root raises the same event, with nothing left to watch.
+    private void Interrupted(string modFolder)
     {
         List<(string Name, string? Origin, bool ClassificationArmed, bool IndexedArmed)> targets;
         lock (_gate)
@@ -348,9 +348,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>ADR-0015 invariant 4: an OS overflow dropped events, so this copy is compared by
-    /// content hash rather than trusted.</summary>
-    internal void ValidateAfterOverflow(PluginCopyKey key)
+    // ADR-0015 invariant 4: an OS overflow dropped events, so this copy is compared by content
+    // hash rather than trusted.
+    private void ValidateAfterOverflow(PluginCopyKey key)
     {
         try
         {
@@ -427,10 +427,9 @@ public sealed class ModFolderWatcher : IDisposable
         foreach (var plugin in indexedTouched) SettleIndexed(plugin);
     }
 
-    /// <summary>ADR-0015 invariant 2: everything one mod settled together, under one gate
-    /// acquisition and one projection scope, so a client that awaits once sees the whole
-    /// batch.</summary>
-    internal void ProjectSourceBatch(IReadOnlyList<SourceChangeEvent> batch)
+    // ADR-0015 invariant 2: everything one mod settled together, under one gate acquisition and
+    // one projection scope, so a client that awaits once sees the whole batch.
+    private void ProjectSourceBatch(IReadOnlyList<SourceChangeEvent> batch)
     {
         // A closed Index has nowhere for a batch to land, and the next reconcile re-derives whatever
         // settled while it was shut.
@@ -560,8 +559,8 @@ public sealed class ModFolderWatcher : IDisposable
         mod.Plugins.Values.FirstOrDefault(p => p.Path is { } path && fullPath.Equals(path, StringComparison.Ordinal));
 
     // Runs on the FileSystemWatcher's own thread or a timer callback, with no caller to catch
-    // anything. Internal so a test can drive it without a live filesystem watch.
-    internal void RaiseSafely(Action action)
+    // anything.
+    private void RaiseSafely(Action action)
     {
         try
         {
@@ -632,8 +631,11 @@ public sealed class ModFolderWatcher : IDisposable
             return plugin;
         }
 
+        // Callers hold the same gate Settle takes, so closing the batch here is what stops a
+        // callback already queued from touching a disposed timer.
         public void Dispose()
         {
+            BatchOpen = false;
             Watcher.Dispose();
             QuietTimer.Dispose();
             MaxWindowTimer.Dispose();

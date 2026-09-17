@@ -64,8 +64,11 @@ public sealed class WatchArmingTests
         // A write under the source root while the mod is still untracked: a batch opens and closes
         // with nothing to project from.
         Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
+        using var oracle = tree.ArmOracleIn(modFolder);
         WatchedTree.WriteUnnamedDocument(modFolder, PluginName);
-        Assert.True(await tree.NothingReaches(() => tree.Index.Of("validate").Count > 0));
+        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
+        tree.AdvancePastBothWindows();
+        Assert.Empty(tree.Index.Of("validate"));
 
         WatchedTree.Track(modFolder, PluginName);
 
@@ -88,7 +91,10 @@ public sealed class WatchArmingTests
 
         Directory.CreateDirectory(modFolder);
         WatchedTree.Track(modFolder, PluginName);
-        Assert.True(await tree.NothingReaches(() => tree.Index.Projections.Count > 0));
+        using var oracle = tree.ArmOracleIn(modFolder);
+        Assert.True(await oracle.Delivered(), "the tree never reached a watch on the mod folder");
+        tree.AdvancePastBothWindows();
+        Assert.Empty(tree.Index.Projections);
 
         tree.Watcher.WatchSourceOf(Origin);
         WatchedTree.WriteUnnamedDocument(modFolder, PluginName);

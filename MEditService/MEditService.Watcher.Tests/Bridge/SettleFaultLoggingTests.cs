@@ -11,9 +11,9 @@ public sealed class SettleFaultLoggingTests
     private const string Origin = "OneMod";
     private const string PluginName = "A.esp";
 
-    private static WatchedTree Watching()
+    private static WatchedTree Watching(IndexWriteGate? writeGate = null)
     {
-        var tree = new WatchedTree();
+        var tree = new WatchedTree(writeGate);
         var modFolder = tree.AddMod(Origin, PluginName);
         WatchedTree.Track(modFolder, PluginName);
         tree.ApplyLoadOrder();
@@ -26,8 +26,7 @@ public sealed class SettleFaultLoggingTests
     [Fact]
     public async Task ASettledBatch_IsLoggedRatherThanLost_WhenAnotherWriterHoldsTheGate()
     {
-        using var tree = Watching();
-        tree.Index.WriteGate = new IndexWriteGate(TimeSpan.FromMilliseconds(100));
+        using var tree = Watching(new IndexWriteGate(TimeSpan.FromMilliseconds(100)));
 
         using var held = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
