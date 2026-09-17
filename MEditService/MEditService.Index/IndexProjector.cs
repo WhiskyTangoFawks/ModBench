@@ -19,12 +19,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
-    private readonly IRecordIndexFactory _indexFactory;
+    private readonly DuckDbRecordIndexFactory _indexFactory;
     private readonly IPluginAdapter _adapter;
     // ADR-0014: null in every test that does not care, matching DuckDbRecordIndex's own posture.
     private readonly INotificationPublisher? _notifications;
-    // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
-    // other reason to carry it; DI already registers SchemaReflector as its own singleton.
     private readonly SchemaReflector _schemaReflector;
     // ADR-0013 invariant 4: the one load order, the kernel's. The projector reads it for who
     // participates and for a copy's mod folder; it never writes it and keeps no view of its own.
@@ -57,32 +55,15 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null)
-        : this(
-            holder,
-            adapter,
-            new DuckDbRecordIndexFactory(
-                schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
-                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider),
-            loggerFactory?.CreateLogger<IndexProjector>(), schemaReflector, notifications)
-    {
-    }
-
-    /// <summary>The store's factory as a seam, for a test that faults or counts what the store
-    /// does.</summary>
-    internal IndexProjector(
-        LoadOrderHolder holder,
-        IPluginAdapter adapter,
-        IRecordIndexFactory indexFactory,
-        ILogger? logger = null,
-        SchemaReflector? schemaReflector = null,
-        INotificationPublisher? notifications = null)
     {
         _holder = holder;
-        _indexFactory = indexFactory;
-        _logger = logger ?? NullLogger.Instance;
         _adapter = adapter;
-        _schemaReflector = schemaReflector ?? new SchemaReflector();
+        _schemaReflector = schemaReflector;
         _notifications = notifications;
+        _logger = loggerFactory?.CreateLogger<IndexProjector>() ?? NullLogger<IndexProjector>.Instance;
+        _indexFactory = new DuckDbRecordIndexFactory(
+            schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
+            loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
     }
 
     // ADR-0013: a copy that failed to open stays a row in an error state until its bytes change.
@@ -114,9 +95,6 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private GameRelease _gameRelease;
 
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
-    /// <summary>The store the projections land in. Internal: ADR-0014 invariant 5 makes the Index
-    /// one module, and the rows behind this are its own. Null until a reconcile opens one.</summary>
-    internal IRecordIndex? Store { get { lock (_lock) return _index; } }
 
     /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
     /// handing out the store.</summary>

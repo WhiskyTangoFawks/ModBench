@@ -244,6 +244,60 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
+    public async Task ANewCopyInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("sm-progressive-arriving-copy")
+            .WithPlugin("Fallout4.esm")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
+            .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
+            .WithPlugin("Minted.esp", mod => mod.Npcs.AddNew("FromMinted"))
+            .BuildScattered();
+        var beforeTheCreate = fx.Plugins.Where(p => p.Name != "Minted.esp").ToList();
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
+        using var _ = manager;
+        using var __ = gate;
+
+        var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+        var readsWhileParked = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+
+        // ADR-0007: a create registers its copy on the holder before the Index hears of it, so the
+        // arriving snapshot names a copy the parked reconcile never knew about.
+        var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        // The five-copy snapshot reaches the holder before the gate opens, so the second reconcile
+        // is genuinely mid-flight rather than a sequential third act the release let through.
+        Assert.True(
+            await Waits.Until(() => holder.Current.Copies.Count == 5),
+            "the arriving snapshot never reached the holder");
+        // Caught in flight: the holder already names five copies while the parked Index still
+        // answers for four, which is the instant this test exists to cover.
+        Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
+        Assert.Equal(0, readsWhileParked.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+
+        gate.Release();
+        // Superseded or run to completion: once the gate opens, either ordering is the projector's
+        // to choose and everything below holds for both.
+        var superseded = await Record.ExceptionAsync(() => first);
+        Assert.True(superseded is null or OperationCanceledException, $"the parked reconcile failed: {superseded}");
+        await second;
+
+        Assert.Same(readsWhileParked, manager.Reads);
+        Assert.Equal(LoadOrderState.Ready, manager.Status.State);
+        Assert.True(manager.Status.ConflictsComputed);
+        Assert.Equal(
+            ["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
+            manager.Status.IndexedPlugins.Select(p => p.Name));
+        // Opened once each across both reconciles: the arriving snapshot adds a copy to the scope
+        // rather than restarting it.
+        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
+        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+    }
+
+    [Fact]
     public async Task MidLoad_ReadsAreServed_RatherThanBlockingUntilTheLoadFinishes()
     {
         var holder = new LoadOrderHolder();
