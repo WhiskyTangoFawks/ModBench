@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mod, ModlistEntry, Separator } from './model';
-import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from '../mo2Codecs/modlistText';
+import type { Mod, ModlistEntry, Separator } from '../instance/instance';
+import { parseModlist, moveModInText, moveSeparatorBlockInText, separatorBlockNames, writeModlist } from '../mo2Codecs/modlistText';
+import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
+
+// The entry names a splice counts its index among — the same read the command makes.
+const entryNames = (text: string): string[] => parseModlist(text).map((e) => e.name);
 import type { InstanceValue } from '../instance/instance';
 import type { ModStatusResult } from '../instance/statusChecker';
 import { present } from '../ports/present';
@@ -428,12 +432,13 @@ describe('ModListProvider', () => {
     // final entry order against `order()`, not the row provider's own un-refreshed rendering.
     function makeApplyingProvider() {
       let text = writeModlist(dndEntries);
-      reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
-        text = moveModInText(text, name, idx);
+      reorderModMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
+        text = moveModInText(text, name, dropIndexIn(entryNames(text), [name], drop));
         return Promise.resolve({ applied: true, wrote: true });
       });
-      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, idx: number) => {
-        text = moveSeparatorBlockInText(text, sepName, idx);
+      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, drop: Drop) => {
+        const block = separatorBlockNames(parseModlist(text), sepName);
+        text = moveSeparatorBlockInText(text, sepName, dropIndexIn(entryNames(text), block, drop));
         return Promise.resolve({ applied: true, wrote: true });
       });
       const provider = makeProvider(dndEntries);
@@ -529,8 +534,8 @@ describe('ModListProvider', () => {
     describe('honors the view direction', () => {
       function makeSimpleProvider() {
         let text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
-        reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
-          text = moveModInText(text, name, idx);
+        reorderModMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
+          text = moveModInText(text, name, dropIndexIn(entryNames(text), [name], drop));
           return Promise.resolve({ applied: true, wrote: true });
         });
         const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];

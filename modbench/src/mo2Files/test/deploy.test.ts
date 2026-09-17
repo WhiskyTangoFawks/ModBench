@@ -7,7 +7,7 @@ import {
 } from '../files';
 import { makeDeployerFixture, type DeployerFixture } from '../../modmanager/test/deployerFixture';
 import { buildFileConflictIndex } from '../../instance/fileConflictIndex';
-import type { ModlistEntry } from '../../modmanager/model';
+import type { ModlistEntry } from '../../mo2Codecs/modlistText';
 
 const CORRUPT_MANIFEST = '{not json';
 

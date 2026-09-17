@@ -94,8 +94,8 @@ function pluginListSource(instanceRoot: string, instance: Instance): PluginListS
   return {
     setPluginEnabled: (name, enabled) =>
       applyOrThrow(setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
-    reorderPlugins: (names, toIndex) =>
-      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, toIndex)),
+    reorderPlugins: (names, drop) =>
+      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, drop)),
   };
 }
 

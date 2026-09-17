@@ -10,7 +10,7 @@ import { parseModlist } from '../../mo2Codecs/modlistText';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import { readSelectedProfile } from '../../mo2Codecs/modOrganizerIni';
 import { buildLoadOrderRows, providedPluginsOf } from '../../instance/loadOrderSnapshot';
-import type { ModlistEntry, PluginEntry } from '../model';
+import type { ModlistEntry, PluginEntry } from '../../instance/instance';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
 // in place by tests asserting its exact contents, so any addition breaks them.

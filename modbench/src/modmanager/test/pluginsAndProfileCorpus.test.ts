@@ -52,7 +52,7 @@ describe('plugins.txt + profile corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], 999);
+    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], { kind: 'losingEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

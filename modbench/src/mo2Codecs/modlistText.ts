@@ -235,6 +235,18 @@ export function moveModToSeparatorEndInText(
 
 /** The block is the separator plus the mods it wraps; `toIndex` counts the
  *  entries remaining once that block is removed. */
+/** The entries one separator wraps, itself last — the same block
+ *  {@link moveSeparatorBlockInText} splices, named rather than moved. */
+export function separatorBlockNames(entries: readonly ModlistEntry[], separatorName: string): string[] {
+  const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === separatorName);
+  if (sepIdx < 0) return [separatorName];
+  let blockStart = 0;
+  for (const [i, entry] of [...entries.entries()].slice(0, sepIdx).reverse()) {
+    if (entry.kind === 'separator') { blockStart = i + 1; break; }
+  }
+  return [...entries.slice(blockStart, sepIdx).map((e) => e.name), separatorName];
+}
+
 export function moveSeparatorBlockInText(
   text: string,
   separatorName: string,

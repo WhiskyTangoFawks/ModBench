@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
+import { reorderPlugins, setPluginEnabled, type PluginsDrop } from '../../pluginsCommands/plugins';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instance/loadOrderSnapshot';
 import type { InstanceValue } from '../../instance/instance';
@@ -105,15 +105,15 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 
 class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
-  reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
+  reorderPluginsCalls: { names: string[]; drop: PluginsDrop }[] = [];
   reorderPluginsError?: Error;
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     this.setPluginEnabledCalls.push({ pluginName, enabled });
     return Promise.resolve();
   }
-  reorderPlugins(names: string[], toIndex: number): Promise<void> {
+  reorderPlugins(names: string[], drop: PluginsDrop): Promise<void> {
     if (this.reorderPluginsError) return Promise.reject(this.reorderPluginsError);
-    this.reorderPluginsCalls.push({ names, toIndex });
+    this.reorderPluginsCalls.push({ names, drop });
     return Promise.resolve();
   }
 }
@@ -124,8 +124,8 @@ const writesTo = (instanceRoot: string): PluginListSource => ({
     const result = await setPluginEnabled(instanceRoot, 'Default', pluginName, enabled);
     if (!result.applied) throw new Error(result.refusal);
   },
-  reorderPlugins: async (names, toIndex) => {
-    const result = await reorderPlugins(instanceRoot, 'Default', names, toIndex);
+  reorderPlugins: async (names, drop) => {
+    const result = await reorderPlugins(instanceRoot, 'Default', names, drop);
     if (!result.applied) throw new Error(result.refusal);
   },
 });
@@ -683,27 +683,39 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(namesFrom(item)).toEqual(['B.esp']);
   });
 
-  it('single-row down-drag onto a lower row reorders with the post-removal index', async () => {
+  it('a drop onto a row asks for the block to land before that row', async () => {
     const source = new FakeSource();
     const { fired } = await drag(source, ['A.esp'], 'D.esp');
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 2 }]);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
     expect(fired).toBe(true);
   });
 
-  it('drop past the last row (undefined target) appends', async () => {
+  it('drop past the last row (undefined target) asks for the losing end', async () => {
     const source = new FakeSource();
     await drag(source, ['B.esp'], undefined);
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], toIndex: 4 }]);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], drop: { kind: 'losingEnd' } }]);
   });
 
-  it('drop onto a non-plugin node (empty state) appends', async () => {
+  it('drop onto a non-plugin node (empty state) asks for the losing end', async () => {
     const source = new FakeSource();
     const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })], { source });
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, NONE);
     await tree.handleDrop(new EmptyNode(), dt, NONE);
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'losingEnd' } }]);
+  });
+
+  // An implicit master's row sits above every plugins.txt line, so it is the one target that
+  // means the winning end rather than a line to land before.
+  it('drop onto an implicit master asks for the winning end', async () => {
+    const source = new FakeSource();
+    const { tree } = makeTree(fixturePlugins(), { source, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    await tree.getChildren();
+    const dt = new DataTransfer();
+    tree.handleDrag([node('B.esp')], dt, NONE);
+    await tree.handleDrop(new ImplicitMasterNode('Fallout4.esm'), dt, NONE);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], drop: { kind: 'winningEnd' } }]);
   });
 
   it('pluginFileOf names the file a row stands for, and nothing for the empty-state row', () => {
@@ -740,16 +752,18 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
-  it('contiguous multi-selection moves as a block to the target index', async () => {
+  it('contiguous multi-selection moves as one block, named in the drag order', async () => {
     const source = new FakeSource();
     await drag(source, ['B.esp', 'C.esp', 'D.esp'], 'A.esp');
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], toIndex: 0 }]);
+    expect(source.reorderPluginsCalls)
+      .toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], drop: { kind: 'before', name: 'A.esp' } }]);
   });
 
-  it('non-contiguous multi-selection counts only moved rows above the target', async () => {
+  it('non-contiguous multi-selection names every dragged row, in one drop', async () => {
     const source = new FakeSource();
     await drag(source, ['A.esp', 'C.esp', 'E.esp'], 'D.esp');
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp', 'C.esp', 'E.esp'], toIndex: 1 }]);
+    expect(source.reorderPluginsCalls)
+      .toEqual([{ names: ['A.esp', 'C.esp', 'E.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
   it('an empty drag payload is a no-op (no write)', async () => {

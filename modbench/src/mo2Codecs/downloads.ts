@@ -40,25 +40,6 @@ export interface DownloadRow {
   author?: string;
 }
 
-export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
-
-export function sortDownloadRows<T extends DownloadRow>(
-  rows: readonly T[],
-  column: DownloadSortColumn,
-  descending: boolean,
-): T[] {
-  // Negate the comparator for descending, don't reverse the sorted array —
-  // reversing would also reverse tied rows, undoing the sort's stability.
-  const dir = descending ? -1 : 1;
-  return [...rows].sort((a, b) => {
-    const av = a[column];
-    const bv = b[column];
-    if (av < bv) return -dir;
-    if (av > bv) return dir;
-    return 0;
-  });
-}
-
 export function parseDownloadMeta(
   text: string,
 ): {
@@ -135,24 +116,6 @@ export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);
 }
 
-/** A view concern, so it runs over already-built rows. `showHidden` keeps the
- *  flags intact, so the dimming decoration can still tell hidden rows apart. */
-export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], showHidden: boolean): T[] {
-  return showHidden ? [...rows] : rows.filter((r) => !r.hidden);
-}
-
-// A space-separated flag string, because `when` clauses match it with
-// `viewItem =~ /\bflag\b/`: flags appear only when true, and the word-boundary
-// regex makes any one of them testable regardless of the others.
-export function downloadContextValue(row: DownloadRow): string {
-  const flags = [
-    row.hasMeta && 'hasMeta',
-    row.modID !== undefined && 'hasModID',
-    row.hidden && 'hidden',
-  ].filter((f): f is string => f !== false);
-  return ['download', ...flags].join(' ');
-}
-
 // Archive filenames come from two of MO2's files and are compared, never displayed, so they are
 // folded: a Windows filename is case-insensitive.
 const archiveKey = (filename: string): string => filename.toLowerCase();
@@ -209,5 +172,6 @@ export function buildDownloadRows(
         author,
       };
     });
-  return sortDownloadRows(rows, 'mtimeMs', true);
+  // Newest first, MO2's own arrival order; which column the tree sorts by is the view's.
+  return rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }

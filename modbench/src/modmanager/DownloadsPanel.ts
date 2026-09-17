@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DownloadSortColumn } from '../mo2Codecs/downloads';
+import type { DownloadSortColumn } from './downloadRows';
 import { deleteDownload, hideDownload, unhideDownload, type DownloadCommandResult } from '../install/downloadSidecar';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';

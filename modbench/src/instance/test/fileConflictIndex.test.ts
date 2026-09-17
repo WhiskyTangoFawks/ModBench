@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm, symlink, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import type { Mod, Separator, ModlistEntry } from '../../modmanager/model';
+import type { Mod, Separator, ModlistEntry } from '../instance';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from '../fileConflictIndex';
 import { parseModlist } from '../../mo2Codecs/modlistText';
 import { computeModStatuses } from '../statusChecker';

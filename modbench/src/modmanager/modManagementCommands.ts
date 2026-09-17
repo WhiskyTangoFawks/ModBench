@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance, InstanceView } from '../instance/instance';
-import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import type { Own } from '../session';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -250,7 +249,7 @@ export function registerOverwriteView(
     vscode.window.registerFileDecorationProvider(
       new OverwriteDecorationProvider(instance.value.paths.overwriteDir)),
     vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
-      if (node?.kind !== OVERWRITE_DIR_NAME) return;
+      if (node?.kind !== OVERWRITE_NODE_KIND) return;
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {

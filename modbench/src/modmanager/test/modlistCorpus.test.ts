@@ -16,7 +16,7 @@ import {
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
 } from './corpusFixture';
-import type { Mod, Separator } from '../model';
+import type { Mod, Separator } from '../../instance/instance';
 import { present } from '../../ports/present';
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
@@ -56,7 +56,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
   it('reorderMod moves a mod to the winning end, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderMod(dir, PROFILE, 'ENBoost - 12k', 0);
+    await reorderMod(dir, PROFILE, 'ENBoost - 12k', { kind: 'winningEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -114,8 +114,8 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
   it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     // Past the last remaining entry once the block is lifted out: a move large enough that
-    // "toIndex ignored" or "children left behind" would be visible.
-    await reorderSeparatorBlock(dir, PROFILE, 'Unassigned (Modlist Development)', 999);
+    // "the drop ignored" or "children left behind" would be visible.
+    await reorderSeparatorBlock(dir, PROFILE, 'Unassigned (Modlist Development)', { kind: 'losingEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 

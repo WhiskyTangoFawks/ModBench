@@ -5,6 +5,7 @@ import { foldPath } from '../instance/fileConflictIndex';
 import type { DataFolderPlugins } from '../instance/loadOrderSnapshot';
 import { pluginsFile } from '../mo2Files/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
+import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../mo2Files/files';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
@@ -41,10 +42,17 @@ export function setPluginEnabled(
 
 /** `toIndex` counts entries with the moved lines already removed. Refuses if a name has no
  *  entry line. */
+/** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without
+ *  naming the codec that settles it into an index. */
+export type { Drop as PluginsDrop } from '../mo2Codecs/dropIndex';
+
 export function reorderPlugins(
-  instanceRoot: string, profile: string, pluginNames: string[], toIndex: number,
+  instanceRoot: string, profile: string, pluginNames: string[], drop: Drop,
 ): Promise<PluginsCommandResult> {
-  return modifyPlugins(instanceRoot, profile, (text) => movePluginsInText(text, pluginNames, toIndex));
+  // Settled against the text this splice is about to rewrite, so a tree a generation behind
+  // plugins.txt cannot land the block at a stale index.
+  return modifyPlugins(instanceRoot, profile, (text) =>
+    movePluginsInText(text, pluginNames, dropIndexIn(parsePlugins(text).map((p) => p.name), pluginNames, drop)));
 }
 
 /** The New Plugin gesture's line, enabled, at the winning end; the file already exists on disk

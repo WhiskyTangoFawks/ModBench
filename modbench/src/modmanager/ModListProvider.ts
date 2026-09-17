@@ -1,11 +1,7 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
-import type { Mod, ModlistEntry, Separator } from './model';
+import { OVERWRITE_DIR_NAME, type Mod, type ModlistEntry, type Separator } from '../instance/instance';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instance/statusChecker';
-// Pure drop-index reconciliation, shared with PluginsTreeProvider. A neutral
-// home would be warranted if a third consumer appears; not worth the churn yet.
-import { dropIndexForMove } from '../mo2Codecs/pluginsText';
 import type { Reporter } from '../ports/reporter';
 import type { InstanceValue, InstanceView } from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
@@ -15,10 +11,14 @@ import {
   reorderMod as reorderModCommand,
   reorderSeparatorBlock as reorderSeparatorBlockCommand,
   setModEnabled as setModEnabledCommand,
-  type ModlistCommandResult,
+  type ModlistCommandResult, type ModlistDrop,
 } from '../modlist/modlist';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
+
+/** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
+ *  on: the row stands for MO2's folder, so it is named as the value names that folder. */
+export const OVERWRITE_NODE_KIND = OVERWRITE_DIR_NAME;
 
 // `DataTransferItem.value` is `any` — handleDrag, above, is this provider's only writer of it.
 function isDragPayload(value: unknown): value is { kind: 'mod' | 'separator'; name: string } {
@@ -105,10 +105,10 @@ export class ModNode extends vscode.TreeItem {
  *  modlist.txt entry — no checkbox, no drag, no mod actions. Single-click and
  *  the sole context action both reveal the folder in the Explorer. */
 export class OverwriteNode extends vscode.TreeItem {
-  readonly kind = OVERWRITE_DIR_NAME;
+  readonly kind = OVERWRITE_NODE_KIND;
   constructor(public override readonly resourceUri: vscode.Uri, fileCount: number) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
-    this.contextValue = OVERWRITE_DIR_NAME;
+    this.contextValue = OVERWRITE_NODE_KIND;
     // No explicit icon or color here: the spec scopes the row's look to a reddish
     // tint applied by a FileDecorationProvider keyed on resourceUri; this node
     // only carries the resourceUri. Let VS Code render the folder icon.
@@ -216,7 +216,7 @@ export class ModListProvider
     if (!payload || !isDragPayload(payload.value)) return;
     // Neither the count summary nor the pinned Overwrite fixture is a modlist.txt
     // position — dropping onto them must not fall through to "move to end".
-    if (target?.kind === 'count' || target?.kind === OVERWRITE_DIR_NAME) return;
+    if (target?.kind === 'count' || target?.kind === OVERWRITE_NODE_KIND) return;
     const { kind, name } = payload.value;
     // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
     // screen (ADR-0019).
@@ -225,11 +225,7 @@ export class ModListProvider
   }
 
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
-    // A drop hands us the *pre-removal* target, but moveModInText counts toIndex among the
-    // entries with the moved lines already removed, so a moved entry above the target shifts
-    // it left. A separator drops its whole block.
-    const order = this.cachedEntries?.map((e) => e.name) ?? [];
-    const targetName = this.targetName(target);
+    const drop = this.dropOnto(this.targetName(target));
     const profile = this.instanceValue.activeProfile;
     if (kind === 'mod') {
       if (target instanceof SeparatorNode) {
@@ -237,11 +233,11 @@ export class ModListProvider
           moveModToSeparatorCommand(this.instanceRoot, profile, name, target.separator.name));
       } else {
         await this.runMutation('reorder', () =>
-          reorderModCommand(this.instanceRoot, profile, name, this.dropToIndex(order, [name], targetName)));
+          reorderModCommand(this.instanceRoot, profile, name, drop));
       }
     } else {
       await this.runMutation('reorderSeparatorBlock', () =>
-        reorderSeparatorBlockCommand(this.instanceRoot, profile, name, this.dropToIndex(order, this.separatorBlockNames(name), targetName)),
+        reorderSeparatorBlockCommand(this.instanceRoot, profile, name, drop),
       );
     }
   }
@@ -265,11 +261,11 @@ export class ModListProvider
   }
 
   // "Drop X onto Y" gives X the visual slot of Y: before Y in the winning-first file when
-  // winning-at-top, after it when the view runs opposite.
-  private dropToIndex(order: string[], movedNames: string[], targetName: string | undefined): number {
-    const before = dropIndexForMove(order, movedNames, targetName);
-    if (this.winningAtTop) return before;
-    return targetName === undefined ? 0 : before + 1;
+  // winning-at-top, after it when the view runs opposite. Past the last row is whichever end
+  // the view has at its bottom.
+  private dropOnto(targetName: string | undefined): ModlistDrop {
+    if (targetName === undefined) return this.winningAtTop ? { kind: 'losingEnd' } : { kind: 'winningEnd' };
+    return { kind: this.winningAtTop ? 'before' : 'after', name: targetName };
   }
 
   private targetName(node: ModlistNode | undefined): string | undefined {
@@ -277,19 +273,6 @@ export class ModListProvider
     return node.kind === 'mod' ? node.mod.name : node.separator.name;
   }
 
-  // A separator's members are the entries *preceding* it, back to the previous separator.
-  private separatorBlockNames(sepName: string): string[] {
-    const entries = this.cachedEntries ?? [];
-    const idx = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
-    if (idx < 0) return [sepName];
-    let start = -1;
-    for (const [i, e] of [...entries.entries()].slice(0, idx).reverse()) {
-      if (e.kind === 'separator') { start = i; break; }
-    }
-    const names = entries.slice(start + 1, idx).map((e) => e.name);
-    names.push(sepName);
-    return names;
-  }
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
     return element;

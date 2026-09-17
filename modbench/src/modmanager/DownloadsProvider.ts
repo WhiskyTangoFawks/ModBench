@@ -1,16 +1,13 @@
-// Row rendering only: sorting and filtering live in mo2/downloads.ts, the same split
-// ModListProvider makes for modlist.txt.
+// Row rendering only: which column the rows are ordered by and which of them show live in
+// downloadRows.ts, the same split ModListProvider makes for modlist.txt.
 
 import * as vscode from 'vscode';
 import {
-  downloadContextValue,
-  filterHiddenRows,
-  sortDownloadRows,
-  type DownloadRow,
-  type DownloadSortColumn,
-  type DownloadStatus,
-} from '../mo2Codecs/downloads';
-import type { DownloadFile, InstanceValue, InstanceView } from '../instance/instance';
+  downloadContextValue, filterHiddenRows, sortDownloadRows, type DownloadSortColumn,
+} from './downloadRows';
+import type {
+  DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
+} from '../instance/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
 import type { Reporter } from '../ports/reporter';

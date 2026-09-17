@@ -32,6 +32,14 @@ import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { exists, get, listDir, manifestFile } from '../mo2Files/files';
 
+/** The rows this value is made of. A view names a row's shape through the read model that
+ *  publishes it, never through the codec that parsed the file behind it. */
+export type { InstalledFileId } from '../mo2Codecs/metaIni';
+export type { Mod, ModlistEntry, Separator } from '../mo2Codecs/modlistText';
+export { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
+export type { PluginEntry } from '../mo2Codecs/pluginsText';
+export type { DownloadRow, DownloadStatus } from '../mo2Codecs/downloads';
+
 /** How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
  *  the wait before an empty modlist read is believed. */
 export const SETTLE_MS = 200;

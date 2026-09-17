@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Mod, ModlistEntry } from '../../modmanager/model';
+import type { Mod, ModlistEntry } from '../instance';
 import { buildFileConflictIndex } from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
 

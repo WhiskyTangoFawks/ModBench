@@ -16,7 +16,7 @@ import {
   unlistedModNames,
   writeModlist,
 } from '../modlistText';
-import type { Mod, ModlistEntry, Separator } from '../../modmanager/model';
+import type { Mod, ModlistEntry, Separator } from '../modlistText';
 
 const fixtureDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
 const defaultModlist = () =>
