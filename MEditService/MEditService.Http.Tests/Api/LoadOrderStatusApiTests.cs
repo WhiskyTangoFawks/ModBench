@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Tests.TestSupport;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -15,7 +14,7 @@ namespace MEditService.Tests.Api;
 [Collection(WebHostCollection.Name)]
 public sealed class LoadOrderStatusApiTests : IDisposable
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private readonly HttpClient _client;
 
     public LoadOrderStatusApiTests() => _client = _app.CreateClient();

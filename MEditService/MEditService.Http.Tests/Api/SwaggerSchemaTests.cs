@@ -1,7 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using Microsoft.AspNetCore.Mvc.Testing;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 
@@ -13,7 +13,7 @@ public sealed class SwaggerSchemaTests
 {
     private static async Task<JsonElement> GetSchemaAsync()
     {
-        await using var app = new WebApplicationFactory<Program>();
+        await using var app = new MEditHost();
         var client = app.CreateClient();
         var body = await client.GetStringAsync("/swagger/v1/swagger.json");
         return JsonDocument.Parse(body).RootElement.Clone();
