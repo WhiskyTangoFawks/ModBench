@@ -482,7 +482,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
-  ownAll(own, registerOverwriteView(instanceRoot, reporterFor('overwrite.reveal')));
+  ownAll(own, registerOverwriteView(instance, reporterFor('overwrite.reveal')));
   own(registerModAdoption(
     instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
     () => modListProvider.invalidate(), outputChannel));

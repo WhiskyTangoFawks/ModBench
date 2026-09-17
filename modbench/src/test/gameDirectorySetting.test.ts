@@ -1,5 +1,5 @@
-// ADR-0015: the Instance recomputes from the instance directory and the resolver it was given,
-// so the setting that overrides where the game is reaches it only through this trigger.
+// ADR-0015 invariant 7: a watcher event, activation and refresh run the same whole recompute,
+// debounced once. An edited setting reaches the value as one of those refreshes.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   GAME_DIRECTORY_SECTION, refreshOnGameDirectoryChange,
@@ -39,7 +39,6 @@ describe('the game-directory setting reaches the Instance as a recompute', () =>
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: the trigger dropped, leaving an edited setting invisible until the next file event.
   it('names the setting the override lives at', () => {
     expect(GAME_DIRECTORY_SECTION).toBe('modbench.mods.gameDirectory');
   });

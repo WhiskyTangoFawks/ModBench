@@ -148,12 +148,16 @@ export function gameDirectoryResolver(
   return async (iniText: string): Promise<GameDirectory | undefined> => {
     const overrides = setOverrides(overridesOf());
     const facts = autodetectFacts(iniText);
-    // Resolved whichever branch answers the root below: the game reads its load order where it
-    // reads it, whether or not the user pointed Modbench at a stock folder.
-    const detected = await detectedPaths(facts, overrides, detectors);
-    const loadOrderFile = overrides.pluginsTxt ?? detected?.pluginsTxt;
-
-    const at = (root: string): GameDirectory => ({ root, dataFolder: join(root, 'Data'), loadOrderFile });
+    // At most one detection per resolve, and none at all when no branch below asks: a detection
+    // reads Steam's library file, and runs `reg query` on Windows.
+    let detection: Promise<GamePaths | null> | undefined;
+    const detected = (): Promise<GamePaths | null> => (detection ??= detectedPaths(facts, overrides, detectors));
+    // The game reads its load order where it reads it, whichever branch answers the root — so
+    // only the override spares the detection.
+    const loadOrderFile = async (): Promise<string | undefined> =>
+      overrides.pluginsTxt ?? (await detected())?.pluginsTxt;
+    const at = async (root: string): Promise<GameDirectory> =>
+      ({ root, dataFolder: join(root, 'Data'), loadOrderFile: await loadOrderFile() });
 
     const explicit = overrides.gameDirectory;
     if (explicit !== undefined) {
@@ -166,7 +170,10 @@ export function gameDirectoryResolver(
     const fromIni = await iniGamePath(iniText, facts, detectors);
     if (fromIni && (await hasDataFolder(fromIni))) return at(fromIni);
 
-    if (detected) return { root: dirname(detected.dataFolder), dataFolder: detected.dataFolder, loadOrderFile };
+    const found = await detected();
+    if (found) {
+      return { root: dirname(found.dataFolder), dataFolder: found.dataFolder, loadOrderFile: await loadOrderFile() };
+    }
     return undefined;
   };
 }

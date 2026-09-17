@@ -231,13 +231,14 @@ export function registerCreateEmptyModCommand(
 /** The pinned Overwrite row's reddish tint and its sole action; the row's own visibility and
  *  count come from the Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
 export function registerOverwriteView(
-  overwriteDir: string,
+  instance: Pick<Instance, 'value'>,
   reporter: Reporter,
 ): vscode.Disposable[] {
   return [
-    // Tint the pinned Overwrite row reddish. Stateless: keyed on the
-    // constant overwrite/ path, which matches OverwriteNode.resourceUri.
-    vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(overwriteDir)),
+    // Tint the pinned Overwrite row reddish. Stateless: keyed on the value's own overwrite path,
+    // which is what OverwriteNode.resourceUri carries.
+    vscode.window.registerFileDecorationProvider(
+      new OverwriteDecorationProvider(instance.value.paths.overwriteDir)),
     vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
       if (node?.kind !== OVERWRITE_DIR_NAME) return;
       try {

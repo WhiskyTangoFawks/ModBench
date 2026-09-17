@@ -125,7 +125,7 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it('normalizes a Wine drive-mapped ini gamePath to its POSIX path (the real-LitR case)', async () => {
+  it('normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
     // MO2 under Proton stores the path as a Wine Z: drive with backslashes.
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
@@ -214,6 +214,41 @@ describe('the game directory resolver', () => {
     expect(resolved).toEqual({
       root: gameRoot, dataFolder: join(gameRoot, 'Data'), loadOrderFile: '/appdata/Plugins.txt',
     });
+  });
+
+  // Rival: detecting up front on every branch, which reads Steam's library file (and spawns
+  // `reg query` on Windows) on every recompute, even when nothing left to answer needs it.
+  it('asks Steam nothing when the setting answers the root and the override names the load order', async () => {
+    const gameRoot = await gameFolder();
+    let asked = 0;
+    const detectors: GameDetectors = {
+      paths: () => { asked += 1; return Promise.resolve(null); },
+      winePrefix: noDetectPrefix,
+    };
+
+    const resolved = await resolverWith(
+      { gameDirectory: gameRoot, pluginsTxt: '/chosen/Plugins.txt' }, detectors)(iniOf());
+
+    expect(resolved).toEqual({
+      root: gameRoot, dataFolder: join(gameRoot, 'Data'), loadOrderFile: '/chosen/Plugins.txt',
+    });
+    expect(asked).toBe(0);
+  });
+
+  // Rival: a detection per branch that asks, which pays Steam's price twice for one answer.
+  it('asks Steam once per resolve, however many branches read the answer', async () => {
+    let asked = 0;
+    const detectors: GameDetectors = {
+      paths: () => {
+        asked += 1;
+        return Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' });
+      },
+      winePrefix: noDetectPrefix,
+    };
+
+    await resolverWith({}, detectors)(iniOf());
+
+    expect(asked).toBe(1);
   });
 
   it('lets the pluginsTxtPath override name the load-order file on its own', async () => {
