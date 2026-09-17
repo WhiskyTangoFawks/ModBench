@@ -6,9 +6,6 @@ import { mo2InstanceContext } from './mo2InstanceContext';
  *  context's folder nor to the composition root. */
 export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
-/** The setting that overrides where the game is outright, editable while Modbench runs. */
-export const GAME_DIRECTORY_SECTION = 'modbench.mods.gameDirectory';
-
 /** The three settings that override where the game is, read fresh on each resolve. Reading them
  *  is all this does: MO2 files decides what they mean. */
 export function gameDirectoryOverrides(): GameDirectoryOverrides {

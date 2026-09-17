@@ -784,42 +784,34 @@ describe('Notification stream connects only while the backend is up', () => {
   });
 });
 
-// ── Launch mEdit → editing plugin tree populated ────────────────────────────────
-
 // ── The game-directory setting is a recompute trigger ────────────────────────
 
 // ADR-0015 invariant 7: a watcher event, activation and refresh run the same whole recompute.
 // The Instance watches files only, so the root turns an edited setting into that recompute.
 describe('The game-directory setting reaches the Instance as a recompute', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
 
   before(() => {
-    if (!root) return;
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
   });
 
   after(async () => {
-    if (!root) return;
     exitEditing();
     await setGameDirectory(undefined);
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
   // No MO2 file is written here, so the only way a new value can land is the setting itself.
-  it('lands a value resolving the directory the setting names, with no file of the instance touched', async function () {
-    if (!root) this.skip();
+  it('lands a value resolving the directory the setting names, with no file of the instance touched', async () => {
+    await setGameDirectory(gameDir);
+
     const instance = present(instanceExport(), 'the Instance activate() exports');
-    const before = instance.sequence;
-
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    await pastSequence(instance, before);
-
     assert.strictEqual(instance.value.gameDirectory?.root, gameDir);
   });
 });
+
+// ── Launch mEdit → editing plugin tree populated ────────────────────────────────
 
 describe('Launch mEdit populates the editing plugin tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

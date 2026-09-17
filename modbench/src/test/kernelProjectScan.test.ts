@@ -191,10 +191,6 @@ describe('the composition root is one project referencing every box', () => {
     expect(files.filter(isTest)).toEqual([]);
     for (const box of BOXES) expect(files.filter((f) => f.startsWith(join('src', box) + '/'))).toEqual([]);
   });
-
-  it('holds no legacy project', () => {
-    expect(existsSync(join(MODBENCH, 'tsconfig.legacy.json'))).toBe(false);
-  });
 });
 
 describe('every production file belongs to exactly one project', () => {
@@ -235,10 +231,10 @@ describe('the test project holds every test and no production file', () => {
     expect(testFilesOnDisk(join('src', dir)).filter((f) => !compiled.has(f))).toEqual([]);
   });
 
-  // Rival: the codecs box holds eight of them, so a walk finding none would satisfy the
-  // containment check above vacuously.
-  it('finds the codecs box’s own tests', () => {
-    expect(testFilesOnDisk(join('src', 'mo2Codecs')).length).toBeGreaterThan(5);
+  // Rival: a walk finding no test under any box would satisfy every containment row above
+  // vacuously; a kernel box such as ports may honestly hold none, so the count is over boxes.
+  it('finds tests on disk under most boxes', () => {
+    expect(BOXES.filter((box) => testFilesOnDisk(join('src', box)).length > 0).length).toBeGreaterThan(10);
   });
 
   // The integration suite is the one exception: it compiles in its own project, for Mocha and

@@ -18,7 +18,8 @@ import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
-import { GAME_DIRECTORY_SECTION, meditConfig } from './workspaceConfig';
+import { meditConfig } from './workspaceConfig';
+import { GAME_DIRECTORY_SECTION } from './gameDirectorySetting';
 import { isTracked } from './mo2Files/files';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
