@@ -20,7 +20,7 @@ import { setUninstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../mo2Files/layout';
 import { ensureDir, exists, put, putIfChanged, remove } from '../mo2Files/files';
 import { present } from '../ports/present';
-import { errorMessage } from '../ports/errorMessage';
+import { refuse } from '../ports/refuse';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -39,7 +39,7 @@ async function spliceModlist(
     const { wrote } = await putIfChanged(modlistFile(instanceRoot, profile), transform);
     return { applied: true, wrote };
   } catch (err) {
-    return { applied: false, refusal: errorMessage(err) };
+    return refuse(err);
   }
 }
 

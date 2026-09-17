@@ -5,7 +5,7 @@
 import { settingsFile } from '../mo2Files/layout';
 import { readSelectedProfile, setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { putIfChanged } from '../mo2Files/files';
-import { errorMessage } from '../ports/errorMessage';
+import { refuse } from '../ports/refuse';
 
 /** `wrote` is false when the profile was already selected: no byte changes, so the
  *  ModOrganizer.ini watcher never fires. */
@@ -29,6 +29,6 @@ export async function switchProfile(
     );
     return { applied: true, wrote };
   } catch (err) {
-    return { applied: false, refusal: errorMessage(err) };
+    return refuse(err);
   }
 }

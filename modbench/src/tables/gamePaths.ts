@@ -54,9 +54,3 @@ export function nexusSlugForGame(mo2Name: string): string {
 export function gamePathInfoForRelease(release: string): GamePathInfo | undefined {
   return GAME_PATHS[release];
 }
-
-/** Every release this table holds a row for — enumeration for the game-name scan
- *  (`src/test/gameNameScan.test.ts`), which reads every literal this table permits from it. */
-export function knownReleases(): string[] {
-  return Object.keys(GAME_PATHS);
-}

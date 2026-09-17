@@ -6,7 +6,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { knownReleases, gamePathInfoForRelease } from '../tables/gamePaths';
+import { gamePathInfoForRelease } from '../tables/gamePaths';
 import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
@@ -29,9 +29,14 @@ const ALLOWLIST = [join('install', 'detectRoot.ts')];
 // needs as much as the two tables' own literals, so it lives here rather than in a third table.
 const SCRIPT_EXTENDER_TOKENS = ['f4se', 'skse', 'obse', 'fnvse', 'nvse'];
 
+// gamePaths.ts's own release keys: mirrored rather than exported, since nothing in production
+// enumerates every release. Kept in sync by hand — a release added there and not here goes
+// unscanned.
+const KNOWN_RELEASES = ['Fallout4', 'Fallout4VR', 'Fallout3', 'FalloutNV', 'SkyrimLE', 'SkyrimSE', 'SkyrimVR', 'EnderalLE', 'Oblivion'];
+
 function knownGameNameLiterals(): string[] {
   const literals = new Set<string>(SCRIPT_EXTENDER_TOKENS);
-  for (const release of knownReleases()) {
+  for (const release of KNOWN_RELEASES) {
     literals.add(release);
     const info = gamePathInfoForRelease(release);
     if (info) {

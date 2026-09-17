@@ -506,7 +506,7 @@ async function relocateStrayFiles(
       await mkdir(dirname(to), { recursive: true });
       await moveFile(from, to, renameFn);
     } catch (err) {
-      unmoved.push(`${relativePath}: ${errorMessage(err)}`); // ADR-0019
+      unmoved.push(`${relativePath}: ${errorMessage(err)}`); // ADR-0019 invariant 2: integrity, never silent
     }
   }
   return unmoved;

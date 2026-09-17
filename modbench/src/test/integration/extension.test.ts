@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import type { PluginMetadata } from '../../client';
+import type { BackendStatus, MEditClient, PluginMetadata } from '../../client';
 import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
@@ -60,6 +60,21 @@ async function enterEditing(): Promise<void> {
 }
 function exitEditing(): void {
   editingApi()?.exitEditing();
+}
+
+// The same label-and-deadline shape as waitFor() below, for a push-based status transition
+// rather than a polled condition.
+function awaitStatus(client: MEditClient, status: BackendStatus, label: string, timeoutMs = 10_000): Promise<void> {
+  if (client.status === status) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { off(); reject(new Error(`timed out waiting for ${label}`)); }, timeoutMs);
+    const off = client.onStatusChanged((s) => {
+      if (s !== status) return;
+      clearTimeout(timer);
+      off();
+      resolve();
+    });
+  });
 }
 
 // Models the real backend: GET /plugins fails with 503 until PUT /load-order arrives. The
@@ -331,15 +346,7 @@ before(async function () {
   // The client polls the mock backend's health on its own schedule; wait for the transition
   // itself rather than guessing how long a poll cycle takes.
   const client = ext?.exports.client;
-  if (client && client.status !== 'attached') {
-    await new Promise<void>((resolve) => {
-      const off = client.onStatusChanged((status) => {
-        if (status !== 'attached') return;
-        off();
-        resolve();
-      });
-    });
-  }
+  if (client) await awaitStatus(client, 'attached', 'the client to reach attached');
 });
 
 after(async () => {
@@ -633,14 +640,12 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
     const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true });
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
-    assert.ok(openTabs().some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
   });
 
   it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
-    assert.ok(openTabs().some(t => t.label === 'Fallout4.esm'), 'expected a header tab titled after the implicit master');
   });
 });
 
@@ -788,15 +793,7 @@ describe('Notification stream connects only while the backend is up', () => {
     // client.stop() is fire-and-forget from exitEditing's own contract (editingTeardown.ts), so
     // the test waits on the client's own status instead of a promise it was never handed.
     const client = ext?.exports.client;
-    if (client && client.status !== 'stopped') {
-      await new Promise<void>((resolve) => {
-        const off = client.onStatusChanged((status) => {
-          if (status !== 'stopped') return;
-          off();
-          resolve();
-        });
-      });
-    }
+    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
     assert.strictEqual(streamRequests(requestLog).length, 1,
       'expected no reconnect once editing ends');
   });
@@ -1624,15 +1621,7 @@ describe('Progressive load', () => {
     // client.stop() is fire-and-forget from exitEditing's own contract (editingTeardown.ts), so
     // the test waits on the client's own status instead of a promise it was never handed.
     const client = ext?.exports.client;
-    if (client && client.status !== 'stopped') {
-      await new Promise<void>((resolve) => {
-        const off = client.onStatusChanged((status) => {
-          if (status !== 'stopped') return;
-          off();
-          resolve();
-        });
-      });
-    }
+    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
 
     assert.strictEqual(
       requestLog.filter((l) => l === 'GET /notifications/stream').length, connectionsAtLoad,

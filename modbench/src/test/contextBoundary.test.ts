@@ -18,9 +18,6 @@ function importsOf(source: string): string[] {
     .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
 }
 
-// No directory is skipped by name beyond node_modules, so the walk provably reaches the Plugins
-// view; `isExcluded` decides what counts against the rule, not the walk.
-
 const EDITING_DIR = 'medit';
 const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
