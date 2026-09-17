@@ -18,6 +18,9 @@ public static class PluginAdapters
     public static PluginFormIds ReadFormIds(this IPluginAdapter adapter, RegisteredCopy copy, GameRelease release) =>
         adapter.ReadFormIds(new ModPath(copy.Path), release);
 
+    public static bool CanRead(this IPluginAdapter adapter, RegisteredCopy copy) =>
+        adapter.CanRead(new ModPath(ModKey.FromFileName(copy.Name), copy.Path));
+
     /// <summary>The files the game loads, one winning copy per filename in slot order, with
     /// <paramref name="compiled"/> among them however it is registered (ADR-0013).</summary>
     public static LinkAnswers LinkTargets(

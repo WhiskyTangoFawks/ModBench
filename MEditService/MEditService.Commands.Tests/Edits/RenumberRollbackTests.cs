@@ -1,8 +1,10 @@
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
@@ -68,6 +70,66 @@ public sealed class RenumberRollbackTests
 
         Assert.Contains("back as it was", thrown.Message, StringComparison.Ordinal);
         Assert.Equal(before, fixture.Snapshots());
+    }
+
+    // ---- a tree that is not as the gesture found it ----
+
+    // Two units claiming one FormKey is the tree's state, not a write fault: a refusal names it,
+    // and a 500 "write failure" would send the author to check a disk that is fine.
+    [Fact]
+    public void ARenumberWhoseReferencerHasTwoSourceUnits_RefusesAsSourceUnitNotFound_WithTheTreeAsItWas()
+    {
+        const string pluginName = "ContainerReferencer.esp";
+        var referenced = FormKey.Null;
+        using var referencer = SourceModFixture.Tracked(pluginName, "ContainerReferencerMod", mod =>
+        {
+            var npc = mod.Npcs.AddNew("ReferencedNpc");
+            var cell = new Cell(mod) { EditorID = "ReferencerCell", WaterHeight = 0f };
+            var placedRef = new PlacedObject(mod) { EditorID = "ReferencerRef", Position = new Noggog.P3Float(0, 0, 0) };
+            placedRef.Base.SetTo(npc.FormKey);
+            cell.Temporary.Add(placedRef);
+            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+            subBlock.Cells.Add(cell);
+            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+            block.SubBlocks.Add(subBlock);
+            mod.Cells.Records.Add(block);
+            referenced = npc.FormKey;
+        });
+        var cellDirectory = PathShape.DirectoryOf(Directory.EnumerateFiles(
+                Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
+                SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal)));
+        var impostor = Path.Combine(
+            PathShape.DirectoryOf(cellDirectory), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
+        Directory.CreateDirectory(impostor);
+        File.Copy(Path.Combine(cellDirectory, "RecordData.json"), Path.Combine(impostor, "RecordData.json"));
+        var before = TreeSnapshot.Of(referencer.ModFolder);
+
+        var result = referencer.RenumberHandler.RenumberRecord(referencer.Plugin, referenced.ToString());
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
+        Assert.Contains("back as it was", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, TreeSnapshot.Of(referencer.ModFolder));
+    }
+
+    // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
+    // a container whose EditorID carries a NUL has no path a rename can land on.
+    [Fact]
+    public void ARenumberThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
+    {
+        using var fixture = new SourceContainerFixture();
+        var worldspaceDocument = fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId);
+        File.WriteAllText(
+            worldspaceDocument,
+            File.ReadAllText(worldspaceDocument).Replace(
+                $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal));
+        var before = TreeSnapshot.Of(fixture.ModFolder);
+
+        Assert.Throws<ArgumentException>(() =>
+            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+
+        Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
     }
 
     // ---- ordering and containers ----

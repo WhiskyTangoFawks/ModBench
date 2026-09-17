@@ -85,7 +85,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
         {
-            track.TrackAsync(LoadOrder, [.. LoadOrder.Copies.Select(c => c.Key)], origin, SourcePreset.Edits)
+            track.TrackAsync(LoadOrder, origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 

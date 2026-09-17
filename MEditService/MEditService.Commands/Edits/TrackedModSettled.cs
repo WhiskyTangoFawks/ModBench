@@ -13,13 +13,17 @@ public enum TrackedModSettledOutcome
     CrashRecovery,
 }
 
-/// <summary>The watcher's one verb (ADR-0015): plugins off the load order, classified from the
-/// Source repository's facts; a genuine external change opens the mod's one question and
+/// <summary>The watcher's one verb (ADR-0015 invariant 2): plugins off the load order, classified
+/// from the Source repository's facts; a genuine external change opens the mod's one question and
 /// publishes it.</summary>
-public static class TrackedModSettled
+public sealed class TrackedModSettled
 {
-    public static TrackedModSettledOutcome Handle(
-        LoadOrderSnapshot loadOrder, string modFolder, INotificationPublisher notifications)
+    private readonly INotificationPublisher _notifications;
+
+    // Internal so only CommandHandlers.AddCommandHandlers builds one, like every handler.
+    internal TrackedModSettled(INotificationPublisher notifications) => _notifications = notifications;
+
+    public TrackedModSettledOutcome Handle(LoadOrderSnapshot loadOrder, string modFolder)
     {
         if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } plugins)
             return TrackedModSettledOutcome.NoQuestion;
@@ -27,15 +31,14 @@ public static class TrackedModSettled
         switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
         {
             case ExternalChangeClassification.ExternalChange change:
-                Raise(loadOrder, modFolder, change, notifications);
+                Raise(loadOrder, modFolder, change);
                 return TrackedModSettledOutcome.QuestionOpened;
 
             case ExternalChangeClassification.CrashRecovery:
                 // Never opened or cleared as the external-change question is — the repair offer's
                 // own state, and the two prompts must never both fire for one event.
                 RaiseCrashRepair(
-                    loadOrder, modFolder, [.. plugins.Select(p => p.PluginName)],
-                    CrashRepairReason.InterruptedCompile, notifications);
+                    loadOrder, modFolder, [.. plugins.Select(p => p.PluginName)], CrashRepairReason.InterruptedCompile);
                 return TrackedModSettledOutcome.CrashRecovery;
 
             default:
@@ -44,19 +47,16 @@ public static class TrackedModSettled
         }
     }
 
-    /// <summary>The repair offer's own verdict of the same question-open notification kind
-    /// (ADR-0009): a tracked binary the load-time check found unreadable, or an interrupted
-    /// compile above, each naming the plugins it found.</summary>
-    public static void RaiseCrashRepair(
-        LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<string> plugins, CrashRepairReason reason,
-        INotificationPublisher notifications) =>
-        notifications.Publish(new QuestionOpenNotification(
+    /// <summary>The repair offer's own verdict of the same question-open notification kind: a
+    /// tracked binary the load-time check found unreadable, or an interrupted compile above, each
+    /// naming the plugins it found.</summary>
+    public void RaiseCrashRepair(
+        LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<string> plugins, CrashRepairReason reason) =>
+        _notifications.Publish(new QuestionOpenNotification(
             OriginOf(loadOrder, modFolder), plugins, TrackedFiles: [], MetaChanged: false, OldVersion: null,
             NewVersion: null, CrashRepairReason: reason.ToString()));
 
-    private static void Raise(
-        LoadOrderSnapshot loadOrder, string modFolder,
-        ExternalChangeClassification.ExternalChange change, INotificationPublisher notifications)
+    private void Raise(LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.ExternalChange change)
     {
         var modName = SourceRepository.ModNameIn(modFolder);
         var named = change.Plugins.Concat(change.TrackedFiles).ToList();
@@ -66,7 +66,7 @@ public static class TrackedModSettled
             "Commit to main as new baseline, or Apply to working tree on edit; the question is " +
             "asked again on the next change or load.");
 
-        notifications.Publish(new QuestionOpenNotification(
+        _notifications.Publish(new QuestionOpenNotification(
             OriginOf(loadOrder, modFolder), change.Plugins, change.TrackedFiles,
             change.MetaChanged, change.OldVersion, change.NewVersion));
     }

@@ -4,6 +4,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -77,6 +78,10 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new TrackHandler(sp.GetRequiredService<TrackService>()));
 
+        // The watcher's verb, not a gesture: built here so the port it publishes through is the
+        // composition root's, never borrowed from the watcher that calls it.
+        services.AddSingleton(sp => new TrackedModSettled(sp.GetRequiredService<INotificationPublisher>()));
+
         services.AddSingleton(sp => new CompilePluginHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<PluginCompileService>()));
@@ -89,11 +94,13 @@ public static class CommandHandlers
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<TrackHandler>()));
+            sp.GetRequiredService<TrackHandler>(),
+            sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new RebaseEditBranchHandler(
             sp.GetRequiredService<LoadOrderHolder>()));
@@ -103,7 +110,8 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<SchemaReflector>()));
+            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<IPluginAdapter>()));
 
         return services;
     }

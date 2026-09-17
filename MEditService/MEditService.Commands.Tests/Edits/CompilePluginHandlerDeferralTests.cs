@@ -17,7 +17,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
     private string PluginPath => Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-    private CompileResult Compile() => _mod.CompileHandler.Compile(_mod.Plugin, new CompileSource.WorkingTree());
+    private async Task<CompileResult> Compile() => await _mod.CompileHandler.CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
     // A change both answers can land: the same records the fixture tracked, one value moved.
     private void RaiseParseableExternalChange()
@@ -34,12 +34,12 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
     }
 
     [Fact]
-    public void Compile_Refuses_WhileAnExternalChangeQuestionIsUnanswered_LeavingTheBinaryUntouched()
+    public async Task Compile_Refuses_WhileAnExternalChangeQuestionIsUnanswered_LeavingTheBinaryUntouched()
     {
         _mod.RaiseExternalChange();
         var upstreamBytes = File.ReadAllBytes(PluginPath);
 
-        var result = Compile();
+        var result = await Compile();
 
         Assert.False(result.Succeeded);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -48,25 +48,25 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
     }
 
     [Fact]
-    public void Compile_Succeeds_RightAfterAbsorbAnswersTheQuestion()
+    public async Task Compile_Succeeds_RightAfterAbsorbAnswersTheQuestion()
     {
         RaiseParseableExternalChange();
-        var absorbed = _mod.AbsorbHandler.Absorb(_mod.ModFolder, _mod.PluginCopies(PluginPath), _mod.LoadOrder);
+        var absorbed = await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(PluginPath), _mod.LoadOrder);
         Assert.True(absorbed.Applied, absorbed.RefusalReason);
 
-        var result = Compile();
+        var result = await Compile();
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }
 
     [Fact]
-    public void Compile_Succeeds_RightAfterKeepAnswersTheQuestion()
+    public async Task Compile_Succeeds_RightAfterKeepAnswersTheQuestion()
     {
         RaiseParseableExternalChange();
         var kept = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
         Assert.True(kept.Applied, kept.RefusalReason);
 
-        var result = Compile();
+        var result = await Compile();
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }

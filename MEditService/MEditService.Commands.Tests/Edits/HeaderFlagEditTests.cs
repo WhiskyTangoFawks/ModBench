@@ -25,7 +25,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     private static JsonElement Json(bool value) => JsonDocument.Parse(value ? "true" : "false").RootElement;
 
     [Fact]
-    public void EditField_IsLightTrue_SetsTheSmallFlag_AndCompilesItIntoTheBinary()
+    public async Task EditField_IsLightTrue_SetsTheSmallFlag_AndCompilesItIntoTheBinary()
     {
         var result = Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true));
 
@@ -34,8 +34,8 @@ public sealed class HeaderFlagEditTests : IDisposable
         // The source document is the truth: the root RecordData.json now carries the flag.
         Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
-        var compile = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var compile = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
 
         using var written = ModFactory.ImportGetter(
@@ -75,13 +75,13 @@ public sealed class HeaderFlagEditTests : IDisposable
     // range refuses to compile, with the typed EslContradiction marker the frontend turns into the
     // remove-the-flag prompt.
     [Fact]
-    public void Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
+    public async Task Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
     {
         Assert.True(_fixture.CreateHandler.CreateRecord(
             _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var compile = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var compile = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(compile.Succeeded);
         Assert.True(compile.EslContradiction);
@@ -89,7 +89,7 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         // The accepted prompt's own path: clear the flag, compile again — clean.
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
-        var second = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var second = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(second.Succeeded, second.RefusalReason);
         Assert.False(second.EslContradiction);
     }

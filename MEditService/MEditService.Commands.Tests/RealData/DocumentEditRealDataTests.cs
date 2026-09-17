@@ -39,7 +39,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         var loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(loadOrder, [_plugin], _plugin.Origin, SourcePreset.Edits)
+            .TrackAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)

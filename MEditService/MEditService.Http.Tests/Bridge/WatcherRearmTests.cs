@@ -153,10 +153,10 @@ public sealed class WatcherRearmTests : IDisposable
     // A crash between the journal's marker write and its clear is offered for repair and never
     // routed into the external-change queue: the two prompts must never both fire for one event.
     [Fact]
-    public void Rearm_OffersRepair_AndQueuesNoExternalChangeQuestion_WhenAJournalMarkerIsUnanswered()
+    public async Task Rearm_OffersRepair_AndQueuesNoExternalChangeQuestion_WhenAJournalMarkerIsUnanswered()
     {
-        Assert.ThrowsAny<Exception>(() =>
-            CompileJournal.RunBatch(_mod.ModFolder, [IndexedModFixture.PluginName],
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            CompileJournal.RunBatchAsync(_mod.ModFolder, [IndexedModFixture.PluginName],
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 

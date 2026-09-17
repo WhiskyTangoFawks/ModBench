@@ -27,10 +27,10 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private string QuestFile => _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-    private IQuestGetter CompiledQuest()
+    private async Task<IQuestGetter> CompiledQuest()
     {
-        var result = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var overlay = ModFactory.ImportGetter(
@@ -73,7 +73,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     [Theory]
     [MemberData(nameof(QuestChildKinds))]
-    public void SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(string kind)
+    public async Task SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(string kind)
     {
         var (child, editorId, siblings) = Kind(kind);
         var before = File.ReadAllText(QuestFile);
@@ -88,7 +88,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         AssertOnlyTheQuestFileChanged();
 
         Assert.Equal($"Renamed{kind}", _fixture.Document(child.ToString()).Require().EditorId);
-        var compiled = siblings(CompiledQuest()).ToList();
+        var compiled = siblings(await CompiledQuest()).ToList();
         Assert.Contains($"Renamed{kind}", compiled);
         if (kind == "topic")
         {
@@ -99,7 +99,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     // The nesting's deepest level: a response inside a topic inside the quest.
     [Fact]
-    public void RenamingANestedResponse_ChangesTheQuestDocumentAtTheResponsesElementOnly_AndCompilesInOrder()
+    public async Task RenamingANestedResponse_ChangesTheQuestDocumentAtTheResponsesElementOnly_AndCompilesInOrder()
     {
         var before = File.ReadAllText(QuestFile);
 
@@ -115,13 +115,13 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Contains(_fixture.Response.ToString(), SlotOf(_fixture.DialogTopic, nameof(DialogTopic.Responses)));
         Assert.Equal(
             ["RenamedResponse", ContainerModFixture.Response2EditorId],
-            CompiledQuest().DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID.Require()));
+            (await CompiledQuest()).DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID.Require()));
     }
 
     // ---- the generic array ops, on an embedded child's own array field ----
 
     [Fact]
-    public void AddingMovingAndRemoving_OnANestedResponsesOwnArray_PatchTheQuestDocumentAtThatArray_AndCompileInOrder()
+    public async Task AddingMovingAndRemoving_OnANestedResponsesOwnArray_PatchTheQuestDocumentAtThatArray_AndCompileInOrder()
     {
         var service = EditService();
         var response = _fixture.Response.ToString();
@@ -144,7 +144,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", File.ReadAllText(QuestFile), StringComparison.Ordinal);
         Assert.Equal(
             [3, 2],
-            CompiledQuest().DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
+            (await CompiledQuest()).DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
                 .Responses.Single(r => r.FormKey == _fixture.Response).Responses.Select(l => (int)l.ResponseNumber));
     }
 
@@ -160,7 +160,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     // ---- delete ----
 
     [Fact]
-    public void DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
+    public async Task DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
     {
         var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.DialogTopic.ToString());
 
@@ -184,7 +184,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         }
         Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 
-        var compiled = CompiledQuest();
+        var compiled = await CompiledQuest();
         Assert.Equal([ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId], compiled.DialogTopics.Select(t => t.EditorID.Require()));
         Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID.Require()));
     }
@@ -192,7 +192,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     // ---- renumber ----
 
     [Fact]
-    public void RenumberingAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
+    public async Task RenumberingAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
     {
         var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
 
@@ -208,7 +208,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
         Assert.Equal(
             [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId],
-            CompiledQuest().DialogTopics.Select(t => t.EditorID.Require()));
+            (await CompiledQuest()).DialogTopics.Select(t => t.EditorID.Require()));
     }
 
     // ---- refusal ----
@@ -230,7 +230,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     // ---- copy as override: the container rule's mint, one and two levels up ----
 
     [Fact]
-    public void CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
+    public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -251,14 +251,14 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Contains($"\"FormKey\": \"{fixture.Quest}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(fixture.DestinationSourceRoot, "Quests")));
 
-        var compiled = CompileAndImport(fixture).Quests.Single(q => q.FormKey == fixture.Quest);
+        var compiled = (await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest);
         Assert.Equal(ContainerCopyFixture.SceneEditorId, Assert.Single(compiled.Scenes).EditorID);
         Assert.Empty(compiled.DialogTopics);
     }
 
     // Own fields only, like every plain copy: the topic lands with no responses.
     [Fact]
-    public void CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
+    public async Task CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -273,14 +273,14 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Response1.ToString()));
         Assert.False(JsonDocument.Parse(topic.Body).RootElement.TryGetProperty("Responses", out _));
 
-        var compiledTopic = Assert.Single(CompileAndImport(fixture).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
+        var compiledTopic = Assert.Single((await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, compiledTopic.EditorID);
         Assert.Empty(compiledTopic.Responses);
     }
 
     // A response into a plugin holding neither its topic nor its quest: both minted, one document.
     [Fact]
-    public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
+    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -307,14 +307,14 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Single(Directory.EnumerateFiles(questsFolder), f => Path.GetFileName(f) != "GroupRecordData.json");
         Assert.Empty(Directory.EnumerateDirectories(questsFolder));
 
-        var compiledTopic = Assert.Single(CompileAndImport(fixture).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
+        var compiledTopic = Assert.Single((await CompileAndImport(fixture)).Quests.Single(q => q.FormKey == fixture.Quest).DialogTopics);
         Assert.Equal(ContainerCopyFixture.Response2EditorId, Assert.Single(compiledTopic.Responses).EditorID);
     }
 
-    private IFallout4ModGetter CompileAndImport(ContainerCopyFixture fixture)
+    private async Task<IFallout4ModGetter> CompileAndImport(ContainerCopyFixture fixture)
     {
-        var compile = CompileServices.Over(fixture.LoadOrder)
-            .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compile = await CompileServices.Over(fixture.LoadOrder)
+            .CompileAsync(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),

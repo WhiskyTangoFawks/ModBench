@@ -79,7 +79,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             ]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [_plugin], _plugin.Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -102,9 +102,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // The set the Index's masters read computed from its references table, now derived by running the
     // collector over the same records (ADR-0008).
     [Fact]
-    public void Compile_ReportsTheEffectiveMasters_InLoadOrder()
+    public async Task Compile_ReportsTheEffectiveMasters_InLoadOrder()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Equal([CharlieName, BravoName], result.Masters);
@@ -113,9 +113,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // Compile sees one plugin's records, so a link into a plugin the load order holds is one it
     // cannot answer for; claiming it unresolved would fill the Problems panel with every valid link.
     [Fact]
-    public void Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
+    public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -125,14 +125,14 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // The other half of the Index's masters rule: a plugin whose record this one overrides is a
     // master whether or not anything here references it (ADR-0008).
     [Fact]
-    public void Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
+    public async Task Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
     {
         SourceEdits.Write(
             SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
@@ -141,14 +141,14 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // The Index answered this from its global lookup; the link cache answers it from the copy the
     // load order loads, so what the author sees in the Problems panel is unchanged.
     [Fact]
-    public void Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
+    public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
     {
         SourceEdits.Rewrite<Npc>(
             SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(
@@ -158,9 +158,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     }
 
     [Fact]
-    public void Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
+    public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -175,14 +175,14 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     // Written into the tracked source after Track rather than pre-baked into the baseline. DeltaName
     // is loaded but never referenced at Track time, so it provably is not yet a master.
     [Fact]
-    public void Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
+    public async Task Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
         SourceEdits.Rewrite<Npc>(
             SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);

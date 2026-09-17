@@ -33,10 +33,10 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
 
     private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString().Require();
 
-    private IFallout4ModGetter ImportCompiled()
+    private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compileResult = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compileResult = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
@@ -50,7 +50,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
     // bare Partial Form override of the parent quest. Response2's sibling link still points at the
     // original, which is xEdit's own behavior.
     [Fact]
-    public void CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
+    public async Task CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
     {
         var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
@@ -84,7 +84,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
-        var compiled = ImportCompiled();
+        var compiled = await ImportCompiled();
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         var compiledTopic = compiledQuest.DialogTopics.Single(t => t.FormKey.ToString() == newTopicFormKey);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, compiledTopic.EditorID);
@@ -98,7 +98,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
     // An existing parent override keeps its own fields and flag: the new topic lands in its
     // DialogTopics slot and nothing else in the document changes.
     [Fact]
-    public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
+    public async Task CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
         Assert.True(_fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
@@ -132,7 +132,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.Empty(Directory.EnumerateDirectories(questsDir));
         Assert.Single(Directory.EnumerateFiles(questsDir), f => Path.GetFileName(f) != "GroupRecordData.json");
 
-        var compiledQuest = ImportCompiled().Quests.Single(q => q.FormKey == _fixture.Quest);
+        var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
         Assert.Single(compiledQuest.DialogTopics, t => t.FormKey.ToString() == result.NewFormKey);
     }
@@ -141,7 +141,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
     // Partial Form overrides — both under their ORIGINAL FormKeys (they are overrides); only the
     // response itself draws a fresh key.
     [Fact]
-    public void CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
+    public async Task CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
     {
         var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.Response1.ToString(), _fixture.DestinationPlugin);
@@ -160,7 +160,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.Contains(newFormKey, File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId)), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
-        var compiledTopic = ImportCompiled().Quests.Single(q => q.FormKey == _fixture.Quest)
+        var compiledTopic = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic);
         var compiledResponse = Assert.Single(compiledTopic.Responses);
         Assert.Equal(newFormKey, compiledResponse.FormKey.ToString());
@@ -170,7 +170,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
     // A Quest copies as its own record only — its children never ride along with a plain Copy as
     // New Record (deep copy is a separate operation).
     [Fact]
-    public void CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
+    public async Task CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
         var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin);
@@ -189,7 +189,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);
 
-        var compiledQuest = ImportCompiled().Quests.Single(q => q.FormKey.ToString() == newFormKey);
+        var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey.ToString() == newFormKey);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
         Assert.Empty(compiledQuest.DialogTopics);
         Assert.Empty(compiledQuest.DialogBranches);

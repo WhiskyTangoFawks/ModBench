@@ -137,7 +137,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [_plugin], Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -156,25 +156,24 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
 
-    private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
+    private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
-        handle = overlay;
-        return (IFallout4ModGetter)overlay;
+        return ((IFallout4ModGetter)overlay, overlay);
     }
 
     private static IEnumerable<ICellGetter> AllCells(IFallout4ModGetter mod) =>
         mod.EnumerateMajorRecords<ICellGetter>();
 
     [Fact]
-    public void Compile_OfTwoCellsInOneSubBlock_GivesEachCellExactlyItsOwnChildren()
+    public async Task Compile_OfTwoCellsInOneSubBlock_GivesEachCellExactlyItsOwnChildren()
     {
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             var a = AllCells(mod).Single(c => c.FormKey == _cellA);
@@ -188,9 +187,9 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfAWorldspace_KeepsTheExteriorHierarchyAndTheTopCell()
+    public async Task Compile_OfAWorldspace_KeepsTheExteriorHierarchyAndTheTopCell()
     {
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             var worldspace = mod.Worldspaces.Single(w => w.FormKey == _worldspace);
@@ -214,9 +213,9 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfTwoQuests_GivesEachQuestExactlyItsOwnDialogueAndScenes()
+    public async Task Compile_OfTwoQuests_GivesEachQuestExactlyItsOwnDialogueAndScenes()
     {
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             var a = mod.Quests.Single(q => q.FormKey == _questA);
@@ -237,9 +236,9 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public void Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
+    public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var diagnostic = Assert.Single(
@@ -254,7 +253,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     // A container's document is found by scanning the tree, never computed from the identity, so the
     // ref's own answer is the only one left once the working tree has lost the directory.
     [Fact]
-    public void Compile_AtARef_ForAnEmbeddedChildWithASemanticError_NamesTheContainersDocumentInThatRef()
+    public async Task Compile_AtARef_ForAnEmbeddedChildWithASemanticError_NamesTheContainersDocumentInThatRef()
     {
         var cellDirectory = Directory
             .EnumerateDirectories(
@@ -262,7 +261,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             .Single();
         Directory.Delete(cellDirectory, recursive: true);
 
-        var result = CompileService().Compile(_plugin, new CompileSource.AtRef("HEAD"));
+        var result = await CompileService().CompileAsync(_plugin, new CompileSource.AtRef("HEAD"));
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = result.Diagnostics.First(d => d.FormKey == _cellATemporaryRef.ToString());
@@ -273,14 +272,14 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
+    public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(
             SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
             quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
 
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             var questC = mod.Quests.Single(q => q.FormKey == _questC);
@@ -291,9 +290,9 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     [Fact]
-    public void Compile_CarriesTheModHeaderFromTheTree_RatherThanEmittingAFreshOne()
+    public async Task Compile_CarriesTheModHeaderFromTheTree_RatherThanEmittingAFreshOne()
     {
-        var mod = CompileAndReimport(out var handle);
+        var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             Assert.Equal(HeaderAuthor, mod.ModHeader.Author);

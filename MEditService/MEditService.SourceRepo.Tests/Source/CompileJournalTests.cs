@@ -17,9 +17,9 @@ public sealed class CompileJournalTests : IDisposable
     }
 
     [Fact]
-    public void RunBatch_WhenEveryPluginLands_ClearsTheMarker()
+    public async Task RunBatch_WhenEveryPluginLands_ClearsTheMarker()
     {
-        CompileJournal.RunBatch(_modFolder, ["A.esp", "B.esp"], _ => true);
+        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp"], _ => Task.FromResult(true));
 
         Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
     }
@@ -34,11 +34,11 @@ public sealed class CompileJournalTests : IDisposable
     // marker file is asserted directly rather than through RunBatch's return value, so it is honest
     // about what a restarted process would see.
     [Fact]
-    public void RunBatch_CrashBetweenTwoPluginsWrites_LeavesAMarkerNamingExactlyWhatLanded()
+    public async Task RunBatch_CrashBetweenTwoPluginsWrites_LeavesAMarkerNamingExactlyWhatLanded()
     {
-        Assert.Throws<InvalidOperationException>(() =>
-            CompileJournal.RunBatch(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin =>
-                plugin == "B.esp" ? throw new InvalidOperationException("simulated crash") : true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin =>
+                plugin == "B.esp" ? throw new InvalidOperationException("simulated crash") : Task.FromResult(true)));
 
         var recovery = CompileJournal.UnfinishedBatch(_modFolder);
         Assert.NotNull(recovery);
@@ -48,9 +48,9 @@ public sealed class CompileJournalTests : IDisposable
     }
 
     [Fact]
-    public void RunBatch_APluginThatRefuses_StopsTheBatch_AndLeavesItInTheUnlandedSet()
+    public async Task RunBatch_APluginThatRefuses_StopsTheBatch_AndLeavesItInTheUnlandedSet()
     {
-        var landed = CompileJournal.RunBatch(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin => plugin != "B.esp");
+        var landed = await CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin => Task.FromResult(plugin != "B.esp"));
 
         Assert.Equal(["A.esp"], landed);
         var recovery = CompileJournal.UnfinishedBatch(_modFolder);
@@ -59,9 +59,9 @@ public sealed class CompileJournalTests : IDisposable
     }
 
     [Fact]
-    public void RunBatch_OfOnePlugin_BehavesTheSameAsAnyOtherBatch()
+    public async Task RunBatch_OfOnePlugin_BehavesTheSameAsAnyOtherBatch()
     {
-        CompileJournal.RunBatch(_modFolder, ["Solo.esp"], _ => true);
+        await CompileJournal.RunBatchAsync(_modFolder, ["Solo.esp"], _ => Task.FromResult(true));
 
         Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
     }

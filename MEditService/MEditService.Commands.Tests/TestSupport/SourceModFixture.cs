@@ -49,7 +49,7 @@ internal sealed class SourceModFixture : IDisposable
         if (tracked)
         {
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(LoadOrder, [Plugin], origin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 

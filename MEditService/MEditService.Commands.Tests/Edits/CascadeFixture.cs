@@ -47,7 +47,7 @@ public sealed class CascadeFixture : IDisposable
         LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackAsync(LoadOrder, Origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);

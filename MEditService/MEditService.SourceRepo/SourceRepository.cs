@@ -474,14 +474,14 @@ public sealed partial class SourceRepository
     internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
         [.. ParseStatus(modFolder).Select(e => e.Path)];
 
-    /// <summary>"Changed tracked files" (ADR-0003): git status against the edit branch,
-    /// restricted to paths outside the source root. Empty under Edits by construction; lists
-    /// assets under Everything.</summary>
+    /// <summary>"Changed tracked files" (ADR-0003 invariant 3): every path outside the source
+    /// root whose working tree differs from the index, git's view; a change staged and untouched
+    /// since is an answer, not a question. Assets under Everything.</summary>
     public static IReadOnlyList<TrackedFileChange> ChangedTrackedFilesOutsideSource(string modFolder)
     {
         var sourcePrefix = ToGitPath(RootFolderName) + "/";
         return [.. ParseStatus(modFolder)
-            .Where(e => !e.Path.StartsWith(sourcePrefix, StringComparison.Ordinal))
+            .Where(e => !e.Path.StartsWith(sourcePrefix, StringComparison.Ordinal) && e.WorktreeStatus != ' ')
             .Select(e => new TrackedFileChange(
                 e.Path,
                 e.IndexStatus == 'D' || e.WorktreeStatus == 'D' ? TrackedFileChangeKind.Deleted : TrackedFileChangeKind.Modified,

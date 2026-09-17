@@ -125,16 +125,17 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013: the handler is the only writer, the composition root's own subscription the only
-    // reconciler — a second one of either makes the Index's Status lie.
+    // ADR-0013 invariant 1: the create and put-load-order handlers are the only writers, the
+    // composition root's own subscription the only reconciler — a second of either makes the
+    // Index's Status lie.
     [Fact]
-    public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
+    public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheCompositionRoot()
     {
         var root = SolutionDirectory();
         // Create never reconciles: its copy reaches the Index through the next snapshot. The
         // composition root is the one caller of the reconcile door. debt #946: the watcher takes the call.
         string[] reconcilers = ["Program.cs"];
-        string[] writers = ["PluginEndpoints.cs", "PutLoadOrderHandler.cs"];
+        string[] writers = ["CreatePluginHandler.cs", "PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
         var applies = HolderWrites(root, Projects, "Apply");
@@ -145,7 +146,7 @@ public sealed class ArchitectureTests
             .ToList();
         Assert.True(offenders.Count == 0,
             "The load order is reconciled outside Load order state's own Changed subscriber, or "
-            + "written outside PluginEndpoints.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
+            + "written outside CreatePluginHandler.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
         Assert.True(dead.Count == 0,

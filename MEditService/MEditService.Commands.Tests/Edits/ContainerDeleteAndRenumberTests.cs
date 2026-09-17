@@ -200,7 +200,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     // ---- order preservation ----
 
     [Fact]
-    public void DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
+    public async Task DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
     {
         var deletes = DeleteHandler();
         foreach (var topic in new[] { _fixture.DialogTopic, _fixture.DialogTopic2, _fixture.DialogTopic3 })
@@ -213,8 +213,8 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
 
-        var compileResult = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var compileResult = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }
 }

@@ -82,7 +82,7 @@ public sealed class SourceEditFixture : IDisposable
         {
             beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, preset)
+                .TrackAsync(LoadOrder, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
 

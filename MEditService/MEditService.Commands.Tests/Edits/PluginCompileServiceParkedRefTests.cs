@@ -30,12 +30,12 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     private static string Sha256Of(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 
     [Fact]
-    public void Compile_WorkingTree_AdvancesTheParkedRef_WithTheCompiledBinarysHash()
+    public async Task Compile_WorkingTree_AdvancesTheParkedRef_WithTheCompiledBinarysHash()
     {
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();
 
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var newParked = RunGit("rev-parse", ParkedRef).Trim();
@@ -47,14 +47,14 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AtMain_AdvancesTheParkedRef_AndTouchesNeitherTheEditBranchsWorkingTreeNorHead()
+    public async Task Compile_AtMain_AdvancesTheParkedRef_AndTouchesNeitherTheEditBranchsWorkingTreeNorHead()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         var dirtBefore = _mod.GitStatus();
         var headBefore = RunGit("rev-parse", "HEAD").Trim();
         var branchBefore = RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim();
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("main"));
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("main"));
         Assert.True(result.Succeeded, result.RefusalReason);
 
         Assert.Equal(dirtBefore, _mod.GitStatus());
@@ -70,13 +70,13 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     // Every working-tree document replaced with text the codec cannot read: a compile at main that
     // read one would refuse, so succeeding is the proof it read the ref's blobs instead.
     [Fact]
-    public void Compile_AtMain_ReadsNoWorkingTreeSourceFile()
+    public async Task Compile_AtMain_ReadsNoWorkingTreeSourceFile()
     {
         var sourceRoot = Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName));
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
             File.WriteAllText(file, "{ not valid json");
 
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("main"));
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("main"));
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var mod = _mod.Reimport(out var handle);
@@ -84,7 +84,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
+    public async Task Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
         const string scratchPrefix = "medit-readtree-";
         var sourceRoot = SourceRepository.RootFor(CompileFixture.PluginName);
@@ -123,15 +123,15 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         // partway through leaves that folder behind unless the cleanup covers the populate.
         var before = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
 
-        Assert.ThrowsAny<IOException>(
-            () => CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("unwritable")));
+        await Assert.ThrowsAnyAsync<IOException>(
+            async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("unwritable")));
 
         var after = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
         Assert.Empty(after.Except(before, StringComparer.Ordinal));
     }
 
     [Fact]
-    public void Compile_ThatRefuses_LeavesTheParkedRefUntouched()
+    public async Task Compile_ThatRefuses_LeavesTheParkedRefUntouched()
     {
         // Two source files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
         // structurally cannot emit, so nothing about the plugin's parked state should move.
@@ -141,7 +141,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         File.WriteAllText(collidingPath, npcSourceText);
 
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal(baselineParked, RunGit("rev-parse", ParkedRef).Trim());

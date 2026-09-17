@@ -32,10 +32,10 @@ public sealed class ResponseWriteApiTests : IDisposable
             .Select(response => response.GetProperty("FormKey").GetString().Require())];
     }
 
-    private IReadOnlyList<string> CompiledResponseEditorIds()
+    private async Task<IReadOnlyList<string>> CompiledResponseEditorIds()
     {
-        var result = CompileServices.Over(_fixture.LoadOrder)
-            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_fixture.LoadOrder)
+            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         using var overlay = ModFactory.ImportGetter(
@@ -47,7 +47,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     }
 
     [Fact]
-    public void SettingAResponsesField_ChangesTheTopicDocumentAtThatPathAndNowhereElse_AndCompilesInOrder()
+    public async Task SettingAResponsesField_ChangesTheTopicDocumentAtThatPathAndNowhereElse_AndCompilesInOrder()
     {
         var before = File.ReadAllText(TopicFile);
         Assert.Empty(_fixture.GitStatus());
@@ -62,11 +62,11 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.EndsWith(Path.GetFileName(TopicFile), changed, StringComparison.Ordinal);
 
         Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString()).Require().EditorId);
-        Assert.Equal(["RenamedResponse", ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
+        Assert.Equal(["RenamedResponse", ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
     }
 
     [Fact]
-    public void DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
+    public async Task DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
     {
         var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
 
@@ -81,11 +81,11 @@ public sealed class ResponseWriteApiTests : IDisposable
             _fixture.Response.ToString(), "info", ContainerModFixture.ResponseEditorId));
         Assert.Equal([_fixture.Response2.ToString()], ResponseFormKeys());
 
-        Assert.Equal([ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
+        Assert.Equal([ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
     }
 
     [Fact]
-    public void RenumberingAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
+    public async Task RenumberingAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
     {
         var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
 
@@ -97,7 +97,7 @@ public sealed class ResponseWriteApiTests : IDisposable
 
         Assert.Equal([result.NewFormKey.Require(), _fixture.Response2.ToString()], ResponseFormKeys());
 
-        Assert.Equal([ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
+        Assert.Equal([ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId], await CompiledResponseEditorIds());
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     // The container rule's mint: the destination lacks the topic and the quest, so both land bare
     // and Partial Form, with the response inline in the topic's document.
     [Fact]
-    public void CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
+    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -138,8 +138,8 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Contains($"\"FormKey\": \"{fixture.DialogTopic}\"", File.ReadAllText(topicFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
-        var compile = CompileServices.Over(fixture.LoadOrder)
-            .Compile(fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compile = await CompileServices.Over(fixture.LoadOrder)
+            .CompileAsync(fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),

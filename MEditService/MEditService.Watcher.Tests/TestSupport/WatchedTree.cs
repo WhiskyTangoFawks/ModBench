@@ -1,8 +1,12 @@
 using System.Diagnostics;
+using MEditService.Commands.Composition;
+using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.SourceRepo;
 using MEditService.Watcher;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using FakeClock = Microsoft.Extensions.Time.Testing.FakeTimeProvider;
@@ -38,6 +42,15 @@ internal sealed class WatchedTree : IDisposable
 
     private readonly List<RegisteredCopy> _copies = [];
 
+    /// <summary>The watcher's verb as the composition root builds it, over the port this tree
+    /// reads.</summary>
+    internal static TrackedModSettled Settled(INotificationPublisher notifications) =>
+        new ServiceCollection()
+            .AddSingleton(notifications)
+            .AddCommandHandlers()
+            .BuildServiceProvider()
+            .GetRequiredService<TrackedModSettled>();
+
     internal WatchedTree(IndexWriteGate? writeGate = null, TimeSpan? quiet = null, TimeSpan? maxWindow = null)
     {
         Quiet = quiet ?? DefaultQuiet;
@@ -46,7 +59,7 @@ internal sealed class WatchedTree : IDisposable
         InstanceRoot = Directory.CreateTempSubdirectory("medit-watch-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Watcher = new ModFolderWatcher(
-            Holder, Index, Notifications, new CollectingLogger(LogEntries), Quiet, MaxWindow, Clock);
+            Holder, Index, Notifications, Settled(Notifications), new CollectingLogger(LogEntries), Quiet, MaxWindow, Clock);
     }
 
     /// <summary>A mod folder holding one plugin binary, registered in the load order this tree
@@ -185,8 +198,9 @@ internal sealed class WatchedTree : IDisposable
             _past = quiet + maxWindow;
             var holder = new LoadOrderHolder();
             holder.Apply(snapshot);
+            var notifications = new InMemoryNotificationPublisher();
             Watcher = new ModFolderWatcher(
-                holder, _index, new InMemoryNotificationPublisher(), NullLogger.Instance, quiet, maxWindow, _clock);
+                holder, _index, notifications, Settled(notifications), NullLogger.Instance, quiet, maxWindow, _clock);
         }
 
         /// <summary>Writes a probe and settles on it. One watch delivers in order, so the probe
