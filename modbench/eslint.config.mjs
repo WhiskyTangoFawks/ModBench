@@ -130,6 +130,7 @@ export default tseslint.config(
                 project: [
                     './src/tsconfig.json',
                     './tsconfig.test.json',
+                    './tsconfig.integration.json',
                     './src/mo2Codecs/tsconfig.json',
                     './src/tables/tsconfig.json',
                     './src/wire/tsconfig.json',

@@ -348,9 +348,9 @@ function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: st
   return offenses;
 }
 
-// Editor, Plugins, Mods, Downloads and the Instance are boxes whose reference lists do not
-// reach each other, so `tsc -b` refuses those imports (kernelProjectScan.test.ts). Editing's
-// wiring compiles in the composition root, which references everything, so this scan holds it.
+// Editor, Plugins, Mods, Downloads and the Instance are boxes whose reference lists never reach
+// each other, so `tsc -b` refuses those imports. Editing's wiring compiles in the composition
+// root, which references everything, so this scan holds it.
 describe('Editing imports nothing from Editor', () => {
   // Editing sits below Editor in the dependency direction (Editor imports the client, never the
   // reverse): a medit/ file reaching into editor/ would cycle the two.
