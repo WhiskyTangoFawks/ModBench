@@ -34,8 +34,8 @@ internal sealed class DuckDbRecordIndexFactory(
         return repo;
     }
 
-    /// <summary>ADR-0014: the reopened sequence is floored at <paramref name="atLeastSequence"/>, so a
-    /// rebuild never regresses below a value this process already handed out.</summary>
+    /// <summary>The reopened sequence is floored at <paramref name="atLeastSequence"/>: this process
+    /// may already have answered a caller with a higher value, and Sequence must never regress.</summary>
     public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
     {
         var repo = new DuckDbRecordIndex(
