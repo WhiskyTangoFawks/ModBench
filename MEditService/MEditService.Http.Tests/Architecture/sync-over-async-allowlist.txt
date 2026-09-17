@@ -1,0 +1,17 @@
+# Every sync-over-async block left in production, as file, form and count. A task's result is
+# reached by awaiting it: `.Result` is banned in BannedSymbols.txt and these spellings block the
+# calling thread on exactly the same hazard, so this list is the work remaining rather than
+# permission. It shrinks as each caller learns to await, and when it is empty the ban grows the
+# entries and this gate goes. A line added here is a new block that needs the maintainer's ruling.
+MEditService.Codec/Schema/DeclaredDefaults.cs: GetAwaiter().GetResult(): 3
+MEditService.Codec/Serialization/HeaderDocument.cs: GetAwaiter().GetResult(): 2
+MEditService.Codec/Serialization/ModDocuments.cs: GetAwaiter().GetResult(): 2
+MEditService.Codec/Serialization/ModelIdentity.cs: GetAwaiter().GetResult(): 2
+MEditService.Codec/Serialization/RecordTextCodec.cs: GetAwaiter().GetResult(): 5
+MEditService.Commands/AbsorbExternalChangeHandler.cs: GetAwaiter().GetResult(): 1
+MEditService.Commands/Edits/PluginCompileService.cs: GetAwaiter().GetResult(): 3
+MEditService.Index/IndexProjector.cs: .Wait(): 1
+MEditService.Index/IndexProjector.cs: GetAwaiter().GetResult(): 1
+MEditService.SourceRepo/GitCli.cs: GetAwaiter().GetResult(): 2
+MEditService.SourceRepo/GitCli.cs: Task.WaitAll(: 1
+MEditService.Watcher/ModFolderWatcher.cs: GetAwaiter().GetResult(): 1

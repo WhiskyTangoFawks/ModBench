@@ -116,11 +116,41 @@ public sealed class WriteSideIndexScanTests
         }
     }
 
-    // Not the write side: an endpoint's read routes name the query services by definition. So the
-    // scan here is narrowed to the gate, which a record route can take again in one compiling line.
+    // The endpoints are a write-side root too: a route that reads the Index and hands the answer to
+    // a handler is the write side reading its own effect through the API.
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
     private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
+
+    // The read routes name the query services by definition, and the gate has its own fact below,
+    // so what is left is the store, the projector and the read surface.
+    private static readonly string[] ReadSideSymbols =
+        ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
+         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
+
+    private static readonly string[] EndpointSymbols =
+        [.. Symbols.Except(ReadSideSymbols, StringComparer.Ordinal).Except(GateSymbols, StringComparer.Ordinal)];
+
+    // The ticket that gives each of these routes a handler or a service of its own.
+    private const string EndpointTicket = "#947";
+
+    [Fact]
+    public void NoEndpoint_NamesAnIndexType()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = ScannedFiles(root, [EndpointRoot], []).Count;
+        var named = Counts(root, [EndpointRoot], [], EndpointSymbols);
+
+        Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
+        Assert.True(
+            named.Count == 0,
+            "An endpoint names an Index type. A route takes a gesture's handler or a query service, "
+            + "and the write side never reads the Index (ADR-0015 invariant 1), so a row reaching a "
+            + $"handler through the API is the same read by another door. {EndpointTicket} gives "
+            + "these routes their own box:\n"
+            + string.Join("\n", named));
+    }
 
     [Fact]
     public void NoEndpoint_NamesTheIndexWriteGate()
