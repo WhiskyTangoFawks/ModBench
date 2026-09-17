@@ -20,8 +20,8 @@ internal sealed class HeldPlugins
     private readonly ILogger _logger;
 
     // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
-    // ordinarily held at once, and a filename-keyed key would silently drop one. Compared as every
-    // other keyed lookup compares it, the kernel's own comparer.
+    // ordinarily held at once. Compared as every other keyed lookup compares it, the kernel's own
+    // comparer.
     private readonly Dictionary<PluginCopyKey, PluginLoadFailure> _loadFailures = new(PluginCopyKey.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.

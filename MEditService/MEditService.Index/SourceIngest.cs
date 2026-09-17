@@ -95,7 +95,7 @@ internal static class SourceIngest
     }
 
     // Diffs HEAD's documents against the working tree's by FormKey, needing no path identity
-    // (ADR-0007 invariant 3). A schema-unpublished type is skipped on the deletion side only: a
+    // (ADR-0007 invariant 3). A schema-unpublished type is skipped on the deletion side: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
         SourceRepository repository, PluginCopyKey key,
