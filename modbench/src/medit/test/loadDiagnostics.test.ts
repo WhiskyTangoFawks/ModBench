@@ -6,7 +6,7 @@ vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: f
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from '../loadDiagnostics';
 import type { OriginFolder } from '../../modmanager/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../client';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 const report = (plugin: string, origin: string, text: string): PluginDiagnosisReport => ({
   plugin, origin, anchor: null, defectClass: 'fixed-size-subrecord-short', tail: null, message: 'm', text,

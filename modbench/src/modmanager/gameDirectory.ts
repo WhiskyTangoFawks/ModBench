@@ -2,10 +2,10 @@
 // like the rest of modmanager/.
 
 import { dirname, join } from 'node:path';
-import { settingsFile } from './mo2/layout';
-import { readGamePath } from './mo2/modOrganizerIni';
+import { settingsFile } from '../mo2Codecs/layout';
+import { readGamePath } from '../mo2Codecs/modOrganizerIni';
 import { factsOf, get } from './mo2Files';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 export interface GameDirectory {
   /** Folder containing the game executable and Data/. */

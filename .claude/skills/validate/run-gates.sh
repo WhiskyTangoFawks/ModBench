@@ -41,7 +41,7 @@ if { $BACKEND || $API_DRIFT; } && [[ -z ${GATE_SLOT:-} ]]; then
 fi
 
 echo "=== Gate 1: Comment discipline ==="
-EXCLUDE_RE='^(references/|modbench/src/medit/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
+EXCLUDE_RE='^(references/|modbench/src/wire/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
 tracked() { (cd "$ROOT" && git ls-files "$@" | grep -Ev "$EXCLUDE_RE" | while read -r f; do [[ -f "$f" ]] && echo "$f"; done); }
 COMMENT_CODE=$(tracked '*.cs' '*.ts' '*.tsx' '*.py')
 COMMENT_DOCS=$(tracked '*.md')

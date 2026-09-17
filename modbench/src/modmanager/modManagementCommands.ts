@@ -6,11 +6,11 @@ import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommand
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance, InstanceView } from './instance';
-import { nexusSlugForGame } from './mo2/gamePaths';
-import { OVERWRITE_DIR_NAME, modDir } from './mo2/layout';
+import { nexusSlugForGame } from '../tables/gamePaths';
+import { OVERWRITE_DIR_NAME, modDir } from '../mo2Codecs/layout';
 import type { Own } from '../session';
-import type { Reporter } from '../reporter';
-import type { AskQuestion } from '../dialog';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 import { registerNameFilter } from '../nameFilter';
 import { setMo2InstanceContext } from '../workspaceConfig';
 import {

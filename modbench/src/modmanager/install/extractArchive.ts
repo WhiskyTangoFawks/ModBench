@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { errnoCode } from '../../errno';
+import { errnoCode } from '../../ports/errno';
 
 /** Rejects with the spawn error (ENOENT when the binary is absent) or a
  *  non-zero-exit error; `extractArchive` distinguishes the two. */

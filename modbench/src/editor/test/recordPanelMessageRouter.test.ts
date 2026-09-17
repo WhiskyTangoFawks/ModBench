@@ -18,10 +18,10 @@ import {
   routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../medit/messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import type { RecordSummary } from '../../medit/client';
 import { InMemoryMEditClient } from '../../medit/client';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 

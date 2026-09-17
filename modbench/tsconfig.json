@@ -1,20 +1,10 @@
 {
-  "compilerOptions": {
-    "module": "commonjs",
-    "target": "ES2022",
-    "lib": ["ES2023"],
-    "outDir": "./out",
-    "rootDir": "./src",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true,
-    // Off: it fights the generated wire types, which already say honestly which fields are optional.
-    "exactOptionalPropertyTypes": false,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "sourceMap": true
-  },
-  "include": ["src"],
-  "exclude": ["node_modules", "out", "webview"]
+  "files": [],
+  "references": [
+    { "path": "./src/mo2Codecs" },
+    { "path": "./src/tables" },
+    { "path": "./src/wire" },
+    { "path": "./src/ports" },
+    { "path": "./tsconfig.legacy.json" }
+  ]
 }

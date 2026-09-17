@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { overwriteDir } from './mo2/layout';
+import { overwriteDir } from '../mo2Codecs/layout';
 
 /** VS Code consults a decoration provider only for a URI it is rendering, so a static answer
  *  needs no event and no coupling back into the tree provider. The colour is theme-adaptive. */

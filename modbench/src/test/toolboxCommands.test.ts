@@ -37,10 +37,10 @@ vi.mock('../workspaceConfig', () => ({
 
 import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
-import type { AskQuestion } from '../dialog';
+import type { AskQuestion } from '../ports/dialog';
 import { instanceValueFixture } from '../modmanager/test/instanceValueFixture';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // `deployed: true` is the steady state most tests want — a directory that already has a
 // manifest, so the deploy gesture never has to ask.

@@ -4,7 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createDownloadsWatcher } from './downloadsWatcher';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // Only the glob is asserted here; coalesce and dispose are covered generically elsewhere.
 describe('createDownloadsWatcher', () => {

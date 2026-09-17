@@ -1,5 +1,5 @@
 import createClient from 'openapi-fetch';
-import type { paths } from '../../src/medit/generated/api';
+import type { paths } from '../../src/wire/generated/api';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './columnKey';
 import { parseCompareResult } from './parseCompareResult';

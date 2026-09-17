@@ -4,8 +4,8 @@ import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetad
 import type { InstanceValue, InstanceView } from '../modmanager/instance';
 import { firstReadOf, type FirstRead } from '../modmanager/instanceFirstRead';
 import type { PluginEntry } from '../modmanager/model';
-import type { Reporter } from '../reporter';
-import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
+import type { Reporter } from '../ports/reporter';
+import { dropIndexForMove } from '../mo2Codecs/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';

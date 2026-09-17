@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SseNotificationSubscriber } from '../notificationStream';
 import type { NotificationEvent } from '../apiClient';
-import { present } from '../../../present';
+import { present } from '../../../ports/present';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, sequence: 1, ...overrides };

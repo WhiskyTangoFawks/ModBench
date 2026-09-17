@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gameReleaseForGame, nexusSlugForGame, gamePathInfoForRelease } from './gamePaths';
+import { gameReleaseForGame, nexusSlugForGame, gamePathInfoForRelease } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
   it('maps a known MO2 game name to Mutagen\'s release name', () => {

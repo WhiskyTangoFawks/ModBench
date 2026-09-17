@@ -692,11 +692,11 @@ overflow, then native **Collapse All** last.
 
 - A pure `pluginsText.ts`, templated directly on `modlistText.ts`'s byte-faithful
   splice-transform pattern: parse `plugins.txt` into an ordered model view, mutate via surgical
-  splice (`lineRanges`, `mo2/lineScan.ts`) — never model→re-serialization — so comments, blank
+  splice (`lineRanges`, `mo2Codecs/lineScan.ts`) — never model→re-serialization — so comments, blank
   lines, and CRLF/BOM survive untouched.
 - **Line endings for *newly inserted* lines.** Existing lines are never rewritten, so
   byte-faithfulness does not answer what terminator a new line gets — that needs its own rule, and
-  `plugins.txt` and `modlist.txt` share one rule in `mo2/lineScan.ts`: **if the file contains
+  `plugins.txt` and `modlist.txt` share one rule in `mo2Codecs/lineScan.ts`: **if the file contains
   `\r\n` anywhere, use `\r\n`; otherwise `\n`.** A per-file rule — sniffing the first terminated
   line's own terminator — is rejected: on a mixed-EOL file it could pick `\n` where the shared
   rule picks `\r\n`, and it could emit a **bare `\r`** when the first line is CR-terminated. That
@@ -760,7 +760,7 @@ overflow, then native **Collapse All** last.
   this install loads with no `plugins.txt` line, in load order: the release's implicit masters
   present in that folder, then its Creation Club catalog. `ForcedPlugins.Names`, the same
   list a `PUT /load-order` prepends, answered with no load order held. `gameRelease` is Mutagen's
-  own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gamePaths.ts`'s
+  own name, translated from `ModOrganizer.ini`'s `gameName` by `tables/gamePaths.ts`'s
   `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no
   release is one of the unknowables above.
 - **Load-order-derived master classification** (ADR-0012): `MasterResolution.Classify`

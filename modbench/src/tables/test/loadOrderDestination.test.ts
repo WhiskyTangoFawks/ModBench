@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadOrderAppDataFolder } from './loadOrderDestination';
+import { loadOrderAppDataFolder } from '../loadOrderDestination';
 
 describe('loadOrderAppDataFolder', () => {
   it('answers Fallout 4\'s AppData folder', () => {

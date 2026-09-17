@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "./out/projects/legacy.tsbuildinfo"
+  },
+  "references": [
+    { "path": "./src/mo2Codecs" },
+    { "path": "./src/tables" },
+    { "path": "./src/wire" },
+    { "path": "./src/ports" }
+  ],
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "out",
+    "webview",
+    "src/mo2Codecs/*.ts",
+    "src/tables/*.ts",
+    "src/wire/*.ts",
+    "src/wire/generated",
+    "src/ports/*.ts"
+  ]
+}

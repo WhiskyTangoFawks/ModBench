@@ -6,11 +6,11 @@ import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
 import type { InstallMeta } from '../model';
 import { modNameCollisionRefusal } from '../modNameCollision';
-import { MOD_META_FILE_NAME, modsDir as modsDirOf, settingsFile } from '../mo2/layout';
-import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
-import { readGameName } from '../mo2/modOrganizerIni';
+import { MOD_META_FILE_NAME, modsDir as modsDirOf, settingsFile } from '../../mo2Codecs/layout';
+import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../../mo2Codecs/metaIni';
+import { readGameName } from '../../mo2Codecs/modOrganizerIni';
 import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../mo2Files';
-import { errnoCode } from '../../errno';
+import { errnoCode } from '../../ports/errno';
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */

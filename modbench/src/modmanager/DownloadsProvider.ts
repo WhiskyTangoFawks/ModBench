@@ -9,12 +9,12 @@ import {
   type DownloadRow,
   type DownloadSortColumn,
   type DownloadStatus,
-} from './mo2/downloads';
-import { downloadFile } from './mo2/layout';
+} from '../mo2Codecs/downloads';
+import { downloadFile } from '../mo2Codecs/layout';
 import type { InstanceValue, InstanceView } from './instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
 // file-icon theme never takes over; a colour is affordable because every row is an archive.

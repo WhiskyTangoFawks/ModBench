@@ -3,8 +3,8 @@ import {
   buttonsInDefaultOrder, messageFor, runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
-import type { AskQuestion } from '../../dialog';
-import { present } from '../../present';
+import type { AskQuestion } from '../../ports/dialog';
+import { present } from '../../ports/present';
 
 function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {

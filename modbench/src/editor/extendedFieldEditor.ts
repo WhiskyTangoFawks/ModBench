@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Reporter } from '../reporter';
-import { errnoCode } from '../errno';
+import type { Reporter } from '../ports/reporter';
+import { errnoCode } from '../ports/errno';
 
 // Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
 // and a length cap keep the result one sane segment; `|| '_'` guards a segment that sanitizes

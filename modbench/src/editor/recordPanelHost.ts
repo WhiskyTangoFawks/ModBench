@@ -5,7 +5,7 @@ import type { MEditClient } from '../medit/client';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { buildWebviewHtml } from './webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../medit/messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import { RecordDecorationProvider } from './RecordDecorationProvider';

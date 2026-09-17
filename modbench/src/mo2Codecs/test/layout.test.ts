@@ -22,7 +22,7 @@ import {
   profileDir,
   profilesDir,
   settingsFile,
-} from './layout';
+} from '../layout';
 
 const ROOT = join('/tmp', 'instance');
 

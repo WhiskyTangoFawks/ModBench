@@ -18,7 +18,7 @@
     "src/**/*.ts",
     "!src/**/*.test.ts",
     "!src/**/test/**",
-    "!src/medit/generated/**",
+    "!src/wire/generated/**",
     "!src/modmanager/ModListProvider.ts",
     "!src/modmanager/PluginListProvider.ts",
     "!src/modmanager/DownloadsProvider.ts",

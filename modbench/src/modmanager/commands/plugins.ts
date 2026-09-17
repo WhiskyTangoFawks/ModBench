@@ -2,9 +2,9 @@
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { foldPath } from '../fileConflictIndex';
-import { isPluginFile } from '../mo2/pluginFile';
-import { pluginsFile } from '../mo2/layout';
-import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2/pluginsText';
+import { isPluginFile } from '../pluginFile';
+import { pluginsFile } from '../../mo2Codecs/layout';
+import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../../mo2Codecs/pluginsText';
 import { listDir, putIfChanged } from '../mo2Files';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no

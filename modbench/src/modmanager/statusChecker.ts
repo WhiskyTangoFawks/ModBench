@@ -2,7 +2,7 @@
 // folders. Pure over ModlistEntry[] + instanceRoot + a precomputed FileConflictIndex; no vscode
 // import, and no plugin file is opened — master facts are the backend's (ADR-0016).
 
-import { modDir } from './mo2/layout';
+import { modDir } from '../mo2Codecs/layout';
 import type { ModlistEntry } from './model';
 import type { FileConflictIndex } from './fileConflictIndex';
 import { exists } from './mo2Files';

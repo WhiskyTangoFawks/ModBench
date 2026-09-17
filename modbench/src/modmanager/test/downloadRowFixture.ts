@@ -1,4 +1,4 @@
-import type { DownloadRow } from '../mo2/downloads';
+import type { DownloadRow } from '../../mo2Codecs/downloads';
 
 /** A `DownloadRow` with every required wire member at its neutral value. */
 export function downloadRowFixture(name: string, overrides: Partial<DownloadRow> = {}): DownloadRow {

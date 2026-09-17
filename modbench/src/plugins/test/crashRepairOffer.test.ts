@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CrashRepairOffer } from '../../medit/client';
-import type { AskQuestion } from '../../dialog';
-import { present } from '../../present';
+import type { AskQuestion } from '../../ports/dialog';
+import { present } from '../../ports/present';
 import {
   messageFor, presentCrashRepairOffers,
   REPAIR_WORKING_TREE_BUTTON, REPAIR_AT_MAIN_BUTTON,

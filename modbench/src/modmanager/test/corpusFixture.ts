@@ -6,9 +6,9 @@ import { cp, mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { expect } from 'vitest';
-import { parseModlist } from '../mo2/modlistText';
-import { parsePlugins } from '../mo2/pluginsText';
-import { readSelectedProfile } from '../mo2/modOrganizerIni';
+import { parseModlist } from '../../mo2Codecs/modlistText';
+import { parsePlugins } from '../../mo2Codecs/pluginsText';
+import { readSelectedProfile } from '../../mo2Codecs/modOrganizerIni';
 import { buildLoadOrderRows, providedPluginsOf } from '../loadOrderSnapshot';
 import type { ModlistEntry, PluginEntry } from '../model';
 

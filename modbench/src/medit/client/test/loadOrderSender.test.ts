@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '../MEditClient';
-import { present } from '../../../present';
+import { present } from '../../../ports/present';
 
 const READY_STATUS: LoadOrderProgress = {
   totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, failures: [],

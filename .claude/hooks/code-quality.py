@@ -57,7 +57,7 @@ CS_PROJECTS = {
 FORMAT_ONLY_DIAGNOSTICS = ("IDE1006", "RCS1226")
 # --- Frontend: extension package that carries the ESLint config. --------------
 TS_PACKAGE = "modbench"
-TS_IGNORE = ("src/medit/generated/", "out/", "webview/dist/", "node_modules/")
+TS_IGNORE = ("src/wire/generated/", "out/", "webview/dist/", "node_modules/")
 
 MAX_LINES = 40  # cap feedback so a large backlog can't flood the turn
 

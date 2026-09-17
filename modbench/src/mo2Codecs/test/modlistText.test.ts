@@ -15,10 +15,10 @@ import {
   setEnabledInText,
   unlistedModNames,
   writeModlist,
-} from './modlistText';
-import type { Mod, ModlistEntry, Separator } from '../model';
+} from '../modlistText';
+import type { Mod, ModlistEntry, Separator } from '../../modmanager/model';
 
-const fixtureDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
+const fixtureDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
 const defaultModlist = () =>
   readFileSync(join(fixtureDir, 'profiles', 'Default', 'modlist.txt'), 'utf8');
 

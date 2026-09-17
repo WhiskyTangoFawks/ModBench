@@ -1,4 +1,4 @@
-import type { components } from '../../src/medit/generated/api';
+import type { components } from '../../src/wire/generated/api';
 
 type WireSchemas = components['schemas'];
 

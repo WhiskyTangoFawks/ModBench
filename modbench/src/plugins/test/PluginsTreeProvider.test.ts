@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plugins';
-import { parsePlugins } from '../../modmanager/mo2/pluginsText';
+import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
 import {
@@ -33,7 +33,7 @@ import { ErrorNode } from '../../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 

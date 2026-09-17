@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseModlist } from './mo2/modlistText';
+import { parseModlist } from '../mo2Codecs/modlistText';
 import { parseManifest } from './mo2Files';
 import { deployMods, purgeMods } from './commands/deployment';
 import { buildFileConflictIndex } from './fileConflictIndex';

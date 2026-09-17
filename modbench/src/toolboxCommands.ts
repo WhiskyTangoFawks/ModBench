@@ -3,8 +3,8 @@ import type { Instance } from './modmanager/instance';
 import { deployMods, purgeMods, type DeploymentCommandResult } from './modmanager/commands/deployment';
 import { listProfiles, switchProfile } from './modmanager/commands/profile';
 import { meditConfig, makeDetectPaths } from './workspaceConfig';
-import type { Reporter } from './reporter';
-import type { AskQuestion } from './dialog';
+import type { Reporter } from './ports/reporter';
+import type { AskQuestion } from './ports/dialog';
 
 // The task type the Launch… command picks from. Nothing contributes one yet, so the pick is
 // empty until a task provider or a tasks.json entry declares this type.

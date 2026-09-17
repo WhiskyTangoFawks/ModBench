@@ -7,7 +7,7 @@ import type {
 } from '../medit/client';
 import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
-import { present } from '../present';
+import { present } from '../ports/present';
 export { headerFormKeyFor } from '../medit/formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in

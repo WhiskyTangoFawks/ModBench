@@ -4,7 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createOverwriteWatcher } from './overwriteWatcher';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 describe('createOverwriteWatcher', () => {
   it('watches overwrite/** under the instance root', () => {

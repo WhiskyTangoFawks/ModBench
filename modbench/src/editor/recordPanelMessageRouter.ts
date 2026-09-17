@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
-} from '../medit/messages';
-import type { Reporter } from '../reporter';
+} from '../wire/messages';
+import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../medit/client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 

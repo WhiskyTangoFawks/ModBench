@@ -20,7 +20,8 @@ const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'g
 const LAYOUT_NAMES = ['profiles', 'mods', 'overwrite', 'downloads', 'ModOrganizer.ini', 'meta.ini', 'modlist.txt', 'plugins.txt', '.meta'];
 const LAYOUT_OWNER = 'layout.ts';
 
-// Both production trees the extension ships: the extension host's and the webview's.
+// The codecs box's own directory, and both production trees the extension ships.
+const KERNEL_DIR = join(__dirname, '..');
 const EXTENSION_SRC = join(__dirname, '..', '..');
 const WEBVIEW_SRC = join(__dirname, '..', '..', '..', 'webview', 'src');
 const SRC_ROOTS = [EXTENSION_SRC, WEBVIEW_SRC];
@@ -60,7 +61,7 @@ function tsFiles(dir: string): string[] {
 function isAllowed(path: string): boolean {
   const name = basename(path);
   if (name === SELF) return true;
-  if (!path.includes(join('modmanager', 'mo2'))) return false;
+  if (!path.includes(sep + 'mo2Codecs' + sep)) return false;
   return KERNEL_FILES.includes(name) || KERNEL_TESTS.includes(name);
 }
 
@@ -93,7 +94,7 @@ describe('mo2 kernel format literals', () => {
   // list is load-bearing, not decorative.
   it('every kernel file exists and names at least one token', () => {
     for (const file of KERNEL_FILES) {
-      const path = join(EXTENSION_SRC, 'modmanager', 'mo2', file);
+      const path = join(KERNEL_DIR, file);
       const found = tokenLeaks(readFileSync(path, 'utf8'), path);
       expect(found.length).toBeGreaterThan(0);
     }
@@ -161,18 +162,18 @@ describe('mo2 kernel format literals', () => {
   });
 
   it('allows a kernel module’s own test file', () => {
-    expect(isAllowed(join('src', 'modmanager', 'mo2', 'pluginsText.test.ts'))).toBe(true);
+    expect(isAllowed(join('src', 'mo2Codecs', 'test', 'pluginsText.test.ts'))).toBe(true);
   });
 
-  it('does not allow a non-kernel file in mo2/, such as a corpus test', () => {
-    expect(isAllowed(join('src', 'modmanager', 'mo2', 'modlistCorpus.test.ts'))).toBe(false);
+  it('does not allow a file in the box that is not a kernel module or its test', () => {
+    expect(isAllowed(join('src', 'mo2Codecs', 'test', 'layout.test.ts'))).toBe(false);
   });
 
   // Rival: lineScan.ts resurrected in the list — it holds no format token of its own, only the
   // shared EOL/splice machinery every kernel module calls.
   it('lineScan.ts is not (and cannot honestly be) a kernel file', () => {
     expect(KERNEL_FILES).not.toContain('lineScan.ts');
-    const text = readFileSync(join(__dirname, 'lineScan.ts'), 'utf8');
+    const text = readFileSync(join(KERNEL_DIR, 'lineScan.ts'), 'utf8');
     expect(tokenLeaks(text, 'lineScan.ts')).toEqual([]);
   });
 });
@@ -218,7 +219,7 @@ function layoutLeaks(sourceText: string, fileName: string): string[] {
 // independent of the layout module under test.
 const isTestFile = (path: string): boolean => /\.test\.tsx?$/.test(path) || path.split(sep).includes('test');
 
-const isLayoutOwner = (path: string): boolean => path.endsWith(join('modmanager', 'mo2', LAYOUT_OWNER));
+const isLayoutOwner = (path: string): boolean => path.endsWith(join('mo2Codecs', LAYOUT_OWNER));
 
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
@@ -234,7 +235,7 @@ describe('mo2 layout names', () => {
   // Rival: a name dropped from layout.ts, which frees every other file to spell it again with
   // the production assertion still green.
   it('layout.ts spells every name the scan forbids elsewhere', () => {
-    const path = join(__dirname, LAYOUT_OWNER);
+    const path = join(KERNEL_DIR, LAYOUT_OWNER);
     expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(LAYOUT_NAMES);
   });
 
@@ -266,7 +267,7 @@ describe('mo2 layout names', () => {
   });
 
   it('does not flag a module specifier', () => {
-    expect(layoutLeaks("import { buildDownloadRows } from './mo2/downloads';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks("import { buildDownloadRows } from '../mo2Codecs/downloads';\n", 'x.ts')).toEqual([]);
   });
 
   it('does not flag a literal type, which can never be a path', () => {

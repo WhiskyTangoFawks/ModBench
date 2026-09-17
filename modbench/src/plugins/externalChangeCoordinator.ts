@@ -1,5 +1,5 @@
 import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../medit/client';
-import type { AskQuestion } from '../dialog';
+import type { AskQuestion } from '../ports/dialog';
 import { handleUnanswered } from './externalChangeGestures';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the

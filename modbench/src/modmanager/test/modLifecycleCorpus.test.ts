@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { uninstallMod } from '../commands/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
-} from '../test/corpusFixture';
+} from './corpusFixture';
 
 const PROFILE = 'Default';
 

@@ -44,7 +44,7 @@ import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compileResultFixture } from '../../medit/client/test/fixtures';
 import type { ExtensionSession } from '../../session';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 beforeEach(() => {
   handlers.clear();

@@ -9,7 +9,7 @@ import {
   markDownloadUninstalled,
   unhideDownload,
 } from './downloads';
-import { parseDownloadMeta } from '../mo2/downloads';
+import { parseDownloadMeta } from '../../mo2Codecs/downloads';
 
 // expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
 function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {

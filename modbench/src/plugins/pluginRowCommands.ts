@@ -11,8 +11,8 @@ import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from '../medit/trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
-import type { Reporter } from '../reporter';
-import type { AskQuestion } from '../dialog';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 import { withPluginsViewProgress, type ExtensionSession } from '../session';
 import { say } from '../editingTeardown';
 

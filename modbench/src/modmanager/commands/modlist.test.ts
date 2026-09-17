@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 // Delay is 0 by default (a passthrough), so only the concurrent-write test below opts in.
 const fsState = vi.hoisted(() => {
@@ -36,7 +36,7 @@ import {
   setModEnabled,
   uninstallMod,
 } from './modlist';
-import { parseModlist } from '../mo2/modlistText';
+import { parseModlist } from '../../mo2Codecs/modlistText';
 
 const fixture = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
