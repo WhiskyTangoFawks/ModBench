@@ -4,7 +4,7 @@ using MEditService.Ports;
 using MEditService.Queries;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 public class WorldspaceQueryServiceTests
 {

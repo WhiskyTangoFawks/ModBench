@@ -1,12 +1,14 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 // Plugin filtering and per-type counting are the Index's own behaviour (Index.Tests/Query/
 // RecordReadsTests.cs, Index.Tests/Records/RecordTypeViewsTests.cs). What remains: a field here

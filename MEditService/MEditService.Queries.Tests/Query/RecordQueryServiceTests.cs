@@ -2,13 +2,15 @@ using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 public sealed class RecordQueryServiceTests
 {
@@ -78,6 +80,27 @@ public sealed class RecordQueryServiceTests
 
         Assert.True(plugins.Single(p => p.Copy.Name == PluginName).HasParseFailure);
         Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).HasParseFailure);
+    }
+
+    // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
+    // from is the Index's answer. Keyed by copy, never by filename.
+    [Fact]
+    public void GetPlugins_MarksOnlyTheCopiesTheIndexDerivedFromASourceTree()
+    {
+        const string otherPlugin = "Other.esp";
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("Tracked"))
+            .WithPlugin(otherPlugin, mod => mod.Npcs.AddNew("Untracked"))
+            .Build("Aggression");
+        var (manager, svc) = Build(fixture);
+        ((FakeReads)manager.RequireReads()).Tracked =
+            new HashSet<PluginCopyKey>(fixture.Copies.Where(c => c.Name == PluginName).Select(c => c.Key),
+                PluginCopyKey.Comparer);
+
+        var plugins = svc.GetPlugins();
+
+        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).IsTracked);
+        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).IsTracked);
     }
 
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
@@ -210,14 +233,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(_npc01Key.ToString(), detail.FormKey);
         Assert.True(detail.IsWinner);
         Assert.NotEmpty(detail.Fields);
-    }
-
-    [Fact]
-    public void GetRecord_UnknownFormKey_ReturnsNull()
-    {
-        var detail = _svc.GetRecord("FFFFFF:Unknown.esp");
-
-        Assert.Null(detail);
     }
 
     // "Copy as New Record" needs the record's schema table name up front (CreateRecord

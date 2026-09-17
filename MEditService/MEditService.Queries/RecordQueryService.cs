@@ -33,9 +33,10 @@ public sealed class RecordQueryService(
                 ? MasterResolution.Classify(opened, status.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
+        var tracked = reads.GetTrackedCopies();
         PluginRow ToRow(RegisteredCopy copy, bool hasMatchingRecords) =>
             new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Name) ?? [], hasMatchingRecords,
-                parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)));
+                parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)), tracked.Contains(copy.Key));
 
         if (_index.FilterSql is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];

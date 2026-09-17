@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 /// <summary>A wire contract: the webview re-derives this text to locate a row's element, and a disagreement
 /// drops the write silently.</summary>
