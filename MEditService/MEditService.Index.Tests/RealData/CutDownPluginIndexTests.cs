@@ -9,27 +9,24 @@ namespace MEditService.Tests.RealData;
 /// throwing" would be vacuous.</summary>
 public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
+    // Over every record the plugin holds, which is the whole cell-location relation: an exterior
+    // cell reaches the Index by a route no interior listing walks.
     [Fact]
     public void Index_RealWorldspaceData_PopulatesCellLocations()
     {
         var reads = fixture.Reads;
-        var worldspaces = reads.Search(new RecordQuery(RecordTypes: ["wrld"], Limit: 50)).Items;
-        Assert.NotEmpty(worldspaces);
+        var located = reads.GetDocuments(CutDownPluginFixture.Plugin)
+            .Count(d => reads.GetCellLocation(CutDownPluginFixture.Plugin, d.FormKey) is not null);
 
-        var cells = worldspaces.SelectMany(w => reads.GetWorldspaceCells(CutDownPluginFixture.Plugin, w.FormKey)).ToList();
-        var interior = reads.GetInteriorCells(CutDownPluginFixture.Plugin, 50, 0).Items;
-
-        Assert.True(cells.Count + interior.Count > 0,
-            "Expected the cut-down plugin to contain worldspace/interior cells.");
+        Assert.True(located > 0, "Expected the cut-down plugin to contain worldspace/interior cells.");
     }
 
     [Fact]
-    public void Index_RealPlacements_PopulatesTheCellsReferences()
+    public void Index_RealPlacements_PopulatesThePlacementRows()
     {
         var reads = fixture.Reads;
-        var placed = reads.GetInteriorCells(CutDownPluginFixture.Plugin, 200, 0).Items
-            .Select(c => reads.GetCellReferences(CutDownPluginFixture.Plugin, c.FormKey))
-            .Sum(r => r.Persistent.Count + r.Temporary.Count);
+        var placed = reads.GetDocuments(CutDownPluginFixture.Plugin)
+            .Count(d => reads.GetPlacement(d.FormKey, CutDownPluginFixture.Plugin) is not null);
 
         Assert.True(placed > 0, "Expected the cut-down plugin to contain placed references (REFR/ACHR).");
     }

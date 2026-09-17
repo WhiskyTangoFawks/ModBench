@@ -21,7 +21,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         fixture.Reads.GetDocument(formKey, CutDownPluginFixture.Plugin)?.Body;
 
     private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
-        new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+        new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
         GameRelease.Fallout4);
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     public async Task Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
     {
         var setterMod = ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
 
         var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);

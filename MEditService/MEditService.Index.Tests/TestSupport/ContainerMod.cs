@@ -37,8 +37,6 @@ internal sealed class ContainerMod : IDisposable
     public FormKey EmbedCell { get; }
     public FormKey TemporaryRef { get; }
     public FormKey PersistentRef { get; }
-    public FormKey Navmesh { get; }
-    public FormKey Landscape { get; }
     public FormKey Worldspace { get; }
     public FormKey TopCell { get; }
     public FormKey TopCellRef { get; }
@@ -46,7 +44,7 @@ internal sealed class ContainerMod : IDisposable
     public ContainerMod()
     {
         FormKey cell = default, embedCell = default, temporaryRef = default, persistentRef = default;
-        FormKey navmesh = default, landscape = default, worldspace = default, topCell = default, topCellRef = default;
+        FormKey worldspace = default, topCell = default, topCellRef = default;
 
         _fixture = new PluginFixtureBuilder("container-mod")
             .WithPlugin(PluginName, mod =>
@@ -76,7 +74,6 @@ internal sealed class ContainerMod : IDisposable
                 embed.Landscape = land;
                 AddInteriorCell(mod, embed, blockNumber: 1);
                 (embedCell, temporaryRef, persistentRef) = (embed.FormKey, temporary.FormKey, persistent.FormKey);
-                (navmesh, landscape) = (mesh.FormKey, land.FormKey);
 
                 var world = new Worldspace(mod) { EditorID = WorldspaceEditorId };
                 var top = new Cell(mod) { EditorID = TopCellEditorId, WaterHeight = 5f };
@@ -97,7 +94,6 @@ internal sealed class ContainerMod : IDisposable
         Entry = _fixture.Plugins.Single();
         Cell = cell;
         (EmbedCell, TemporaryRef, PersistentRef) = (embedCell, temporaryRef, persistentRef);
-        (Navmesh, Landscape) = (navmesh, landscape);
         (Worldspace, TopCell, TopCellRef) = (worldspace, topCell, topCellRef);
     }
 
@@ -136,7 +132,6 @@ internal sealed class IndexedContainerMod : IDisposable
     public PluginCopyKey Plugin => _mod.Plugin;
     public IRecordReads Reads => Index.RequireReads();
 
-    // The reads take a FormKey as text, so the fixture answers in the form its callers ask in.
     public string Cell => _mod.Cell.ToString();
     public string EmbedCell => _mod.EmbedCell.ToString();
     public string TemporaryRef => _mod.TemporaryRef.ToString();

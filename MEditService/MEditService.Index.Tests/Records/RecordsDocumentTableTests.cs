@@ -16,7 +16,7 @@ namespace MEditService.Tests.Records;
 public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
     private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
-        new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+        new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
         GameRelease.Fallout4);
 
     [Fact]

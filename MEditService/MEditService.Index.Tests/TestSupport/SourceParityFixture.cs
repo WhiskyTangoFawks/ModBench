@@ -16,30 +16,27 @@ public sealed class SourceParityFixture : IDisposable
     internal IndexProjector FromSource { get; }
 
     // One store file per launch, so each side's rows stand on their own.
-    public string BinaryInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
-    public string SourceInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
-    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
+    private readonly string _binaryInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
+    private readonly string _sourceInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
+
+    public PluginCopyKey Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
 
     public SourceParityFixture()
     {
-        var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
-        File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
+        var pluginPath = Path.Combine(ModFolder, RealDataPlugin.PluginFileName);
+        File.Copy(RealDataPlugin.PluginPath, pluginPath);
 
-        FromBinary = NewIndex(pluginPath, BinaryInstanceRoot);
+        FromBinary = NewIndex(pluginPath, _binaryInstanceRoot);
         TrackedMods.Track(pluginPath, _gameDirectory);
-        FromSource = NewIndex(pluginPath, SourceInstanceRoot);
+        FromSource = NewIndex(pluginPath, _sourceInstanceRoot);
     }
-
-    internal LoadOrderEntry Entry =>
-        new(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName),
-            Origin, Slot: 0, Enabled: true, Winning: true);
 
     private IndexProjector NewIndex(string pluginPath, string instanceRoot) =>
         Indexes.Reconciled(
             _gameDirectory,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(RealDataPlugin.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             instanceRoot);
 
     public void Dispose()
@@ -48,8 +45,8 @@ public sealed class SourceParityFixture : IDisposable
         FromBinary.Dispose();
         TryDelete(ModFolder);
         TryDelete(_gameDirectory);
-        TryDelete(BinaryInstanceRoot);
-        TryDelete(SourceInstanceRoot);
+        TryDelete(_binaryInstanceRoot);
+        TryDelete(_sourceInstanceRoot);
     }
 
     private static void TryDelete(string path)

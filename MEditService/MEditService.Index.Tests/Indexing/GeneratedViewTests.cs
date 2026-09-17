@@ -70,13 +70,22 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames_SoAFilterCanMatchOneWithLike()
     {
-        var withFlags = Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" <> ''");
-        Assert.True(withFlags > 0, "Positive control: some cell must carry flags.");
+        // Taken off a document rather than written down: the curated slice is regenerable, and a
+        // flag it stops carrying would turn the LIKE below into a match against nothing.
+        var flagName = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin)
+            .Where(d => d.RecordType == "cell")
+            .Select(d => d.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
+            .OfType<JsonElement>()
+            .Where(value => value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0)
+            .Select(value => value[0].GetString())
+            .First(name => !string.IsNullOrEmpty(name));
+
+        Assert.True(Matching($"SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%{flagName}%'") > 0,
+            $"A flag name must be matchable with LIKE — that is the capability this rendering exists to keep, and '{flagName}' is a name the fixture carries.");
 
         // A JSON array rendering would carry brackets and quotes, and LIKE on a flag name would
         // then depend on the punctuation around it.
         Assert.Equal(0, Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%[%' OR \"Flags\" LIKE '%\"%'"));
-        Assert.Equal(withFlags, Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" <> '' AND \"Flags\" NOT LIKE '%[%'"));
     }
 
     [Fact]
