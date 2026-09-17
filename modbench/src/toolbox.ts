@@ -17,7 +17,7 @@ import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
-import { originFolder } from './instance/loadOrderSnapshot';
+import { originFolder, type DataFolderPlugins } from './instance/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
@@ -421,7 +421,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const runPluginsReconcile = async (
-    profile: string, provided: ReadonlyMap<string, string>, inData: ReadonlySet<string> | undefined,
+    profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
     folder: string | undefined, gameName: string,
   ) => {
     const result = await reconcilePlugins(

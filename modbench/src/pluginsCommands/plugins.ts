@@ -2,6 +2,7 @@
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { foldPath } from '../instance/fileConflictIndex';
+import type { DataFolderPlugins } from '../instance/loadOrderSnapshot';
 import { pluginsFile } from '../mo2Files/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
 import { putIfChanged } from '../mo2Files/files';
@@ -93,7 +94,7 @@ export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
  *  Data-folder presence (ADR-0015 invariant 1) — this walks nothing. */
 export async function reconcilePlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
-  inData: ReadonlySet<string> | undefined, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
+  inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
 ): Promise<PluginsReconcileResult> {
   let appendable: ReadonlyMap<string, string>;
   try {
@@ -105,6 +106,9 @@ export async function reconcilePlugins(
       log('[plugins] the implicit masters are unknown — appending and pruning nothing this run');
       return { applied: true, wrote: false, append: [], prune: [] };
     }
+    // A folder that resolved and could not be read leaves every verdict a guess the same way, so
+    // the run refuses with the read's own reason rather than appending against half an answer.
+    if (inData.kind === 'unreadable') return { applied: false, refusal: inData.reason };
     // An implicit master is left out: the tree gives it a row of its own, never from a line, so
     // a mod's copy of one must not earn a line.
     const implicitFolded = new Set(implicit.map(foldPath));
@@ -112,12 +116,13 @@ export async function reconcilePlugins(
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
   }
+  const inDataNames = inData.kind === 'listed' ? inData.names : undefined;
 
   let delta: PluginLinesDelta = { append: [], prune: [] };
   const result = await modifyPlugins(instanceRoot, profile, (text) => {
     // The delta is computed inside the write chain, from the text about to be spliced, so two
     // overlapping runs can neither double-append nor prune a line the other just wrote.
-    delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), appendable, inData);
+    delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), appendable, inDataNames);
     let out = text;
     for (const name of delta.prune) out = removePluginFromText(out, name);
     for (const name of delta.append) out = appendPluginInText(out, name, false);

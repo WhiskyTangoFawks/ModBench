@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
 import { providedPluginsIn } from '../../modmanager/test/corpusFixture';
 import { isPluginFile } from '../../mo2Files/pluginFile';
+import type { DataFolderPlugins } from '../../instance/loadOrderSnapshot';
 
 const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
@@ -137,21 +138,29 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
   const logs: string[] = [];
   const dataFolder = () => join(dir, 'Game', 'Data');
 
-  // The Instance's `dataFolderPlugins` field, doubled: presence at the Data folder's root,
-  // case-folded, which is the argument the reconcile takes.
-  const inDataOnDisk = async (): Promise<ReadonlySet<string>> => {
-    const dirents = await readdir(dataFolder(), { withFileTypes: true });
-    return new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase()));
+  // What the value carries when the folder resolved and the listing threw: the read's own reason,
+  // which is the refusal the Output channel shows.
+  const UNREADABLE: DataFolderPlugins = {
+    kind: 'unreadable',
+    reason: "ENOENT: no such file or directory, scandir '/game/Data'",
   };
 
-  // `null` stands for both unknowables — a Data folder the value could not read and a backend
-  // that could not answer. An explicit `undefined` selects the default rather than the absence.
+  // The Instance's `dataFolderPlugins` field, doubled: presence at the Data folder's root,
+  // case-folded, which is the argument the reconcile takes.
+  const inDataOnDisk = async (): Promise<DataFolderPlugins> => {
+    const dirents = await readdir(dataFolder(), { withFileTypes: true });
+    const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase());
+    return { kind: 'listed', names: new Set(names) };
+  };
+
+  // `null` is the game directory that never resolved; `undefined` selects the default, which is
+  // what the folder on disk holds. A backend that could not answer is `implicit` null.
   const run = async (
-    inData?: ReadonlySet<string> | null,
+    inData?: DataFolderPlugins | null,
     implicit: readonly string[] | null = [],
   ) => reconcilePlugins(
     dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()),
-    inData === null ? undefined : (inData ?? await inDataOnDisk()),
+    inData === null ? { kind: 'unresolved' } : (inData ?? await inDataOnDisk()),
     () => Promise.resolve(implicit ?? undefined), (m) => logs.push(m));
 
   beforeEach(async () => {
@@ -229,6 +238,22 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
 
   // Both unknowables reach here the same way: an unresolved game directory and a Data folder the
   // value could not list are one `undefined`, and pruning against either would delete every line.
+  // A resolved folder nobody could read is not "nothing is there": appending against half an
+  // answer would list a plugin the game already loads, so the run refuses with the read's reason.
+  it('refuses when the Data folder resolved and could not be read, writing nothing', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
+    await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
+
+    assertRefusal(await run(UNREADABLE), 'ENOENT');
+    expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
+  });
+
+  // Rival: refuse on unknown implicit masters too. That run wrote nothing either way, so the
+  // earlier answer stands and the refusal never reaches the log.
+  it('answers the unknown implicit masters first, even when the Data folder could not be read', async () => {
+    expect(await run(UNREADABLE, null)).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+  });
+
   it('with the Data folder unknown, still appends but prunes nothing', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');

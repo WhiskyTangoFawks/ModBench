@@ -893,22 +893,23 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     await instance.refresh();
 
-    expect([...present(instance.value.dataFolderPlugins, 'the Data folder plugins')].sort())
-      .toEqual(['fallout4.esm']);
+    const listed = instance.value.dataFolderPlugins;
+    expect(listed.kind).toBe('listed');
+    expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['fallout4.esm']);
   });
 
-  // Presence is unknowable rather than empty: pruning plugins.txt against a folder nobody could
-  // read would delete every line.
-  it('leaves the Data folder plugins undefined when the folder is unresolved or unreadable', async () => {
+  // A folder nobody could read is its own answer, not an empty one: pruning plugins.txt against
+  // an empty set would delete every line, and the command refuses on this instead.
+  it('tells an unresolved game directory from a folder that resolved and could not be read', async () => {
     const { instance, logs, setResolver } = await minimalInstance();
 
     await instance.refresh();
-    expect(instance.value.dataFolderPlugins).toBeUndefined();
+    expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
 
     setResolver(() => Promise.resolve({ root: '/nowhere', dataFolder: '/nowhere/Data' }));
     await instance.refresh();
 
-    expect(instance.value.dataFolderPlugins).toBeUndefined();
+    expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });
     expect(instance.sequence).toBe(2);
     expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });

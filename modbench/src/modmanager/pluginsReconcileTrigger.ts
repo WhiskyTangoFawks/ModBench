@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import type { Instance } from '../instance/instance';
-import { providedPluginsOf } from '../instance/loadOrderSnapshot';
+import { providedPluginsOf, type DataFolderPlugins } from '../instance/loadOrderSnapshot';
 
 // Termination: a write re-enters through this subscription, since the Instance watches
 // plugins.txt and its value runs the reconcile. The next run changes nothing, writes nothing,
@@ -8,7 +8,7 @@ import { providedPluginsOf } from '../instance/loadOrderSnapshot';
 export function registerPluginsReconcile(
   instance: Pick<Instance, 'subscribe'>,
   run: (
-    profile: string, provided: ReadonlyMap<string, string>, inData: ReadonlySet<string> | undefined,
+    profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
     dataFolder: string | undefined, gameName: string,
   ) => Promise<unknown>,
 ): vscode.Disposable {

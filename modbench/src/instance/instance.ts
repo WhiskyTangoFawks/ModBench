@@ -5,8 +5,11 @@ import type * as vscode from 'vscode';
 import { errnoCode } from '../ports/errno';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import type { PluginEntry } from '../mo2Codecs/pluginsText';
-import { buildFileConflictIndex, FileConflictLookup, foldPath, type FileWinners } from './fileConflictIndex';
-import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
+import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
+import {
+  buildLoadOrderRows, readDataFolderPlugins,
+  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
+} from './loadOrderSnapshot';
 import { createDebouncedFsWatcher } from './fsWatcher';
 import { createModsWatcher } from './modsWatcher';
 import { createModlistWatcher } from './modlistWatcher';
@@ -24,7 +27,6 @@ import {
   pluginsFile, profilesDir, settingsFile,
 } from '../mo2Files/layout';
 import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirectory';
-import { isPluginFile } from '../mo2Files/pluginFile';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { exists, get, listDir, manifestFile } from '../mo2Files/files';
@@ -79,10 +81,9 @@ export interface InstanceValue {
   readonly gameRelease: string;
   /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
   readonly gameDirectory: GameDirectory | undefined;
-  /** Case-folded names of the plugin files sitting at the root of the game's Data folder —
-   *  presence, never provision. `undefined` when the folder is unresolved or unreadable, which
-   *  is what makes presence unknowable. */
-  readonly dataFolderPlugins: ReadonlySet<string> | undefined;
+  /** What the game's Data folder holds at its root — presence, never provision — or the reason
+   *  it could not be read. */
+  readonly dataFolderPlugins: DataFolderPlugins;
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
   /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
@@ -158,21 +159,6 @@ async function readProfileNames(instanceRoot: string): Promise<string[]> {
   }
 }
 
-// A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent. An
-// unreadable Data folder is unknown presence, not a failed recompute: the whole value would go
-// stale over a folder no MO2 file names.
-async function readDataFolderPlugins(
-  dataFolder: string | undefined, log: (msg: string) => void,
-): Promise<ReadonlySet<string> | undefined> {
-  if (dataFolder === undefined) return undefined;
-  try {
-    const dirents = await listDir(dataFolder);
-    return new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => foldPath(d.name)));
-  } catch (err) {
-    log(`[instance] the game's Data folder could not be listed, so plugin presence there is unknown: ${message(err)}`);
-    return undefined;
-  }
-}
 
 const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
@@ -192,7 +178,7 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   activeProfile: '',
   gameRelease: '',
   gameDirectory: undefined,
-  dataFolderPlugins: undefined,
+  dataFolderPlugins: { kind: 'unresolved' },
   deployed: false,
   modStatuses: new Map(),
   overwriteFileCount: 0,

@@ -86,6 +86,32 @@ export function resolvePluginPaths(
   return new Map(entries);
 }
 
+/** What the game's Data folder holds at its root, as a command is handed it. A folder that never
+ *  resolved and one that resolved unreadable are different answers: only the second is a run
+ *  whose verdicts cannot be trusted. */
+export type DataFolderPlugins =
+  | { readonly kind: 'listed'; readonly names: ReadonlySet<string> }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
+/** A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent. An
+ *  unreadable folder is an answer, never a throw: no MO2 file names it, and the whole value
+ *  would otherwise go stale over it. */
+export async function readDataFolderPlugins(
+  dataFolder: string | undefined, log: (msg: string) => void,
+): Promise<DataFolderPlugins> {
+  if (dataFolder === undefined) return { kind: 'unresolved' };
+  try {
+    const dirents = await listDir(dataFolder);
+    const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => foldPath(d.name));
+    return { kind: 'listed', names: new Set(names) };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    log(`[instance] the game's Data folder could not be listed: ${reason}`);
+    return { kind: 'unreadable', reason };
+  }
+}
+
 // MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
 // too, not just origin classification. Empty until a purge first creates the folder.
 async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
