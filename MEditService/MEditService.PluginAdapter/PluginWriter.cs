@@ -16,8 +16,8 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger, TimeProvider? tim
     private readonly ILogger<PluginWriter> _logger = logger;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
-    /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0008,
-    /// xEdit's canonical form) rather than leaving it to Mutagen's undefined default.</summary>
+    // loadOrder orders the written master list explicitly (ADR-0008, xEdit's canonical form)
+    // rather than leaving it to Mutagen's undefined default.
     private static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         GameRelease gameRelease,

@@ -35,8 +35,8 @@ public interface IPluginAdapter
     bool CanRead(ModPath modPath);
 
     /// <summary>The plugins the install at <paramref name="dataFolder"/> loads with no load-order
-    /// line naming them (ADR-0013 invariant 2): the release's implicit masters present there, then
-    /// that folder's Creation Club catalog. Claimed by both, named once.</summary>
+    /// line naming them (ADR-0013 invariant 2): its implicit masters present there, then its
+    /// Creation Club catalog. Claimed by both, named once.</summary>
     IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease);
 
     /// <summary>What a copy's own binary says about itself, which is what the Index holds for it.

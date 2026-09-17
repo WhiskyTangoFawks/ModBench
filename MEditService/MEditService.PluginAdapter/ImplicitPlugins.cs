@@ -4,9 +4,9 @@ using Mutagen.Bethesda.Plugins.Order;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The two sources an install loads a plugin from without a load-order line naming it
-/// (ADR-0013 invariant 2): the release's own implicit masters, and the Creation Club catalog
-/// beside the game directory, which varies per install.</summary>
+/// <summary>The two sources an install loads a plugin from with no load-order line naming it
+/// (ADR-0013 invariant 2): the release's implicit masters, and the Creation Club catalog beside
+/// the game directory.</summary>
 internal static class ImplicitPlugins
 {
     internal static IReadOnlyList<string> In(string dataFolder, GameRelease gameRelease) =>

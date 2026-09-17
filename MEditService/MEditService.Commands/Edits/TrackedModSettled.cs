@@ -58,7 +58,7 @@ public static class TrackedModSettled
         LoadOrderSnapshot loadOrder, string modFolder,
         ExternalChangeClassification.ExternalChange change, INotificationPublisher notifications)
     {
-        var modName = Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
+        var modName = SourceRepository.ModNameIn(modFolder);
         var named = change.Plugins.Concat(change.TrackedFiles).ToList();
         var changed = named.Count > 0 ? string.Join(", ", named) : modName;
         SourceRepository.RaiseExternalChangeQuestion(modFolder,
