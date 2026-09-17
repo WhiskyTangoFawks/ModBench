@@ -4,9 +4,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.PluginAdapter;
 
-/// <summary>The plugins an install loads with no load-order line of its own (ADR-0013), read off a
-/// real Data folder: the release's implicit masters that are present, then that folder's Creation
-/// Club catalog.</summary>
+/// <summary>The plugins an install loads with no load-order line of its own (ADR-0013 invariant
+/// 2), read off a real Data folder: the release's implicit masters that are present, then that
+/// folder's Creation Club catalog.</summary>
 public sealed class ImplicitPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
