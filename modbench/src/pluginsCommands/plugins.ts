@@ -7,6 +7,7 @@ import { pluginsFile } from '../mo2Files/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../mo2Files/files';
+import { refuse } from '../ports/refuse';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -23,7 +24,7 @@ async function modifyPlugins(
     const { wrote } = await putIfChanged(pluginsFile(instanceRoot, profile), edit);
     return { applied: true, wrote };
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return refuse(err);
   }
 }
 
@@ -61,10 +62,10 @@ export function appendPlugin(
   return modifyPlugins(instanceRoot, profile, (text) => appendPluginInText(text, pluginName));
 }
 
-export interface PluginLinesDelta {
-  /** Real on-disk names to append, disabled, ascending case-folded. */
+interface PluginLinesDelta {
+  // Real on-disk names to append, disabled, ascending case-folded.
   append: string[];
-  /** plugins.txt names (as written) whose line goes. */
+  // plugins.txt names (as written) whose line goes.
   prune: string[];
 }
 
@@ -72,9 +73,9 @@ export type PluginsReconcileResult =
   | { applied: true; wrote: boolean; append: string[]; prune: string[] }
   | { applied: false; refusal: string };
 
-/** `inData` is presence only, never an append source; `undefined` — an unresolved game
- *  directory — makes presence unknowable, so nothing is pruned. */
-export function pluginLinesDelta(
+// `inData` is presence only, never an append source; `undefined` — an unresolved game
+// directory — makes presence unknowable, so nothing is pruned.
+function pluginLinesDelta(
   listed: readonly string[],
   provided: ReadonlyMap<string, string>,
   inData: ReadonlySet<string> | undefined,
@@ -120,7 +121,7 @@ export async function reconcilePlugins(
     const implicitFolded = new Set(implicit.map(foldPath));
     appendable = new Map([...provided].filter(([folded]) => !implicitFolded.has(folded)));
   } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+    return refuse(err);
   }
   const inDataNames = inData.kind === 'listed' ? inData.names : undefined;
 

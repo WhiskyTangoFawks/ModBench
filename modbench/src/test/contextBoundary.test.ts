@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
+import { tsFiles } from './tsFiles';
 
 // CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
 // origin, never by FormKey, and never reach the backend. The Plugins view is excluded — it
@@ -15,19 +16,6 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 function importsOf(source: string): string[] {
   return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]
     .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
-}
-
-// No directory is skipped by name here, so the walk provably reaches the Plugins view;
-// `isExcluded` decides what counts against the rule, not the walk.
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
 }
 
 const EDITING_DIR = 'medit';

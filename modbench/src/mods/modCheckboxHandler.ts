@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ModListProvider, ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Its own file to stay unit testable: `ModListProvider` is a type-only import, so loading
  *  this never evaluates a module that extends `vscode.TreeItem` at definition time and so
@@ -16,7 +17,7 @@ export async function onModCheckboxChanged(
       await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
     } catch (err) {
       reporter.report(
-        'error', `Failed to update "${node.mod.name}".`, err instanceof Error ? err.message : String(err));
+        'error', `Failed to update "${node.mod.name}".`, errorMessage(err));
       modListProvider.invalidate();
     }
   }

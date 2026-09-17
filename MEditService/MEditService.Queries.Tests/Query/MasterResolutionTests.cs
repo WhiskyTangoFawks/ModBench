@@ -1,11 +1,12 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 // ADR-0012: a plugin declaring a master absent from the load order is flagged, distinguishing a
 // directly-missing master from one that is itself unloadable. Driven through GetPlugins, the one

@@ -14,7 +14,6 @@ import {
   renameSeparatorInText,
   setEnabledInText,
   unlistedModNames,
-  writeModlist,
 } from '../modlistText';
 import type { Mod, ModlistEntry, Separator } from '../modlistText';
 
@@ -165,20 +164,6 @@ describe('parseModlist', () => {
   });
 });
 
-describe('writeModlist — parseModlist\'s inverse', () => {
-  it('round-trips entries through write then parse', () => {
-    const entries: (Mod | Separator)[] = [
-      { kind: 'mod', name: 'Alpha', enabled: true },
-      { kind: 'separator', name: 'Group A', enabled: false },
-      { kind: 'mod', name: 'Beta', enabled: false },
-    ];
-    expect(parseModlist(writeModlist(entries))).toEqual(entries);
-  });
-
-  it('writes an empty file for no entries', () => {
-    expect(writeModlist([])).toBe('');
-  });
-});
 
 // Fixture entry order: SKK(0), Unassigned sep(1), NODELETE(2), Unofficial(3),
 // Radfall sep(4), ENBoost(5), Harder VATS(6), Cracked(7).

@@ -9,14 +9,15 @@ namespace MEditService.Tests.Architecture;
 public sealed class WriteSideIndexScanTests
 {
     // The store and its factory, the read surface, the ref enum, the Index, the query surface, the
-    // four query services and the write gate. Naming one is how a write path starts reading its own
+    // five query services and the write gate. Naming one is how a write path starts reading its own
     // effect.
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
         "IRecordReads", "RecordRef", "IndexProjector", "IQueryIndex", "IndexStore", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
-        "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
+        "ImplicitMasterQueryService", "IWorldspaceQueryService", "WorldspaceQueryService",
+        "ContainerChildQueryService",
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
@@ -126,7 +127,8 @@ public sealed class WriteSideIndexScanTests
     // so what is left is the store, the projector and the read surface.
     private static readonly string[] ReadSideSymbols =
         ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
-         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
+         "ImplicitMasterQueryService", "IWorldspaceQueryService", "WorldspaceQueryService",
+         "ContainerChildQueryService"];
 
     private static readonly string[] EndpointSymbols =
         [.. Symbols.Except(ReadSideSymbols, StringComparer.Ordinal).Except(GateSymbols, StringComparer.Ordinal)];

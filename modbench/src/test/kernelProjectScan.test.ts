@@ -2,9 +2,10 @@
 // project over every test, and a root solution over them all. The reference lists are the
 // maintainer's, drawn in target-architecture-references.d2.
 import { describe, it, expect } from 'vitest';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
+import { tsFiles } from './tsFiles';
 
 const MODBENCH = join(__dirname, '..', '..');
 
@@ -21,11 +22,11 @@ const DRIVEN_BOXES: Record<string, string[]> = {
 // out here and reported, never referenced to make the picture symmetric.
 const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'mo2Files', 'ports'],
-  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files'],
-  instanceCommands: ['mo2Codecs', 'mo2Files'],
+  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
+  instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
   install: ['mo2Codecs', 'mo2Files', 'ports'],
-  deploy: ['instance', 'mo2Files'],
-  client: ['wire'],
+  deploy: ['instance', 'mo2Files', 'ports'],
+  client: ['ports', 'wire'],
 };
 
 
@@ -77,18 +78,15 @@ const isTest = (f: string): boolean => f.includes('.test.') || f.split('/').incl
 
 // Off the disk, not off a project's file list: a file belonging to no project is invisible to
 // every list there is, which is the very state this has to catch.
-function filesOnDisk(dir: string): string[] {
-  return readdirSync(join(MODBENCH, dir), { withFileTypes: true })
-    .flatMap((entry) => (entry.isDirectory()
-      ? filesOnDisk(join(dir, entry.name))
-      : (entry.name.endsWith('.ts') ? [join(dir, entry.name)] : [])));
-}
+const filesOnDisk = (dir: string): string[] =>
+  tsFiles(join(MODBENCH, dir), { tsx: false }).map((f) => relative(MODBENCH, f));
 
 const testFilesOnDisk = (dir: string): string[] => filesOnDisk(dir).filter((f) => f.endsWith('.test.ts'));
 
 // The integration suite compiles in its own project against the real VS Code process.
 const productionFilesOnDisk = (): string[] =>
-  filesOnDisk('src').filter((f) => !isTest(f) && !f.startsWith(join('src', 'test') + '/'));
+  tsFiles(join(MODBENCH, 'src'), { tsx: false, includeTests: false, exclude: ['test'] })
+    .map((f) => relative(MODBENCH, f));
 
 describe('one composite project per box', () => {
   it.each(BOXES)('%s has its own tsconfig', (box) => {

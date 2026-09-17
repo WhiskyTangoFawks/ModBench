@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
-import { buildLoadOrderSnapshot, originFolder, providedPluginsOf, resolvePluginPaths } from '../loadOrderSnapshot';
+import { buildLoadOrderRows, originFolder, providedPluginsOf, resolvePluginPaths } from '../loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
@@ -28,7 +28,7 @@ const source = (order: string[], enabled: string[] = order) => ({
   readModlist: () => Promise.resolve([]),
 });
 
-describe('buildLoadOrderSnapshot', () => {
+describe('buildLoadOrderRows', () => {
   let instanceRoot: string | undefined;
   afterEach(async () => {
     if (instanceRoot) await rm(instanceRoot, { recursive: true, force: true });
@@ -42,7 +42,7 @@ describe('buildLoadOrderSnapshot', () => {
     const dataFolder = join(instanceDir, 'game', 'Data');
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderSnapshot(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
@@ -52,7 +52,7 @@ describe('buildLoadOrderSnapshot', () => {
 
     const dataFolder = join(instanceDir, 'game', 'Data');
 
-    const result = await buildLoadOrderSnapshot(source(['Fallout4.esm']), instanceDir, dataFolder, () => Promise.resolve(index({})));
+    const result = await buildLoadOrderRows(source(['Fallout4.esm']), instanceDir, dataFolder, () => Promise.resolve(index({})));
 
     expect(result).toEqual([{ name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: 'Data', slot: 0, enabled: true, winning: true }]);
   });
@@ -63,7 +63,7 @@ describe('buildLoadOrderSnapshot', () => {
     const dataFolder = join(instanceDir, 'game', 'Data');
     const fakeIndex = index({ 'On.esp': { winner: '/mods/A/On.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderSnapshot(
+    const result = await buildLoadOrderRows(
       source(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'mixed.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([
@@ -87,7 +87,7 @@ describe('buildLoadOrderSnapshot', () => {
       },
     );
 
-    const result = await buildLoadOrderSnapshot(source(['Other.esp', 'Shared.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Other.esp', 'Shared.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/A/Shared.esp', origin: 'A', slot: 1, enabled: true, winning: true });
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/B/Shared.esp', origin: 'B', slot: 1, enabled: true, winning: false });
@@ -102,7 +102,7 @@ describe('buildLoadOrderSnapshot', () => {
       { C: [{ relativePath: 'Stray.esp', absolutePath: '/mods/C/Stray.esp' }, { relativePath: 'textures/x.dds', absolutePath: '/mods/C/textures/x.dds' }] },
     );
 
-    const result = await buildLoadOrderSnapshot(source(['Listed.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Listed.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([
       { name: 'Listed.esp', path: join(dataFolder, 'Listed.esp'), origin: 'Data', slot: 0, enabled: true, winning: true },
@@ -121,7 +121,7 @@ describe('buildLoadOrderSnapshot', () => {
       { A: [{ relativePath: 'Foo.esp', absolutePath: '/mods/A/Foo.esp' }] },
     );
 
-    const result = await buildLoadOrderSnapshot(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: join(instanceDir, 'overwrite', 'Foo.esp'), origin: 'overwrite', slot: 0, enabled: true, winning: true },
@@ -137,7 +137,7 @@ describe('buildLoadOrderSnapshot', () => {
     await writeFile(join(instanceDir, 'overwrite', 'New.esp'), '');
     await writeFile(join(instanceDir, 'overwrite', 'notes.txt'), '');
 
-    const result = await buildLoadOrderSnapshot(source([]), instanceDir, dataFolder, () => Promise.resolve(index({})));
+    const result = await buildLoadOrderRows(source([]), instanceDir, dataFolder, () => Promise.resolve(index({})));
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(instanceDir, 'overwrite', 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
@@ -150,7 +150,7 @@ describe('buildLoadOrderSnapshot', () => {
     const dataFolder = join(instanceDir, 'game', 'Data');
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderSnapshot(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
@@ -162,7 +162,7 @@ describe('buildLoadOrderSnapshot', () => {
     await mkdir(join(instanceDir, 'overwrite', 'Foo.esp'), { recursive: true }); // a directory, not a file
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderSnapshot(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
@@ -175,7 +175,7 @@ describe('buildLoadOrderSnapshot', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
     await expect(
-      buildLoadOrderSnapshot(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex)),
+      buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex)),
     ).rejects.toThrow();
   });
 
@@ -189,7 +189,7 @@ describe('buildLoadOrderSnapshot', () => {
       'textures/Foo.esp': { winner: '/mods/C/textures/Foo.esp', winnerMod: 'C' },
     });
 
-    const result = await buildLoadOrderSnapshot(
+    const result = await buildLoadOrderRows(
       source(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([

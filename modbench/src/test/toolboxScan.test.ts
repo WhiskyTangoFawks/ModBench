@@ -1,9 +1,10 @@
 // Two source-text invariants a compiling change can break silently: the retired vocabulary, and
 // the Toolbox's own ownership of everything it constructs.
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import ts from 'typescript';
+import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
 const PACKAGE_JSON = join(SRC, '..', 'package.json');
@@ -16,23 +17,12 @@ const TOOLBOX_COMMANDS = join(SRC, 'toolboxCommands.ts');
 const RETIRED = [/loadout/i, /modlist\s*source/i];
 const SELF = 'toolboxScan.test.ts';
 
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
-}
-
 function retiredWordsIn(text: string): string[] {
   return RETIRED.flatMap((pattern) => [...text.matchAll(new RegExp(pattern.source, 'gi'))].map((m) => m[0]));
 }
 
 describe('the retired names are gone from the extension source', () => {
-  const scanned = [...tsFiles(SRC), PACKAGE_JSON].filter((path) => !path.endsWith(SELF));
+  const scanned = [...tsFiles(SRC, { exclude: ['generated'] }), PACKAGE_JSON].filter((path) => !path.endsWith(SELF));
 
   it('scans a real body of files', () => {
     expect(scanned.length).toBeGreaterThan(100);

@@ -2,11 +2,12 @@
 // directory and file names live in `layout.ts`, and nothing else spells them.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname, basename, sep } from 'node:path';
+import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../../ports/present';
+import { tsFiles } from '../../test/tsFiles';
 
 const KERNEL_FILES = ['modlistText.ts', 'pluginsText.ts', 'metaIni.ts', 'modOrganizerIni.ts', 'downloads.ts'];
 const KERNEL_TESTS = KERNEL_FILES.map((f) => f.replace(/\.ts$/, '.test.ts'));
@@ -58,18 +59,6 @@ function tokenLeaks(sourceText: string, fileName: string): string[] {
   return TOKENS.filter((tok) => literals.has(tok));
 }
 
-// Every `.ts`/`.tsx` file under `dir`, recursively.
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
-}
-
 function isAllowed(path: string): boolean {
   const name = basename(path);
   if (name === SELF) return true;
@@ -77,7 +66,8 @@ function isAllowed(path: string): boolean {
   return KERNEL_FILES.includes(name) || KERNEL_TESTS.includes(name);
 }
 
-const allFiles = (roots: readonly string[]): string[] => roots.flatMap(tsFiles);
+const allFiles = (roots: readonly string[]): string[] =>
+  roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
 // Shared by the production assertion and the rival tests below, so a broken walk — a wrong root,
 // an excluded directory or extension — fails both the same way, not just the matcher.

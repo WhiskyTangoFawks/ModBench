@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  reportLoadOrderResult, applyFilterSyncResult, syncActiveFilter, applyLoadOrderOutcome,
+  reportLoadOrderResult, syncActiveFilter, applyLoadOrderOutcome,
 } from '../loadOrderOutcome';
 import type { components } from '../../wire/generated/api';
 
@@ -162,37 +162,9 @@ describe('reportLoadOrderResult — abandoned', () => {
   });
 });
 
-describe('applyFilterSyncResult', () => {
-  function makeFilterDeps() {
-    return { warn: vi.fn(), setFilterActive: vi.fn() };
-  }
-
-  it('sets the filter active with the sql the read returned', () => {
-    const deps = makeFilterDeps();
-
-    applyFilterSyncResult('SELECT form_key FROM "npc_"', deps);
-
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
-  });
-
-  it('sets the filter inactive when nothing is active', () => {
-    const deps = makeFilterDeps();
-
-    applyFilterSyncResult(null, deps);
-
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined, undefined);
-  });
-
-  it('shows the ready-to-show message verbatim and sets the filter inactive when the read fails', () => {
-    const deps = makeFilterDeps();
-
-    applyFilterSyncResult({ refused: true, message: 'mEdit: Could not read the active filter — treating the filter as inactive. boom' }, deps);
-
-    expect(deps.warn).toHaveBeenCalledWith('mEdit: Could not read the active filter — treating the filter as inactive. boom');
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
-  });
-});
-
+// applyFilterSyncResult is not exported: syncActiveFilter is its one caller, and every result
+// shape it can be handed — a sql string, null, or the refused object a caught read builds — is
+// reachable by what getActiveFilter resolves or rejects with below.
 describe('syncActiveFilter', () => {
   function makeSyncDeps() {
     return { log: vi.fn(), warn: vi.fn(), setFilterActive: vi.fn() };
@@ -205,6 +177,15 @@ describe('syncActiveFilter', () => {
 
     expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
     expect(deps.log).not.toHaveBeenCalled();
+  });
+
+  it('sets the filter inactive when nothing is active', async () => {
+    const deps = makeSyncDeps();
+
+    await syncActiveFilter(() => Promise.resolve(null), deps);
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined, undefined);
+    expect(deps.warn).not.toHaveBeenCalled();
   });
 
   // ADR-0019: an unsurfaced read failure is a notify-and-log tier — both the toast and the

@@ -1,13 +1,15 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
+using MEditService.Queries.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 /// <summary>A Partial Form override's own fields, even ones that genuinely differ from the master,
 /// must not register as a conflict (CONTEXT.md: "its own fields are ignored... full stop").</summary>

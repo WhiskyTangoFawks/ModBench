@@ -1,9 +1,10 @@
 // ADR-0015 invariant 7: the Instance owns every MO2-side watcher. A view or command wiring its own
 // watcher would duplicate the Instance's recompute trigger instead of reading its value.
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import ts from 'typescript';
+import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 
@@ -21,16 +22,7 @@ const ALLOWED = new Set([
 
 const WATCHER_FACTORY = /^create\w*Watcher$/;
 
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' && !entry.name.endsWith('.test.ts')) out.push(path);
-  }
-  return out;
-}
+const PRODUCTION_FILES: Parameters<typeof tsFiles>[1] = { exclude: ['generated'], tsx: false, includeTests: false };
 
 // The trailing name of a call target: `vscode.workspace.createFileSystemWatcher` reads as
 // `createFileSystemWatcher`, `createModsWatcher(...)` as `createModsWatcher`.
@@ -57,12 +49,12 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
 
 describe('every MO2-side watcher is created inside the Instance or a watcher module', () => {
   it('scans a real body of files', () => {
-    expect(tsFiles(SRC).length).toBeGreaterThan(100);
+    expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
   });
 
   it('no other production file calls a watcher factory', () => {
     const offenders: Record<string, string[]> = {};
-    for (const path of tsFiles(SRC)) {
+    for (const path of tsFiles(SRC, PRODUCTION_FILES)) {
       const rel = relative(SRC, path);
       if (ALLOWED.has(rel)) continue;
       const calls = watcherFactoryCalls(readFileSync(path, 'utf8'), path);

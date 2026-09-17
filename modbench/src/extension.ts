@@ -28,6 +28,7 @@ import {
 import { originFolder, type OriginFolder } from './instance/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
+import { errorMessage } from './ports/errorMessage';
 
 
 
@@ -56,7 +57,7 @@ function wireAutoLaunch(
       await enterEditing?.();
     } catch (err) {
       exitEditing(session, client); // tear down any half-started backend
-      reporter.report('error', 'Failed to launch mEdit.', err instanceof Error ? err.message : String(err));
+      reporter.report('error', 'Failed to launch mEdit.', errorMessage(err));
     }
   };
   void launch();

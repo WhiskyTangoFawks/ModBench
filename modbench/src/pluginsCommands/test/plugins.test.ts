@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
+import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
 import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../mo2Files/pluginFile';
 import type { DataFolderPlugins } from '../../instance/loadOrderSnapshot';
@@ -95,41 +95,6 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 });
 
-const provided = (...names: string[]) => new Map(names.map((n) => [n.toLowerCase(), n] as const));
-const folded = (...names: string[]) => new Set(names.map((n) => n.toLowerCase()));
-
-describe('pluginLinesDelta — what plugins.txt must gain and lose to match disk', () => {
-  it('appends every provided plugin with no line, ascending case-folded, and prunes nothing when all lines are provided', () => {
-    const delta = pluginLinesDelta(['A.esp'], provided('A.esp', 'zeta.esp', 'Beta.esl'), folded());
-    expect(delta).toEqual({ append: ['Beta.esl', 'zeta.esp'], prune: [] });
-  });
-
-  it('a line differing only in case from the on-disk name is the same plugin: neither appended nor pruned', () => {
-    const delta = pluginLinesDelta(['BASE.esp'], provided('Base.esp'), folded());
-    expect(delta).toEqual({ append: [], prune: [] });
-  });
-
-  it('prunes a line whose plugin no enabled mod, overwrite/, nor Data provides', () => {
-    const delta = pluginLinesDelta(['Gone.esp', 'Kept.esp'], provided('Kept.esp'), folded());
-    expect(delta).toEqual({ append: [], prune: ['Gone.esp'] });
-  });
-
-  it('keeps a line whose plugin lives in the game Data folder (DLC, Creation Club) even though no mod provides it', () => {
-    const delta = pluginLinesDelta(['ccBGSFO4001-PipBoy(Black).esl'], provided(), folded('ccbgsfo4001-pipboy(black).esl'));
-    expect(delta).toEqual({ append: [], prune: [] });
-  });
-
-  it('never appends from Data: a Data-folder plugin with no line stays unlisted', () => {
-    const delta = pluginLinesDelta([], provided(), folded('DLCCoast.esm'));
-    expect(delta).toEqual({ append: [], prune: [] });
-  });
-
-  it('with Data unknown, prunes nothing but still appends', () => {
-    const delta = pluginLinesDelta(['Gone.esp'], provided('New.esp'), undefined);
-    expect(delta).toEqual({ append: ['New.esp'], prune: [] });
-  });
-});
-
 describe('reconcilePlugins — plugins.txt converges on what disk provides', () => {
   let dir: string;
   const pluginsPath = () => join(dir, 'profiles', PROFILE, 'plugins.txt');
@@ -200,6 +165,20 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
 
     expect(await run()).toEqual({ applied: true, wrote: true, append: [], prune: ['Gone.esp'] });
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
+  });
+
+  it('never appends from Data: a Data-folder plugin with no line stays unlisted', async () => {
+    await writeFile(join(dir, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
+
+    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
+  });
+
+  it('a line differing only in case from the provided name is the same plugin: neither appended nor pruned', async () => {
+    await writeFile(pluginsPath(), '# header\r\n*BASE.esp\r\n');
+
+    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await plugins()).toBe('# header\r\n*BASE.esp\r\n');
   });
 
   it('a plugin hidden the MO2 way (.mohidden suffix) is not present: never appended, and its line is pruned', async () => {

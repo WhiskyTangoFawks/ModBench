@@ -1,7 +1,7 @@
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>A <see cref="LoadOrderHolder"/> carrying exactly the copies a test names — the kernel
 /// half of a Queries test that needs no Index at all.</summary>

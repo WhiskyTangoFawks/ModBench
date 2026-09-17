@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import type { PluginMetadata } from '../../client';
+import type { BackendStatus, MEditClient, PluginMetadata } from '../../client';
 import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
@@ -60,6 +60,21 @@ async function enterEditing(): Promise<void> {
 }
 function exitEditing(): void {
   editingApi()?.exitEditing();
+}
+
+// The same label-and-deadline shape as waitFor() below, for a push-based status transition
+// rather than a polled condition.
+function awaitStatus(client: MEditClient, status: BackendStatus, label: string, timeoutMs = 10_000): Promise<void> {
+  if (client.status === status) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { off(); reject(new Error(`timed out waiting for ${label}`)); }, timeoutMs);
+    const off = client.onStatusChanged((s) => {
+      if (s !== status) return;
+      clearTimeout(timer);
+      off();
+      resolve();
+    });
+  });
 }
 
 // Models the real backend: GET /plugins fails with 503 until PUT /load-order arrives. The
@@ -328,8 +343,10 @@ before(async function () {
     await new Promise(r => setTimeout(r, 100));
   }
 
-  // Give the client time to poll and reach 'attached' (polls every 500 ms).
-  await new Promise(r => setTimeout(r, 2000));
+  // The client polls the mock backend's health on its own schedule; wait for the transition
+  // itself rather than guessing how long a poll cycle takes.
+  const client = ext?.exports.client;
+  if (client) await awaitStatus(client, 'attached', 'the client to reach attached');
 });
 
 after(async () => {
@@ -447,32 +464,36 @@ describe('modbench command registration', () => {
 
 // ── openEditor ────────────────────────────────────────────────────────────────
 
+const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
+
 describe('modbench.openEditor', () => {
   it('opens a new webview tab when no panel exists', async () => {
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000001',
       label: 'Test Record',
     });
 
-    await new Promise(r => setTimeout(r, 500));
-
-    const tabsAfter = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsAfter = await waitFor('a new tab after openEditor', () => {
+      const count = openTabs().length;
+      return count > tabsBefore ? count : undefined;
+    });
     assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.openEditor');
   });
 
   it('reuses the existing panel on a second call', async () => {
-    const tabsAfterFirst = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsAfterFirst = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000002',
       label: 'Another Record',
     });
 
-    await new Promise(r => setTimeout(r, 500));
+    // The reused panel's own title update is what proves the call landed at all.
+    await waitFor('the reused panel to retitle', () => openTabs().some(t => t.label === 'Another Record') || undefined);
 
-    const tabsAfterSecond = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsAfterSecond = openTabs().length;
     assert.strictEqual(
       tabsAfterSecond,
       tabsAfterFirst,
@@ -485,15 +506,15 @@ describe('modbench.openEditor', () => {
       formKey: 'Fallout4.esm:000010',
       label: 'First Record',
     });
-    await new Promise(r => setTimeout(r, 300));
+    await waitFor('the panel titled "First Record"', () => openTabs().some(t => t.label === 'First Record') || undefined);
 
     await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000011',
       label: 'Second Record',
     });
-    await new Promise(r => setTimeout(r, 300));
+    await waitFor('the panel to retitle to "Second Record"', () => openTabs().some(t => t.label === 'Second Record') || undefined);
 
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     const editTab = tabs.find(t => t.label.startsWith('First Record') || t.label.startsWith('Second Record'));
     assert.ok(editTab, 'Expected an mEdit tab to exist');
     assert.strictEqual(editTab.label, 'Second Record', 'Panel title should update to the most recently opened record');
@@ -510,21 +531,21 @@ describe('modbench.openEditorBeside', () => {
     // Seed the singleton with a known title first: an implementation that routed through the
     // singleton/retarget path would retarget this panel instead of opening a new tab.
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
-    await new Promise(r => setTimeout(r, 300));
+    await waitFor('the seed panel', () => openTabs().some(t => t.label === 'Seed Record') || undefined);
 
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000021', label: 'Beside Record' });
-    await new Promise(r => setTimeout(r, 500));
+    await waitFor('the Beside-opened tab', () => openTabs().some(t => t.label === 'Beside Record') || undefined);
 
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     assert.strictEqual(tabs.length, tabsBefore + 1, 'expected a genuinely new tab, not a retarget of the existing singleton');
     assert.ok(tabs.some(t => t.label === 'Seed Record'), 'the singleton panel must still show its own record, untouched');
     assert.ok(tabs.some(t => t.label === 'Beside Record'), 'expected a new tab for the Beside-opened record');
   });
 
   it('resolves a Plugins-tree RecordNode-shaped argument to its own record', async () => {
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', {
       kind: 'record',
@@ -532,9 +553,10 @@ describe('modbench.openEditorBeside', () => {
       origin: 'Data',
       label: 'TestRecord [Fallout4.esm:000030]',
     });
-    await new Promise(r => setTimeout(r, 500));
+    await waitFor('the RecordNode-opened tab',
+      () => openTabs().some(t => t.label === 'TestRecord [Fallout4.esm:000030]') || undefined);
 
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     assert.strictEqual(tabs.length, tabsBefore + 1, 'expected exactly one new tab');
     assert.ok(
       tabs.some(t => t.label === 'TestRecord [Fallout4.esm:000030]'),
@@ -543,7 +565,7 @@ describe('modbench.openEditorBeside', () => {
   });
 
   it('resolves a Plugins-tree PlacedNode-shaped argument (placed-reference row) to its own record', async () => {
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', {
       kind: 'placed',
@@ -551,9 +573,9 @@ describe('modbench.openEditorBeside', () => {
       origin: 'Data',
       label: 'TestRef [REFR:000040]',
     });
-    await new Promise(r => setTimeout(r, 500));
+    await waitFor('the PlacedNode-opened tab', () => openTabs().some(t => t.label === 'TestRef [REFR:000040]') || undefined);
 
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     assert.strictEqual(tabs.length, tabsBefore + 1, 'expected exactly one new tab');
     assert.ok(
       tabs.some(t => t.label === 'TestRef [REFR:000040]'),
@@ -562,14 +584,14 @@ describe('modbench.openEditorBeside', () => {
   });
 
   it('two sequential single-target opens land as two separate tabs — neither retargets the other', async () => {
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000050', label: 'First Beside' });
-    await new Promise(r => setTimeout(r, 300));
+    await waitFor('the first Beside tab', () => openTabs().some(t => t.label === 'First Beside') || undefined);
     await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000051', label: 'Second Beside' });
-    await new Promise(r => setTimeout(r, 300));
+    await waitFor('the second Beside tab', () => openTabs().some(t => t.label === 'Second Beside') || undefined);
 
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     assert.strictEqual(tabs.length, tabsBefore + 2, 'expected two separate new tabs');
     assert.ok(tabs.some(t => t.label === 'First Beside'), 'first Beside panel should still show its own record');
     assert.ok(tabs.some(t => t.label === 'Second Beside'), 'second Beside panel should show its own record');
@@ -577,7 +599,7 @@ describe('modbench.openEditorBeside', () => {
 
   it('a multi-selection opens one panel per record, all landing in a single new editor group beside the active one', async () => {
     const groupsBefore = vscode.window.tabGroups.all.length;
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    const tabsBefore = openTabs().length;
 
     const selection = [
       { formKey: 'Fallout4.esm:000060', label: 'Multi A' },
@@ -585,10 +607,14 @@ describe('modbench.openEditorBeside', () => {
       { formKey: 'Fallout4.esm:000062', label: 'Multi C' },
     ];
     await vscode.commands.executeCommand('modbench.openEditorBeside', selection[0], selection);
-    await new Promise(r => setTimeout(r, 700));
+    // Both conditions: a tab can carry its label before the group it landed in finishes
+    // settling, and settling into one group (not one per record) is the behavior under test.
+    await waitFor('every multi-selected tab in one new group', () =>
+      (selection.every((s) => openTabs().some((t) => t.label === s.label))
+        && vscode.window.tabGroups.all.length === groupsBefore + 1) || undefined);
 
     const groupsAfter = vscode.window.tabGroups.all.length;
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const tabs = openTabs();
     assert.strictEqual(groupsAfter, groupsBefore + 1, 'expected exactly one new editor group, not one per record');
     assert.strictEqual(tabs.length, tabsBefore + 3, 'expected three new tabs, one per selected record');
     for (const s of selection) {
@@ -613,17 +639,13 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
   it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
     const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true });
     await vscode.commands.executeCommand('modbench.openHeader', node);
-    await new Promise(r => setTimeout(r, 300));
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
-    assert.ok(tabs.some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
+    await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
   });
 
   it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
-    await new Promise(r => setTimeout(r, 300));
-    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
-    assert.ok(tabs.some(t => t.label === 'Fallout4.esm'), 'expected a header tab titled after the implicit master');
+    await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
   });
 });
 
@@ -667,20 +689,10 @@ describe('modbench.downloads tree', () => {
 
     // The watcher debounces 200ms before calling invalidate() itself, so poll for the row rather
     // than sleeping a fixed time. Never calls invalidate() directly: the watcher must do it alone.
-    const rows = await new Promise<DownloadsTreeNode[]>((resolve, reject) => {
-      const deadline = Date.now() + 10000;
-      const check = () => {
-        provider()
-          .getChildren()
-          .then((found) => {
-            if (found.some((r) => archiveNameOf(r) === 'bar.zip')) return resolve(found);
-            if (Date.now() > deadline) return reject(new Error('bar.zip did not appear via the watcher within 10s'));
-            setTimeout(check, 200);
-          })
-          .catch(reject);
-      };
-      check();
-    });
+    const rows = await waitFor('bar.zip via the watcher', async () => {
+      const found = await provider().getChildren();
+      return found.some((r) => archiveNameOf(r) === 'bar.zip') ? found : undefined;
+    }, 10000);
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 });
@@ -778,7 +790,10 @@ describe('Notification stream connects only while the backend is up', () => {
     assert.strictEqual(streamRequests(requestLog).length, 1, 'expected exactly one connection for the launch');
 
     exitEditing();
-    await new Promise((r) => setTimeout(r, 1000));
+    // client.stop() is fire-and-forget from exitEditing's own contract (editingTeardown.ts), so
+    // the test waits on the client's own status instead of a promise it was never handed.
+    const client = ext?.exports.client;
+    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
     assert.strictEqual(streamRequests(requestLog).length, 1,
       'expected no reconnect once editing ends');
   });
@@ -1267,7 +1282,6 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     if (!putLoadOrderShouldFail) {
       await waitFor('the tree hand-off after the PUT', () => requestLog.filter((l) => l === 'GET /plugins').length > pluginReads ? true : undefined);
     }
-    await new Promise((r) => setTimeout(r, 200));
   }
 
   before(async () => {
@@ -1414,7 +1428,6 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
     const tree = pluginsTree();
 
     await clientOf()?.stop();
-    await new Promise((r) => setTimeout(r, 200)); // let the status listener's refresh land
 
     assert.ok(!(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'),
       'a stopped client is not a reason to un-narrow a view the user narrowed');
@@ -1429,7 +1442,6 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
     await clientOf()?.stop();
-    await new Promise((r) => setTimeout(r, 200));
 
     const children = await tree.getChildren(row);
     assert.ok(children.length > 0, 'the row must still expand into something');
@@ -1606,7 +1618,10 @@ describe('Progressive load', () => {
     // leaving it to wait for a socket that will never answer.
     await launch;
 
-    await new Promise((r) => setTimeout(r, 1000));
+    // client.stop() is fire-and-forget from exitEditing's own contract (editingTeardown.ts), so
+    // the test waits on the client's own status instead of a promise it was never handed.
+    const client = ext?.exports.client;
+    if (client) await awaitStatus(client, 'stopped', 'the client to reach stopped');
 
     assert.strictEqual(
       requestLog.filter((l) => l === 'GET /notifications/stream').length, connectionsAtLoad,

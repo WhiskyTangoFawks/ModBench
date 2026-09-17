@@ -2,13 +2,14 @@
 // scanned: the webview ships from its own tsconfig, and a walk stopping at src/ lets it spell
 // anything.
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { extname, join, relative, sep } from 'node:path';
-import { knownReleases, gamePathInfoForRelease } from '../tables/gamePaths';
+import { join, relative, sep } from 'node:path';
+import { gamePathInfoForRelease } from '../tables/gamePaths';
 import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
 import { present } from '../ports/present';
+import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
 const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
@@ -20,9 +21,6 @@ const TABLE_FILES = [
   join('tables', 'loadOrderDestination.ts'),
 ];
 
-// The generated client mirrors the backend's schema rather than carrying a decision.
-const GENERATED_DIR = 'generated';
-
 // detectRoot.ts's DATA_DIRS names the Bethesda Data folder layout, not a game — except f4se and
 // skse, each a game-specific directory name, which is why it needs the exemption below.
 const ALLOWLIST = [join('install', 'detectRoot.ts')];
@@ -31,9 +29,14 @@ const ALLOWLIST = [join('install', 'detectRoot.ts')];
 // needs as much as the two tables' own literals, so it lives here rather than in a third table.
 const SCRIPT_EXTENDER_TOKENS = ['f4se', 'skse', 'obse', 'fnvse', 'nvse'];
 
+// gamePaths.ts's own release keys: mirrored rather than exported, since nothing in production
+// enumerates every release. Kept in sync by hand — a release added there and not here goes
+// unscanned.
+const KNOWN_RELEASES = ['Fallout4', 'Fallout4VR', 'Fallout3', 'FalloutNV', 'SkyrimLE', 'SkyrimSE', 'SkyrimVR', 'EnderalLE', 'Oblivion'];
+
 function knownGameNameLiterals(): string[] {
   const literals = new Set<string>(SCRIPT_EXTENDER_TOKENS);
-  for (const release of knownReleases()) {
+  for (const release of KNOWN_RELEASES) {
     literals.add(release);
     const info = gamePathInfoForRelease(release);
     if (info) {
@@ -64,23 +67,13 @@ function isTestSupport(path: string): boolean {
   return path.split(sep).some((seg) => seg === 'test' || seg === 'integration') || path.includes('.test.');
 }
 
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === GENERATED_DIR) continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
-}
-
 // Shared by the production assertion and the self-test below, so a broken walk — a wrong root, a
 // silently-excluded directory — fails both the same way, not just the regex.
 function findOffenders(roots: readonly string[], tableFiles: string[], allowlist: string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
   for (const root of roots) {
-    for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
+    // The generated client mirrors the backend's schema rather than carrying a decision.
+    for (const path of tsFiles(root, { exclude: ['generated'] }).filter((p) => !p.endsWith(SELF))) {
       const relPath = relative(root, path);
       if (tableFiles.includes(relPath) || allowlist.includes(relPath) || isTestSupport(relPath)) continue;
       const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
@@ -90,7 +83,8 @@ function findOffenders(roots: readonly string[], tableFiles: string[], allowlist
   return offenders;
 }
 
-const allFiles = (roots: readonly string[]): string[] => roots.flatMap(tsFiles);
+const allFiles = (roots: readonly string[]): string[] =>
+  roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
 // Covered: a table literal or a script-extender token, planted anywhere in production source,
 // case-insensitively. Not covered: a name built at runtime, or a game the table does not yet

@@ -21,7 +21,7 @@ export interface GameAutodetect {
 }
 
 // Parses Valve's VDF format just enough to find a library path that contains a given AppID.
-export function parseLibraryFoldersVdf(content: string, appId: string): string | null {
+function parseLibraryFoldersVdf(content: string, appId: string): string | null {
   // A library block reads:  "path"  "/some/path"  ...  "appid"  "value"
   const libraryBlocks = content.split(/"\d+"\s*\{/);
   for (const block of libraryBlocks) {

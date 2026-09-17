@@ -2,9 +2,10 @@
 // order, and the client's sender is the only thing that reaches the port verb underneath.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname, relative, dirname } from 'node:path';
+import { join, relative, dirname } from 'node:path';
+import { tsFiles } from './tsFiles';
 
 // The Toolbox subscribes the Instance to the sender at activation; no gesture, command or view
 // may reach the sender itself.
@@ -20,21 +21,12 @@ const PORT = ['MEditClient.ts', 'HttpMEditClient.ts', 'InMemoryMEditClient.ts']
 const SEND_CALL = /\.send\s*\(/;
 const PUT_CALL = /\bputLoadOrder\s*\(/;
 
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' && !entry.name.endsWith('.test.ts')) out.push(path);
-  }
-  return out;
-}
+const PRODUCTION_FILES: Parameters<typeof tsFiles>[1] = { exclude: ['generated'], tsx: false, includeTests: false };
 
 // Shared by the production assertions and the rivals below, so a broken walk fails them the same
 // way. The allowed files are whole relative paths: `endsWith` would exempt a `subtoolbox.ts` too.
 function findOffenders(root: string, call: RegExp, allowed: string[]): string[] {
-  return tsFiles(root)
+  return tsFiles(root, PRODUCTION_FILES)
     .filter((path) => !allowed.includes(relative(root, path)))
     .filter((path) => call.test(readFileSync(path, 'utf8')));
 }
@@ -43,7 +35,7 @@ const SRC = join(__dirname, '..');
 
 describe('only the Toolbox hands the client a load order', () => {
   it('covers the whole extension source tree', () => {
-    expect(tsFiles(SRC).length).toBeGreaterThan(50);
+    expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(50);
   });
 
   it('no file but toolbox.ts calls .send()', () => {
@@ -57,7 +49,7 @@ describe('only the Toolbox hands the client a load order', () => {
   // The allowlist must name files that are really there, or an allowed path silently becomes a
   // rule about nothing.
   it('every allowed path is a file the walk actually reaches', () => {
-    const reached = tsFiles(SRC).map((path) => relative(SRC, path));
+    const reached = tsFiles(SRC, PRODUCTION_FILES).map((path) => relative(SRC, path));
     expect(reached).toEqual(expect.arrayContaining([SENDS, PUTS, ...PORT]));
   });
 });

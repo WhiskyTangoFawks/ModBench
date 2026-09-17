@@ -2,10 +2,11 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.Queries;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 /// <summary>An absent member is the default the schema declares, not the CLR zero, so the
 /// classifier reads the metadata's default rather than assuming nothing (ADR-0005).</summary>
