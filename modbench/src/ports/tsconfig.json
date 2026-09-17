@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.kernel.json",
+  "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "../../out/projects/ports"

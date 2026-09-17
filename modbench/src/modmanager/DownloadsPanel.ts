@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import type { DownloadRow, DownloadSortColumn } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile } from '../mo2Codecs/layout';
+import type { DownloadSortColumn } from '../mo2Codecs/downloads';
 import {
   deleteDownload,
   hideDownload,
@@ -11,7 +10,7 @@ import {
 import { nexusSlugForGame } from '../tables/gamePaths';
 import type { InstallChoice } from './commands/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
-import type { Instance } from './instance';
+import type { DownloadFile, Instance } from '../instance/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
@@ -61,7 +60,7 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
 // Pre-supplying the archive path keeps the install command's file-picker from appearing. The
 // row's own mod id, file id and version are what it is told: the view re-reads no sidecar.
 async function installArchive(
-  instanceRoot: string, row: DownloadRow, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  instanceRoot: string, row: DownloadFile, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): Promise<void> {
   const { name } = row;
   let installed = false;
@@ -75,7 +74,7 @@ async function installArchive(
     }
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      downloadFile(instanceRoot, name), row.modID, row.fileID, row.version, choice,
+      row.path, row.modID, row.fileID, row.version, choice,
     )) ?? false;
   } catch (err) {
     // ADR-0019: explicit user action failed -> error notification + log.
@@ -179,18 +178,18 @@ export function registerDownloadsSingleRowCommands(
     }),
     // OS-open the archive in the system's associated application.
     vscode.commands.registerCommand('modbench.downloads.openFile', (node?: DownloadNode) => {
-      const name = node?.row.name;
-      if (!name) return;
-      void runRowAction('Open File', name, reporter, async () => {
-        await vscode.env.openExternal(vscode.Uri.file(downloadFile(instanceRoot, name)));
+      const row = node?.row;
+      if (!row) return;
+      void runRowAction('Open File', row.name, reporter, async () => {
+        await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
     // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
     vscode.commands.registerCommand('modbench.downloads.openMeta', (node?: DownloadNode) => {
-      const name = node?.row.name;
-      if (!name) return;
-      void runRowAction('Open Meta File', name, reporter, async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(downloadSidecarFile(instanceRoot, name)));
+      const row = node?.row;
+      if (!row) return;
+      void runRowAction('Open Meta File', row.name, reporter, async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
       });
     }),
   ];

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/mo2Files"
+  },
+  "references": [
+    { "path": "../mo2Codecs" },
+    { "path": "../ports" },
+    { "path": "../tables" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

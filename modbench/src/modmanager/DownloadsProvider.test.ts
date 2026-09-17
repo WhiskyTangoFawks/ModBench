@@ -18,26 +18,35 @@ import { recordingReporter } from '../test/surfacingDoubles';
 import { expectInstanceOf } from '../test/expectInstanceOf';
 import { instanceValueFixture } from './test/instanceValueFixture';
 import type { DownloadRow } from '../mo2Codecs/downloads';
-import type { InstanceValue } from './instance';
+import type { DownloadFile, InstanceValue } from '../instance/instance';
 import { present } from '../ports/present';
 
 // The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
 const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
 
-const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
-  name: 'foo.zip',
-  displayName: 'foo.zip',
-  status: 'Downloaded',
-  size: 100,
-  mtimeMs: 1700000000000,
-  hasMeta: false,
-  hidden: false,
-  ...extra,
-});
+// The Instance's own row: the two paths it carries are what a view opens, so the fixture names
+// them exactly as a recompute over `/instance` would.
+const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
+  const base: DownloadRow = {
+    name: 'foo.zip',
+    displayName: 'foo.zip',
+    status: 'Downloaded',
+    size: 100,
+    mtimeMs: 1700000000000,
+    hasMeta: false,
+    hidden: false,
+    ...extra,
+  };
+  return {
+    ...base,
+    path: join('/instance', 'downloads', base.name),
+    sidecarPath: join('/instance', 'downloads', base.name + '.meta'),
+  };
+};
 
 // Only `.downloads` is ever read by the row provider — the rest of InstanceValue is other
 // views' territory this ticket does not touch.
-function valueOf(downloads: DownloadRow[]): InstanceValue {
+function valueOf(downloads: DownloadFile[]): InstanceValue {
   return instanceValueFixture({ downloads });
 }
 
@@ -87,14 +96,12 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 
 // Never created on disk. If DownloadsProvider ever fell back to its own scan, every test here
 // would see an empty/ENOENT result instead of the fixture rows below.
-const FAKE_ROOT = '/fake/instance-root-never-created';
-
 const makeProvider = (
-  downloads: DownloadRow[],
-  extra: Partial<{ instance: FakeInstance; instanceRoot: string; reporter: DownloadsProviderOptions['reporter'] }> = {},
+  downloads: DownloadFile[],
+  extra: Partial<{ instance: FakeInstance; reporter: DownloadsProviderOptions['reporter'] }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instanceRoot: extra.instanceRoot ?? FAKE_ROOT, instance, reporter: extra.reporter };
+  const options: DownloadsProviderOptions = { instance, reporter: extra.reporter };
   return new DownloadsProvider(options);
 };
 
@@ -102,33 +109,33 @@ const makeProvider = (
 
 describe('DownloadNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
-    const node = new DownloadNode(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }), '/instance');
+    const node = new DownloadNode(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
     expect(node.label).toBe('Sleep or Save');
     expect(node.id).toBe('foo_1_2_3.zip');
   });
 
   it('is a flat leaf row (no children)', () => {
-    const node = new DownloadNode(row(), '/instance');
+    const node = new DownloadNode(row());
     expect(node.collapsibleState).toBe(0); // TreeItemCollapsibleState.None
   });
 
   describe('status icon + colour', () => {
     it('Downloaded -> archive icon, green', () => {
-      const node = new DownloadNode(row({ status: 'Downloaded' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Downloaded' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('archive');
       expect(icon.color?.id).toBe('charts.green');
     });
 
     it('Installed -> check icon, no explicit colour', () => {
-      const node = new DownloadNode(row({ status: 'Installed' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Installed' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('check');
       expect(icon.color).toBeUndefined();
     });
 
     it('Uninstalled -> circle-slash icon, yellow', () => {
-      const node = new DownloadNode(row({ status: 'Uninstalled' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Uninstalled' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('circle-slash');
       expect(icon.color?.id).toBe('charts.yellow');
@@ -137,23 +144,23 @@ describe('DownloadNode', () => {
 
   describe('description', () => {
     it('Downloaded (default) shows only the version, unmarked', () => {
-      const node = new DownloadNode(row({ status: 'Downloaded', version: '2.2.1' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Downloaded', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1');
     });
 
     it('Installed appends the status word after the version', () => {
-      const node = new DownloadNode(row({ status: 'Installed', version: '2.2.1' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Installed', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1 Installed');
     });
 
     it('Uninstalled appends the status word after the version', () => {
-      const node = new DownloadNode(row({ status: 'Uninstalled', version: '2.2.1' }), '/instance');
+      const node = new DownloadNode(row({ status: 'Uninstalled', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1 Uninstalled');
     });
 
     it('omits the version entirely when absent, leaving just the status word (or nothing)', () => {
-      expect(new DownloadNode(row({ status: 'Downloaded' }), '/instance').description).toBe('');
-      expect(new DownloadNode(row({ status: 'Installed' }), '/instance').description).toBe('Installed');
+      expect(new DownloadNode(row({ status: 'Downloaded' })).description).toBe('');
+      expect(new DownloadNode(row({ status: 'Installed' })).description).toBe('Installed');
     });
   });
 
@@ -164,7 +171,6 @@ describe('DownloadNode', () => {
           modName: 'Sleep or Save', version: '2.2.1', modID: '12345', size: 4096,
           mtimeMs: Date.parse('2024-01-15T10:00:00Z'), gameName: 'Fallout4', author: 'SomeAuthor',
         }),
-        '/instance',
       );
       const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
@@ -177,7 +183,7 @@ describe('DownloadNode', () => {
     });
 
     it('a minimal row (filename only) omits every optional field without erroring', () => {
-      const node = new DownloadNode(row(), '/instance');
+      const node = new DownloadNode(row());
       const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
       expect(tooltip.value).not.toContain('undefined');
@@ -185,18 +191,18 @@ describe('DownloadNode', () => {
   });
 
   it('contextValue is the row\'s downloadContextValue', () => {
-    const node = new DownloadNode(row({ hasMeta: true, modID: '1', hidden: true }), '/instance');
+    const node = new DownloadNode(row({ hasMeta: true, modID: '1', hidden: true }));
     expect(node.contextValue).toBe('download hasMeta hasModID hidden');
   });
 
-  it('resourceUri points at the archive under <instanceRoot>/downloads/<name>', () => {
-    const node = new DownloadNode(row({ name: 'foo.zip' }), '/instance');
+  it('resourceUri is the path the value carries for the row', () => {
+    const node = new DownloadNode(row({ name: 'foo.zip' }));
     expect(present(node.resourceUri, "the download node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
     const r = row();
-    expect(new DownloadNode(r, '/instance').row).toBe(r);
+    expect(new DownloadNode(r).row).toBe(r);
   });
 });
 
@@ -408,24 +414,18 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
   });
 
-  // instanceRoot points at a real file where downloads/ would be scanned. If DownloadsProvider
-  // ever fell back to its own scan, readdir(<file>/downloads) would throw ENOTDIR here.
-  it('never touches disk: rows still come from the value when instanceRoot is not a real MO2 instance', async () => {
-    const notADirectory = join(await mkdtemp(join(tmpdir(), 'downloads-provider-')), 'not-a-dir');
-    await writeFile(notADirectory, 'not a directory');
-    try {
-      const provider = makeProvider([row({ name: 'a.zip' })], { instanceRoot: notADirectory });
-      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
-    } finally {
-      await rm(notADirectory, { force: true });
-    }
+  // The provider is never told where the instance is, so a scan of its own has nothing to walk:
+  // every row, and every path on one, arrives in the value.
+  it('never touches disk: it is given no instance root to walk', async () => {
+    const provider = makeProvider([row({ name: 'a.zip' })]);
+    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
   });
 
   it('a file appearing on disk changes nothing until the Instance publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
     try {
       const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-      const provider = makeProvider([], { instance, instanceRoot: root });
+      const provider = makeProvider([], { instance });
       expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
 
       await writeFile(join(root, 'b.zip'), 'data'); // never reaches the Instance in this test

@@ -30,10 +30,7 @@ const { deployMods, purgeMods, listProfiles, switchProfile } = vi.hoisted(() => 
 
 vi.mock('../modmanager/commands/deployment', () => ({ deployMods, purgeMods }));
 vi.mock('../modmanager/commands/profile', () => ({ listProfiles, switchProfile }));
-vi.mock('../workspaceConfig', () => ({
-  meditConfig: () => ({ get: () => undefined }),
-  makeDetectPaths: () => () => Promise.resolve({ pluginsTxt: '/instance/profiles/Default/plugins.txt' }),
-}));
+vi.mock('../workspaceConfig', () => ({ meditConfig: () => ({ get: () => undefined }) }));
 
 import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
@@ -45,7 +42,10 @@ import { present } from '../ports/present';
 // `deployed: true` is the steady state most tests want — a directory that already has a
 // manifest, so the deploy gesture never has to ask.
 const value = instanceValueFixture({
-  activeProfile: 'Default', gameDirectory: { root: '/game', dataFolder: '/game/Data' }, deployed: true,
+  activeProfile: 'Default', deployed: true,
+  gameDirectory: {
+    root: '/game', dataFolder: '/game/Data', loadOrderFile: '/instance/profiles/Default/plugins.txt',
+  },
 });
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
@@ -129,13 +129,15 @@ describe('Deploy and Purge', () => {
     ]);
   });
 
-  it('hands the command the Instance value and the resolved load-order target, no reporter or dialog', async () => {
+  // The load-order target rides on the value's own game directory, so deploy is handed one
+  // generation and nothing else.
+  it('hands the command the Instance value alone, no reporter or dialog', async () => {
     deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
 
     const { run } = register();
     await run('modbench.toolbox.deploy');
 
-    expect(deployMods).toHaveBeenCalledWith('/instance', value, '/instance/profiles/Default/plugins.txt');
+    expect(deployMods).toHaveBeenCalledWith('/instance', value);
   });
 
   it('hands purge the Instance value alone', async () => {
@@ -173,7 +175,7 @@ describe('Deploy and Purge', () => {
       await run('modbench.toolbox.deploy');
 
       expect(ask.asked).toHaveLength(1);
-      expect(deployMods).toHaveBeenCalledWith('/instance', notDeployed, '/instance/profiles/Default/plugins.txt');
+      expect(deployMods).toHaveBeenCalledWith('/instance', notDeployed);
       expect(reporter.landings).toEqual(['Mods deployed.']);
     });
 

@@ -447,7 +447,7 @@ The extension owns the editing backend process
 ### Deploy / purge (Modbench-4)
 
 Deploy is a module of the [Toolbox](containers.md) (`modmanager/commands/deployment.ts` plus
-the hardlink/manifest/purge core in `modmanager/mo2Files.ts`), offering deploy, purge and
+the hardlink/manifest/purge core in `mo2Files/files.ts`), offering deploy, purge and
 status (the manifest's presence) — one strategy, hardlinks, with no strategy interface: the
 symlink fallback stays a requirement, not a second implementation, until it actually ships.
 
@@ -661,7 +661,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - Install, profile switch, deploy and purge are free-function commands beside the
   `modlist.txt` ones, in the same shape and under the same scan test:
   `modmanager/commands/install.ts`, `profile.ts` and `deployment.ts`.
-- The **Instance** (`modmanager/instance.ts`) is the only reader of MO2's files: the modlist
+- The **Instance** (`instance/instance.ts`) is the only reader of MO2's files: the modlist
   with each mod's `meta.ini` folded in, `plugins.txt`, the active profile and the game name all
   come from one value. Reconciling `mods/` with `modlist.txt` is `reconcileMods`, a command
   beside the others, exercised with real MO2 instance fixtures.

@@ -133,6 +133,8 @@ export default tseslint.config(
                     './src/tables/tsconfig.json',
                     './src/wire/tsconfig.json',
                     './src/ports/tsconfig.json',
+                    './src/mo2Files/tsconfig.json',
+                    './src/instance/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,
             },

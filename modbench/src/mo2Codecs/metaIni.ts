@@ -3,6 +3,9 @@
 
 import { detectEol, lineRanges } from './lineScan';
 
+/** A mod folder's metadata file. */
+export const MOD_META_FILE_NAME = 'meta.ini';
+
 /** One meta.ini `[installedFiles]` entry — a Nexus mod/file id pair MO2 recorded as
  *  installed. Field names match the array's own (lowercase) keys. */
 export interface InstalledFileId {

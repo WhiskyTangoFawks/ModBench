@@ -1,7 +1,7 @@
 // Pure: which installed mods a download upgrades, and which one its own file id already
 // names. Filename is never consulted — meta.ini's mod id and file id are the only identity.
 
-import type { InstanceValue } from './instance';
+import type { InstanceValue } from '../instance/instance';
 import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { Mod } from './model';
 
@@ -22,7 +22,7 @@ function fileIdMatches(mod: Mod, downloads: readonly DownloadRow[], fileID: stri
 /** No candidates — no mod id, or no installed mod sharing it — is the cue to skip the pick.
  *  A file-id match sorts first: the pick's active row. */
 export function selectUpgradeCandidates(
-  value: Pick<InstanceValue, 'mods' | 'downloads'>,
+  value: { mods: InstanceValue['mods']; downloads: readonly DownloadRow[] },
   download: Pick<DownloadRow, 'modID' | 'fileID'>,
 ): UpgradeCandidate[] {
   if (!download.modID) return [];

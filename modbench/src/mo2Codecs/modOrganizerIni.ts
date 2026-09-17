@@ -4,6 +4,9 @@
 
 import { lineRanges } from './lineScan';
 
+/** MO2's settings file, at the instance root. */
+export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
+
 const KEY = 'selected_profile';
 const GAME_KEY = 'gameName';
 const GAME_PATH_KEY = 'gamePath';

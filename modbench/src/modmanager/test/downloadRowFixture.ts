@@ -1,7 +1,12 @@
+import { join } from 'node:path';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
+import type { DownloadFile } from '../../instance/instance';
 
-/** A `DownloadRow` with every required wire member at its neutral value. */
-export function downloadRowFixture(name: string, overrides: Partial<DownloadRow> = {}): DownloadRow {
+/** A `DownloadFile` with every required member at its neutral value, the two paths named as a
+ *  recompute over `instanceRoot` names them. */
+export function downloadRowFixture(
+  name: string, overrides: Partial<DownloadRow> = {}, instanceRoot = '/instance',
+): DownloadFile {
   return {
     name,
     displayName: name,
@@ -11,5 +16,7 @@ export function downloadRowFixture(name: string, overrides: Partial<DownloadRow>
     hasMeta: false,
     hidden: false,
     ...overrides,
+    path: join(instanceRoot, 'downloads', name),
+    sidecarPath: join(instanceRoot, 'downloads', name + '.meta'),
   };
 }

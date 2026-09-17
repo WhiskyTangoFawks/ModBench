@@ -1,6 +1,6 @@
-// The only per-game knowledge left in the extension is the per-release tables box —
-// tables/gamePaths.ts and tables/loadOrderDestination.ts. Scoped to src/:
-// webview/src/presentation.ts's per-game schema is Editing's own concern.
+// The only per-game knowledge left is the per-release tables box. Both production trees are
+// scanned: the webview ships from its own tsconfig, and a walk stopping at src/ lets it spell
+// anything.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
@@ -11,6 +11,8 @@ import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
 import { present } from '../ports/present';
 
 const SRC = join(__dirname, '..');
+const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
+const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 const SELF = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [
@@ -75,16 +77,20 @@ function tsFiles(dir: string): string[] {
 
 // Shared by the production assertion and the self-test below, so a broken walk — a wrong root, a
 // silently-excluded directory — fails both the same way, not just the regex.
-function findOffenders(root: string, tableFiles: string[], allowlist: string[]): Record<string, string[]> {
+function findOffenders(roots: readonly string[], tableFiles: string[], allowlist: string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
-  for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
-    const relPath = relative(root, path);
-    if (tableFiles.includes(relPath) || allowlist.includes(relPath) || isTestSupport(relPath)) continue;
-    const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
-    if (hits.length > 0) offenders[relPath] = hits;
+  for (const root of roots) {
+    for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
+      const relPath = relative(root, path);
+      if (tableFiles.includes(relPath) || allowlist.includes(relPath) || isTestSupport(relPath)) continue;
+      const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
+      if (hits.length > 0) offenders[relPath] = hits;
+    }
   }
   return offenders;
 }
+
+const allFiles = (roots: readonly string[]): string[] => roots.flatMap(tsFiles);
 
 // Covered: a table literal or a script-extender token, planted anywhere in production source,
 // case-insensitively. Not covered: a name built at runtime, or a game the table does not yet
@@ -92,11 +98,16 @@ function findOffenders(root: string, tableFiles: string[], allowlist: string[]):
 
 describe('no extension file names a game outside the two tables', () => {
   it('covers the whole extension source tree', () => {
-    expect(tsFiles(SRC).filter((path) => !path.endsWith(SELF)).length).toBeGreaterThan(100);
+    expect(allFiles(SRC_ROOTS).filter((path) => !path.endsWith(SELF)).length).toBeGreaterThan(100);
+  });
+
+  // The record panel is a second production tree, built and shipped from its own tsconfig.
+  it('reaches the webview tree too, not only the extension host’s', () => {
+    expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
   it('scans clean outside the two tables and the allowlist', () => {
-    expect(findOffenders(SRC, TABLE_FILES, ALLOWLIST)).toEqual({});
+    expect(findOffenders(SRC_ROOTS, TABLE_FILES, ALLOWLIST)).toEqual({});
   });
 
   // Rival: the traversal itself breaks (wrong root, an excluded directory) rather than the
@@ -107,7 +118,7 @@ describe('no extension file names a game outside the two tables', () => {
       await mkdir(join(dir, 'nested'));
       await writeFile(join(dir, 'topLevel.ts'), "export const label = 'not a game';\n");
       await writeFile(join(dir, 'nested', 'plantedGame.ts'), "export const label = 'Skyrim';\n");
-      const offenders = findOffenders(dir, [], []);
+      const offenders = findOffenders([dir], [], []);
       expect(Object.keys(offenders)).toEqual([join('nested', 'plantedGame.ts')]);
       expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Skyrim']));
     } finally {

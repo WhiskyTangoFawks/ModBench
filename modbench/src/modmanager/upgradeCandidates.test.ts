@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { selectUpgradeCandidates } from './upgradeCandidates';
-import type { InstanceValue } from './instance';
+import type { DownloadRow } from '../mo2Codecs/downloads';
+import type { InstanceValue } from '../instance/instance';
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
   kind: 'mod',
@@ -8,11 +9,12 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
+// The rows this reads are the codec's own: it never looks at the paths the Instance adds.
 const valueOf = (
-  mods: InstanceValue['mods'], downloads: InstanceValue['downloads'] = [],
-): Pick<InstanceValue, 'mods' | 'downloads'> => ({ mods, downloads });
+  mods: InstanceValue['mods'], downloads: readonly DownloadRow[] = [],
+): { mods: InstanceValue['mods']; downloads: readonly DownloadRow[] } => ({ mods, downloads });
 
-const download = (over: { modID?: string; fileID?: string }): Pick<InstanceValue['downloads'][number], 'modID' | 'fileID'> => over;
+const download = (over: { modID?: string; fileID?: string }): Pick<DownloadRow, 'modID' | 'fileID'> => over;
 
 describe('selectUpgradeCandidates', () => {
   it('is empty when the download carries no mod id', () => {
@@ -77,7 +79,7 @@ describe('selectUpgradeCandidates', () => {
     ]);
     // The download's own name coincidentally matches the mod's installationFile, but carries a
     // different file id — no match, because filename is never the signal.
-    const value2: Pick<InstanceValue, 'mods' | 'downloads'> = {
+    const value2: { mods: InstanceValue['mods']; downloads: readonly DownloadRow[] } = {
       mods: value.mods,
       downloads: [{ name: 'harder-vats-v1.7z', displayName: 'harder-vats-v1.7z', status: 'Downloaded', size: 0, mtimeMs: 0, hasMeta: true, hidden: false, fileID: '111' }],
     };

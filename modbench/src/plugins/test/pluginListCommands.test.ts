@@ -39,7 +39,11 @@ beforeEach(() => {
 
 function makeMo2() {
   return {
-    instance: { value: instanceValueFixture() },
+    instance: {
+      value: instanceValueFixture({
+        paths: { overwriteDir: '/instance/overwrite', downloadsDir: '/instance/downloads', modDirs: new Map() },
+      }),
+    },
     instanceRoot: '/instance',
     pluginsTree: { invalidate: vi.fn() },
   };

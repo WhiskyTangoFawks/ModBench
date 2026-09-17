@@ -3,12 +3,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
-import type { ConfigLike, DetectWinePrefix } from './gameDirectory';
-import type { ConfigChangeEvent } from './gameDirectory';
+import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from './instance';
+import { Instance, type InstanceValue } from '../instance/instance';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
@@ -17,7 +16,6 @@ import { present } from '../ports/present';
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
-const noDetectWinePrefix: DetectWinePrefix = () => Promise.resolve(null);
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -78,15 +76,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const config: ConfigLike = { get: (key) => (key === 'mods.gameDirectory' ? join(root, 'Game') : undefined) };
-  const instance = new Instance({
-    instanceRoot: root,
-    config: () => config,
-    detectPaths: () => Promise.resolve(null),
-    detectWinePrefix: noDetectWinePrefix,
-    onConfigChange: (_listener: (e: ConfigChangeEvent) => void) => ({ dispose: () => {} }),
-    log: () => {},
-  });
+  const resolveGameDirectory: GameDirectoryResolver = () =>
+    Promise.resolve({ root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
+  const instance = new Instance({ instanceRoot: root, resolveGameDirectory, log: () => {} });
   instances.push(instance);
 
   const reconciles: Promise<PluginsReconcileResult>[] = [];

@@ -34,6 +34,7 @@ const EDITING_DIR = 'medit';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
 const MOD_MANAGEMENT_DIR = 'modmanager';
+const INSTANCE_DIR = 'instance';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
@@ -349,8 +350,8 @@ function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: st
 // Management's term for the user ("mod"), so recordLifecycleCommands.ts gets the import-only
 // tier rather than a "no vocabulary in its own text" bar.
 describe('Editor and the Plugins view import from neither each other', () => {
-  it('nothing under Editor imports from the Plugins view or from Mod Management', () => {
-    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR])).toEqual([]);
+  it('nothing under Editor imports from the Plugins view, Mod Management or the Instance', () => {
+    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR])).toEqual([]);
   });
 
   it('nothing under the Plugins view imports from Editor', () => {
@@ -377,16 +378,16 @@ describe('Editor and the Plugins view import from neither each other', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'editor'), { recursive: true });
         writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { RecordNode } from '../plugins/PluginTreeProvider';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR]).map((o) => o.path))
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR]).map((o) => o.path))
           .toEqual([join('editor', 'someCommand.ts')]);
       });
     });
 
-    it('a Mod-Management import planted in an Editor-shaped file is caught', () => {
+    it('an Instance import planted in an Editor-shaped file is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { Instance } from '../modmanager/instance';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR]).map((o) => o.path))
+        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { Instance } from '../instance/instance';\n");
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR, INSTANCE_DIR]).map((o) => o.path))
           .toEqual([join('editor', 'someCommand.ts')]);
       });
     });

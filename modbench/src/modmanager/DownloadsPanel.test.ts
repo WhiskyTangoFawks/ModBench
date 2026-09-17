@@ -38,13 +38,15 @@ import {
 } from './DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
 import type { DownloadRow } from '../mo2Codecs/downloads';
-import type { Instance, InstanceValue } from './instance';
+import type { Instance, InstanceValue } from '../instance/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../test/surfacingDoubles';
 import { downloadRowFixture } from './test/downloadRowFixture';
 import { instanceValueFixture } from './test/instanceValueFixture';
 
-const node = (name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
-  new DownloadNode(downloadRowFixture(name, row), '/instance');
+// The row the Instance would publish for this instance root: its two paths are what the panel
+// opens, so every gesture is driven by the same tree the test wrote.
+const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
+  new DownloadNode(downloadRowFixture(name, row, root));
 
 // No installed mods by default, so `selectUpgradeCandidates` finds none and the pick never
 // shows — the shape every install test not about the pick itself relies on.
@@ -139,7 +141,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined, { kind: 'new' });
@@ -152,7 +154,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, '123', '456', '2.0', { kind: 'new' });
@@ -173,7 +175,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z'), [node('foo.7z'), node('other.7z')]);
+    invoke('modbench.downloads.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined, { kind: 'new' });
@@ -188,7 +190,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('installed=true');
@@ -205,7 +207,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), report);
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     const reportEntry = present(report.reports[0], 'the one recorded report');
@@ -223,7 +225,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     executeCommand.mockResolvedValueOnce(false);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
     // give any (incorrect) writeback a chance to land before asserting its absence
@@ -239,7 +241,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), report);
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -250,7 +252,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.visitNexus', node('foo.7z', { modID: '123' }));
+    invoke('modbench.downloads.visitNexus', node(root, 'foo.7z', { modID: '123' }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     const target = calledWith<{ toString(): string }>(openExternal);
@@ -262,7 +264,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.visitNexus', node('foo.7z'));
+    invoke('modbench.downloads.visitNexus', node(root, 'foo.7z'));
 
     await new Promise((r) => setTimeout(r, 50));
     expect(openExternal).not.toHaveBeenCalled();
@@ -273,7 +275,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.openFile', node('foo.7z'));
+    invoke('modbench.downloads.openFile', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     expect(calledFsPath(openExternal)).toBe(archive);
@@ -284,7 +286,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
-    invoke('modbench.downloads.openMeta', node('foo.7z'));
+    invoke('modbench.downloads.openMeta', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
     expect(calledFsPath(showTextDocument)).toBe(meta);
@@ -300,7 +302,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), report);
-    invoke('modbench.downloads.openFile', node('foo.7z'));
+    invoke('modbench.downloads.openFile', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([
@@ -327,7 +329,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
     const items = calledWith<{ label: string; description?: string; choice: unknown }[]>(showQuickPick);
@@ -346,7 +348,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith(
@@ -363,7 +365,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith(
@@ -379,7 +381,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 50));
@@ -393,7 +395,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z'));
+    invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith(
@@ -410,7 +412,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     executeCommand.mockResolvedValueOnce(true);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
-    invoke('modbench.downloads.install', node('foo.7z', { modID: '222' }));
+    invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '222' }));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith(
@@ -440,7 +442,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const metaB = await writeMeta(root, 'b.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node('a.7z'), [node('a.7z'), node('b.7z')]);
+    invoke('modbench.downloads.hide', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(metaA, 'utf8')).toContain('removed=true');
@@ -454,7 +456,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const visible = await writeMeta(root, 'visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node('visible.7z'), [node('already-hidden.7z'), node('visible.7z')]);
+    invoke('modbench.downloads.hide', node(root, 'visible.7z'), [node(root, 'already-hidden.7z'), node(root, 'visible.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(already, 'utf8')).toContain('removed=true');
@@ -469,7 +471,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const already = await writeMeta(root, 'already-visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.unhide', node('hidden.7z'), [node('hidden.7z'), node('already-visible.7z')]);
+    invoke('modbench.downloads.unhide', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(hidden, 'utf8')).toContain('removed=false');
@@ -483,7 +485,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node('foo.7z'));
+    invoke('modbench.downloads.hide', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=true');
@@ -495,7 +497,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.unhide', node('foo.7z'));
+    invoke('modbench.downloads.unhide', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=false');
@@ -508,7 +510,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node('foo.7z'));
+    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
@@ -522,7 +524,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node('foo.7z'));
+    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     await new Promise((r) => setTimeout(r, 50));
@@ -535,7 +537,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog('Delete'));
-    invoke('modbench.downloads.delete', node('foo.7z'));
+    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
     const trashedPaths = calledFsPaths(fsDelete);

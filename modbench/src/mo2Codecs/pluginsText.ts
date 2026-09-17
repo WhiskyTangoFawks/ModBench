@@ -4,6 +4,9 @@
 
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
+/** The per-profile plugin load order, one line per plugin file. */
+export const PLUGINS_FILE_NAME = 'plugins.txt';
+
 /** A single plugins.txt line (a plugin file), in Plugin load order. The `*`
  *  prefix (MO2's enabled marker) is modelled as `enabled`; the marker itself is
  *  never surfaced in `name`. Distinct from a Mod: plugins.txt has no separators. */

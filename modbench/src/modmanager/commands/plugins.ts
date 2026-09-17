@@ -1,11 +1,11 @@
 // Every write to a profile's plugins.txt. Commands return applied-or-refusal, never throw
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
-import { foldPath } from '../fileConflictIndex';
-import { isPluginFile } from '../pluginFile';
-import { pluginsFile } from '../../mo2Codecs/layout';
+import { foldPath } from '../../instance/fileConflictIndex';
+import { isPluginFile } from '../../mo2Files/pluginFile';
+import { pluginsFile } from '../../mo2Files/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../../mo2Codecs/pluginsText';
-import { listDir, putIfChanged } from '../mo2Files';
+import { listDir, putIfChanged } from '../../mo2Files/files';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */

@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { Instance } from './instance';
+import type { Instance } from '../instance/instance';
 
 export type ModAdoptionOutcome =
   | { applied: true; added: string[] }
