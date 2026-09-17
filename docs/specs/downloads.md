@@ -267,7 +267,7 @@ of the two in one menu is the UX wart being fixed).
 
 **The menu is VS Code's own native `view/item/context` menu**, contributed in
 `package.json` and gated on the row's `contextValue` — a space-separated flag string
-(`downloadContextValue`, `mo2Codecs/downloads.ts`): the base `download` token plus `hasMeta`,
+(`downloadContextValue`, `modmanager/downloadRows.ts`): the base `download` token plus `hasMeta`,
 `hasModID`, and/or `hidden` when true. Each `when` clause tests a flag via a
 word-boundary regex (`viewItem =~ /\bflag\b/`), so flag order never matters — the
 same `contextValue`-flag-string idiom Mods/Plugins use.
@@ -342,10 +342,10 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
 ### Architecture / seams
 
 - **The pure `downloads` model** (`mo2Codecs/downloads.ts`) is **placement-agnostic** —
-  `buildDownloadRows`, `sortDownloadRows`, `filterHiddenRows`,
-  `parseDownloadMeta`, `downloadContextValue`, and the `.meta`-mutation surgical text
+  `buildDownloadRows`, `parseDownloadMeta`, and the `.meta`-mutation surgical text
   transforms (`setInstalledInText` / `setUninstalledInText` / `setHiddenInText`) know
-  nothing of the tree. This mirrors the existing pure-logic layer
+  nothing of the tree; `sortDownloadRows`, `filterHiddenRows` and `downloadContextValue`
+  are the view's own, in `modmanager/downloadRows.ts`. This mirrors the existing pure-logic layer
   (`statusChecker.ts`, `metaIni.ts`, `modlistText.ts`).
 - **`DownloadsProvider` / `DownloadNode`** (`DownloadsProvider.ts`) is a thin
   `TreeDataProvider` reading the Instance's `downloads` field (ADR-0015): it owns no scan
@@ -397,9 +397,9 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   helpers or call sequences.
 - **Primary unit seam — the `downloads` model module** (`mo2Codecs/test/downloads.test.ts`, Vitest,
   `npm run test:unit`, no backend): filename → row mapping with `.meta` sidecars
-  suppressed; Status derivation (`installed`/`uninstalled`/neither/no-`.meta`); hidden
-  filtering; default and re-sort ordering; `downloadContextValue`'s flag-string output;
-  the three mutation functions, byte-faithfully.
+  suppressed; Status derivation (`installed`/`uninstalled`/neither/no-`.meta`); default
+  ordering; the three mutation functions, byte-faithfully. Hidden filtering, re-sorting and
+  `downloadContextValue`'s flag-string output are `modmanager/downloadRows.test.ts`.
 - **`DownloadsProvider.test.ts`** (Vitest): `DownloadNode` row rendering (label/id, status
   icon+colour, description, tooltip composition including the metaless-minimal case,
   `contextValue`, `resourceUri`); provider behavior against a fake Instance — rows come
