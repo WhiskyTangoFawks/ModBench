@@ -40,9 +40,9 @@ export { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 export type { PluginEntry } from '../mo2Codecs/pluginsText';
 export type { DownloadRow, DownloadStatus } from '../mo2Codecs/downloads';
 
-/** How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
- *  the wait before an empty modlist read is believed. */
-export const SETTLE_MS = 200;
+// How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
+// the wait before an empty modlist read is believed.
+const SETTLE_MS = 200;
 
 /** A downloads/ row with the two paths a view opens or reveals, so that no view joins one. */
 export interface DownloadFile extends DownloadRow {

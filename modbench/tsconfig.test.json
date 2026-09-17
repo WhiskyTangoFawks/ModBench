@@ -1,10 +1,13 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    // Every unit test and every test double, compiled against each project's declarations: a
+    // test may reach outside its box, so none compiles inside one.
     "noEmit": true,
-    "tsBuildInfoFile": "./out/projects/legacy.tsbuildinfo"
+    "tsBuildInfoFile": "./out/projects/test.tsbuildinfo"
   },
   "references": [
+    { "path": "./src" },
     { "path": "./src/mo2Codecs" },
     { "path": "./src/tables" },
     { "path": "./src/wire" },
@@ -22,27 +25,6 @@
     { "path": "./src/plugins" },
     { "path": "./src/editor" }
   ],
-  "include": ["src"],
-  "exclude": [
-    "node_modules",
-    "out",
-    "webview",
-    "src/mo2Codecs/*.ts",
-    "src/tables/*.ts",
-    "src/wire/*.ts",
-    "src/wire/generated",
-    "src/ports/*.ts",
-    "src/mo2Files/*.ts",
-    "src/instance/*.ts",
-    "src/modlist/*.ts",
-    "src/pluginsCommands/*.ts",
-    "src/instanceCommands/*.ts",
-    "src/install/*.ts",
-    "src/deploy/*.ts",
-    "src/client/*.ts",
-    "src/mods/*.ts",
-    "src/downloads/*.ts",
-    "src/plugins/*.ts",
-    "src/editor/*.ts"
-  ]
+  "include": ["src/**/*.test.ts", "src/**/test/**/*.ts"],
+  "exclude": ["src/test/integration"]
 }

@@ -1,0 +1,30 @@
+{
+  "extends": "../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../out/projects/root",
+    // The composition root: the activation file and the Toolbox compose every box onto the
+    // extension host, and reference every box by definition (target-architecture-references.d2).
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "./mo2Codecs" },
+    { "path": "./tables" },
+    { "path": "./wire" },
+    { "path": "./ports" },
+    { "path": "./mo2Files" },
+    { "path": "./instance" },
+    { "path": "./modlist" },
+    { "path": "./pluginsCommands" },
+    { "path": "./instanceCommands" },
+    { "path": "./install" },
+    { "path": "./deploy" },
+    { "path": "./client" },
+    { "path": "./mods" },
+    { "path": "./downloads" },
+    { "path": "./plugins" },
+    { "path": "./editor" }
+  ],
+  "include": ["*.ts", "medit/*.ts"],
+  "exclude": ["**/*.test.ts"]
+}

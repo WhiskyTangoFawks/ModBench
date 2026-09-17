@@ -14,6 +14,7 @@ eslint.config.*
 esbuild.mjs
 vitest.config.*
 **/*.test.*
+out/**
 
 # Keep: out/ (bundled extension + webview) and backend/ (published self-contained
 # service). vsce's negate matching is a blanket OR over the whole file, not
