@@ -12,7 +12,7 @@ export interface GamePaths {
 }
 
 /** The per-release facts autodetection needs, already looked up from the two tables
- *  (`modmanager/mo2/gamePaths.ts`, `modmanager/mo2/loadOrderDestination.ts`) — this module names
+ *  (`tables/gamePaths.ts`, `tables/loadOrderDestination.ts`) — this module names
  *  no game itself. */
 export interface GameAutodetect {
   steamAppId: string;

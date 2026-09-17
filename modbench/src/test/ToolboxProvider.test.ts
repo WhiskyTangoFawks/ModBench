@@ -5,7 +5,7 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './v
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { ToolboxProvider, type ToolboxDeps, type ToolboxState } from '../ToolboxProvider';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 const VALUE: ToolboxState = { activeProfile: 'Default', deployed: false };
 

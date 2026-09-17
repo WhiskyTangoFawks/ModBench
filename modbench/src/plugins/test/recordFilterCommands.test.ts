@@ -29,7 +29,7 @@ vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: 
 import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
 import { InMemoryMEditClient } from '../../medit/client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 beforeEach(() => {
   handlers.clear();

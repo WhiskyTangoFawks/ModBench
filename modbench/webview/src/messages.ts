@@ -3,4 +3,4 @@ export {
   type WebviewToExtension, type ExtensionToWebview, type LogLevel,
   type ArrayElementContext, type ArrayParentContext,
   type ColumnHeaderContext, type StringValueContext, type PathHop, type PathSegment, type RecordEditEnvelope,
-} from '../../src/medit/messages';
+} from '../../src/wire/messages';

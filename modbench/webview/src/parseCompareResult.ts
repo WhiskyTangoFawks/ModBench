@@ -1,4 +1,4 @@
-import type { components } from '../../src/medit/generated/api';
+import type { components } from '../../src/wire/generated/api';
 import type { CompareResult } from './types';
 
 type Schemas = components['schemas'];

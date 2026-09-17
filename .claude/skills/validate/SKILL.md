@@ -34,7 +34,7 @@ reaches string literals but carries only the History and Ticket rules (`.vale-ra
 tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate
 runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
 
-`--api-drift` boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
+`--api-drift` boots a fresh backend and fails if `modbench/src/wire/generated/api.ts`
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
 silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 

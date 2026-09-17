@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
 // stream's endpoint path live only under medit/client/. The webview also calls the backend
@@ -38,7 +38,7 @@ function isClientFolder(relativePath: string): boolean {
 // Pre-existing, narrow, type-only reads of the generated schema, neither the HTTP adapter: the
 // webview wire protocol and the load-failure report. Named so this fold stays the five modules
 // the ticket lists.
-const GENERATED_TYPE_ONLY_EXCEPTIONS = [join('medit', 'messages.ts'), join('medit', 'pluginFailures.ts')];
+const GENERATED_TYPE_ONLY_EXCEPTIONS = [join('wire', 'messages.ts'), join('medit', 'pluginFailures.ts')];
 
 interface Offense { path: string; reason: string }
 
@@ -97,7 +97,7 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
     it('a generated-client import planted under Plugins is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'plugins'), { recursive: true });
-        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import type { components } from '../medit/generated/api';\n");
+        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import type { components } from '../wire/generated/api';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('plugins', 'SomeProvider.ts')]);
       });
     });
@@ -105,7 +105,7 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
     it('a generated-client import planted under Editor is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { components } from '../medit/generated/api';\n");
+        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { components } from '../wire/generated/api';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('editor', 'someCommand.ts')]);
       });
     });
@@ -113,7 +113,7 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
     it('a generated-client import planted under Mod Management is caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'modmanager'), { recursive: true });
-        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import type { components } from '../medit/generated/api';\n");
+        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import type { components } from '../wire/generated/api';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
       });
     });

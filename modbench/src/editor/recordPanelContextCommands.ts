@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type RecordEditEnvelope, type StringValueContext } from '../medit/messages';
+import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type RecordEditEnvelope, type StringValueContext } from '../wire/messages';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor } from './extendedFieldEditor';
 

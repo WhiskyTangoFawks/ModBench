@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, extname, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // The `node:fs` entry points that hand back bytes rather than a directory listing or a decoded
 // string. `readFile` is not among them — it is covered by the encoding rule below.

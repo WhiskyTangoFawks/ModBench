@@ -5,12 +5,12 @@
 import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
-import { isPluginFile } from './mo2/pluginFile';
+import { OVERWRITE_DIR_NAME, overwriteDir } from '../mo2Codecs/layout';
+import { isPluginFile } from './pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
-import { pluginSlots } from './mo2/pluginsText';
+import { pluginSlots } from '../mo2Codecs/pluginsText';
 import { listDir } from './mo2Files';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../ports/errno';
 
 // Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.

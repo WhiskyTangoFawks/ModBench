@@ -11,8 +11,8 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance, type InstanceValue } from './instance';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
-import { setSelectedProfileInText } from './mo2/modOrganizerIni';
-import { present } from '../present';
+import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
+import { present } from '../ports/present';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';

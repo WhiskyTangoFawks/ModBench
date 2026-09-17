@@ -267,7 +267,7 @@ of the two in one menu is the UX wart being fixed).
 
 **The menu is VS Code's own native `view/item/context` menu**, contributed in
 `package.json` and gated on the row's `contextValue` — a space-separated flag string
-(`downloadContextValue`, `mo2/downloads.ts`): the base `download` token plus `hasMeta`,
+(`downloadContextValue`, `mo2Codecs/downloads.ts`): the base `download` token plus `hasMeta`,
 `hasModID`, and/or `hidden` when true. Each `when` clause tests a flag via a
 word-boundary regex (`viewItem =~ /\bflag\b/`), so flag order never matters — the
 same `contextValue`-flag-string idiom Mods/Plugins use.
@@ -341,7 +341,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
 
 ### Architecture / seams
 
-- **The pure `downloads` model** (`mo2/downloads.ts`) is **placement-agnostic** —
+- **The pure `downloads` model** (`mo2Codecs/downloads.ts`) is **placement-agnostic** —
   `buildDownloadRows`, `sortDownloadRows`, `filterHiddenRows`,
   `parseDownloadMeta`, `downloadContextValue`, and the `.meta`-mutation surgical text
   transforms (`setInstalledInText` / `setUninstalledInText` / `setHiddenInText`) know
@@ -395,7 +395,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   produced rows (and their Status / hidden / action-enabled flags / order); given a
   `.meta` text + a mutation, assert the resulting text. No assertions about private
   helpers or call sequences.
-- **Primary unit seam — the `downloads` model module** (`mo2/downloads.test.ts`, Vitest,
+- **Primary unit seam — the `downloads` model module** (`mo2Codecs/test/downloads.test.ts`, Vitest,
   `npm run test:unit`, no backend): filename → row mapping with `.meta` sidecars
   suppressed; Status derivation (`installed`/`uninstalled`/neither/no-`.meta`); hidden
   filtering; default and re-sort ordering; `downloadContextValue`'s flag-string output;
@@ -481,7 +481,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   in the `modbench` container — no separate command to open it, no columns, no
   manual Refresh (a name filter exists — Slot 1 above — this is about the absence of a
   data-refresh control). Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
-  in `mo2/downloads.ts`.
+  in `mo2Codecs/downloads.ts`.
 - Consequence of ADR-0017: this surface's shape — sidebar tree, collapsed by
   default, status-bar item deferred to Nexus integration — is resolved; downloads
   directory, endorsements and retention are closed by the Implementation Decisions above.

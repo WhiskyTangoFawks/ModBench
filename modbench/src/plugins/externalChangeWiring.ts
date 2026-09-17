@@ -6,7 +6,7 @@ import {
 } from './externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { makeReporter } from '../reporter';
-import type { AskQuestion } from '../dialog';
+import type { AskQuestion } from '../ports/dialog';
 
 // Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
 // lives in ./externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —

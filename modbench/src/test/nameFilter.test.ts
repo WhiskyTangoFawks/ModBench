@@ -54,7 +54,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerNameFilter, type NameFilterDeps } from '../nameFilter';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 const VIEW_ID = 'test.view';
 const OPEN = `${VIEW_ID}.filter`;

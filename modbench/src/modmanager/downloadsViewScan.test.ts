@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 const VIEW_FILES = ['DownloadsPanel.ts', 'DownloadsProvider.ts', 'HiddenDownloadDecorationProvider.ts'];
 

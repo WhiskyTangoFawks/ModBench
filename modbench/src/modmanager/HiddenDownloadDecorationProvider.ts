@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { downloadsDir } from './mo2/layout';
+import { downloadsDir } from '../mo2Codecs/layout';
 
 /** Colour only, no badge: Show hidden is additive, so hidden rows sit alongside visible ones
  *  and this tint is the only cue telling them apart — MO2 itself draws none. */

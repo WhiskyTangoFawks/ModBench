@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // Rules a compiling change can break silently, checked as source text like contextBoundary.test.ts.
 

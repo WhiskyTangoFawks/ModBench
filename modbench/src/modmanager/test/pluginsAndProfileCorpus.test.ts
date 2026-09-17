@@ -7,7 +7,7 @@ import { switchProfile } from '../commands/profile';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
   readModlistEntries, readPluginLines, snapshotTree,
-} from '../test/corpusFixture';
+} from './corpusFixture';
 
 const INI = 'ModOrganizer.ini';
 const PROFILE = 'Default';

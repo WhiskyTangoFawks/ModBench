@@ -4,7 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createModsWatcher } from './modsWatcher';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 describe('createModsWatcher', () => {
   it('watches mods/** under the instance root', () => {

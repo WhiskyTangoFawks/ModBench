@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readGameName, readGamePath, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+import { readGameName, readGamePath, readSelectedProfile, setSelectedProfileInText } from '../modOrganizerIni';
 
-const iniPath = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance', 'ModOrganizer.ini');
+const iniPath = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance', 'ModOrganizer.ini');
 const ini = () => readFileSync(iniPath, 'utf8');
 
 describe('readSelectedProfile', () => {

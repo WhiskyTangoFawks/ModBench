@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { modsDir, profilesDir, settingsFile } from './mo2/layout';
+import { modsDir, profilesDir, settingsFile } from '../mo2Codecs/layout';
 
 /** Structural presence only, never file contents: a real instance with a corrupt
  *  `modlist.txt` still reads `true` here and surfaces its error elsewhere (ADR-0019)

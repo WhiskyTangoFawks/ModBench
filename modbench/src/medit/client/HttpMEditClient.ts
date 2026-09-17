@@ -1,4 +1,4 @@
-import type { RecordEditEnvelope } from '../messages';
+import type { RecordEditEnvelope } from '../../wire/messages';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
   toLoadOrderStatus, type ApiClient, type LoadOrderStatus,

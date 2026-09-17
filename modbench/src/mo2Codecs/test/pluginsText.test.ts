@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parsePlugins, pluginSlots, setPluginEnabledInText, movePluginsInText, dropIndexForMove, appendPluginInText, removePluginFromText } from './pluginsText';
-import type { PluginEntry } from '../model';
+import { parsePlugins, pluginSlots, setPluginEnabledInText, movePluginsInText, dropIndexForMove, appendPluginInText, removePluginFromText } from '../pluginsText';
+import type { PluginEntry } from '../../modmanager/model';
 
-const fixtureDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
+const fixtureDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
 const defaultPlugins = () =>
   readFileSync(join(fixtureDir, 'profiles', 'Default', 'plugins.txt'), 'utf8');
 

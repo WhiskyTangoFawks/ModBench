@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect } from './medit/GamePathDetector';
 import type { DetectPaths, DetectWinePrefix } from './modmanager/gameDirectory';
 import { mo2InstanceContext } from './modmanager/detectMo2Instance';
-import { readGameName } from './modmanager/mo2/modOrganizerIni';
-import { gameReleaseForGame, gamePathInfoForRelease } from './modmanager/mo2/gamePaths';
-import { settingsFile } from './modmanager/mo2/layout';
-import { loadOrderAppDataFolder } from './modmanager/mo2/loadOrderDestination';
+import { readGameName } from './mo2Codecs/modOrganizerIni';
+import { gameReleaseForGame, gamePathInfoForRelease } from './tables/gamePaths';
+import { settingsFile } from './mo2Codecs/layout';
+import { loadOrderAppDataFolder } from './tables/loadOrderDestination';
 
 /** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither
  *  context's folder nor to the composition root. */

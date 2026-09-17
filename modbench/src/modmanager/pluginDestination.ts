@@ -2,7 +2,7 @@
 // (Mod Management never calls it, CLAUDE.md) — so it is unit-testable without a VS Code harness.
 
 import { OVERWRITE_ORIGIN } from './loadOrderSnapshot';
-import { OVERWRITE_DIR_NAME, modDir, overwriteDir } from './mo2/layout';
+import { OVERWRITE_DIR_NAME, modDir, overwriteDir } from '../mo2Codecs/layout';
 
 export type PluginDestinationChoice =
   | { kind: 'overwrite' }

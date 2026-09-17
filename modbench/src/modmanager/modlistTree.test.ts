@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist } from './modlistTree';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod',

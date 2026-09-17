@@ -2,10 +2,10 @@
 // No vscode import, so it is unit-testable standalone.
 
 import { join, relative, sep } from 'node:path';
-import { MOD_META_FILE_NAME, modDir } from './mo2/layout';
+import { MOD_META_FILE_NAME, modDir } from '../mo2Codecs/layout';
 import type { ModlistEntry } from './model';
 import { factsOf, listDir } from './mo2Files';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../ports/errno';
 
 // Nearly every mod has one, so indexing it would make them all conflict with each other.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);

@@ -2,8 +2,8 @@
 // instance root and the download's filename, returning applied or a refusal. Each writes and
 // returns — the downloads watcher is how the change comes back.
 
-import { setHiddenInText, setInstalledInText, setUninstalledInText } from '../mo2/downloads';
-import { downloadFile, downloadSidecarFile } from '../mo2/layout';
+import { setHiddenInText, setInstalledInText, setUninstalledInText } from '../../mo2Codecs/downloads';
+import { downloadFile, downloadSidecarFile } from '../../mo2Codecs/layout';
 import { exists, put } from '../mo2Files';
 
 /** Every verb here writes unconditionally — a splice of the sidecar, or a trash — so `applied`

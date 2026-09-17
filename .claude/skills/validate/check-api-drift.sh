@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fails if modbench/src/medit/generated/api.ts has drifted from the live
+# Fails if modbench/src/wire/generated/api.ts has drifted from the live
 # OpenAPI spec. Boots a fresh backend, then uses openapi-typescript's own
 # --check flag (a pure read/compare — it never writes to the destination file,
 # verified empirically) against the committed api.ts in place. No temp file,
@@ -8,7 +8,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-API_TS="$ROOT/modbench/src/medit/generated/api.ts"
+API_TS="$ROOT/modbench/src/wire/generated/api.ts"
 BOOT_LOG="$(mktemp /tmp/api-drift-boot.XXXXXX.log)"
 STATUS=1
 

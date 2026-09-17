@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../medit/client';
 import type { Instance } from '../modmanager/instance';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
-import { OVERWRITE_DIR_NAME } from '../modmanager/mo2/layout';
+import { OVERWRITE_DIR_NAME } from '../mo2Codecs/layout';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
 import { appendPlugin } from '../modmanager/commands/plugins';
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.

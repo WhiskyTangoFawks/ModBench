@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { backendStatusText, wireBackendStatus, enterEditingAcrossRestarts } from '../backendStatus';
 import { InMemoryMEditClient, createLoadOrderSender } from '../client';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 function makeViews() {
   return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn() };

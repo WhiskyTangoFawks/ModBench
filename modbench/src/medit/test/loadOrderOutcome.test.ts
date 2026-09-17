@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   reportLoadOrderResult, applyFilterSyncResult, syncActiveFilter, applyLoadOrderOutcome,
 } from '../loadOrderOutcome';
-import type { components } from '../generated/api';
+import type { components } from '../../wire/generated/api';
 
 function makeDeps() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn(), setStatusText: vi.fn(), refreshTree: vi.fn(), notifyConflictsComputed: vi.fn() };

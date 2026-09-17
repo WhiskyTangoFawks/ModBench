@@ -43,7 +43,7 @@ to Stryker.NET's `since` — which reads the wrong checkout from a linked worktr
 
 Mutation runs against `src/modmanager/` and `src/medit/`:
 
-- **`src/modmanager/mo2/*.ts` and friends are the payload** — pure transforms by invariant
+- **`src/mo2Codecs/*.ts` and friends are the payload** — pure transforms by invariant
   (`modbench/CLAUDE.md`: byte-faithful surgical edits, never model→re-serialization). Parsers,
   an index, a conflict resolver: real branching, real boundaries. The bug history is the
   argument — BOM-handling bugs (a modlist BOM silently dropping the first mod) are exactly
@@ -60,7 +60,7 @@ Mutation runs against `src/modmanager/` and `src/medit/`:
 - **Test code is excluded on both sides** (`**/*.test.ts`, `*/test/**`) — fixture builders.
   Mutating a fixture tells you nothing about the code under test; an early run wasted 24
   findings proving it.
-- **`src/medit/generated/**` is excluded** — `api.ts` is regenerated from the OpenAPI spec
+- **`src/wire/generated/**` is excluded** — `api.ts` is regenerated from the OpenAPI spec
   (`/regenerate-api`). A surviving mutant there is a finding against the generator's input,
   which no test in this repo should be pinning.
 
@@ -124,7 +124,7 @@ survivor list reaches context.
 ## Baseline
 
 The first full run produced **330 actionable findings** — 272 survived, 58
-uncovered — concentrated in `deployer.ts` (66), `mo2/modlistText.ts` (44) and
+uncovered — concentrated in `deployer.ts` (66), `mo2Codecs/modlistText.ts` (44) and
 `install/detectRoot.ts` (43).
 
 That is a **backlog, not a review.** A list that size is exactly what tempts an agent into

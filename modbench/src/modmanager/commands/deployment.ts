@@ -6,7 +6,7 @@ import {
   deployToGameData, purgeFromGameData, type DeployOutcome, type DeployLink,
   type DeployWarning, type LoadOrderDeployment, type PurgeOutcome,
 } from '../mo2Files';
-import { pluginsFile } from '../mo2/layout';
+import { pluginsFile } from '../../mo2Codecs/layout';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
 

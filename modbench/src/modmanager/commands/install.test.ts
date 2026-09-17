@@ -9,8 +9,8 @@ import { join, relative, sep } from 'node:path';
 import { installFromArchive, installFromFolder } from './install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../test/corpusFixture';
 import type { Runner } from '../install/extractArchive';
-import { writeMetaIni } from '../mo2/metaIni';
-import { present } from '../../present';
+import { writeMetaIni } from '../../mo2Codecs/metaIni';
+import { present } from '../../ports/present';
 
 const MOD = 'Freshly Installed Mod';
 

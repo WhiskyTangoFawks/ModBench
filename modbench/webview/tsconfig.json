@@ -14,5 +14,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
+  // The record panel reads the kernel's wire box, the one arrow it has into src/.
+  "references": [{ "path": "../src/wire" }],
   "include": ["src"]
 }
