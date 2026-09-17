@@ -6,9 +6,9 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>Every value <c>/compare</c> shows for a field is the same node the plain field read
-/// (<c>overrides[i].fields</c>, in the same response) already carries for it — the compare tree
-/// invents no second value.</summary>
+/// <summary>Every value <c>/compare</c> shows for a field is the same node the independent
+/// <c>GET /records/{formKey}</c> read already carries for it — the compare tree invents no second
+/// value.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFixture> loaded)
     : IClassFixture<LoadedApiFixture<CutDownPluginApiFixture>>
@@ -26,9 +26,11 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         foreach (var formKey in formKeys)
         {
             var compare = await _client.Compare(formKey);
-            // The cut-down plugin loads alone, so its one override's own fields are the whole
-            // "document" a client can independently read for this record.
-            var fields = compare.GetProperty("overrides")[0].GetProperty("fields");
+            // GetRecord (reads.GetDocument) and GetCompare (reads.GetOverrideStack, then
+            // ConflictClassifier) are separate production paths over the same committed document —
+            // an independent side a client can read, not compare's own output checked against itself.
+            var record = await _client.Record(formKey);
+            var fields = record.GetProperty("fields");
 
             var metadata = new Dictionary<string, FieldMetadata>(StringComparer.Ordinal);
             var fieldsByName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);

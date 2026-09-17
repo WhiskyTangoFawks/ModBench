@@ -86,6 +86,32 @@ public sealed class CompareColumnKeyIntegrityTraceTests : HostedTests
         // itself isn't carrying its own real origin over the wire.
         Assert.Equal(2, validKeys.Count);
 
+        // The walk below is only meaningful if it reaches non-empty struct/structList and condition
+        // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
+        var diffs = compare.GetProperty("diffs");
+        var virtualMachineAdapter = diffs.EnumerateArray().Single(d => d.GetProperty("fieldName").GetString() == "VirtualMachineAdapter");
+        var scripts = Children(virtualMachineAdapter).Single(c => c.GetProperty("fieldName").GetString() == "Scripts");
+        var scriptDiff = Children(scripts).Single();
+        var propertiesNode = Children(scriptDiff).Single(c => c.GetProperty("fieldName").GetString() == "Properties");
+        var properties = Children(propertiesNode);
+
+        var config = properties.Single(p => p.GetProperty("fieldName").GetString() == "Config");
+        var configMembers = Children(config).Single(c => c.GetProperty("fieldName").GetString() == "Members");
+        Assert.NotEmpty(Children(configMembers));
+
+        var items = properties.Single(p => p.GetProperty("fieldName").GetString() == "Items");
+        var itemsStructs = Children(items).Single(c => c.GetProperty("fieldName").GetString() == "Structs");
+        Assert.NotEmpty(Children(itemsStructs));
+
+        // Conditions reach the grid as an ordinary reflected array column, so the walk's condition
+        // coverage is a nested diff subtree with per-column values/cellStates.
+        var conditions = diffs.EnumerateArray().Single(d => d.GetProperty("fieldName").GetString() == "Conditions");
+        var conditionRow = Children(conditions).Single();
+        Assert.NotEmpty(conditionRow.GetProperty("cellStates").EnumerateObject());
+        var conditionData = Children(conditionRow).Single(c => c.GetProperty("fieldName").GetString() == "Data");
+        var runOnReference = Children(conditionData).Single(c => c.GetProperty("fieldName").GetString() == "Reference");
+        Assert.NotEmpty(ResolutionsOf(runOnReference));
+
         AssertEveryColumnDictKeyIsValid(compare, validKeys);
 
         // PluginStates is keyed by ColumnKey.Of, so a lookup by plugin name alone misses both
@@ -95,6 +121,21 @@ public sealed class CompareColumnKeyIntegrityTraceTests : HostedTests
         Assert.Equal("Master", modA.GetProperty("conflictThis").GetString());
         Assert.Equal("IdenticalToMaster", modB.GetProperty("conflictThis").GetString());
     }
+
+    private static List<JsonElement> Children(JsonElement diff)
+    {
+        var children = diff.GetProperty("children");
+        return children.ValueKind == JsonValueKind.Array
+            ? [.. children.EnumerateArray()]
+            : throw new InvalidOperationException($"Expected \"{diff.GetProperty("fieldName").GetString()}\" to have children.");
+    }
+
+    // Null-coalesced to empty rather than skipped, so a missing "resolutions" fails the NotEmpty
+    // check loudly instead of the walk silently passing it by.
+    private static List<JsonProperty> ResolutionsOf(JsonElement diff) =>
+        diff.TryGetProperty("resolutions", out var resolutions) && resolutions.ValueKind == JsonValueKind.Object
+            ? [.. resolutions.EnumerateObject()]
+            : [];
 
     private static void AssertEveryColumnDictKeyIsValid(JsonElement element, HashSet<string> validKeys)
     {

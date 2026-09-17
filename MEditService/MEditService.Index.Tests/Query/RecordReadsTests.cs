@@ -69,6 +69,66 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(TestPluginFixture.RecordCount, page1.Total);
     }
 
+    // The FormKey picker seeds its QuickPick with the record's own FormKey, which is only coherent
+    // if searching by that FormKey resolves it — a search that matches `search` against EditorID
+    // only makes a seeded (or pasted) FormKey match nothing.
+    [Fact]
+    public void GetRecords_SearchByFormKey_ResolvesExactRecord()
+    {
+        using var index = LoadedIndex();
+        var formKey = _fixture.Npc1FormKey.ToString();
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: formKey, Limit: 100, Offset: 0));
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(formKey, result.Items[0].FormKey);
+    }
+
+    // A FormKey-shaped query is matched case-insensitively against the canonical stored form — the
+    // picker seeds from whatever casing a resolved link displays, and the paste-a-FormKey path
+    // can't assume the user typed the exact stored case.
+    [Fact]
+    public void GetRecords_SearchByFormKey_IsCaseInsensitive()
+    {
+        using var index = LoadedIndex();
+        var formKey = _fixture.Npc1FormKey.ToString();
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: formKey.ToLowerInvariant(), Limit: 100, Offset: 0));
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(formKey, result.Items[0].FormKey);
+    }
+
+    // A search string that merely looks close to a FormKey but doesn't fully parse (too short, bad
+    // delimiter, non-hex id) must fall back to the EditorID path, not throw or silently match
+    // everything.
+    [Fact]
+    public void GetRecords_SearchByMalformedFormKeyLikeString_FallsBackToEditorIdMatch_NoResults()
+    {
+        using var index = LoadedIndex();
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: "ZZZZZZ:NotAFormKey.esp", Limit: 100, Offset: 0));
+
+        Assert.Equal(0, result.Total);
+    }
+
+    [Fact]
+    public void GetRecords_ReturnsSortedByEditorIdAscending()
+    {
+        using var fixture = new PluginFixtureBuilder("medit-sort-editorid")
+            .WithPlugin("SortTest.esp", mod =>
+            {
+                mod.Npcs.AddNew("Zebra");
+                mod.Npcs.AddNew("Apple");
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+
+        Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
+    }
+
     // --- GetDocument ---
 
     [Fact]

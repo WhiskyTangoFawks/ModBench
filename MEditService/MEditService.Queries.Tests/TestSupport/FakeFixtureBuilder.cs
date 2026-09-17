@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
@@ -14,9 +15,8 @@ internal sealed record FakeFixtureData(
     GameRelease Release,
     IReadOnlyList<RegisteredCopy> Copies, IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
 
-/// <summary>The real-plugin half of <c>PluginFixtureBuilder</c>, without a real Index: a scratch
-/// round trip so Mutagen's own master computation runs, then the real codec over the result.
-/// </summary>
+// Build takes the column names a test reads, never every column a schema has: a scratch round
+// trip runs Mutagen's own master computation, then the real codec serializes each record once.
 internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallout4)
 {
     private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
@@ -35,7 +35,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         return this;
     }
 
-    internal FakeFixtureData Build()
+    internal FakeFixtureData Build(params string[] fieldNames)
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
         var scratch = Directory.CreateTempSubdirectory("medit-fake-fixture-");
@@ -69,7 +69,8 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                     .Where(t => t.RecordType.Length > 0)
                     .ToList();
 
-                opened[key] = new PluginContent(mod.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, masters, records.Count);
+                opened[key] = new PluginContent(
+                    written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, masters, records.Count);
                 if (listed) copies.Add(new RegisteredCopy(name, origin, name, slot, enabled, Winning: true));
                 perPlugin.Add((key, slot, records));
             }
@@ -84,7 +85,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 foreach (var (record, recordType) in records)
                 {
                     var isWinner = winners.TryGetValue(record.FormKey.ToString(), out var winner) && winner.Slot == slot;
-                    rows.Add(new FakeRow(key, slot, isWinner, RealDocuments.Of(record, key, slot, isWinner, release, recordType, Resolve)));
+                    rows.Add(new FakeRow(key, slot, isWinner, RealDocuments.Of(record, key, slot, isWinner, release, recordType, fieldNames, Resolve)));
                 }
             }
 

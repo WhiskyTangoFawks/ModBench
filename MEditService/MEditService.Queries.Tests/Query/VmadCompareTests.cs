@@ -68,7 +68,7 @@ public sealed class VmadCompareTests
     }
 
     private static FakeRow Row(IMajorRecordGetter record, PluginCopyKey plugin, int loadOrderIndex, bool isWinner, string recordType) =>
-        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType));
+        new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, [Field]));
 
     private static ScriptEntry NamedScript(string name, string property, int value)
     {

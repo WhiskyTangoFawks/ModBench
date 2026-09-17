@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -39,41 +38,25 @@ internal sealed class FakeReads(
         return entries.Count == 0 ? null : new RecordOverrides(formKey, entries[0].Effective.RecordType, entries);
     }
 
+    // Matching, sorting and paging are the real Index's own behaviour (RecordReadsTests), not
+    // Queries'. This answers with exactly what the test configured, recording the query asked of it
+    // so a test can assert on the RecordQuery RecordQueryService built.
+    public RecordQuery? LastSearch { get; private set; }
+    public PagedResult<RecordSummary> SearchResult { get; set; } = new([], 0);
+
     public PagedResult<RecordSummary> Search(RecordQuery query)
     {
-        IEnumerable<FakeRow> filtered = rows;
-        if (query.RecordTypes is { Count: > 0 })
-        {
-            var types = new HashSet<string>(query.RecordTypes, StringComparer.OrdinalIgnoreCase);
-            filtered = filtered.Where(r => types.Contains(r.Document.RecordType));
-        }
-        if (query.Plugin is { } plugin)
-            filtered = filtered.Where(r => string.Equals(r.Plugin.Name, plugin.Name, StringComparison.OrdinalIgnoreCase));
-        if (query.Origin is { } origin)
-            filtered = filtered.Where(r => string.Equals(r.Plugin.Origin, origin, StringComparison.OrdinalIgnoreCase));
-        if (query.Search is { } search)
-            filtered = FormKey.TryFactory(search, out var formKey)
-                ? filtered.Where(r => string.Equals(r.Document.FormKey, formKey.ToString(), StringComparison.OrdinalIgnoreCase))
-                : filtered.Where(r => r.Document.EditorId?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
-
-        var ordered = filtered
-            .OrderBy(r => r.Document.EditorId, StringComparer.Ordinal)
-            .ThenBy(r => r.Document.FormKey, StringComparer.Ordinal)
-            .ThenBy(r => r.Plugin.Name, StringComparer.Ordinal)
-            .ThenBy(r => r.Plugin.Origin, StringComparer.Ordinal)
-            .ToList();
-        var page = ordered.Skip(query.Offset).Take(query.Limit)
-            .Select(r => new RecordSummary(
-                r.Document.FormKey, r.Plugin.Name, r.LoadOrderIndex, r.IsWinner, r.Document.EditorId, r.Plugin.Origin,
-                ParseDiagnosis: r.Document.ParseDiagnosis, HasParseFailure: r.Document.ParseDiagnosis != null))
-            .ToList();
-        return new(page, ordered.Count);
+        LastSearch = query;
+        return SearchResult;
     }
 
+    // The grouping and counting are the real Index's own behaviour too; keyed so a test can
+    // configure one plugin's counts without touching another's.
+    public IReadOnlyDictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>> RecordTypeCountsByPlugin { get; set; } =
+        new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>();
+
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) =>
-        [.. rows.Where(r => r.Plugin.Equals(plugin))
-            .GroupBy(r => r.Document.RecordType)
-            .Select(g => new RecordTypeCount(g.Key, g.Count(), g.Any(r => r.Document.ParseDiagnosis != null)))];
+        RecordTypeCountsByPlugin.GetValueOrDefault(plugin, []);
 
     public RecordLookupEntry? Resolve(string formKey) =>
         rows.FirstOrDefault(r => r.Document.FormKey == formKey && r.IsWinner) is { Document: { } d } ? new(d.RecordType, d.EditorId) : null;

@@ -19,19 +19,24 @@ public sealed class RecordQueryServiceTests
     private readonly FakeIndex _manager;
     private readonly FakeReads _reads;
     private readonly RecordQueryService _svc;
+    private readonly FormKey _npc01Key;
 
     public RecordQueryServiceTests()
     {
+        FormKey npc01Key = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin(PluginName, mod =>
             {
-                mod.Npcs.AddNew("TestNPC01");
+                var npc01 = mod.Npcs.AddNew("TestNPC01");
+                npc01.Aggression = Npc.AggressionType.Aggressive; // non-default, so the column isn't skipped as absent
+                npc01Key = npc01.FormKey;
                 mod.Npcs.AddNew("TestNPC02");
             })
-            .Build();
+            .Build("Aggression");
         (_manager, var svc) = Build(fixture);
         _reads = (FakeReads)_manager.RequireReads();
         _svc = svc;
+        _npc01Key = npc01Key;
     }
 
     private static (FakeIndex Manager, RecordQueryService Service) Build(FakeFixtureData fixture)
@@ -84,7 +89,7 @@ public sealed class RecordQueryServiceTests
                 npcFormKey = npc.FormKey;
                 npc.Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800));
             })
-            .Build();
+            .Build("Race");
         var (_, svc) = Build(fixture);
 
         var detail = svc.GetRecord(npcFormKey.ToString());
@@ -105,128 +110,83 @@ public sealed class RecordQueryServiceTests
         Assert.Empty(plugins[0].MasterIssues);
     }
 
+    // Matching, sorting and paging are the real Index's own behaviour, covered at
+    // Index.Tests/Query/RecordReadsTests.cs. This service's own job is building the RecordQuery,
+    // resolving type and origin, and returning reads.Search's answer untouched.
+
     [Fact]
-    public void GetRecords_ByType_ReturnsPaginatedResults()
+    public void GetRecords_KnownType_ForwardsSearchLimitOffsetUntouchedIntoTheQuery()
     {
+        _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 7, offset: 3);
+
+        var query = _reads.LastSearch;
+        Assert.NotNull(query);
+        Assert.Equal(["npc_"], query.RecordTypes);
+        Assert.Equal("TestNPC01", query.Search);
+        Assert.Equal(7, query.Limit);
+        Assert.Equal(3, query.Offset);
+    }
+
+    [Fact]
+    public void GetRecords_NoType_QueriesEveryNonHeaderSchemaType()
+    {
+        _svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
+
+        var query = _reads.LastSearch;
+        Assert.NotNull(query);
+        var recordTypes = query.RecordTypes;
+        Assert.NotNull(recordTypes);
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(Release);
+        var expected = schemas.Keys.Where(t => t != PluginHeader.RecordType).OrderBy(t => t, StringComparer.Ordinal);
+        Assert.Equal(expected, recordTypes.OrderBy(t => t, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void GetRecords_WithPlugin_ResolvesOriginFromTheLoadOrder()
+    {
+        _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0);
+
+        var query = _reads.LastSearch;
+        Assert.NotNull(query);
+        Assert.Equal(PluginName, query.Plugin);
+        Assert.Equal("Data", query.Origin);
+    }
+
+    [Fact]
+    public void GetRecords_WithExplicitOrigin_SkipsLoadOrderResolution()
+    {
+        _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0, origin: "OtherOrigin");
+
+        var query = _reads.LastSearch;
+        Assert.NotNull(query);
+        Assert.Equal("OtherOrigin", query.Origin);
+    }
+
+    [Fact]
+    public void GetRecords_ReturnsExactlyWhatReadsSearchProvides()
+    {
+        _reads.SearchResult = new PagedResult<RecordSummary>(
+            [new RecordSummary("000800:Test.esp", PluginName, 0, IsWinner: true, "FromFake", "Data")], 1);
+
         var result = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0);
 
-        Assert.Equal(RecordCount, result.Total);
-        Assert.Equal(RecordCount, result.Items.Count);
-    }
-
-    [Fact]
-    public void GetRecords_SearchByEditorId_FiltersResults()
-    {
-        var result = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 10, offset: 0);
-
-        Assert.Equal(1, result.Total);
-        Assert.Equal("TestNPC01", result.Items[0].EditorId);
-    }
-
-    // The FormKey picker seeds its QuickPick with the record's own FormKey, which
-    // is only coherent if searching by that FormKey resolves it — a backend that matches
-    // `search` against EditorID only makes a seeded (or pasted) FormKey match nothing.
-    [Fact]
-    public void GetRecords_SearchByFormKey_ResolvesRecord()
-    {
-        var byEditorId = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 10, offset: 0);
-        var formKey = byEditorId.Items[0].FormKey;
-
-        var result = _svc.GetRecords(type: "npc_", plugin: null, search: formKey, limit: 10, offset: 0);
-
-        Assert.Equal(1, result.Total);
-        Assert.Equal(formKey, result.Items[0].FormKey);
-        Assert.Equal("TestNPC01", result.Items[0].EditorId);
-    }
-
-    // A FormKey-shaped query is matched case-insensitively against the canonical stored form —
-    // the picker seeds from whatever casing a resolved link displays, and the paste-a-FormKey
-    // path can't assume the user typed the exact stored case.
-    [Fact]
-    public void GetRecords_SearchByFormKey_IsCaseInsensitive()
-    {
-        var byEditorId = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 10, offset: 0);
-        var formKey = byEditorId.Items[0].FormKey;
-
-        var result = _svc.GetRecords(type: "npc_", plugin: null, search: formKey.ToLowerInvariant(), limit: 10, offset: 0);
-
-        Assert.Equal(1, result.Total);
-        Assert.Equal(formKey, result.Items[0].FormKey);
-    }
-
-    // A search string that merely looks close to a FormKey but doesn't fully parse (too short,
-    // bad delimiter, non-hex id) must fall back to the EditorID path, not throw or silently
-    // match everything.
-    [Fact]
-    public void GetRecords_SearchByMalformedFormKeyLikeString_FallsBackToEditorIdMatch_NoResults()
-    {
-        var result = _svc.GetRecords(type: "npc_", plugin: null, search: "ZZZZZZ:NotAFormKey.esp", limit: 10, offset: 0);
-
-        Assert.Equal(0, result.Total);
-    }
-
-    [Fact]
-    public void GetRecords_ByPlugin_FiltersResults()
-    {
-        var result = _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0);
-
-        Assert.Equal(RecordCount, result.Total);
-        Assert.All(result.Items, r => Assert.Equal(PluginName, r.Plugin));
-    }
-
-    [Fact]
-    public void GetRecords_AllTypes_ReturnsCombinedResults()
-    {
-        var result = _svc.GetRecords(type: null, plugin: null, search: null, limit: 100, offset: 0);
-
-        Assert.Equal(RecordCount, result.Total);
-        Assert.Equal(RecordCount, result.Items.Count);
-    }
-
-    [Fact]
-    public void GetRecords_Pagination_RespectsLimitAndOffset()
-    {
-        var page1 = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 1, offset: 0);
-        var page2 = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 1, offset: 1);
-
-        Assert.Single(page1.Items);
-        Assert.Single(page2.Items);
-        Assert.NotEqual(page1.Items[0].FormKey, page2.Items[0].FormKey);
-        Assert.Equal(RecordCount, page1.Total);
+        Assert.Same(_reads.SearchResult, result);
     }
 
     // --- GET /records/{formKey} ---
 
+    // GetRecord_FieldsHaveMetadata needs the record's full derived column set to mean anything;
+    // that lives at Index.Tests/Query/RecordReadsTests.cs (same name), over a real Index.
+
     [Fact]
     public void GetRecord_ReturnsWinnerWithFields()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
-        var detail = _svc.GetRecord(fk);
+        var detail = _svc.GetRecord(_npc01Key.ToString());
 
         Assert.NotNull(detail);
-        Assert.Equal(fk, detail.FormKey);
+        Assert.Equal(_npc01Key.ToString(), detail.FormKey);
         Assert.True(detail.IsWinner);
         Assert.NotEmpty(detail.Fields);
-    }
-
-    [Fact]
-    public void GetRecord_FieldsHaveMetadata()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var detail = _svc.GetRecord(all.Items[0].FormKey);
-        Assert.NotNull(detail);
-
-        Assert.All(detail.Fields, f =>
-        {
-            Assert.NotEmpty(f.Metadata.Name);
-            Assert.Contains(f.Metadata.Type, new[]
-            {
-                "string", "translatedString", "int", "float", "bool", "enum", "flags", "formKey", "array", "struct",
-                "hex", "color", "vector",
-            });
-        });
     }
 
     [Fact]
@@ -242,8 +202,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecord_ReturnsRecordType()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var detail = _svc.GetRecord(all.Items[0].FormKey);
+        var detail = _svc.GetRecord(_npc01Key.ToString());
 
         Assert.NotNull(detail);
         Assert.Equal("npc_", detail.RecordType);
@@ -254,8 +213,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCompare_SingleOverride_ReturnsDiffs()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var compare = _svc.GetCompare(all.Items[0].FormKey);
+        var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
         Assert.Single(compare.Overrides);
@@ -295,7 +253,7 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Disabled.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20),
                 enabled: false)
-            .Build();
+            .Build(VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -307,8 +265,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var compare = _svc.GetCompare(all.Items[0].FormKey);
+        var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
         Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
@@ -324,7 +281,7 @@ public sealed class RecordQueryServiceTests
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20))
             .WithPlugin("Top.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(30))
-            .Build();
+            .Build(VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -339,8 +296,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCompare_NoOverrideCarriesAnAdapter_OmitsTheFieldEntirely()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var compare = _svc.GetCompare(all.Items[0].FormKey);
+        var compare = _svc.GetCompare(_npc01Key.ToString());
 
         Assert.NotNull(compare);
         Assert.DoesNotContain(compare.Diffs, d => d.FieldName == VmadField);
@@ -354,7 +310,7 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey) // no VMAD
             .WithPlugin("Over.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5))
-            .Build();
+            .Build(VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -373,10 +329,10 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Over.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.EditorID = "Changed";           // generic field override
+                o.Aggression = Npc.AggressionType.Frenzied; // generic field override
                 o.VirtualMachineAdapter = ScriptVmad(20); // VMAD override (2 plugins)
             })
-            .Build();
+            .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -393,16 +349,16 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Mid.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.EditorID = "Same";              // non-masters agree on the field → generic Override
+                o.Aggression = Npc.AggressionType.Frenzied; // non-masters agree on the field → generic Override
                 o.VirtualMachineAdapter = ScriptVmad(20);
             })
             .WithPlugin("Top.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.EditorID = "Same";
+                o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(30); // VMAD differs among non-masters → Conflict
             })
-            .Build();
+            .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -437,7 +393,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Frenzied; // same as Mid → no generic conflict
                 o.VirtualMachineAdapter = ScriptVmad(20); // differs from Mid → VMAD Conflict
             })
-            .Build();
+            .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -469,7 +425,7 @@ public sealed class RecordQueryServiceTests
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
                 o.Aggression = Npc.AggressionType.Aggressive; // differs from Mid → generic Conflict
             })
-            .Build();
+            .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -503,7 +459,7 @@ public sealed class RecordQueryServiceTests
                 o.Aggression = Npc.AggressionType.Aggressive;
                 o.VirtualMachineAdapter = ScriptVmad(30);
             })
-            .Build();
+            .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
@@ -535,7 +491,7 @@ public sealed class RecordQueryServiceTests
                     Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
                 });
             })
-            .Build();
+            .Build("Conditions");
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(cobjKey.ToString());
@@ -572,7 +528,7 @@ public sealed class RecordQueryServiceTests
                     Data = conditionData,
                 });
             })
-            .Build();
+            .Build("Conditions");
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(cobjKey.ToString());
@@ -629,9 +585,16 @@ public sealed class RecordQueryServiceTests
 
     // --- GET /plugins/{plugin}/record-types ---
 
+    private static readonly PluginCopyKey PluginKey = new(PluginName, "Data");
+
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
     {
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
+        };
+
         var result = _svc.GetPluginRecordTypes(PluginName);
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
@@ -644,6 +607,11 @@ public sealed class RecordQueryServiceTests
     {
         // The signature ("npc_") stays the key; DisplayName is additive, sourced
         // from the same xEdit-parity lookup SchemaReflector uses.
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
+        };
+
         var result = _svc.GetPluginRecordTypes(PluginName);
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
@@ -655,6 +623,15 @@ public sealed class RecordQueryServiceTests
     {
         // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
         // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] =
+            [
+                new RecordTypeCount("npc_", 1, HasParseFailure: false),
+                new RecordTypeCount(PluginHeader.RecordType, 1, HasParseFailure: false),
+            ],
+        };
+
         var result = _svc.GetPluginRecordTypes(PluginName);
 
         Assert.DoesNotContain(result, r => r.Type == "header");
@@ -697,24 +674,8 @@ public sealed class RecordQueryServiceTests
         Assert.Contains("No load order", ex.Message);
     }
 
-    [Fact]
-    public void GetRecords_AllTypes_ReturnsSortedByEditorId()
-    {
-        var fixture = new FakeFixtureBuilder(Release)
-            .WithPlugin("SortTest.esp", mod =>
-            {
-                mod.Npcs.AddNew("Zebra");
-                mod.Npcs.AddNew("Apple");
-            })
-            .Build();
-        var (_, svc) = Build(fixture);
-
-        var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
-
-        var editorIds = result.Items.Select(r => r.EditorId).ToList();
-        Assert.Equal(2, editorIds.Count);
-        Assert.Equal([.. editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase)], editorIds);
-    }
+    // GetRecords_AllTypes_ReturnsSortedByEditorId dropped: the sort is the real Index's own
+    // behaviour, covered at Index.Tests/Query/RecordReadsTests.GetRecords_ReturnsSortedByEditorIdAscending.
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (plugins.md) ---
 

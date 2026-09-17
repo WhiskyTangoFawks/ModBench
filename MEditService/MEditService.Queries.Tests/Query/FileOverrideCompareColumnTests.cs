@@ -28,7 +28,7 @@ public sealed class FileOverrideCompareColumnTests
         var mod = new Fallout4Mod(ModKey.FromFileName(plugin), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew(editorId);
         var key = new PluginCopyKey(plugin, origin);
-        return new(key, loadOrderIndex, isWinner, RealDocuments.Of(npc, key, loadOrderIndex, isWinner, Release, "npc_"));
+        return new(key, loadOrderIndex, isWinner, RealDocuments.Of(npc, key, loadOrderIndex, isWinner, Release, "npc_", []));
     }
 
     [Fact]

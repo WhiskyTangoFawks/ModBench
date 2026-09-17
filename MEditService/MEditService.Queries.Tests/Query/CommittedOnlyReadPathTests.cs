@@ -8,8 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>The read path answers from the index alone (ADR-0007): no surface reconstructs a second
-/// answer on the way out.</summary>
+// Plugin filtering and per-type counting are the Index's own behaviour (Index.Tests/Query/
+// RecordReadsTests.cs, Index.Tests/Records/RecordTypeViewsTests.cs). What remains: a field here
+// reads off the committed document, not a working-tree rebuild (ADR-0007).
 public sealed class CommittedOnlyReadPathTests
 {
     private const string PluginName = "TestPlugin.esp";
@@ -19,7 +20,7 @@ public sealed class CommittedOnlyReadPathTests
 
     private static FakeRow Row(Fallout4Mod mod, string editorId) =>
         new(Plugin, LoadOrderIndex: 0, IsWinner: true,
-            RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_"));
+            RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_", ["IsDeleted"]));
 
     private static RecordQueryService Service(params FakeRow[] rows)
     {
@@ -31,46 +32,21 @@ public sealed class CommittedOnlyReadPathTests
         return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 
-    private static (Fallout4Mod Mod, RecordQueryService Service) TwoNpcs()
+    private static (FormKey Npc01Key, RecordQueryService Service) TwoNpcs()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("TestNPC01");
+        var npc01Key = mod.Npcs.AddNew("TestNPC01").FormKey;
         mod.Npcs.AddNew("TestNPC02");
         var svc = Service(Row(mod, "TestNPC01"), Row(mod, "TestNPC02"));
-        return (mod, svc);
-    }
-
-    [Fact]
-    public void GetRecords_ForAPlugin_ReturnsExactlyTheRecordsThatPluginDeclares()
-    {
-        var (_, svc) = TwoNpcs();
-
-        var result = svc.GetRecords("npc_", PluginName, search: null, limit: 100, offset: 0);
-
-        Assert.Equal(2, result.Total);
-        Assert.Equal(
-            ["TestNPC01", "TestNPC02"],
-            result.Items.Select(r => r.EditorId ?? "").OrderBy(e => e, StringComparer.Ordinal).ToArray());
-    }
-
-    [Fact]
-    public void GetPluginRecordTypes_CountsOnlyIndexedRecords()
-    {
-        var (_, svc) = TwoNpcs();
-
-        var counts = svc.GetPluginRecordTypes(PluginName);
-
-        var npcs = Assert.Single(counts, c => c.Type == "npc_");
-        Assert.Equal(2, npcs.Count);
+        return (npc01Key, svc);
     }
 
     [Fact]
     public void GetCompare_OverrideCarriesTheCommittedFieldValue()
     {
-        var (_, svc) = TwoNpcs();
-        var formKey = svc.GetRecords("npc_", PluginName, "TestNPC01", 1, 0).Items[0].FormKey;
+        var (npc01Key, svc) = TwoNpcs();
 
-        var compare = svc.GetCompare(formKey);
+        var compare = svc.GetCompare(npc01Key.ToString());
 
         Assert.NotNull(compare);
         var only = Assert.Single(compare.Overrides);
