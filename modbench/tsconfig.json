@@ -5,6 +5,8 @@
     { "path": "./src/tables" },
     { "path": "./src/wire" },
     { "path": "./src/ports" },
+    { "path": "./src/mo2Files" },
+    { "path": "./src/instance" },
     { "path": "./tsconfig.legacy.json" }
   ]
 }

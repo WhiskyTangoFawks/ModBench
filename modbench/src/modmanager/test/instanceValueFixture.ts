@@ -1,5 +1,5 @@
-import { FileConflictLookup } from '../fileConflictIndex';
-import type { InstanceValue } from '../instance';
+import { FileConflictLookup } from '../../instance/fileConflictIndex';
+import type { InstanceValue } from '../../instance/instance';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
@@ -17,6 +17,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     deployed: false,
     modStatuses: new Map(),
     overwriteFileCount: 0,
+    paths: { overwriteDir: '', downloadsDir: '', modDirs: new Map() },
     ...overrides,
   };
 }

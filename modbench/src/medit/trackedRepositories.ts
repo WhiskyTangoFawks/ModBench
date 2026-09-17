@@ -1,11 +1,9 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PluginMetadata } from './client';
 
-// ADR-0007: tracked *is* the presence of `.git` — a filesystem check, no registry, no backend.
-function isTracked(modFolder: string): boolean {
-  return fs.existsSync(path.join(modFolder, '.git'));
-}
+/** Whether a mod folder is tracked. Injected: MO2 files answers it, and this box holds no door
+ *  onto the instance of its own (ADR-0007). */
+export type IsTracked = (modFolder: string) => Promise<boolean>;
 
 function modFolderOf(plugin: Pick<PluginMetadata, 'path'>): string {
   return path.dirname(plugin.path);
@@ -13,11 +11,12 @@ function modFolderOf(plugin: Pick<PluginMetadata, 'path'>): string {
 
 /** Distinct, not one per plugin: a folder can hold several plugins, and each must register with
  *  `vscode.git` exactly once. */
-export function trackedModFoldersOf(plugins: readonly Pick<PluginMetadata, 'path'>[]): string[] {
+export async function trackedModFoldersOf(
+  plugins: readonly Pick<PluginMetadata, 'path'>[], isTracked: IsTracked,
+): Promise<string[]> {
   const folders = new Set<string>();
-  for (const plugin of plugins) {
-    const folder = modFolderOf(plugin);
-    if (isTracked(folder)) folders.add(folder);
+  for (const folder of new Set(plugins.map(modFolderOf))) {
+    if (await isTracked(folder)) folders.add(folder);
   }
   return [...folders];
 }

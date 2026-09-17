@@ -2,9 +2,15 @@
 // suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
 // The top of the file is the winning end. Mutations splice the raw string.
 
-import { OVERWRITE_DIR_NAME } from './layout';
 import type { InstalledFileId } from './metaIni';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+
+/** The per-profile mod list, one line per mod in Mod override order. */
+export const MODLIST_FILE_NAME = 'modlist.txt';
+
+/** The reserved origin (ADR-0012): MO2's own overwrite folder, the one name under `mods/`'s
+ *  sibling set a modlist line may never take. MO2 files joins it to the instance root. */
+export const OVERWRITE_DIR_NAME = 'overwrite';
 
 export interface Mod {
   kind: 'mod';

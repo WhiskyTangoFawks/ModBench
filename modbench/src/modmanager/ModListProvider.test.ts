@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from '../mo2Codecs/modlistText';
-import type { InstanceValue } from './instance';
-import type { ModStatusResult } from './statusChecker';
+import type { InstanceValue } from '../instance/instance';
+import type { ModStatusResult } from '../instance/statusChecker';
 import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -61,13 +61,14 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 // provider reaching for `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
     activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFileCount: extra.overwriteFileCount ?? 0,
+    ...(extra.paths ? { paths: extra.paths } : {}),
   });
 }
 
@@ -928,12 +929,14 @@ describe('ModListProvider', () => {
       expect(tooltip).toMatch(/reassign|clear/i);
     });
 
-    // instanceRoot's only remaining use: the pinned row's resourceUri (Explorer reveal / the
-    // decoration provider's key) — never a disk read.
-    it('builds the Overwrite node\'s resourceUri by joining the injected instanceRoot with "overwrite"', async () => {
+    // The pinned row's resourceUri (Explorer reveal / the decoration provider's key) is the
+    // path the value carries — this provider joins none of its own.
+    it('builds the Overwrite node\'s resourceUri from the overwrite path the value carries', async () => {
       const provider = makeProvider(entries(), {
-        instance: new FakeInstance(valueOf(entries(), { overwriteFileCount: 1 })),
-        instanceRoot: '/my/mo2/instance',
+        instance: new FakeInstance(valueOf(entries(), {
+          overwriteFileCount: 1,
+          paths: { overwriteDir: '/my/mo2/instance/overwrite', downloadsDir: '', modDirs: new Map() },
+        })),
       });
       const roots = await provider.getChildren();
       const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");

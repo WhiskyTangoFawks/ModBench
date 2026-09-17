@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import type { Instance } from './modmanager/instance';
+import type { Instance } from './instance/instance';
 import { deployMods, purgeMods, type DeploymentCommandResult } from './modmanager/commands/deployment';
 import { listProfiles, switchProfile } from './modmanager/commands/profile';
-import { meditConfig, makeDetectPaths } from './workspaceConfig';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 
@@ -64,13 +63,9 @@ async function runDeployment(
 // registered for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
   const { instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask } = deps;
-  const detectPaths = makeDetectPaths(instanceRoot);
   const deployReporter = reporterFor('deploy');
   const profileReporter = reporterFor('switchProfile');
   const launchReporter = reporterFor('launchTarget');
-  const loadOrderTarget = async (): Promise<string | undefined> =>
-    meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
-
   return [
     vscode.commands.registerCommand('modbench.toolbox.switchProfile', async () => {
       const active = instance.value.activeProfile;
@@ -94,7 +89,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
         if (!instance.value.deployed && !(await confirmFirstDeploy(ask))) {
           return { applied: false, refusal: DEPLOY_DECLINED };
         }
-        return deployMods(instanceRoot, instance.value, await loadOrderTarget());
+        return deployMods(instanceRoot, instance.value);
       })),
     vscode.commands.registerCommand('modbench.toolbox.purge', () =>
       runDeployment(deployReporter, 'Purge failed.', 'Deployed mods purged.', () =>

@@ -15,7 +15,7 @@ describe('OverwriteDecorationProvider', () => {
   const overwriteDir = join(instanceRoot, 'overwrite');
 
   it('tints the overwrite folder URI reddish (gitDecoration.deletedResourceForeground)', () => {
-    const provider = new OverwriteDecorationProvider(instanceRoot);
+    const provider = new OverwriteDecorationProvider(overwriteDir);
     const decoration = present(
       provider.provideFileDecoration(fakeUri(overwriteDir)),
       'the overwrite folder\'s decoration',
@@ -27,7 +27,7 @@ describe('OverwriteDecorationProvider', () => {
   });
 
   it('returns undefined for any other URI so mod rows are unaffected', () => {
-    const provider = new OverwriteDecorationProvider(instanceRoot);
+    const provider = new OverwriteDecorationProvider(overwriteDir);
     const otherPath = join(instanceRoot, 'mods', 'SomeMod');
     expect(provider.provideFileDecoration(fakeUri(otherPath))).toBeUndefined();
   });

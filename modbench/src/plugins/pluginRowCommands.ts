@@ -5,8 +5,10 @@ import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider'
 import { resolveCompileTarget } from '../medit/compileTarget';
 import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
 import { resolveOrigin } from '../medit/resolveOrigin';
-import type { OriginFolder } from '../modmanager/loadOrderSnapshot';
-import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../medit/trackedRepositories';
+import type { OriginFolder } from '../instance/loadOrderSnapshot';
+import {
+  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked,
+} from '../medit/trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from '../medit/trackProgress';
@@ -263,6 +265,7 @@ interface GitExtensionExports {
 export async function registerHeldTrackedRepositories(
   client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
+  isTracked: IsTracked,
 ): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -274,7 +277,7 @@ export async function registerHeldTrackedRepositories(
     const gitApi = exports.getAPI(1);
 
     const plugins = await client.getPlugins();
-    const folders = trackedModFoldersOf(plugins);
+    const folders = await trackedModFoldersOf(plugins, isTracked);
     const folderRepositories = await registerTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
     setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories));

@@ -3,9 +3,18 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { present } from '../../ports/present';
 
-// ADR-0015 invariant 2: commands write and forget. One that read the Instance would make the read
-// model an input to the write side, and a write's own effect would come back to it twice.
-const READ_MODEL = 'instance';
+// ADR-0015 invariant 2: commands write and forget. One reading the Instance makes the read model
+// an input to the write side, and a write's own effect comes back to it twice.
+
+// A type the value carries arrives as an argument, so naming one is not reading the model.
+const READ_MODEL_MODULE = join('instance', 'instance');
+// `Instance` alone is prose a comment may use; these two are only ever the type.
+const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];
+
+const readModelIn = (source: string): string[] => [
+  ...importsOf(source).filter((spec) => spec.endsWith(READ_MODEL_MODULE)),
+  ...READ_MODEL_NAMES.filter((name) => new RegExp(`\\b${name}\\b`).test(source)),
+];
 
 function importsOf(source: string): string[] {
   return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) =>
@@ -26,18 +35,22 @@ describe('commands never read the Instance', () => {
   it('no command module imports the read model, directly or by name', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of commandModules()) {
-      const source = readFileSync(path, 'utf8');
-      const found = importsOf(source).filter((spec) => spec.toLowerCase().includes(READ_MODEL));
-      if (source.includes('InstanceValue')) found.push('InstanceValue');
+      const found = readModelIn(readFileSync(path, 'utf8'));
       if (found.length > 0) offenders[path] = found;
     }
     expect(offenders).toEqual({});
   });
 
   // Rival this catches: a command handed the Instance's value instead of walking disk itself.
-  it('flags a module that imports the read model', () => {
-    const planted = "import type { InstanceValue } from '../instance';\n";
-    expect(importsOf(planted).filter((s) => s.includes(READ_MODEL))).toEqual(['../instance']);
+  it('flags a module that imports the read model, by module and by name alike', () => {
+    expect(readModelIn("import type { InstanceValue } from '../../instance/instance';\n"))
+      .toEqual([join('..', '..', 'instance', 'instance'), 'InstanceValue']);
+  });
+
+  // Rival: a rule so broad that every module of the Instance's box reads as the read model —
+  // a command IS handed the winners, as an argument whose type it has to name.
+  it('leaves a type the value carries alone, taken from the box beside the read model', () => {
+    expect(readModelIn("import type { FileWinners } from '../../instance/fileConflictIndex';\n")).toEqual([]);
   });
 });
 

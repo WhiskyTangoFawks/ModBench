@@ -5,9 +5,9 @@ import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
-import type { Instance, InstanceView } from './instance';
+import type { Instance, InstanceView } from '../instance/instance';
 import { nexusSlugForGame } from '../tables/gamePaths';
-import { OVERWRITE_DIR_NAME, modDir } from '../mo2Codecs/layout';
+import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import type { Own } from '../session';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -123,8 +123,10 @@ export function registerModContextCommands(
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        const uri = vscode.Uri.file(modDir(instanceRoot, node.mod.name));
-        await vscode.commands.executeCommand('revealInExplorer', uri);
+        // The value's own folder for this row, never a path joined here (ADR-0015 invariant 1).
+        const folder = instance.value.paths.modDirs.get(node.mod.name);
+        if (folder === undefined) return;
+        await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
       }),
       vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
@@ -229,13 +231,14 @@ export function registerCreateEmptyModCommand(
 /** The pinned Overwrite row's reddish tint and its sole action; the row's own visibility and
  *  count come from the Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
 export function registerOverwriteView(
-  instanceRoot: string,
+  instance: Pick<Instance, 'value'>,
   reporter: Reporter,
 ): vscode.Disposable[] {
   return [
-    // Tint the pinned Overwrite row reddish. Stateless: keyed on the
-    // constant overwrite/ path, which matches OverwriteNode.resourceUri.
-    vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
+    // Tint the pinned Overwrite row reddish. Stateless: keyed on the value's own overwrite path,
+    // which is what OverwriteNode.resourceUri carries.
+    vscode.window.registerFileDecorationProvider(
+      new OverwriteDecorationProvider(instance.value.paths.overwriteDir)),
     vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
       if (node?.kind !== OVERWRITE_DIR_NAME) return;
       try {
@@ -302,7 +305,7 @@ export function registerDownloadsView(
   ask: AskQuestion,
 ): DownloadsProvider {
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instanceRoot, instance, reporter,
+    instance, reporter,
   }));
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -311,7 +314,7 @@ export function registerDownloadsView(
   // Dims hidden rows once Show hidden is on — the sole cue distinguishing them, since Show
   // hidden is additive, not an exclusive filter.
   own(vscode.window.registerFileDecorationProvider(
-    new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
+    new HiddenDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.hiddenNames()),
   ));
   own(registerNameFilter({
     view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',

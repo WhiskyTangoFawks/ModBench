@@ -5,10 +5,10 @@
 import {
   deployToGameData, purgeFromGameData, type DeployOutcome, type DeployLink,
   type DeployWarning, type LoadOrderDeployment, type PurgeOutcome,
-} from '../mo2Files';
-import { pluginsFile } from '../../mo2Codecs/layout';
-import type { FileWinners } from '../fileConflictIndex';
-import type { GameDirectory } from '../gameDirectory';
+} from '../../mo2Files/files';
+import { pluginsFile } from '../../mo2Files/layout';
+import type { FileWinners } from '../../instance/fileConflictIndex';
+import type { GameDirectory } from '../../mo2Files/gameDirectory';
 
 export type { DeployWarning };
 
@@ -54,17 +54,17 @@ const refuse = (err: unknown): DeploymentCommandResult => ({
   refusal: err instanceof Error ? err.message : String(err),
 });
 
-/** `value.files` are the Instance's own field, never a fresh walk. `loadOrderTarget` is where
- *  the game reads plugins.txt; undefined leaves the load order undeployed. */
+/** `value.files` are the Instance's own field, never a fresh walk, and the game directory it
+ *  carries names where the game reads its load order; no `loadOrderFile` leaves the load order
+ *  undeployed. */
 export function deployMods(
   instanceRoot: string,
   value: Pick<DeployableValue, 'activeProfile' | 'files' | 'gameDirectory'>,
-  loadOrderTarget: string | undefined,
 ): Promise<DeploymentCommandResult> {
   const { activeProfile, files, gameDirectory } = value;
   if (!gameDirectory) return Promise.resolve({ applied: false, refusal: NO_GAME_DIRECTORY });
-  const loadOrder: LoadOrderDeployment[] = loadOrderTarget
-    ? [{ source: pluginsFile(instanceRoot, activeProfile), target: loadOrderTarget }]
+  const loadOrder: LoadOrderDeployment[] = gameDirectory.loadOrderFile
+    ? [{ source: pluginsFile(instanceRoot, activeProfile), target: gameDirectory.loadOrderFile }]
     : [];
   return deployToGameData(instanceRoot, gameDirectory, hardlinkableWinners(files), loadOrder)
     .then(toCommandResult, refuse);

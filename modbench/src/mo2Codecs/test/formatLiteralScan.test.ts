@@ -6,6 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, basename, sep } from 'node:path';
 import ts from 'typescript';
+import { present } from '../../ports/present';
 
 const KERNEL_FILES = ['modlistText.ts', 'pluginsText.ts', 'metaIni.ts', 'modOrganizerIni.ts', 'downloads.ts'];
 const KERNEL_TESTS = KERNEL_FILES.map((f) => f.replace(/\.ts$/, '.test.ts'));
@@ -16,9 +17,20 @@ const SELF = 'formatLiteralScan.test.ts';
 
 const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath', 'installed', 'uninstalled', 'removed'];
 
-// MO2's layout: the names of the directories and files the extension touches. Their one speller.
-const LAYOUT_NAMES = ['profiles', 'mods', 'overwrite', 'downloads', 'ModOrganizer.ini', 'meta.ini', 'modlist.txt', 'plugins.txt', '.meta'];
-const LAYOUT_OWNER = 'layout.ts';
+// MO2's layout: the names of the directories and files the extension touches, each against its
+// one speller. A directory is MO2 files'; a file's own name is its codec's.
+const LAYOUT_OWNERS: Record<string, string> = {
+  profiles: join('mo2Files', 'layout.ts'),
+  mods: join('mo2Files', 'layout.ts'),
+  downloads: join('mo2Files', 'layout.ts'),
+  overwrite: join('mo2Codecs', 'modlistText.ts'),
+  'modlist.txt': join('mo2Codecs', 'modlistText.ts'),
+  'plugins.txt': join('mo2Codecs', 'pluginsText.ts'),
+  'ModOrganizer.ini': join('mo2Codecs', 'modOrganizerIni.ts'),
+  'meta.ini': join('mo2Codecs', 'metaIni.ts'),
+  '.meta': join('mo2Codecs', 'downloads.ts'),
+};
+const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
 
 // The codecs box's own directory, and both production trees the extension ships.
 const KERNEL_DIR = join(__dirname, '..');
@@ -219,32 +231,35 @@ function layoutLeaks(sourceText: string, fileName: string): string[] {
 // independent of the layout module under test.
 const isTestFile = (path: string): boolean => /\.test\.tsx?$/.test(path) || path.split(sep).includes('test');
 
-const isLayoutOwner = (path: string): boolean => path.endsWith(join('mo2Codecs', LAYOUT_OWNER));
-
+// A name is allowed only in the one file that owns it; every other name in that same file is
+// still a leak, so no owner is a free-for-all.
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
   for (const path of allFiles(roots)) {
-    if (isTestFile(path) || isLayoutOwner(path)) continue;
-    const found = layoutLeaks(readFileSync(path, 'utf8'), path);
+    if (isTestFile(path)) continue;
+    const found = layoutLeaks(readFileSync(path, 'utf8'), path)
+      .filter((name) => !path.endsWith(present(LAYOUT_OWNERS[name], `an owner for "${name}"`)));
     if (found.length > 0) leaks[path] = found;
   }
   return leaks;
 }
 
 describe('mo2 layout names', () => {
-  // Rival: a name dropped from layout.ts, which frees every other file to spell it again with
+  // Rival: a name dropped from its owner, which frees every other file to spell it again with
   // the production assertion still green.
-  it('layout.ts spells every name the scan forbids elsewhere', () => {
-    const path = join(KERNEL_DIR, LAYOUT_OWNER);
-    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(LAYOUT_NAMES);
+  it('every name is spelled by the file that owns it', () => {
+    for (const [name, owner] of Object.entries(LAYOUT_OWNERS)) {
+      const path = join(EXTENSION_SRC, owner);
+      expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toContain(name);
+    }
   });
 
-  it('appear in no production file of either tree but layout.ts', () => {
+  it('appear in no production file of either tree but their owner', () => {
     expect(findLayoutLeaks(SRC_ROOTS)).toEqual({});
   });
 
   // Rival this catches: a mod folder guessed as the mods directory joined with an origin.
-  it('the walk catches a name planted in a nested non-kernel production file', async () => {
+  it('the walk catches a name planted in a nested production file that owns none of them', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-layout-scan-'));
     try {
       await mkdir(join(dir, 'nested'));
@@ -279,10 +294,17 @@ describe('mo2 layout names', () => {
   });
 
   it('leaves test files to spell their own fixtures', () => {
-    expect(isTestFile(join('src', 'modmanager', 'instance.test.ts'))).toBe(true);
+    expect(isTestFile(join('src', 'instance', 'test', 'instance.test.ts'))).toBe(true);
     expect(isTestFile(join('src', 'modmanager', 'test', 'corpusFixture.ts'))).toBe(true);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.test.tsx'))).toBe(true);
-    expect(isTestFile(join('src', 'modmanager', 'instance.ts'))).toBe(false);
+    expect(isTestFile(join('src', 'instance', 'instance.ts'))).toBe(false);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.tsx'))).toBe(false);
+  });
+
+  // Rival: a codec's own file name spelled in MO2 files' layout as well, which is how one name
+  // gets two spellers without either scan noticing.
+  it('MO2 files spells the directory names and no file name of a codec’s', () => {
+    const path = join(EXTENSION_SRC, 'mo2Files', 'layout.ts');
+    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads']);
   });
 });

@@ -10,7 +10,7 @@ import {
   markDownloadUninstalled,
   unhideDownload,
 } from './downloads';
-import { scanDownloads } from '../downloadsScan';
+import { scanDownloads } from '../../instance/downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../../mo2Codecs/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../test/corpusFixture';
 

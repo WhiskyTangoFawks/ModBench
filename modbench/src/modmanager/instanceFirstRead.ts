@@ -3,7 +3,7 @@
 
 import type * as vscode from 'vscode';
 import type { Reporter } from '../ports/reporter';
-import type { Instance } from './instance';
+import type { Instance } from '../instance/instance';
 
 /** A tree's first-render gate: `settled` resolves on the first landed value or the first failed
  *  read — never "nothing here" before a read (ADR-0002), never an endless spinner (ADR-0019).

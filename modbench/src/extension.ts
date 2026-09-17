@@ -19,11 +19,12 @@ import { exitEditing, refreshMatchingPlugins } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import type { ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
+import { isTracked } from './mo2Files/files';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
-import { originFolder, type OriginFolder } from './modmanager/loadOrderSnapshot';
+import { originFolder, type OriginFolder } from './instance/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 
@@ -114,7 +115,8 @@ export function activate(context: vscode.ExtensionContext) {
   // (ADR-0007 — the one reliable point to do so).
   const notifyConflictsComputed = () => {
     for (const panel of recordPanels) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
-    void registerHeldTrackedRepositories(meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; });
+    void registerHeldTrackedRepositories(
+      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);
   };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
@@ -237,7 +239,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerTrackCommand(
       session, client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
-        await registerHeldTrackedRepositories(client, outputChannel, (repos) => { session.pluginRepositories = repos; });
+        await registerHeldTrackedRepositories(
+          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);
         notifyConflictsComputed();
       },
     ),

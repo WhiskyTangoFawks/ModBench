@@ -19,17 +19,14 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { Instance } from './instance';
+import { Instance } from '../instance/instance';
 import { ModListProvider, ModNode } from './ModListProvider';
 
 async function setup() {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root,
-    config: () => ({ get: () => undefined }),
-    detectPaths: () => Promise.resolve(null),
-    detectWinePrefix: () => Promise.resolve(null),
-    onConfigChange: () => ({ dispose: () => {} }),
+    resolveGameDirectory: () => Promise.resolve(undefined),
     log: () => {},
   });
   await instance.refresh();

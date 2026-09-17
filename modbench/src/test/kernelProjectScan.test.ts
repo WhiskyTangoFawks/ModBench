@@ -1,5 +1,5 @@
-// One composite project per kernel box, a legacy project for what has not moved, and a root
-// solution over both. The reference lists are the maintainer's, drawn in
+// One composite project per box the diagram draws, a legacy project for what has not moved, and
+// a root solution over both. The reference lists are the maintainer's, drawn in
 // target-architecture-references.d2.
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
@@ -9,6 +9,15 @@ import ts from 'typescript';
 const MODBENCH = join(__dirname, '..', '..');
 
 const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+
+// The driven column, each with the reference list target-architecture-references.d2 draws for it:
+// the arrows that leave the box, plus its column's kernel by the band's rule.
+const DRIVEN_BOXES: Record<string, string[]> = {
+  mo2Files: ['mo2Codecs', 'ports', 'tables'],
+  instance: ['mo2Codecs', 'mo2Files', 'ports'],
+};
+
+const BOXES = [...KERNEL_BOXES, ...Object.keys(DRIVEN_BOXES)];
 
 const ROOT_SOLUTION = 'tsconfig.json';
 const LEGACY_PROJECT = 'tsconfig.legacy.json';
@@ -37,14 +46,14 @@ const testFiles = (box: string): string[] =>
   fileNames(kernelProject(box)).concat(fileNames(LEGACY_PROJECT))
     .filter((f) => f.startsWith(join('src', box) + '/') && f.includes('.test.'));
 
-describe('one composite project per kernel box', () => {
-  it.each(KERNEL_BOXES)('%s has its own tsconfig', (box) => {
+describe('one composite project per box', () => {
+  it.each(BOXES)('%s has its own tsconfig', (box) => {
     expect(existsSync(join(MODBENCH, kernelProject(box)))).toBe(true);
   });
 
   // Composite is what lets another project reference it, and what lets `tsc -b` skip a box
   // whose inputs have not changed.
-  it.each(KERNEL_BOXES)('%s is composite', (box) => {
+  it.each(BOXES)('%s is composite', (box) => {
     expect(parsed(kernelProject(box)).options.composite).toBe(true);
   });
 
@@ -60,11 +69,29 @@ describe('one composite project per kernel box', () => {
     expect(parsed(kernelProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(KERNEL_BOXES)('%s emits outside src, so no build output lands beside a source file', (box) => {
+  // MO2 files holds the one file system door, so the same rule binds it: a VS Code type here
+  // would put the extension host behind that door.
+  it('mo2Files sees the Node types and no others', () => {
+    expect(parsed(kernelProject('mo2Files')).options.types).toEqual(['node']);
+  });
+
+  // The Instance owns every MO2-side watcher, and a watcher is VS Code's — the one driven box
+  // that sees the extension host.
+  it('instance sees the Node and VS Code types and no others', () => {
+    expect(parsed(kernelProject('instance')).options.types).toEqual(['node', 'vscode']);
+  });
+
+  // The rule the compiler enforces for the driven column: each box references exactly the arrows
+  // the diagram draws for it, so a new dependency fails `tsc -b` rather than compiling quietly.
+  it.each(Object.entries(DRIVEN_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
+    expect(referencePaths(kernelProject(box))).toEqual(references.map((r) => join('src', r)).sort());
+  });
+
+  it.each(BOXES)('%s emits outside src, so no build output lands beside a source file', (box) => {
     expect(relative(MODBENCH, parsed(kernelProject(box)).options.outDir ?? '')).toBe(join('out', 'projects', box));
   });
 
-  it.each(KERNEL_BOXES)('%s compiles its own production files and no test', (box) => {
+  it.each(BOXES)('%s compiles its own production files and no test', (box) => {
     const files = fileNames(kernelProject(box));
     expect(files.length).toBeGreaterThan(0);
     expect(files.every((f) => f.startsWith(join('src', box) + '/'))).toBe(true);
@@ -73,8 +100,8 @@ describe('one composite project per kernel box', () => {
 });
 
 describe('the legacy project holds every file not yet moved', () => {
-  it('references every kernel project, so an un-moved file still compiles against the boxes', () => {
-    expect(referencePaths(LEGACY_PROJECT)).toEqual(KERNEL_BOXES.map((box) => join('src', box)).sort());
+  it('references every box project, so an un-moved file still compiles against the boxes', () => {
+    expect(referencePaths(LEGACY_PROJECT)).toEqual(BOXES.map((box) => join('src', box)).sort());
   });
 
   it('compiles the whole extension source tree', () => {
@@ -83,14 +110,14 @@ describe('the legacy project holds every file not yet moved', () => {
 
   // A box's production file belongs to the box's own project and to no other, or the same
   // source would be typed twice and the reference would buy nothing.
-  it.each(KERNEL_BOXES)('compiles none of %s’s production files', (box) => {
+  it.each(BOXES)('compiles none of %s’s production files', (box) => {
     const boxFiles = new Set(fileNames(kernelProject(box)));
     expect(fileNames(LEGACY_PROJECT).filter((f) => boxFiles.has(f))).toEqual([]);
   });
 
   // A box test may reach outside the kernel — the codecs' own tests read fixtures from disk —
   // so every one of them compiles here, and none inside the box's project.
-  it.each(KERNEL_BOXES)('compiles every test that sits under %s', (box) => {
+  it.each(BOXES)('compiles every test that sits under %s', (box) => {
     expect(fileNames(LEGACY_PROJECT)).toEqual(expect.arrayContaining(testFiles(box)));
     expect(fileNames(kernelProject(box)).filter((f) => f.includes('.test.'))).toEqual([]);
   });
@@ -103,9 +130,9 @@ describe('the legacy project holds every file not yet moved', () => {
 });
 
 describe('the root solution builds every project', () => {
-  it('references the four kernel projects and the legacy project, and nothing else', () => {
+  it('references every box project and the legacy project, and nothing else', () => {
     expect(referencePaths(ROOT_SOLUTION))
-      .toEqual([...KERNEL_BOXES.map((box) => join('src', box)), LEGACY_PROJECT].sort());
+      .toEqual([...BOXES.map((box) => join('src', box)), LEGACY_PROJECT].sort());
   });
 
   // A solution file lists projects, never sources: an empty file list is what stops `tsc -b`
