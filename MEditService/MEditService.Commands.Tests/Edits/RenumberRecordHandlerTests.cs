@@ -1,11 +1,12 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>What a renumber does to the working trees: the record's own file moves, a tracked
 /// referencer's document is rewritten, an untracked one refuses. What the Index says afterwards

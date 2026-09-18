@@ -1,12 +1,13 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Only three of the five embedded slots can be exercised through a field edit:
 /// <c>SchemaReflector</c> publishes no schema for Landscape or NavigationMesh, so neither has a field to

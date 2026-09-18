@@ -2,12 +2,13 @@ using System.Globalization;
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CreateRecordHandlerTests
 {

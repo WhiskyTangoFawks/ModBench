@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>The fixture is Mutagen-written, so there is no first-write normalization gap, and
 /// write1 == write2 alone is blind to a defect reproduced on every write.</summary>

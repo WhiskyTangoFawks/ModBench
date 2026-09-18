@@ -2,9 +2,11 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -13,7 +15,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>Nothing in-game reads <c>HEDR.NextObjectID</c>/<c>NumRecords</c> and authoring tools
 /// leave them stale, so fidelity means the stored value verbatim. Real plugins, since the
@@ -148,7 +150,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
             new TrackService(
                     NullLogger<TrackService>.Instance,
-                    deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : MutagenPluginAdapter.Instance)
+                    deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : MutagenPluginAdapter.Instance)
                 .TrackAsync(_loadOrder, Plugin.Origin, SourcePreset.Edits);
 
         public PluginCompileService CompileService() =>

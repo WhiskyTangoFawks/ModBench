@@ -1,13 +1,15 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A member a KnownDefects row governs: the schema names it and says why it is read-only,
 /// and every path reaching it is refused by name rather than written.</summary>

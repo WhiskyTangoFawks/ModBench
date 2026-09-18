@@ -1,9 +1,10 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The always-overwrite rule is scoped to the container-copy family (xEdit's copy-into
 /// behavior); a flat record keeps the <c>FormKeyCollision</c> refusal.</summary>

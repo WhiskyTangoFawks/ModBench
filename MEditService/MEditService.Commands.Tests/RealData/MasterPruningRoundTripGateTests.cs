@@ -2,9 +2,11 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,7 +16,7 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>Real plugins whose bytes trip the walker's master-pruning false positive must Track (ADR-0008);
 /// SpaDia_AMR is refused, since Mutagen-#688 hides its real use of a master.</summary>

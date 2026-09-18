@@ -1,10 +1,11 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A file a user renamed by hand, content unchanged, is still the record's file: the write
 /// path resolves it by the repository's fallback scan rather than a stale computed path.</summary>

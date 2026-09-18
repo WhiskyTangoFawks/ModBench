@@ -1,4 +1,5 @@
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
@@ -7,7 +8,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The handler seam behind "a tracked mod settled" (ADR-0015): one call, classifying from
 /// the Source repository's own facts, whether it is asked at a restart or from a live change.</summary>

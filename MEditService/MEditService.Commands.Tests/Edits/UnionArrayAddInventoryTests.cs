@@ -1,11 +1,13 @@
 using System.Text.Json;
+using MEditService.Commands.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The document-edit seam on an in-memory record's document, no plugin on disk: whether
 /// the default element names a leaf the codec builds is settled before anything is written.</summary>

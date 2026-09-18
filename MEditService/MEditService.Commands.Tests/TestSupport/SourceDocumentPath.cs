@@ -1,9 +1,10 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The file a record's own document sits in, asked of the repository.</summary>
 public static class SourceDocumentPath

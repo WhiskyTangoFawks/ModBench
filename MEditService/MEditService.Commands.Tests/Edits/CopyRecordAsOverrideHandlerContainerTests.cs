@@ -1,10 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A plain "Copy as Override" is own-fields-only for every record type, containers
 /// included (xEdit parity: only "Deep copy as override" carries children).</summary>

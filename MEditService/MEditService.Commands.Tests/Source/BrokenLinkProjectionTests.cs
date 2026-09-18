@@ -1,8 +1,9 @@
 using System.Text.Json;
-using MEditService.Tests.Edits;
+using MEditService.Commands.Tests.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Commands.Tests.Source;
 
 /// <summary>An edit is checked for shape and nothing else (ADR-0015 invariant 5): a link no plugin
 /// answers still lands.</summary>

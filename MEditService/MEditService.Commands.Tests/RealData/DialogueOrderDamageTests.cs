@@ -1,9 +1,11 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -12,7 +14,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>Order damage measured against the tree Track actually wrote, deserialized the way
 /// <see cref="MEditService.Commands.Edits.PluginCompileService"/> does, against the original binary's
