@@ -38,7 +38,7 @@ public class IndexAtomicityTests
     }
 
     // Real documents up to a point, then the throw an unreadable record would raise mid-plugin.
-    private sealed class ThrowingPartwayAdapter(int afterRecords) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    private sealed class ThrowingPartwayAdapter(int afterRecords) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override IPluginDocuments OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,

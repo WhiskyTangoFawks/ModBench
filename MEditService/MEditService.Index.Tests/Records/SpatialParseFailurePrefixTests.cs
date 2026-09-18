@@ -141,7 +141,7 @@ public sealed class SpatialParseFailurePrefixTests
         }
     }
 
-    private sealed class DiagnosingAdapter() : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    private sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public string? Unreadable { get; set; }
 
