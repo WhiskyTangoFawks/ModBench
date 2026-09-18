@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/implicit-masters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The plugin filenames this install loads without a plugins.txt line of their own: the release's implicit masters present in the given Data folder, then that folder's Creation Club catalog. Load order. */
+        get: operations["GetImplicitMasters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/load-order/status": {
         parameters: {
             query?: never;
@@ -110,23 +127,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["AwaitSequence"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/implicit-masters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The plugin filenames this install loads without a plugins.txt line of their own: the release's implicit masters present in the given Data folder, then that folder's Creation Club catalog. Load order. */
-        get: operations["GetImplicitMasters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1202,6 +1202,38 @@ export interface operations {
             };
         };
     };
+    GetImplicitMasters: {
+        parameters: {
+            query: {
+                gameDirectory: string;
+                gameRelease: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetLoadOrderStatus: {
         parameters: {
             query?: never;
@@ -1377,38 +1409,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SequenceAwaitResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetImplicitMasters: {
-        parameters: {
-            query: {
-                gameDirectory: string;
-                gameRelease: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
                 };
             };
             /** @description Bad Request */
