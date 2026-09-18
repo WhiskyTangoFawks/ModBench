@@ -73,9 +73,8 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
-    // ADR-0015 invariant 3: the process may already have answered a caller with a sequence value the fresh
-    // file's own table does not know about; the rebuild must never let Sequence regress within one
-    // process.
+    // The process may already have answered a caller with a sequence value the fresh file's own
+    // table does not know about; the rebuild must never let Sequence regress within one process.
     [Fact]
     public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {

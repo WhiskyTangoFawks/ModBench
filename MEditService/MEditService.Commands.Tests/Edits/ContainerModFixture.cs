@@ -15,7 +15,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>The container counterpart to <see cref="SourceEditFixture"/>, which holds only flat
 /// records and cannot exercise a container at all. No index anywhere in it (ADR-0014 invariant
-/// 7).</summary>
+/// 7). Duplicated with Http.Tests' own copy, debt #944.</summary>
 public sealed class ContainerModFixture : IDisposable
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";

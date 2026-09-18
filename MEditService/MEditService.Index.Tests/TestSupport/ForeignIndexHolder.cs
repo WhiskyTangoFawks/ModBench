@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
