@@ -37,13 +37,12 @@ public sealed class SettleFaultLoggingTests
         });
         Assert.True(held.Wait(TimeSpan.FromSeconds(5)), "the holder never took the gate");
 
-        WatchedTree.WriteUnnamedDocument(ModFolderOf(tree), PluginName);
-        var logged = await tree.Settles(() => tree.LogEntries.Count > 0);
+        await tree.Observes(() => tree.WriteUnnamedDocument(ModFolderOf(tree), PluginName));
+        tree.AdvancePastBothWindows();
 
         release.Set();
         await otherWriter.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.True(logged, "the refused batch was never logged");
         Assert.Contains(tree.LogEntries, e => e.Level == LogLevel.Warning
             && e.Message.Contains(PluginName, StringComparison.Ordinal)
             && e.Message.Contains("re-checked", StringComparison.Ordinal));
@@ -59,9 +58,10 @@ public sealed class SettleFaultLoggingTests
         using var tree = await Watching();
         tree.Index.RefusesProjectionScope = true;
 
-        WatchedTree.WriteUnnamedDocument(ModFolderOf(tree), PluginName);
+        await tree.Observes(() => tree.WriteUnnamedDocument(ModFolderOf(tree), PluginName));
 
-        Assert.True(await tree.Settles(() => tree.LogEntries.Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Contains(tree.LogEntries, e => e.Level == LogLevel.Error
             && e.Message.Contains("failed unexpectedly", StringComparison.Ordinal)
             && e.Exception?.Message == "the store could not open a scope");

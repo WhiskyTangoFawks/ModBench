@@ -14,8 +14,6 @@ public sealed class SourceBatchTests
             .Select(p => (p.Plugin ?? throw new InvalidOperationException("a validate names no plugin")).Name)
             .Order(StringComparer.Ordinal)];
 
-    private static int Scopes(WatchedTree tree) => tree.Index.Of("projection").Count;
-
     private static async Task<string> OneTrackedMod(WatchedTree tree, params string[] plugins)
     {
         var modFolder = tree.AddMod(Origin, plugins[0]);
@@ -31,11 +29,12 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp", "B.esp");
 
-        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
-        WatchedTree.WriteUnnamedDocument(modFolder, "B.esp");
+        await tree.Observes(
+            () => tree.WriteUnnamedDocument(modFolder, "A.esp"),
+            () => tree.WriteUnnamedDocument(modFolder, "B.esp"));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count >= 2));
-        // One scope, asserted off the clock: no further batch can land until it advances again.
+        tree.AdvancePastBothWindows();
+
         Assert.Single(tree.Index.Of("projection"));
         Assert.Equal(["A.esp", "B.esp"], ValidatedIn(tree, 1));
     }
@@ -53,11 +52,13 @@ public sealed class SourceBatchTests
         WatchedTree.Track(modB, "B.esp");
         await tree.ApplyLoadOrder();
 
-        WatchedTree.WriteUnnamedDocument(modA, "A.esp");
-        WatchedTree.WriteUnnamedDocument(modB, "B.esp");
+        await tree.Observes(
+            () => tree.WriteUnnamedDocument(modA, "A.esp"),
+            () => tree.WriteUnnamedDocument(modB, "B.esp"));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count >= 2));
-        Assert.Equal(2, Scopes(tree));
+        tree.AdvancePastBothWindows();
+
+        Assert.Equal(2, tree.Index.Of("projection").Count);
         Assert.Equal(
             [["A.esp"], ["B.esp"]],
             new[] { ValidatedIn(tree, 1), ValidatedIn(tree, 2) }.OrderBy(batch => batch[0], StringComparer.Ordinal));
@@ -72,10 +73,8 @@ public sealed class SourceBatchTests
         var maxWindow = TimeSpan.FromSeconds(1);
         using var tree = new WatchedTree(quiet: quiet, maxWindow: maxWindow);
         var modFolder = await OneTrackedMod(tree, "A.esp");
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
 
-        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
-        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, "A.esp"));
 
         var step = maxWindow / 5;
         for (var elapsed = TimeSpan.Zero; elapsed + step < maxWindow; elapsed += step)
@@ -97,9 +96,10 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        WatchedTree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
+        await tree.Observes(() => tree.WriteRecord(modFolder, "A.esp", "000800:A.esp"));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
+        tree.AdvancePastBothWindows();
+
         var refreshed = Assert.Single(tree.Index.Of("refresh"));
         Assert.Equal("A.esp", (refreshed.Plugin ?? throw new InvalidOperationException("no plugin")).Name);
         Assert.Equal(["000800:A.esp"], refreshed.Keys);
@@ -112,9 +112,10 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp", "B.esp");
 
-        WatchedTree.MoveRef(modFolder);
+        await tree.Observes(() => tree.MoveRef(modFolder));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count >= 2));
+        tree.AdvancePastBothWindows();
+
         Assert.Single(tree.Index.Of("projection"));
         Assert.Equal(["A.esp", "B.esp"], ValidatedIn(tree, 1));
     }
@@ -127,9 +128,11 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, "A.esp"));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
+        tree.AdvancePastBothWindows();
+
+        Assert.Single(tree.Index.Of("validate"));
         Assert.Empty(tree.Index.Of("refresh"));
     }
 
@@ -141,12 +144,12 @@ public sealed class SourceBatchTests
 
         // A .json outside the source root, so passing takes more than the carries-no-record filter
         // the extension alone would trip.
-        File.WriteAllText(Path.Combine(modFolder, "notes.json"), """{"note":"not a record"}""");
-        // One watch delivers in order, so a later event landing proves the loose asset's already
-        // had its chance.
-        WatchedTree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
+        await tree.Observes(
+            () => tree.WriteFile(Path.Combine(modFolder, "notes.json"), """{"note":"not a record"}"""u8.ToArray()),
+            () => tree.WriteRecord(modFolder, "A.esp", "000800:A.esp"));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal(["000800:A.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
         Assert.Empty(tree.Index.Of("validate"));
     }
@@ -159,11 +162,10 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
-        Directory.Delete(Path.Combine(modFolder, ".git"), recursive: true);
+        await tree.Observes(
+            () => WatchedTree.RemoveRepository(modFolder),
+            () => tree.WriteUnnamedDocument(modFolder, "A.esp"));
         Assert.False(SourceRepository.IsTracked(modFolder));
-        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
-        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
 
         tree.AdvancePastBothWindows();
 
@@ -180,11 +182,9 @@ public sealed class SourceBatchTests
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
         tree.Index.Closed = true;
 
-        WatchedTree.WriteUnnamedDocument(modFolder, "A.esp");
-        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, "A.esp"));
 
         tree.AdvancePastBothWindows();
 
