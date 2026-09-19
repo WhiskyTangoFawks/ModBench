@@ -76,7 +76,7 @@ requires a deploy.**
 11. As a user, I want a toggle beside the filter that controls separator behavior — keep
     matching sections in context, or collapse to a flat list of matches — so that I can
     search either structurally or flatly.
-12. As a user, I want a status overlay on each mod's icon flagging file conflicts, missing
+12. As a user, I want a status overlay on each mod's icon flagging file order conflicts, missing
     masters, or a missing mod folder, so that I can spot problems without opening anything.
 13. As a user, I want to hover a mod and see a tooltip listing the conflicting files and
     which mod wins each, so that I can understand a conflict badge in place.

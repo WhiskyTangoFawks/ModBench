@@ -1,300 +1,164 @@
-# Modbench domain language
-
-Modbench is one tool with two bounded contexts. **Editing** is the mEdit service and the record
-editor's surfaces: it speaks in plugins, records and FormKeys and never says "mod". **Mod
-Management** is the Toolbox, Mods, Plugins and Downloads views: it speaks in mods, modlists and
-files and never sees a record. They meet at one object, a plugin file at a physical path, which
-Mod Management hands Editing inside the Plugin load order
-([ADR-0013](docs/adr/0013-mod-management-hands-editing-the-load-order.md)). The Plugins tree is
-Mod Management's and also shows Editing's records
-([ADR-0017](docs/adr/0017-mo2-is-the-reference-for-mod-management.md)). Architecture words
-live in [ADR-0014](docs/adr/0014-modules-are-layered-and-call-adjacent-layers-through-ports.md).
-
-## Shared language
-
-**Override order**:
-The ordering that decides who wins a conflict, defined only by its two ends and never by a
-position in a file or a view. Two instances: the **Mod override order** (`modlist.txt`), which
-decides file conflicts, and the **Plugin load order** (`plugins.txt`), which decides record
-conflicts. Always say which.
-_Avoid_: load order unqualified, priority, shadowed plugin (say file-level loser)
-
-**Winning / losing**:
-The two ends of an override order: A wins over B, B loses to A, the extremes are winning-most
-and losing-most. Vanilla content is losing-most on both axes: the base game's records lose to
-every plugin and its files lose to every mod.
-_Avoid_: high or low priority, top or bottom (view words)
-
-**Plugin load order**:
-The ordered list of plugins the game loads. Mod Management owns and writes it; Editing holds the
-value it is handed (ADR-0013).
-_Avoid_: load order unqualified, plugin list, session
-
-**Load order snapshot**:
-The value Mod Management sends Editing: every plugin copy in the instance with its slot, whether
-its line is enabled, and whether it wins its name. The only thing called a snapshot.
-_Avoid_: mod override snapshot
-
-## Editing
-
-### Records and identity
-
-**FormLink**:
-A typed field holding another record's FormKey. Two data errors, both flagged: **dangling**, a
-FormKey that resolves to no record in the load order, and **type-mismatched**, one that resolves
-to a record of a type the field does not permit.
-_Avoid_: missing reference, broken link, wrong-type reference
-
-**Effective masters**:
-The masters a plugin will have once its working-tree edits compile: its compiled masters plus the
-plugins its uncommitted changes reference.
-_Avoid_: pending masters, staged masters
-
-**Header record**:
-A plugin's own header, its author, masters and flags, held as a record like any other. A header
-is not an override of another plugin's header.
-_Avoid_: TES4 record, plugin metadata, header table
-
-**Immutable plugin**:
-A plugin Editing treats as read-only: the base game's own files.
-_Avoid_: read-only plugin, locked plugin
-
-### Load order and overrides
-
-**Participation**:
-Whether a registered plugin copy competes for winner and counts in a conflict: enabled, winning
-its name, and named by a line. A non-participating copy is indexed but never a winner (ADR-0012).
-_Avoid_: loaded, active, shadowed
-
-**Underride**:
-Placing a record into an earlier-loading plugin rather than a later one. Because a FormKey
-encodes its origin, an underride is a move plus a renumber.
-_Avoid_: inject, inject-to-master
-
-**Container record**:
-A record whose plugin form owns a child group, CELL, WRLD, DIAL or QUST, so its children exist
-only in a plugin that also carries it. In source, a container's children are embedded in its
-document (ADR-0006).
-_Avoid_: parent record, group record
-
-**Embedded**:
-A child record held inline in its container's document rather than in a file of its own.
-_Avoid_: the hyphenated coinage for splitting a folder, nested file
-
-**Partial form**:
-A container override that exists only to carry children. Its own fields are ignored for conflict
-resolution and omitted from the compare grid.
-_Avoid_: empty override, sparse record, ITM parent
-
-**ConflictAll**:
-The classification of a record's override stack as a whole: OnlyOne, NoConflict, Override,
-Conflict or ConflictCritical, in that severity order (ADR-0018).
-_Avoid_: the four-state shorthand
-
-**ConflictThis**:
-The classification of one plugin's version within a stack: OnlyOne, Master, IdenticalToMaster,
-Override, ConflictWins or ConflictLoses.
-
-### Source and tracking
-
-**Tracked mod**:
-A mod whose folder holds a `.git` repository, created by Track. Editing requires tracking;
-viewing never does (ADR-0007).
-_Avoid_: tracked record, vendored mod
-
-**Track**:
-The user gesture that creates a mod's repository and its source (ADR-0007).
-_Avoid_: vendor, init
-
-**Source**:
-The document tree inside a tracked mod's folder, one file per record with children embedded,
-versioned by the mod's own repository. Semantically lossless: compiling it reproduces the
-plugin's model (ADR-0006).
-_Avoid_: ledger, text mirror, Spriggit tree, view, projection, committed plugin, compiled artifact
-
-**Semantically lossless**:
-The round-trip requirement: a source compiles to a plugin whose every record is model-identical
-to the original (ADR-0006).
-_Avoid_: byte-identical, lossless unqualified
-
-**Edit branch**:
-The branch a tracked mod's edits live on. `main` holds the pristine upstream state.
-_Avoid_: working branch, dev branch
-
-**Baseline**:
-A pristine-state commit on a tracked mod's `main`: the serialization at Track, or of an upstream
-update.
-_Avoid_: original, base version
-
-**Provenance**:
-The commit trailers on a baseline: the pristine binary's hash and the upstream version. Never a
-trigger.
-_Avoid_: metadata, Anchor (Mod Management's term)
-
-**External change**:
-A tracked mod whose plugin bytes or git-tracked files differ from what Modbench last wrote,
-classified per mod and answered by one dialog (ADR-0003).
-_Avoid_: drift, conflict (that is a record-level word)
-
-**Tell**:
-`meta.ini`'s role in an external change: its version against the baseline trailer picks the
-dialog's default. It raises nothing.
-_Avoid_: trigger, signal
-
-**Save & Compile**:
-The gesture that writes a tracked plugin's binary from its source (ADR-0007).
-_Avoid_: save, apply, rebuild
-
-**Working-tree change**:
-Git's uncommitted change, in the source. The only pending state there is.
-_Avoid_: pending change, staged edit, change group
-
-**Reconcile**:
-A check of the record index against the plugin files and source trees by content hash, and the
-same word for bringing it to a newly sent Plugin load order.
-_Avoid_: reload, refresh (a view word), sync
-
-**Record index**:
-The read model of record data, one row per record per plugin copy, rebuilt from the plugin files
-and the source trees and never a source of truth (ADR-0009, ADR-0011).
-_Avoid_: index, the Index, DuckDB, database, store, cache
-
-### Diagnosis and repair
-
-**Diagnosis**:
-The named finding on a plugin that Track, Save & Compile or a reconcile could not take as-is: the
-record, the defect, and whether it is repairable losslessly, repairable with loss, or blocked
-upstream.
-_Avoid_: error, parse error, warning
-
-**Malformed plugin**:
-A plugin whose bytes depart from what the Creation Kit writes, provably, because every vanilla
-record of the type shows the canonical form. Distinct from a correct plugin Mutagen mishandles.
-_Avoid_: broken plugin, corrupt plugin, dirty plugin
-
-**Repair**:
-The explicit gesture that rewrites a malformed plugin into its canonical form (ADR-0006). Not
-xEdit's clean, and not crash recovery.
-_Avoid_: fix, clean, sanitize, normalize, crash repair
-
-### Fields
-
-**Complex field**:
-An array or struct field, edited as one value.
-_Avoid_: compound field, nested field
-
-**Child record**:
-A record reachable through another record's array field but carrying its own FormKey, so it is
-its own record. Distinct from a struct element with no FormKey.
-_Avoid_: sub-record, nested record
-
-### Filters
-
-**Record filter**:
-A SQL SELECT, stored as a `.sql` file in the scripts folder, that narrows the record tree to the
-FormKeys it returns.
-_Avoid_: search filter, query filter, filter script
-
-## Mod Management
-
-### Mods and downloads
-
-**Authored mod**:
-A mod the user owns outright, created in Modbench or adopted, with no upstream. The only kind
-whose full content may be shared.
-_Avoid_: custom mod, personal mod, own mod
-
-**Downloaded mod**:
-A mod installed from a Download or any other external source, whose upstream defines the
-pristine content it derives from. Ownership, not transport, is the split.
-_Avoid_: third-party mod, external mod
-
-**Modified**:
-The state of a Downloaded mod whose files have diverged from what its upstream installed. Derived
-by comparison, never declared. Only the divergence may be shared.
-_Avoid_: modified mod as a kind, edited mod, tweaked mod
-
-**Adopt**:
-Take ownership of a Modified mod: reclassify it as Authored and sever the upstream link. One way.
-_Avoid_: fork, convert
-
-**Upstream**:
-The lineage of pristine content a Downloaded mod derives from, the author's releases as
-installed. For a tracked mod's plugins that comparison is Editing's (ADR-0007).
-_Avoid_: origin (Editing's plugin-identity term), source
-
-**Download**:
-MO2's downloaded archive in the instance's `downloads/` folder, with its `.meta` sidecar. The
-uninstalled state of a mod. Two orthogonal axes: **status**, Downloaded, Installed or
-Uninstalled; and **hidden**, dismissed from view, held in MO2's own form so both tools hide the
-same rows. Hiding is a command; showing hidden rows is a view setting.
-_Avoid_: archive (that is a BA2 or BSA), package, Removed (MO2's `.meta` key for hidden), deleted
-
-**Upgrade**:
-Installing a download over a mod already installed from the same Nexus mod id: the folder's
-contents are replaced in place around `.git`, so the mod keeps its identity.
-_Avoid_: reinstall, update (Nexus's own word for a different gesture)
-
-### Instance and profile
-
-**Instance**:
-The MO2 instance directory Modbench is opened on, and the one read model derived from its files
-([ADR-0015](docs/adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Everything a view
-shows on the MO2 side is read from it; nothing writes to it.
-_Avoid_: loadout, workspace, model
-
-**Toolbox**:
-The view that presents the instance, MO2's top bar as two rows, Profile and Deployment.
-_Avoid_: Loadout, header, dashboard
-
-**Profile**:
-An MO2 profile. The active one is the only one the Instance reflects.
-_Avoid_: session, loadout
-
-**Separator**:
-MO2's separator. A mod belongs to the same separator whichever way the list is displayed.
-_Avoid_: group, category, treating a separator as a priority position
-
-**View order**:
-A view setting: how a list is displayed, winning-at-top or losing-at-top. It never changes who
-wins.
-_Avoid_: conflating with override order
-
-**Command**:
-A CQRS command: a gesture that writes an MO2 file, a mod folder or a download sidecar and
-returns (ADR-0015).
-_Avoid_: action, operation
-
-**View setting**:
-A gesture that changes only what a view displays and writes no MO2 file: View order, Show hidden.
-It lives inside the view that owns it and never enters the watch loop.
-_Avoid_: filter (that is the name filter), toggle, preference
-
-### Files and deploy
-
-**File conflict**:
-Two enabled mods providing the same relative file; the mod nearer the winning end of the Mod
-override order wins. Distinct from a record-level conflict, which is Editing's.
-_Avoid_: override (record-level), higher-priority (say winning)
-
-**File conflict index**:
-Mod Management's index over every relative path the enabled mods provide, recording which mod
-wins each one. Distinct from the record index.
-_Avoid_: index, the Index, conflict index, winner map
-
-**Deploy**:
-Make the enabled mods' files present in the game directory so the running game reads them.
-_Avoid_: install, link, mount, build
-
-**Purge**:
-Remove deployed mod files, returning the game directory to its pre-deploy state.
-_Avoid_: uninstall, clean, teardown
-
-**Game directory**:
-The game installation Modbench reads vanilla masters from and deploys into: the Steam install or
-a stock game folder.
-_Avoid_: data folder (a subpath), install path
-
-**Stock game folder**:
-Wabbajack's Stock Game: a copy of the vanilla game files outside Steam's management.
-_Avoid_: game copy, vanilla folder
+Architecture words live in `docs/architecture/`. Verbs live in `docs/architecture/commands.md`.
+
+# Order
+A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds.
+Load order combines them.
+Avoid: priority
+
+## Mod order
+The order of mods, held in `modlist.txt`. It resolves files.
+Avoid: mod priority, mod load order
+
+## Plugin order
+The order of plugins, held in `plugins.txt`. It resolves records.
+Avoid: plugin load order
+
+## Load order
+The mod order and plugin order together. The two files resolve the full stack into a playable game
+state. Never use it for one half alone.
+
+# Winning / losing
+The two ends of an order. A wins over B, B loses to A. The extremes are winning-most and
+losing-most. Vanilla is losing-most in both orders.
+Avoid: high or low priority, top or bottom (view words)
+
+# Sort direction
+Whether a view lists winning at the top or at the bottom. It never changes who wins.
+Avoid: view order, sort order
+
+# Order conflict
+Several items in an order provide the same thing. The order decides which one wins. Say which order
+unless context makes it clear.
+Avoid: override (a placement, not a clash)
+
+## File order conflict
+An order conflict in mod order: enabled mods provide the same relative file.
+Avoid: file conflict, override (a placement, not a clash), higher-priority
+
+## Record order conflict
+An order conflict in plugin order: plugins define the same record differently. xEdit's
+classification is the reference (ADR-0018).
+Avoid: record conflict, override (a placement, not a clash)
+
+# Override
+An item that wins an order conflict by sitting later in the order than the item it conflicts with.
+The item is a record or a file.
+Avoid: patch (that is a kind of plugin), child (that is a record inside another record)
+
+# Underride
+An item that loses an order conflict by sitting earlier in the order than the item it conflicts
+with. It is the other side of an override. The item is a record or a file.
+Avoid: inject, inject-to-master
+
+# Mod
+A folder under the instance's `mods/` folder. Its files overlay the game folder. A line in
+`modlist.txt` places it in mod order. A mod holds zero or more plugins.
+Avoid: plugin, package
+
+## Mod separator
+A mod entry that groups other mods in the list and holds no files. A mod belongs to its separator
+whichever way the list is displayed. A separator is not a priority position.
+Avoid: group, category
+
+## Tracked mod
+A mod whose folder holds a `.git` repository and the plugin source of its plugins. It follows one
+git workflow.
+
+# Git workflow
+How a tracked mod uses its `main` branch. The user chooses, and Modbench does not detect which. Two
+kinds exist: authored and vendored.
+
+## Authored workflow
+A git workflow where `main` is the work itself.
+Avoid: custom mod, personal mod
+
+## Vendored workflow
+A git workflow where `main` holds one commit per release of the upstream mod, the baseline, with the
+release version and the binary's hash as trailers. Edits live on the `edit` branch. Upstream is the
+author's releases, not a git remote: the repository holds no link to it.
+Avoid: modified mod (a vendored workflow describes where `main` points)
+
+# Plugin
+An `.esp`, `.esm` or `.esl` file. It holds records. A plugin is not a mod, it is a component of a mod.
+Avoid: mod (that is a folder), ESP (that is one of the three extensions)
+
+## Patch plugin
+A plugin whose purpose is to override records in another mod's plugin, to fix a bug or resolve a
+conflict.
+Avoid: override (that is a placement), fix plugin, child plugin
+
+## Malformed plugin
+A plugin whose bytes provably depart from what the Creation Kit writes, because every vanilla record
+of the type shows the canonical form. It is not a correct plugin that Mutagen mishandles.
+Avoid: broken plugin, corrupt plugin
+
+## Overridden plugin
+A plugin file that another mod's file of the same name overrides. The game loads the winning file
+and not this one.
+Avoid: plugin copy, duplicate, version, shadowed plugin
+
+## Master Plugin
+A plugin that another plugin lists as a dependency. A master loads earlier.
+Avoid: parent plugin (an override's plugin is not its child)
+
+# Plugin source
+The deserialized form of a plugin, held in a tracked mod's folder. It has one file per record, with
+child records inside their container's file. The mod's own repository versions it. Compiling it
+reproduces the plugin's model, not its bytes.
+Avoid: source, text mirror, Spriggit tree
+
+# Vanilla
+The base game's own plugins and files.
+Avoid: base game, immutable plugin, stock (except in Stock game folder)
+
+# Record
+A plugin's unit of data. Each record has a FormKey.
+
+## Plugin Header record
+A record that holds a plugin's own header: author, masters and flags. A header is not an override.
+Avoid: TES4 record, plugin metadata
+
+## Container record
+A record that owns child records: CELL, WRLD, DIAL or QUST. Its children exist only in a plugin that
+also carries it. In plugin source the children sit inside the container's document.
+Avoid: group record
+
+## Child record
+A record that belongs to another record's structure, such as a cell in a worldspace, or a record an
+array field lists that carries its own FormKey. A struct element has no FormKey and is not a child
+record. An override is never a child of the record it overrides.
+Avoid: sub-record, nested record
+
+# FormKey
+A record's identity: its origin plugin and its ID inside that plugin. It is not a FormID, which also
+depends on load position.
+Avoid: FormID, record ID
+
+# FormLink
+A typed field that holds another record's FormKey. Two data errors exist. A dangling link resolves
+to no record in the load order. A type-mismatched link resolves to a type the field does not permit.
+Avoid: missing reference, broken link
+
+# Instance
+The MO2 installation, a set of files on disk.
+Avoid: loadout, workspace, profile (that is one part of it)
+
+# Profile
+An MO2 profile. Only the active profile shows in the instance.
+Avoid: session, loadout
+
+# Downloaded file
+A mod file that MO2 fetched into the instance's `downloads/` folder, with its `.meta` sidecar.
+Installing it creates a mod, and the file stays. The Downloads view lists downloaded files.
+Avoid: download (as a noun; to download is to fetch a file), archive (that is
+a BA2 or BSA), package
+
+# Game folder
+The game installation Modbench reads vanilla plugins from and deploys into. It is the Steam install
+or a stock game folder.
+Avoid: game directory, data folder (that is a subpath), install path
+
+## Stock game folder
+A game folder that is Wabbajack's Stock Game: a copy of the vanilla game files outside Steam's
+management.
+Avoid: game copy, vanilla folder

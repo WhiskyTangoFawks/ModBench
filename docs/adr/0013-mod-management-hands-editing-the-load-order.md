@@ -32,7 +32,7 @@ it is handed and never reloads.
 
 ## Derived tactical observations
 
-- The snapshot is what Mod Management already walks for its file conflict index: every root-level
+- The snapshot is what Mod Management already walks for its file order conflict index: every root-level
   plugin in every enabled mod, `overwrite/`, and the `Data/` copy of every listed name no mod
   provides. A disabled mod's plugins are not in it, so enabling a mod is when its copies first pay
   their one index.
