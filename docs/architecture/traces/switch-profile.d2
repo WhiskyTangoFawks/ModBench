@@ -1,4 +1,4 @@
-# Loadout gesture. The profile is a line in ModOrganizer.ini; the write is forgotten and
+# Load order gesture. The profile is a line in ModOrganizer.ini; the write is forgotten and
 # the watch does the rest, so the new profile's files are read the same way as any other
 # change.
 ...@../styles
@@ -25,16 +25,16 @@ commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: "Load order state\nmEdit"
 
-toolbox -> instancecommands: switch profile {class: loadout}
-instancecommands -> codecs: "ModOrganizer.ini: profile name" {class: loadout}
-codecs -> instancecommands: bytes {class: loadout}
-instancecommands -> mo2files: "put ModOrganizer.ini" {class: loadout}
-mo2files -> mo2: bytes, then forget {class: loadout}
+toolbox -> instancecommands: switch profile {class: loadorder}
+instancecommands -> codecs: "ModOrganizer.ini: profile name" {class: loadorder}
+codecs -> instancecommands: bytes {class: loadorder}
+instancecommands -> mo2files: "put ModOrganizer.ini" {class: loadorder}
+mo2files -> mo2: bytes, then forget {class: loadorder}
 mo2 -> instance: watch {class: signal}
 instance."recompute from the new profile"
-instance -> views: value {class: loadout}
-instance -> toolbox: load order snapshot {class: loadout}
-toolbox -> client: load order snapshot {class: loadout}
-client -> http: load order snapshot {class: loadout}
-http -> commands: put load order {class: loadout}
-commands -> loadorder: load order snapshot {class: loadout}
+instance -> views: value {class: loadorder}
+instance -> toolbox: load order snapshot {class: loadorder}
+toolbox -> client: load order snapshot {class: loadorder}
+client -> http: load order snapshot {class: loadorder}
+http -> commands: put load order {class: loadorder}
+commands -> loadorder: load order snapshot {class: loadorder}

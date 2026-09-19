@@ -17,11 +17,11 @@ client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 
 mo2 -> instance: "watch: every file and folder, debounced" {class: signal}
-instance -> mo2files: "get: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadout}
-mo2files -> instance: bytes {class: loadout}
-instance -> codecs: bytes {class: loadout}
-codecs -> instance: "parsed, one codec per file" {class: loadout}
+instance -> mo2files: "get: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadorder}
+mo2files -> instance: bytes {class: loadorder}
+instance -> codecs: bytes {class: loadorder}
+codecs -> instance: "parsed, one codec per file" {class: loadorder}
 instance."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
-instance -> views: value {class: loadout}
-instance -> toolbox: load order snapshot, on change {class: loadout}
-toolbox -> client: load order snapshot, on change {class: loadout}
+instance -> views: value {class: loadorder}
+instance -> toolbox: load order snapshot, on change {class: loadorder}
+toolbox -> client: load order snapshot, on change {class: loadorder}

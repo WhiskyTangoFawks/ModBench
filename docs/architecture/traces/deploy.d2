@@ -16,11 +16,11 @@ mo2files.label: MO2 files
 gamedata: @../target-architecture.modbench_data.gamedata
 gamedata.label: Game Data/
 
-instance -> toolbox: one value, with its sequence {class: loadout}
+instance -> toolbox: one value, with its sequence {class: loadorder}
 toolbox."the first-deploy consent"
 toolbox -> deploy: "deploy · purge, with the value" {class: deploy}
 tables -> deploy: load-order file destination {class: deploy}
 deploy -> mo2files: "the hardlinks to make · the manifest" {class: deploy}
 mo2files -> gamedata: hardlinks · manifest, then forget {class: deploy}
 gamedata -> instance: "watch: the manifest" {class: signal}
-instance -> toolbox: value, deploy state {class: loadout}
+instance -> toolbox: value, deploy state {class: loadorder}

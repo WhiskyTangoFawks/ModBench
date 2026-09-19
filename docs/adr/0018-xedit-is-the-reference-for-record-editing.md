@@ -17,7 +17,7 @@ user arrives fluent in it. [The xEdit UX audit](../research/xedit-ux-audit.md) a
 3. **Adopted, as xEdit's source has them:** the gesture model, where click focuses, the keyboard
    acts on the focused cell's model value and double click edits; the compare grid as one tree
    with a slot per plugin at every depth, sorted arrays aligned by key, a complex field edited as
-   one value; and the two-axis conflict model, ConflictAll per record and per node, ConflictThis
+   one value; and the two-axis record order conflict model, ConflictAll per record and per node, ConflictThis
    per plugin. [The record-editor spec](../specs/medit-record-editor.md) states each surface.
 4. **Cite xEdit's definitions; rule the composition yourself.** The TES5Edit clone under
    `references/` carries definitions whose consuming machinery is absent from the clone. A
@@ -61,6 +61,6 @@ A divergence outside this surface is its own ADR:
 - **Element-level writes** (`packages[1]`). Array indices have no stable identity.
 - **Double click opens the extended editor**, xEdit's own gesture. On a tab it threw the user out
   of the panel and forced a debounce on every inline string edit.
-- **The four-state conflict model.** Cannot drive per-cell colour.
-- **Conflict state in SQL.** Cannot produce ConflictThis or tell wins from loses; classification
+- **The four-state record order conflict model.** Cannot drive per-cell colour.
+- **Record order conflict state in SQL.** Cannot produce ConflictThis or tell wins from loses; classification
   runs in C# on documents.

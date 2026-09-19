@@ -22,14 +22,14 @@ watcher: @../target-architecture.medit_driving.watcher
 watcher.label: "Mod watcher\nmEdit"
 
 downloads."install this, with the sidecar's mod id and file id"
-instance -> downloads: "value: mods with this Nexus id, their installedFiles" {class: loadout}
+instance -> downloads: "value: mods with this Nexus id, their installedFiles" {class: loadorder}
 downloads."the pick: candidates + new mod, pre-selected by file id, confirmed"
-downloads -> install: "upgrade: the confirmed target" {class: loadout}
-install -> codecs: "meta.ini: the meta it knows, with installedFiles" {class: loadout}
-codecs -> install: bytes {class: loadout}
-install -> mo2files: "staged tree in, old files out, .git kept" {class: loadout}
-mo2files -> mo2: the folder, then forget {class: loadout}
+downloads -> install: "upgrade: the confirmed target" {class: loadorder}
+install -> codecs: "meta.ini: the meta it knows, with installedFiles" {class: loadorder}
+codecs -> install: bytes {class: loadorder}
+install -> mo2files: "staged tree in, old files out, .git kept" {class: loadorder}
+mo2files -> mo2: the folder, then forget {class: loadorder}
 mo2 -> instance: watch {class: signal}
-instance -> views: value {class: loadout}
+instance -> views: value {class: loadorder}
 mo2 -> watcher: changed paths {class: signal}
 watcher."a-tracked-mod-changes-on-disk from here: the dialog with the baseline answer pre-selected, since the version moved; the answer commits the new baseline to main, version in the trailer, then rebases the edit branch"

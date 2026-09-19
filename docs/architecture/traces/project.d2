@@ -28,10 +28,10 @@ port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
-instance -> toolbox: load order snapshot {class: loadout}
-toolbox -> client: load order snapshot {class: loadout}
-client -> http: load order snapshot {class: loadout}
-http -> commands: put load order {class: loadout}
+instance -> toolbox: load order snapshot {class: loadorder}
+toolbox -> client: load order snapshot {class: loadorder}
+client -> http: load order snapshot {class: loadorder}
+http -> commands: put load order {class: loadorder}
 commands -> loadorder: load order snapshot {class: query}
 http -> projector: "reconcile: validate by hash" {class: signal}
 loadorder -> projector: winners {class: query}

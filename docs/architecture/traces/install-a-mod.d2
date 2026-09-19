@@ -1,4 +1,4 @@
-# Loadout gesture. Install drops a folder; the Instance's watcher registers it, and the
+# Load order gesture. Install drops a folder; the Instance's watcher registers it, and the
 # modlist adoption is a command handed the value, the way the plugins reconcile is. Nothing
 # watches mods/ on the mEdit side, so mEdit learns of the new plugin the way it learns of
 # every other load-order change: the adopted line makes a new snapshot and the tail of this
@@ -29,20 +29,20 @@ http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 
-downloads -> install: install this {class: loadout}
-install -> codecs: "meta.ini: the meta it knows" {class: loadout}
-codecs -> install: bytes {class: loadout}
-install -> mo2files: "stage, then one rename into mods/" {class: loadout}
-mo2files -> mo2: the folder, then forget {class: loadout}
+downloads -> install: install this {class: loadorder}
+install -> codecs: "meta.ini: the meta it knows" {class: loadorder}
+codecs -> install: bytes {class: loadorder}
+install -> mo2files: "stage, then one rename into mods/" {class: loadorder}
+mo2files -> mo2: the folder, then forget {class: loadorder}
 mo2 -> instance: watch {class: signal}
-instance -> views: value {class: loadout}
-instance -> modlist: "each value, as an argument: folders with no modlist line" {class: loadout}
-modlist -> codecs: "modlist.txt: lines to add" {class: loadout}
-codecs -> modlist: bytes {class: loadout}
-modlist -> mo2files: "put modlist.txt" {class: loadout}
-mo2files -> mo2: bytes, then forget {class: loadout}
+instance -> views: value {class: loadorder}
+instance -> modlist: "each value, as an argument: folders with no modlist line" {class: loadorder}
+modlist -> codecs: "modlist.txt: lines to add" {class: loadorder}
+codecs -> modlist: bytes {class: loadorder}
+modlist -> mo2files: "put modlist.txt" {class: loadorder}
+mo2files -> mo2: bytes, then forget {class: loadorder}
 mo2 -> instance: "watch: the adopted line" {class: signal}
-instance -> toolbox: "load order snapshot, on change" {class: loadout}
-toolbox -> client: "load order snapshot" {class: loadout}
-client -> http: load order snapshot {class: loadout}
-http -> commands: put load order {class: loadout}
+instance -> toolbox: "load order snapshot, on change" {class: loadorder}
+toolbox -> client: "load order snapshot" {class: loadorder}
+client -> http: load order snapshot {class: loadorder}
+http -> commands: put load order {class: loadorder}
