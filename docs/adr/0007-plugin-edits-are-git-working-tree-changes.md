@@ -11,7 +11,7 @@ the binary from it.
 
 1. **Editing requires tracking; viewing never does.** An untracked plugin is hard read-only in
    the editor, with signposting that names the Track command. That friction is deliberate: the
-   blessed paths for someone else's plugin are a patch plugin or a deliberate fork via Track. The
+   blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
 2. **Tracked is the presence of `.git` in the mod folder, and Track is a manual gesture.** No
    registry, no hidden gitdirs, no automatic repo creation. Track serializes every record of the
@@ -31,11 +31,12 @@ the binary from it.
    git's own gesture, ungated; history may hold states that do not build.
 5. **The native git UI is the review surface.** One Source Control group per tracked mod, native
    diffs, native commit. Git on PATH is a product requirement.
-6. **Modified versus Authored is repo topology, not a mode.** A tracked downloaded mod keeps
-   pristine upstream state on `main` and is edited on the branch, so `git diff main <branch>` is
+6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine
+   upstream state on `main` and is edited on the edit branch, so `git diff main <branch>` is
    everything the user changed and compiling `main` restores the pristine plugin. An authored mod
-   merges into `main` at will. Provenance is commit trailers on `main` baselines, read by humans
-   and agents; a trailer may pre-select a dialog's default and never acts on its own.
+   merges into `main` at will. Baseline commits carry trailers for the upstream version and the
+   binary's hash, read by humans and agents; a trailer may pre-select a dialog's default and never
+   acts on its own.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
    trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
    generates the `.gitignore`, then the user owns it.
