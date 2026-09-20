@@ -10,9 +10,10 @@ A gesture this file has and the model cannot hold is a ticket.
   Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor
   realizes it.
 - **Gesture**: one thing the user does to an object. One row in the tables below, under the
-  object it changes.
-- **System command**: a command Modbench runs itself, with trigger `automatic`. No user starts it and
-  no surface owns it. It has its own section, after the objects.
+  object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
+- **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
+  has no gesture. Its first column is the trigger that fires it. It has its own section, after the
+  objects.
 - **Where**: the entry points of the gesture, surface by surface, as `<surface>: <entry point>`
   with a condition in brackets, separated by semicolons. It states the model, not the code. The
   entry points are `context menu`, `title icon`, `title overflow`, `inline button`, `row click`, `key`
@@ -28,11 +29,12 @@ A gesture this file has and the model cannot hold is a ticket.
   ID per direction. A row that lists more than one ID, other than a pair, is `debt`. So is a
   registered ID that differs from the target here.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
-  position. A picker asks for each Option the caller did not supply.
+  position. A picker asks for each Option the caller did not supply. An Option may be computed
+  and multi-valued, such as a checked list with defaults.
 - **Argument**: the value that identifies the object or objects to the gesture, such as a plugin
   name or a FormKey. For a gesture that creates an object, it identifies the container. It is
-  the same on every surface that offers the gesture. A handler that receives anything else is
-  `debt`.
+  the same on every surface that offers the gesture. Singular means the clicked row, and plural
+  means the whole selection. A handler that receives anything else is `debt`.
 - **Template**: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md))
   or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row
   follows, read from [the xEdit audit](../research/xedit-surface-audit.md),
@@ -41,7 +43,8 @@ A gesture this file has and the model cannot hold is a ticket.
   gesture: the row is an addition or a divergence, and needs a ruling.
 - **Trace**: the sequence diagram of the gesture's family. A gesture that is not built has none,
   because drawing the trace is part of designing the gesture. A built gesture with `-` has a trace
-  still to draw.
+  still to draw. Beside each trace, a `.md` file with the same name holds its contract: when the
+  gesture is available, what it refuses, what it leaves behind, and what it confirms.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -61,18 +64,47 @@ Status: `built`, `drawn` (in the zoom-out and a trace, not built), `planned`, `w
   the object. The gesture asks only for the Options the caller left out. A keybinding, a webview
   message or an agent call may supply all of them.
 - **One command per gesture.** A toggle or an opposite pair registers one for each direction.
-- **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
-  can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
-  command, not a second gesture.
-- **One name.** The gesture name derives from the Command ID: the ID's verb words, in order, with
-  the object added where the verb alone is shared by several IDs. It is one to three words and
-  unique in this catalog. Prefer existing software-development language. It is the name in the
-  architecture, the Command ID and the core handler; UI text may differ. A name that needs more than
-  three words means the concept lacks a term, so define the term first. A name that differs
-  anywhere is `debt`.
+- **When to group.** Variants are one gesture when all four of these hold:
+  1. The user names them with the same verb and a qualifier: "copy as", "move to", "open beside".
+  2. The Argument has the same shape.
+  3. The variants differ along one dimension the user chooses: a mode, a target or a placement.
+  4. The result is the same kind of thing.
 
   A category word such as "edit" fails the first test, so its variants are separate gestures. An
   opposite pair is one row with two entries, and it needs no picker.
+- **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
+  can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
+  command, not a second gesture.
+- **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb
+  the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod").
+  Keep the ID's verb and the user's verb the same words. Prefer existing software-development
+  language, and keep both short. A verb that needs more than three words means the concept lacks a
+  term, so define the term first.
+- **No dead entries.** A gesture that is not available, or not applicable, is not shown. It is never
+  shown and then refused for that reason. A gesture that is offered and then cannot proceed still
+  refuses, and says why (see the next principle).
+- **Refuse, do not repair.** When a gesture cannot proceed, it says why and stops. The user fixes
+  the cause and tries again.
+- **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts,
+  stops or reloads it.
+- **One filter.** Every list has the same name filter. It stays until cleared, its term shows in the
+  view description, and the same slot clears it.
+- **Stay in the panel.** No gesture on the record panel moves the user out of it.
+
+## Chrome
+
+Rules for the title bar of a view.
+
+- A view shows at most four icons, and a filter and its clear count as one.
+- An icon is earned. A state readout or a common toggle keeps one. A configure-once gesture goes in
+  the overflow.
+- A destructive gesture never gets an icon. It sits in the overflow, behind a confirmation.
+- The order is the name filter, the view's state toggle, domain gestures, the overflow, and Collapse
+  All last. Collapse All is on trees only.
+- An action that is not about a tree's own object goes on the Toolbox, the status bar or the
+  palette.
+- The icons: search narrows by name, filter narrows by condition, clear-all clears a durable
+  filter, and there is one refresh.
 
 ## Ruling a gesture out
 
@@ -97,15 +129,30 @@ first. The file for that template lists the gesture with its reason.
 
 ## Surfaces and their templates
 
-| Surface | xEdit template | MO2 template |
-|---|---|---|
-| Toolbox | main menu | toolbar, run box, profile combo |
-| Mods | - | mod list |
-| Plugins | navigator | plugin list |
-| Downloads | - | Downloads tab |
-| Editor | View grid, Referenced By | - |
+| Surface | xEdit template | MO2 template | What it shows |
+|---|---|---|---|
+| Toolbox | main menu | toolbar, run box, profile combo | to write |
+| Mods | - | mod list | to write |
+| Plugins | navigator | plugin list | to write |
+| Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
+| Editor | View grid, Referenced By | - | to write |
 
 The xEdit Messages tab is not a surface. Failures go to the Problems panel (ADR-0019).
+
+## Where surfaces live
+
+| Surface | Container | Order | Default |
+|---|---|---|---|
+| Toolbox | Activity Bar (`modbench`) | 1 | open |
+| Mods | Activity Bar | 2 | open |
+| Plugins | Activity Bar | 3 | open |
+| Downloads | Activity Bar | 4 | collapsed |
+| Editor, the record panel | an editor tab | - | opened by the user |
+| Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
+
+Every view is always present. A view with nothing to show renders its own empty state, and no
+view hides itself. Referenced By is a Panel view because it follows the active record, and a
+sidebar view cannot sit beside an editor tab.
 
 ## Instance
 
@@ -133,8 +180,8 @@ Offered on Toolbox. A Profile is part of the Instance.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| switch profile | writes | Toolbox: row click | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. | debt #967 | switch-profile |
-| create profile | writes | Toolbox: dialog answer | ? | source profile, or none | - | MO2 Profiles dialog | Create a profile, empty or copied from another. | planned | - |
+| switch | writes | Toolbox: row click | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. | debt #967 | switch-profile |
+| create | writes | Toolbox: dialog answer | ? | source profile, or none | - | MO2 Profiles dialog | Create a profile, empty or copied from another. | planned | - |
 
 ## Mod
 
@@ -142,21 +189,21 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| enable / disable mod | writes | Mods: check box, key, context menu | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | ? | enable-a-mod |
-| move mod | writes | Mods: drag, key, context menu | `modbench.mod.move` | mods or separators | target: a separator (built); top, bottom, priority N, first or last conflict (planned) | MO2 mod list | Move mods in mod order. | debt #956, #967 | enable-a-mod |
+| enable / disable | writes | Mods: check box, key, context menu | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | ? | enable-a-mod |
+| move | writes | Mods: drag, key, context menu | `modbench.mod.move` | mods or separators | target: a separator (built); top, bottom, priority N, first or last conflict (planned) | MO2 mod list | Move mods in mod order. | debt #956, #967 | enable-a-mod |
 | uninstall | writes | Mods: context menu | `modbench.mod.uninstall` | mods | - | MO2 mod list | Remove a mod folder and its line. | debt #967 | - |
-| rename mod | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | planned | - |
+| rename | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | planned | - |
 | create empty mod | writes | Mods: context menu | `modbench.mod.createEmpty` | - | position (planned) | MO2 mod list | Create an empty mod folder and its line. | debt #967 | - |
 | install | writes | Mods: context menu; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | position (planned); target mod, for an upgrade; reinstall from the recorded archive (planned); installer: quick, manual or FOMOD (planned) | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | debt #959, #967 | install-a-mod, upgrade-a-mod |
 | open details | reads | Mods: context menu, double click; Plugins: context menu, double click | - | mod, separator, or a plugin's origin mod | tab | MO2 mod list; MO2 plugin list | Open the mod details view. Its conflicts tab lists the conflicting mods and opens each one. | planned | - |
 | highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | planned | - |
-| exclude / include mod file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | planned | - |
+| exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | planned | - |
 | check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | planned | - |
-| track mod | writes | Plugins: context menu (mod untracked); Editor: read-only banner (mod untracked) | `modbench.mod.track` | mod | preset: Edits or Everything | none | Put the mod's plugins under git. It fires `decompile plugin` with a new repository as the destination: it creates the repository, commits the baseline to `main` and checks out the edit branch. | debt #966, #967 | decompile-a-plugin |
+| track | writes | Plugins: context menu (mod untracked); Editor: read-only banner (mod untracked) | `modbench.mod.track` | mod | preset: Edits or Everything | none | Put the mod's plugins under git. It fires `decompile plugin` with a new repository as the destination: it creates the repository, commits the baseline to `main` and checks out the edit branch. | debt #966, #967 | decompile-a-plugin |
 | rebase edit branch | writes | Plugins: context menu (mod tracked) | `modbench.mod.rebaseEditBranch` | tracked mod | - | none | Replay the edit branch onto `main`. | debt #967 | a-tracked-mod-changes-on-disk |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | debt #967 | - |
-| filter mods | reads | Mods: title icon, key (Ctrl+F) | `modbench.mod.filter`, `modbench.mod.clearFilter` | - | - | MO2 mod list | Narrow the mod list by name. | debt #967 | - |
-| open mod folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod | - | MO2 mod list | Show a mod's files in the native file tab, decorated by conflict status (planned; today the file explorer). | debt #967 | - |
+| filter | reads | Mods: title icon, key (Ctrl+F) | `modbench.mod.filter`, `modbench.mod.clearFilter` | - | - | MO2 mod list | Narrow the mod list by name. | debt #967 | - |
+| open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod | - | MO2 mod list | Show a mod's files in the native file tab, decorated by conflict status (planned; today the file explorer). | debt #967 | - |
 | open overwrite folder | reads | Mods: context menu | `modbench.mod.openOverwriteFolder` | overwrite | - | MO2 mod list, Overwrite row | Show the overwrite folder in the file explorer. | debt #956, #967 | - |
 | view on Nexus | reads | Mods: context menu (mod has a Nexus id); Downloads: context menu (file has a Nexus id) | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | debt #956, #967 | - |
 | publish | writes | Mods: context menu | - | mod | - | none | Publish an update for a mod the user owns, through the Nexus API. | planned | - |
@@ -167,9 +214,9 @@ Offered on Mods. A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| add separator | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: below (built); above, inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | enable-a-mod |
-| rename separator | writes | Mods: context menu | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | enable-a-mod |
-| delete separator | writes | Mods: context menu | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | enable-a-mod |
+| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: below (built); above, inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | enable-a-mod |
+| rename | writes | Mods: context menu | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | enable-a-mod |
+| delete | writes | Mods: context menu | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | enable-a-mod |
 
 ## Plugin
 
@@ -177,21 +224,21 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| enable / disable plugin | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | enable-a-plugin |
-| move plugin | writes | Plugins: drag, key, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | enable-a-plugin |
-| create plugin | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | - |
+| enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | enable-a-plugin |
+| move | writes | Plugins: drag, key, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | enable-a-plugin |
+| create | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | - |
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugin | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-a-plugin |
 | repair | writes | Plugins: context menu | - | plugin | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | planned | - |
-| filter plugins | reads | Plugins: title icon, key (Ctrl+F) | `modbench.plugin.filter`, `modbench.plugin.clearFilter` | - | - | MO2 plugin list; xEdit navigator | Narrow the plugin list by name. | debt #967 | - |
-| reveal plugin | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | debt #967 | - |
+| filter | reads | Plugins: title icon, key (Ctrl+F) | `modbench.plugin.filter`, `modbench.plugin.clearFilter` | - | - | MO2 plugin list; xEdit navigator | Narrow the plugin list by name. | debt #967 | - |
+| reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | debt #967 | - |
 | highlight origin | reads | Plugins: automatic; Mods: automatic | - | plugins, or mods | - | MO2 plugin list | Selecting a plugin marks its origin mod and its masters. Selecting a mod marks the plugins it provides. | planned | - |
 | add sort rule | writes | Plugins: context menu | - | - | rule | none | Add a plugin sorting rule. A hard rule is red and a soft rule is yellow. | planned | - |
 | edit sort rule | writes | Plugins: context menu | - | sort rule | field | none | Change a sorting rule. | planned | - |
 | enable / disable sort rule | writes | Plugins: context menu | - | sort rules | - | none | Turn a sorting rule on or off. | planned | - |
 | remove sort rule | writes | Plugins: context menu | - | sort rules | - | none | Remove a sorting rule. | planned | - |
 | apply suggested sort | writes | Plugins: code action | - | plugin | - | none | Fix a sorting problem by applying the suggested position. The problem shows as a squiggle. | planned | - |
-| rename plugin | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin, its source tree and the master reference in every dependent. | planned | - |
+| rename | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin, its source tree and the master reference in every dependent. | planned | - |
 | relink source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was renamed outside Modbench: move its source tree to the new name. | planned | - |
 | remove source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was deleted outside Modbench: remove its source tree, as a working-tree deletion the user reviews. | planned | - |
 
@@ -205,13 +252,13 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | - | xEdit View grid | Add an element to an array field. Sorted arrays add too (planned). | debt #967 | edit-a-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-a-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-a-record |
-| create record | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-a-record |
-| delete record | writes | Plugins: context menu; Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-a-record |
+| create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-a-record |
+| delete | writes | Plugins: context menu; Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-a-record |
 | renumber | writes | Plugins: context menu | `modbench.record.renumber` | records, or a plugin | start id, for a plugin (planned) | xEdit navigator | Change a record's FormKey and every reference to it. | built | edit-a-record |
-| copy record | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride (planned); destination plugins; deep, for containers (planned) | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | debt #962, #967 | edit-a-record |
-| open record | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open as a comparison. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | debt #963, #967 | - |
+| copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride (planned); destination plugins; deep, for containers (planned) | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | debt #962, #967 | edit-a-record |
+| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open as a comparison. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | debt #963, #967 | - |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, field path | - | xEdit View grid | Open a field value in an editor tab. | debt #967 | - |
-| filter records | reads | Plugins: title icon, code action (on a `.sql` file) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | debt #964, #967 | query |
+| filter | reads | Plugins: title icon, code action (on a `.sql` file) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | debt #964, #967 | query |
 | show referenced by | reads | Editor: automatic | `modbench.record.showReferencedBy` | active record | - | xEdit Referenced By tab | The Referenced By list follows the active record and shows the records that reference it. It has no menu entry; the command only focuses the view. | debt #967 | query |
 | hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | planned | - |
 | copy value | reads | Mods: context menu, key; Plugins: context menu, key; Editor: context menu, key | `modbench.record.copyValue` | selection | text: name, FormKey | xEdit navigator, Referenced By, View grid; MO2 mod list | Copy the selected rows, or a focused cell value, to the clipboard. | debt #967 | - |
@@ -222,27 +269,27 @@ Offered on Downloads.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| exclude / include downloaded file | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | debt #956, #967 | - |
-| delete downloaded file | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | - |
+| exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | debt #956, #967 | - |
+| delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | - |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
 | pause / resume | writes | Downloads: context menu, key | - | downloaded file (a running download) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
 | open file | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file. | debt #967 | - |
 | open meta | reads | Downloads: context menu (a `.meta` exists) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the `.meta` sidecar. | debt #967 | - |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | planned | - |
-| filter downloaded files | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | - |
-| sort downloaded files | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | debt #967 | - |
+| filter | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | - |
+| sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | debt #967 | - |
 | show excluded | reads | Downloads: title icon | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | debt #956, #967 | - |
 | reveal installed mod | reads | Downloads: context menu | - | downloaded file | - | none | Show the mod that a downloaded file was installed as. | planned | - |
 
 ## System commands
 
-Commands Modbench runs itself. No user starts them and no surface owns them, so they sit outside the
-object tables. Each is a command for the same reason a gesture is: one handler, and a name that
-matches everywhere.
+Commands Modbench runs itself. No user starts them and no surface owns them, so they have no
+gesture and sit outside the object tables. The first column is the trigger that fires each one.
+Each is a command for the same reason a gesture is: one handler, and one identity.
 
-| Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
-|---|---|---|---|---|---|---|---|---|---|
-| put load order | writes | automatic | - | load order snapshot | - | none | Hand mEdit the whole load order snapshot whenever it changes. The architecture calls it a PUT. | built | enable-a-mod, project |
-| import mod | writes | automatic | - | folder | - | MO2 refresh | Add a line to `modlist.txt` for a folder already in `mods/`. Code name: adopt. | debt #956 | install-a-mod |
-| import plugin | writes | automatic | - | plugin | - | none | Add a line to `plugins.txt` for a plugin on disk that lacks one. Code name: reconcile. | debt #956 | enable-a-plugin |
-| decompile plugin | writes | automatic | - | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The gesture `track mod` calls the same command with a new repository as the destination. | debt #966 | decompile-a-plugin, a-tracked-mod-changes-on-disk |
+| Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Status | Trace |
+|---|---|---|---|---|---|---|---|---|
+| The load order changed: a `modlist.txt` or `plugins.txt` edit, or a change from another tool | writes | `modbench.instance.putLoadOrder` | load order snapshot | - | none | Hand mEdit the whole load order snapshot whenever it changes. The architecture calls it a PUT. | built | enable-a-mod, project |
+| A folder in `mods/` has no `modlist.txt` line | writes | `modbench.mod.import` | folder | - | MO2 refresh | Add a line to `modlist.txt` for a folder already in `mods/`. Code name: adopt. | debt #956 | install-a-mod |
+| A plugin on disk has no `plugins.txt` line | writes | `modbench.plugin.import` | plugin | - | none | Add a line to `plugins.txt` for a plugin on disk that lacks one. Code name: reconcile. | debt #956 | enable-a-plugin |
+| The watcher settles a tracked mod that changed: a moved `meta.ini` version means a new release, otherwise an edit in another tool | writes | `modbench.plugin.decompile` | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The gesture `track mod` calls the same command with a new repository as the destination. | debt #966 | decompile-a-plugin, a-tracked-mod-changes-on-disk |
