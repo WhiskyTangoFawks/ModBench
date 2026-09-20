@@ -33,6 +33,7 @@ Gestures Modbench does differently.
 | 7 | Flags row | Expands into an in-cell checkbox list, collapsed to xEdit's compact name summary | Opens a transient check-combo | Ruling. |
 | 8 | Left click and the extended editor | No left click leaves the record panel. The extended editor opens only from the right-click menu. A string cell's second click, F2 and double click open the inline editor, like every other scalar. | Double click opens the extended editor, which is modeless | Ruling: a tab relocates the user where xEdit's modeless editor did not. |
 | 9 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
+| 10 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
 
 ## Omissions by object
 
