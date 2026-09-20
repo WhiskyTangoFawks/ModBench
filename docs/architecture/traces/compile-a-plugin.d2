@@ -1,5 +1,5 @@
-# Compile and keep, orange. Compile writes the source tree's documents back as bytes.
-# Keep is the same write, chosen over absorb when a tracked plugin changed.
+# Compile, orange. Compile writes the source tree's documents back as bytes. It is the
+# inverse of decompile plugin (decompile-a-plugin).
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -21,7 +21,7 @@ watcher.label: Mod watcher
 projector: @../target-architecture.medit_driven.index.projector
 projector.label: Projector
 
-plugins -> client: compile · keep {class: edit}
+plugins -> client: compile {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourcerepo: documents {class: compile}

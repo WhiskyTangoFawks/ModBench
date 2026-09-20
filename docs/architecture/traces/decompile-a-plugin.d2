@@ -1,6 +1,8 @@
-# Track and absorb, green. Track reads the plugin's bytes into documents, all of them,
-# once. Absorb is the same move, chosen when a tracked plugin changes on disk
-# (a-tracked-mod-changes-on-disk).
+# Decompile plugin, green. It reads the plugin's bytes into documents, all of them, once, and
+# puts them at a destination: a new repository, main, or the working tree. Two things call it.
+# The gesture track mod, drawn here, asks for a new repository. The system trigger, the
+# watcher's classification of an external change (a-tracked-mod-changes-on-disk), asks for main
+# when the meta.ini version moved, and for the working tree when it did not.
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -24,7 +26,7 @@ watcher.label: Mod watcher
 projector: @../target-architecture.medit_driven.index.projector
 projector.label: Projector
 
-plugins -> client: track · absorb {class: edit}
+plugins -> client: "track mod: decompile plugin to a new repository" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}

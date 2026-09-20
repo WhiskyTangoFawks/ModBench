@@ -1,8 +1,11 @@
 # External change, per mod. One watcher per mod; the Source repository names its paths.
 # A tracked mod changed externally when the plugin bytes differ from the baseline, or a
 # file git tracks differs from what git last saw; the preset chosen at Track decides what
-# git tracks. meta.ini is a tell: its version chooses the default, never triggers. The
-# human always answers. After the baseline commit the rebase is attempted at once.
+# git tracks. The response is the command decompile plugin (decompile-a-plugin) with a
+# destination: main when meta.ini's version moved (a new release), the working tree when it did
+# not (an edit in another tool). meta.ini is a tell: its version chooses the default, never
+# triggers. Whether the human is asked first is open; today one dialog asks. After a commit to
+# main the rebase is attempted at once.
 ...@../styles
 shape: sequence_diagram
 tools: @../target-architecture.medit_data.tools
@@ -36,11 +39,10 @@ port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> plugins: external change pending {class: push}
 plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc"
-plugins -> client: baseline · apply {class: edit}
+plugins -> client: "decompile plugin: to main · to working tree" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
-commands -> sourcerepo: "baseline: documents and tracked files to main, deletions included" {class: track}
-commands -> sourcerepo: "apply: working-tree dirt on the current branch, refusing a same-file collision" {class: edit}
+commands -> sourcerepo: "decompile-a-plugin: to main · to working tree" {class: track}
 sourcerepo."commit to main by plumbing, then rebase the edit branch"
 sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
 commands -> http: applied or refusal {class: edit}
