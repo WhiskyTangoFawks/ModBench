@@ -49,8 +49,8 @@ a Core box or a driven adapter, every box of its column's kernel by the band's r
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
 Every arrow points down or into the kernel, with four same-band references the captions name: the
-record index reads the two adapters beside it, Ports reads Load order state, the Instance reads MO2
-files, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
+record index reads the two adapters beside it, Ports reads Load order state, the Instance loader reads the Instance
+adapter, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
 the HTTP endpoints on mEdit, the activation file and Toolbox on Modbench, references every box below
 it by definition.
 A reference the reference view does not draw is a compile error and a question for the
@@ -59,7 +59,7 @@ maintainer, never a line an agent adds.
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them, built only by
-watching: the record index over the plugin files and the source tree, the Instance over MO2's
+watching: the record index over the plugin files and the source tree, the instance value over MO2's
 files. A command writes a file and forgets, so a change from another tool and a change from
 Modbench are the same signal in both
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
@@ -72,17 +72,20 @@ for its absence; a disconnect is an error the views surface.
 ## Rules the Modbench column draws
 
 Change flows up only through watchers and the notification port. mEdit watches one folder per
-mod, and the Source repository names the paths inside it, so layout has one owner; on the
-Modbench side MO2 files is that owner, the one box that reads or writes the instance and Game
-Data/. A command splices through the pure codec and puts through MO2 files. No command reads the
-Instance; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
+mod, and the Source adapter names the paths inside it, so layout has one owner; on the
+Modbench side the Instance adapter is that owner, the one box that reads or writes the instance and Game
+Data/. A command splices through the pure codec and puts through the Instance adapter. No command reads the
+Instance loader; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
 the first-deploy consent.
-The Instance is derived from disk and nothing else; it recomputes whole, keeps its last value on
-a parse failure, and validates on activation and Refresh through the same path
-([load-instance](traces/load-instance.d2)). Outside two per-release tables,
+The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
+keeps the last value on a parse failure. It validates on activation and on refresh, through the
+same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
-holds it. Mods, Downloads and Toolbox never see a record.
+holds it. Modbench does not depend on one mod manager. The game owns the format of `plugins.txt`.
+The mod manager owns every other file in the instance. The Instance adapter is a repository. MO2
+is one implementation of it. Only that implementation names MO2. A source scan holds this rule,
+as it holds game names. Mods, Downloads and Toolbox never see a record.
 
 ## What is left out
 
@@ -121,7 +124,7 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   actor.
 - A trace message runs between two boxes the reference view joins, or through a port, where one
   end implements it and the other references Ports, or across the wire, or inside one box, or
-  between two boxes a composition root wires, as Toolbox hands the Instance's value to the mEdit
+  between two boxes a composition root wires, as Toolbox hands the instance value to the mEdit
   client. Any other message is a reference the maintainer has not drawn. The one exception is a trace
   that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the

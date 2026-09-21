@@ -48,9 +48,10 @@ modbench_driving.plugins -> modbench_core.pluginscommands {class: ref}
 modbench_driving.toolbox -> modbench_core.instancecommands {class: ref}
 modbench_driving.toolbox -> modbench_core.deploy {class: ref}
 modbench_driving.downloads -> modbench_core.install {class: ref}
+modbench_driving.downloads -> modbench_core.downloadscommands {class: ref}
 modbench_driving.mods -> modbench_core.install {class: ref}
 modbench_driving.toolbox -> modbench_kernel.tables {class: ref}
-# Modbench: core (the kernel by the band's rule, not drawn; the Instance's value arrives as an argument)
+# Modbench: core (the kernel by the band's rule, not drawn; the instance value arrives as an argument)
 modbench_core.modlist -> modbench_driven.instance {class: ref}
 modbench_core.pluginscommands -> modbench_driven.instance {class: ref}
 modbench_core.deploy -> modbench_driven.instance {class: ref}
@@ -58,6 +59,7 @@ modbench_core.pluginscommands -> modbench_core.client {class: ref}
 modbench_core.modlist -> modbench_driven.mo2files {class: ref}
 modbench_core.pluginscommands -> modbench_driven.mo2files {class: ref}
 modbench_core.instancecommands -> modbench_driven.mo2files {class: ref}
+modbench_core.downloadscommands -> modbench_driven.mo2files {class: ref}
 modbench_core.install -> modbench_driven.mo2files {class: ref}
 modbench_core.deploy -> modbench_driven.mo2files {class: ref}
 # Modbench: driven adapters (the kernel by the band's rule, not drawn)

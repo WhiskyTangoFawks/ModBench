@@ -5,7 +5,7 @@ Modbench never assumes exclusive ownership of a file
 validation must exist for every file it reads. Once they exist, Modbench's own write can take the
 same path as another tool's: a command writes a system of record and returns, and the change
 comes back to the read model through the watcher. Both processes have that shape, the record
-index over the plugin files and the source tree, the Instance over MO2's files, and one
+index over the plugin files and the source tree, the instance value over MO2's files, and one
 architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
 
 ## Strategic invariants
@@ -22,14 +22,14 @@ architecture on both sides of the HTTP boundary is worth more than either side's
    reconcile and on watcher overflow, and is idempotent by hash, so a duplicate signal is
    harmless.
 5. **The write side's inputs are the source text, the load order and the schema.** It reads the
-   load order for which copy a record lives in and the Source repository for whether a mod is
+   load order for which copy a record lives in and the Source adapter for whether a mod is
    tracked. Parse status comes from the codec at edit time. A document is never taken from the
    read model, and a missing file is a refusal.
-6. **The Instance is one whole, immutable value.** Replaced whole by each recompute, with no
+6. **The instance value is whole and immutable.** Replaced whole by each recompute, with no
    partial update and no per-key invalidation, so a consumer never holds two facts from two
    generations. Recompute is whole, not incremental, while a full walk stays affordable; if it
    stops being affordable, this ADR is what gets rewritten.
-7. **The Instance owns every MO2-side watcher, and a bad read is not a new value.** A watcher
+7. **The Instance loader owns every MO2-side watcher, and a bad read is not a new value.** A watcher
    event, activation and refresh run the same whole recompute, debounced once. A read that throws
    keeps the last value; a torn write that parses to nothing is re-read after a settle and
    published only if the re-read agrees.

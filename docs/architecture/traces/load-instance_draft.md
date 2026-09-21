@@ -38,7 +38,7 @@ As a user, I want:
 ## Test seam
 
 - **The Toolbox:** that `refresh` is offered, and what it reports.
-- **The Instance:** given watch events and the bytes of the MO2 files, the value and its sequence, and
+- **The Instance loader:** given watch events and the bytes of the MO2 files, the value and its sequence, and
   the load order snapshot.
 
 ## Open Questions

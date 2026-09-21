@@ -1,24 +1,24 @@
-# One MO2 file updated. Twelve commands draw this shape, so the two actors that differ are
+# One instance file updated. Fourteen commands draw this shape, so the two actors that differ are
 # declared here as sets and the contract's table says which command uses which. A command
-# splices through the pure codec and puts through MO2 files; the write is forgotten and the
+# splices through the pure codec and puts through the Instance adapter; the write is forgotten and the
 # watch closes the loop, so a change from MO2 takes the same path. A system command is handed
-# the Instance value as an argument and reads nothing itself. Only plugins commands ask mEdit
+# the instance value as an argument and reads nothing itself. Only plugins commands ask mEdit
 # which plugins load with no line. The tail, indexing the new load order, is index-load-order's.
 # Governed by ADR-0003, ADR-0013, ADR-0015, ADR-0016 and ADR-0017. Contract: update-load-order-file.md.
 ...@../styles
 shape: sequence_diagram
-surfaces: "Mods · Plugins · Toolbox" {class: driving}
-cmds: "modlist · plugins · instance commands" {class: core}
+surfaces: "Mods · Plugins · Toolbox · Downloads" {class: driving}
+cmds: "modlist · plugins · instance · downloads commands" {class: core}
 instance: @../target-architecture.modbench_driven.instance
-instance.label: Instance
+instance.label: Instance loader
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
 mo2files: @../target-architecture.modbench_driven.mo2files
-mo2files.label: MO2 files
+mo2files.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "MO2 instance\nmodlist.txt · plugins.txt · ModOrganizer.ini · mods/"
+mo2.label: "MO2 instance\nmodlist.txt · plugins.txt · ModOrganizer.ini · mods/ · downloads/"
 views: "every view" {class: driving}
 toolbox: @../target-architecture.modbench_driving.toolbox
 toolbox.label: Toolbox

@@ -54,7 +54,7 @@ As a user, I want:
 ## Test seam
 
 - **The driving box** (Downloads, Mods): the source, the target pick, the name prompt, and Esc.
-- **The install box:** given a source and a target, what it asks MO2 files to stage, rename, remove and
+- **The install box:** given a source and a target, what it asks the Instance adapter to stage, rename, remove and
   write, or the refusal.
 
 The external-change question is tested in

@@ -100,7 +100,7 @@ ticket names the fix).
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
   selection. Any other gesture does not ask. A contract names an exception.
 - **A write is forgotten.** A gesture that changes an MO2 file writes it and keeps no copy of the
-  new state. The watch reads the file back, and every view updates from the new Instance value. A
+  new state. The watch reads the file back, and every view updates from the new instance value. A
   view shows the old state until the disk says otherwise.
 - **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing
   and says nothing.
@@ -287,8 +287,8 @@ Offered on Downloads.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | debt #956, #967 | - |
-| delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | - |
+| exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | debt #956, #967 | update-load-order-file |
+| delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | update-load-order-file |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
 | pause / resume | writes | Downloads: context menu, key | - | downloaded file (a running download) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
 | open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | target: the file, or its `.meta` (offered when a `.meta` exists) | MO2 Downloads | Open a downloaded file, or its `.meta` sidecar. | debt #967 | none |

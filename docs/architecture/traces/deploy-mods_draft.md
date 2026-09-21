@@ -50,7 +50,7 @@ As a user, I want:
 ## Test seam
 
 - **The Toolbox:** what is offered, the confirmation, and Esc.
-- **The deploy box:** given an Instance value, what it asks MO2 files to write or remove, and what it
+- **The deploy box:** given an instance value, what it asks the Instance adapter to write or remove, and what it
   reports.
 
 ## Open Questions

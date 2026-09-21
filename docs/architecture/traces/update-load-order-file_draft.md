@@ -1,7 +1,7 @@
 # update-load-order-file: contract (draft)
 
-Diagram: [update-load-order-file.d2](update-load-order-file.d2). Twelve commands draw one shape: a
-driving box calls a Core box, the codec splices, MO2 files puts the bytes, and the watch closes the
+Diagram: [update-load-order-file.d2](update-load-order-file.d2). Fourteen commands draw one shape: a
+driving box calls a Core box, the codec splices, the Instance adapter puts the bytes, and the watch closes the
 loop. The two actors that differ are drawn as sets, and the table below says which command uses which. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md),
@@ -24,6 +24,7 @@ diagram. **Ruling** means the maintainer decided it and nothing else states it.
 | plugin `enable` / `disable`, `move` | plugins commands | `plugins.txt` |
 | `import plugin` | plugins commands | `plugins.txt` |
 | profile `switch` | instance commands | `ModOrganizer.ini` |
+| downloaded file `exclude` / `include`, `delete` | downloads commands | a download's `.meta`, and the file |
 
 ## Shared
 
@@ -43,8 +44,8 @@ As a user, I want:
 6. Nothing written when the result equals what is already there. *Doing nothing is not an error*
 7. No confirmation, unless a section below says otherwise. *Confirm what destroys*
 8. Esc on any picker or prompt to change nothing. *Esc changes nothing*
-9. No Core box to read the Instance. A value a command needs arrives as its argument. *the
-   architecture: "No command reads the Instance"*
+9. No Core box to read the Instance loader. A value a command needs arrives as its argument. *the
+   architecture: "No command reads the Instance loader"*
 
 ## mod enable / disable
 
@@ -118,14 +119,26 @@ The trigger is a plugin on disk with no line in `plugins.txt`, or a line that no
 2. The profile line in `ModOrganizer.ini` changed, so `modlist.txt` and `plugins.txt` come from the new
    profile, with nothing torn down. *catalog Meaning; ADR-0015, invariant 7*
 
+## downloaded file exclude / include
+
+1. A download's `.meta` marked hidden, or the mark cleared. *catalog Meaning*
+2. A selection that mixes excluded and included rows to take the clicked row's direction.
+   *[downloads.md](../surfaces/downloads.md)*
+
+## downloaded file delete
+
+1. The file and its `.meta` moved to the system trash, the `.meta` first. *[downloads.md](../surfaces/downloads.md)*
+2. To be asked first, once for the whole selection. *Confirm what destroys*
+3. The mod it installed left in place. *[downloads.md](../surfaces/downloads.md)*
+
 ## Test seam
 
 Two seams, one per side of the driving boundary.
 
-- **The driving box** (Mods, Plugins, Toolbox): what is offered, the pickers, the prompts, the
+- **The driving box** (Mods, Plugins, Toolbox, Downloads): what is offered, the pickers, the prompts, the
   confirmations, and Esc.
 - **The Core box** (modlist, plugins or instance commands): given an argument and the current bytes,
-  the bytes it puts through MO2 files, or the refusal.
+  the bytes it puts through the Instance adapter, or the refusal.
 
 ## Open Questions
 
