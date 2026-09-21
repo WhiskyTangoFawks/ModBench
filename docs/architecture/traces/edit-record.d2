@@ -1,5 +1,5 @@
-# Edit gesture, both processes. Blue carries the edit down to the source tree;
-# purple carries the projection back up. The editor re-reads on the push.
+# Edit gesture, both processes. Blue carries the edit down to the source tree; purple carries the
+# re-index back up. The editor re-reads on the push.
 ...@../styles
 shape: sequence_diagram
 editor: @../target-architecture.modbench_driving.editor
@@ -15,8 +15,8 @@ sourcerepo.label: Source repository
 source: @../target-architecture.medit_data.source
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
-projector: @../target-architecture.medit_driven.index.projector
-projector.label: Projector
+indexer: @../target-architecture.medit_driven.index.indexer
+indexer.label: Indexer
 store: @../target-architecture.medit_driven.index.store
 store.label: Store
 port: @../target-architecture.medit_kernel.ports
@@ -33,9 +33,9 @@ commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> editor: applied or refusal {class: edit}
 source -> watcher: source changed {class: signal}
-watcher -> projector: "source changed: refresh keys" {class: signal}
-sourcerepo -> projector: documents (tracked) {class: query}
-projector -> store: rows {class: query}
+watcher -> indexer: "source changed: refresh keys" {class: signal}
+sourcerepo -> indexer: documents (tracked) {class: query}
+indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}

@@ -1,6 +1,9 @@
-# Projection, purple. The load order snapshot arrives from Modbench; the Projector asks
-# the kernel for winners and schema and decides nothing; the Store announces what changed
-# and every subscriber re-reads.
+# Index the load order, purple. The whole load order arrives from Modbench. For each copy the
+# Indexer reads the mod's source when it is tracked and the plugin's bytes when it is not, asks
+# the kernel which copy wins and what the schema is, and writes rows into the record index. It
+# decides nothing itself. The Store then announces which keys changed, and every subscriber
+# re-reads: that tail is the same one edit-record ends with.
+# Governed by ADR-0009, ADR-0012, ADR-0013 and ADR-0015. Contract: index-load-order.md.
 ...@../styles
 shape: sequence_diagram
 instance: @../target-architecture.modbench_driven.instance
@@ -14,8 +17,8 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
-projector: @../target-architecture.medit_driven.index.projector
-projector.label: Projector
+indexer: @../target-architecture.medit_driven.index.indexer
+indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
 codec.label: Codec + schema
 sourcerepo: @../target-architecture.medit_driven.sourcerepo
@@ -33,12 +36,12 @@ toolbox -> client: load order snapshot {class: loadorder}
 client -> http: load order snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
 commands -> loadorder: load order snapshot {class: query}
-http -> projector: "reconcile: validate by hash" {class: signal}
-loadorder -> projector: winners {class: query}
-codec -> projector: schema {class: query}
-sourcerepo -> projector: documents (tracked) {class: query}
-pluginadapter -> projector: bytes (untracked) {class: query}
-projector -> store: rows {class: query}
+http -> indexer: "reconcile: validate by hash" {class: signal}
+loadorder -> indexer: winners {class: query}
+codec -> indexer: schema {class: query}
+sourcerepo -> indexer: documents (tracked) {class: query}
+pluginadapter -> indexer: bytes (untracked) {class: query}
+indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}

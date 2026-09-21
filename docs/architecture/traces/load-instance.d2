@@ -1,6 +1,9 @@
-# How the Instance is built, whichever gesture or tool changed a file. One watch over the
-# instance directory, debounced; one codec per MO2 file parses; one whole value replaces
-# the last, with the next sequence. A parse failure keeps the last value.
+# Load the instance: every MO2 file that says what loads, read into one value. One watch over the
+# instance folder, debounced, and activation and refresh take the same path. One codec per file
+# parses. One whole value replaces the last, with the next sequence: no partial update and no
+# per-key patch, so no consumer holds two generations. A parse failure keeps the last value, and a
+# torn write is read again after it settles. The value goes to every view and on to mEdit.
+# Governed by ADR-0003, ADR-0013, ADR-0015 and ADR-0017. Contract: load-instance.md.
 ...@../styles
 shape: sequence_diagram
 mo2: @../target-architecture.modbench_data.mo2

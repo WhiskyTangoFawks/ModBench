@@ -63,8 +63,8 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads · refresh by keys · validate by hash · reconcile ·\nset and clear the filter · rebuild · the sequence and its await\nhides: the Projector and the Store" {
-    projector: "Projector\nasks the load order and the schema, decides nothing" {class: driven}
+  index: "Record index — one deep module, rebuildable\ninterface: reads · refresh by keys · validate by hash · reconcile ·\nset and clear the filter · rebuild · the sequence and its await\nhides: the Indexer and the Store" {
+    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB" {class: derived}
   }
   sourcerepo: "Source repository\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}

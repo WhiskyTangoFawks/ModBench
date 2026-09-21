@@ -43,7 +43,7 @@ The status comes from the `.meta`:
 | neither | Downloaded |
 
 - A file with no sidecar is a valid row, Downloaded. The gestures that need a sidecar are absent for
-  it: `view on Nexus`, `open meta`, `query info`.
+  it: `view on Nexus`, `open` with the `.meta` as its target, and `query info`.
 - A successful install writes `installed=true` back, so the row flips to Installed.
 - Excluding a file writes `removed=true`. Including it clears the flag.
 - The Nexus mod and file IDs are absent when they are missing or `0`.
@@ -63,7 +63,7 @@ The status comes from the `.meta`:
 
 ## Selection rules
 
-- `install`, `view on Nexus`, `open file` and `open meta` act on the clicked row only. A selection of
+- `install`, `view on Nexus` and `open` act on the clicked row only. A selection of
   several would open several tabs, and MO2 does not batch installs either.
 - `delete`, `exclude` and `include` act on the whole selection.
 - A selection that mixes excluded and included rows applies the clicked row's direction to every

@@ -1,5 +1,5 @@
 # Compile, orange. Compile writes the source tree's documents back as bytes. It is the
-# inverse of decompile plugin (decompile-a-plugin).
+# inverse of decompile plugin (decompile-plugin).
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -18,8 +18,8 @@ pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
-projector: @../target-architecture.medit_driven.index.projector
-projector.label: Projector
+indexer: @../target-architecture.medit_driven.index.indexer
+indexer.label: Indexer
 
 plugins -> client: compile {class: edit}
 client -> http: envelope {class: edit}
@@ -29,4 +29,4 @@ sourcerepo -> commands: documents {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: bytes {class: compile}
 plugin -> watcher: bytes {class: signal}
-watcher -> projector: "plugin changed: validate by hash" {class: signal}
+watcher -> indexer: "plugin changed: validate by hash" {class: signal}

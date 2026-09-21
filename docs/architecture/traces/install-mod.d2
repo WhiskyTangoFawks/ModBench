@@ -1,0 +1,49 @@
+# Install, both targets. One command: a new mod stages and renames into mods/, an upgrade
+# replaces the folder's contents in place around .git so the repository and the watchers
+# survive. The target is stated by the caller and never inferred from disk; Downloads picks it
+# and always confirms. No modlist.txt line is written here: the folder appears, and the system
+# commands adopt it (update-load-order-file). A tracked mod goes on to decompile-plugin, with
+# the moved meta.ini version pre-selecting the new baseline.
+# Governed by ADR-0003, ADR-0007, ADR-0015 and ADR-0017. Contract: install-mod.md.
+...@../styles
+shape: sequence_diagram
+downloads: @../target-architecture.modbench_driving.downloads
+downloads.label: "Downloads · Mods"
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance
+install: @../target-architecture.modbench_core.install
+install.label: install
+codecs: @../target-architecture.modbench_kernel.codecs
+codecs.label: MO2 file codecs
+mo2files: @../target-architecture.modbench_driven.mo2files
+mo2files.label: MO2 files
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nmods/<name>/, meta.ini"
+views: "every view" {class: driving}
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: "Mod watcher\nmEdit"
+
+instance -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
+downloads."the target: a new mod, or a candidate pre-selected by file id. Always confirmed. Esc installs nothing"
+downloads -> install: "the source, and the target" {class: loadorder}
+install -> codecs: "meta.ini: the meta it knows" {class: loadorder}
+codecs -> install: bytes {class: loadorder}
+
+new mod: "a new mod" {
+  install -> mo2files: "stage, meta.ini first, then one rename into mods/" {class: loadorder}
+}
+upgrade: "an upgrade" {
+  install -> mo2files: "staged tree in, old files out, .git kept" {class: loadorder}
+}
+
+mo2files -> mo2: the folder, then forget {class: loadorder}
+install -> downloads: applied or refusal {class: loadorder}
+mo2 -> instance: watch {class: signal}
+instance -> views: value {class: loadorder}
+instance."the folder has no line: update-load-order-file adopts it"
+mo2 -> watcher: changed paths {class: signal}
+watcher."a tracked mod: decompile-plugin from here, the moved version pre-selecting the new baseline"
+
+refused: "refused, before any write" {
+  install -> downloads: "a new mod whose folder exists, naming it · an upgrade whose folder has gone" {class: loadorder}
+}

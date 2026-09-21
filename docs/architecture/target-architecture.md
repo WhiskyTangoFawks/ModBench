@@ -20,14 +20,15 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
   references. This picture is each project's reference list. A thin purple arrow is a read or
   write of a system of record. A grey arrow is the user, another tool, or the wire between the
   two processes.
-- [traces/](traces/) holds one sequence diagram per gesture family, and two that cross families
-  end to end, a tracked mod changing on disk and upgrading a mod. Actors are the zoom-out's
+- [traces/](traces/) holds one sequence diagram per flow. Gestures whose arrows are the same share
+  one, and the diagram names each one's command and the box it calls. Beside each diagram a `.md`
+  file of the same name holds its contract. Actors are the zoom-out's
   boxes, imported by name; time runs down; a message is labelled with what moves, never with the
   call, so a request and its reply are two messages. A note on an actor is what it does between
   messages.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
   kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
-  mark. A message class says which gesture family the payload belongs to, and a reply takes its
+  mark. A message class says which kind of payload it is, and a reply takes its
   request's class. A signal is dashed grey and carries no payload, a watch event or a bare
   request; a push is dashed purple and names what changed, and the receiver re-reads.
 
@@ -60,8 +61,11 @@ maintainer, never a line an agent adds.
 Each process has its own systems of record and one read model over them, built only by
 watching: the record index over the plugin files and the source tree, the Instance over MO2's
 files. A command writes a file and forgets, so a change from another tool and a change from
-Modbench are the same signal in both, which is what
-[a-change-from-another-tool](traces/a-change-from-another-tool.d2) draws. The two meet at one
+Modbench are the same signal in both
+([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
+draws that signal on its own, because there is no separate path: it is the watch that opens
+[load-instance](traces/load-instance.d2) and [index-load-order](traces/index-load-order.d2), and the
+settle that opens decompile-plugin's trigger. The two meet at one
 value, the load order snapshot, and one stream. mEdit is always running, so no view has a mode
 for its absence; a disconnect is an error the views surface.
 
@@ -76,7 +80,7 @@ to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps 
 the first-deploy consent.
 The Instance is derived from disk and nothing else; it recomputes whole, keeps its last value on
 a parse failure, and validates on activation and Refresh through the same path
-([the-instance-recomputes](traces/the-instance-recomputes.d2)). Outside two per-release tables,
+([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
 holds it. Mods, Downloads and Toolbox never see a record.
 
@@ -118,10 +122,10 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
 - A trace message runs between two boxes the reference view joins, or through a port, where one
   end implements it and the other references Ports, or across the wire, or inside one box, or
   between two boxes a composition root wires, as Toolbox hands the Instance's value to the mEdit
-  client. Any other message is a reference the maintainer has not drawn. The one exception is an end-to-end trace that abbreviates another trace as one
-  message named after it, as upgrade-a-mod does with a-tracked-mod-changes-on-disk.
+  client. Any other message is a reference the maintainer has not drawn. The one exception is a trace
+  that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.
-  A new gesture family is a new trace and a new class in the styles file.
+  A new flow is a new trace and, if its payload is a new kind, a new class in the styles file.
 - Render before committing and look at the picture. A change that makes a diagram false changes
   the diagram in the same change, and the ADR it cites with it.
