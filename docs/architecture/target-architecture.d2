@@ -59,7 +59,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
   codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini · a download's .meta\nhides: installedFiles in MO2's form; game name to release" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
   tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
-  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; the invariant lookup and the errno read\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
+  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; the invariant lookup and the errno read;\nmove a file to the system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
@@ -74,7 +74,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
   instance: "Instance loader\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a parse failure keeps the last value" {class: driven}
-  mo2files: "Instance adapter\ninterface: get, put, rename in mods/; put and trash in\ndownloads/; hardlink and manifest into Game Data/; what to\nwatch; where the game is\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the ini's game path, then Steam and\nWine detection" {class: driven}
+  mo2files: "Instance adapter\ninterface: get, put, rename in mods/; put in downloads/;\nhardlink and manifest into Game Data/; what to watch; where\nthe game is\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the ini's game path, then Steam and\nWine detection" {class: driven}
 }
 
 medit_data: "MEDIT · Systems of record" {
