@@ -37,7 +37,8 @@ public sealed class CutDownPluginGenerator
         // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
         // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
         // "LocalAppData" env var.
-        MutagenReadParameters.EnsureLocalAppDataDefault();
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
+            Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
 
         using var source = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Fallout4.esm"), sourcePath), Fallout4Release.Fallout4,
@@ -62,7 +63,7 @@ public sealed class CutDownPluginGenerator
         CopyInteriorCells(source, target);
 
         var outPath = Path.Combine(SourceTestDataDir(), RealDataPlugin.PluginFileName);
-        Directory.CreateDirectory(PathShape.DirectoryOf(outPath));
+        Directory.CreateDirectory((Path.GetDirectoryName(outPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
         target.WriteToBinary(outPath, new BinaryWriteParameters
         {
             // Override records keep their Fallout4.esm FormKeys; iterate so the header lists the

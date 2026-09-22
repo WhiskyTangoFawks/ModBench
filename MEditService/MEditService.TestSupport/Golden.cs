@@ -41,7 +41,7 @@ public static class Golden
     // The caller's own file (CallerFilePath), two levels up from any TestProject/Subfolder/File.cs,
     // reaches this project's sibling TestData — the one committed copy every test project shares.
     private static string GoldenDirectory(string callerFile) =>
-        Path.Combine(PathShape.DirectoryOf(callerFile), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
+        Path.Combine((Path.GetDirectoryName(callerFile) ?? throw new InvalidOperationException("Expected a parent directory.")), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
 
     private static string Canonical(object? value)
     {

@@ -26,7 +26,7 @@ public sealed class RenamedSourceFileEditTests : IDisposable
         // before the hand-rename below, or every later read would just re-find the file at its new spot.
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
-            PathShape.DirectoryOf(originalPath),
+            (Path.GetDirectoryName(originalPath) ?? throw new InvalidOperationException("Expected a parent directory.")),
             $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
         File.Move(originalPath, renamed);
 

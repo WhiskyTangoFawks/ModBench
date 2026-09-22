@@ -22,7 +22,7 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
     public async Task Compile_AtARefWhoseSourceHasTwoDocumentsClaimingOneFormKey_RefusesNamingTheFormKey()
     {
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
+        Directory.CreateDirectory((Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
         File.WriteAllText(collidingPath, File.ReadAllText(_mod.NpcSourceFile));
         _mod.CommitWorkingTree("two documents, one FormKey");
         File.Delete(collidingPath);

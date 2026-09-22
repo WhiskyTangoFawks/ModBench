@@ -39,8 +39,8 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
     private string NpcGroupFolder =>
-        PathShape.DirectoryOf(
-            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4));
+        (Path.GetDirectoryName(
+            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4)) ?? throw new InvalidOperationException("Expected a parent directory."));
 
     // Tracks an empty tree, then puts the fixture's NPC through the repository — the same door a real
     // edit uses — so its file lands wherever the repository's own placement decides.

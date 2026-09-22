@@ -96,12 +96,12 @@ public sealed class RenumberRollbackTests
             mod.Cells.Records.Add(block);
             referenced = npc.FormKey;
         });
-        var cellDirectory = PathShape.DirectoryOf(Directory.EnumerateFiles(
+        var cellDirectory = (Path.GetDirectoryName(Directory.EnumerateFiles(
                 Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
                 SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal)));
+            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal))) ?? throw new InvalidOperationException("Expected a parent directory."));
         var impostor = Path.Combine(
-            PathShape.DirectoryOf(cellDirectory), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
+            (Path.GetDirectoryName(cellDirectory) ?? throw new InvalidOperationException("Expected a parent directory.")), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
         Directory.CreateDirectory(impostor);
         File.Copy(Path.Combine(cellDirectory, "RecordData.json"), Path.Combine(impostor, "RecordData.json"));
         var before = TreeSnapshot.Of(referencer.ModFolder);
@@ -139,8 +139,8 @@ public sealed class RenumberRollbackTests
     public void TheGroupFolder_ReturnsToItsPreActionEntries()
     {
         using var fixture = new CascadeRollbackFixture();
-        var racesFolder = PathShape.DirectoryOf(
-            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId));
+        var racesFolder = (Path.GetDirectoryName(
+            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
         Block(fixture.CascadeWritePaths(NewRaceFormKey)[0]);
 
         var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
@@ -188,9 +188,9 @@ public sealed class RenumberRollbackTests
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var directory = PathShape.DirectoryOf(SourceDocumentPath.Of(
+        var directory = (Path.GetDirectoryName(SourceDocumentPath.Of(
             fixture.ModFolder, fixture.Plugin.Name, "wrld", newFormKey, SourceContainerFixture.WorldspaceEditorId,
-            GameRelease.Fallout4));
+            GameRelease.Fallout4)) ?? throw new InvalidOperationException("Expected a parent directory."));
         repository.Remove(fixture.Plugin, identity);
         return directory;
     }

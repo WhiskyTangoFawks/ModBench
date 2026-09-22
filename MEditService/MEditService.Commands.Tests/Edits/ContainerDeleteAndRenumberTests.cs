@@ -30,7 +30,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
     {
-        var directory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
+        var directory = (Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
         Assert.True(Directory.Exists(directory));
 
         var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
@@ -121,8 +121,8 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void RenumberingAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
     {
-        var oldDirectory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModPlugin.CellEditorId));
-        var parent = PathShape.DirectoryOf(oldDirectory);
+        var oldDirectory = (Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.CellEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
+        var parent = (Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException("Expected a parent directory."));
 
         var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 

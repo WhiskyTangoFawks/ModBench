@@ -21,7 +21,7 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
             foreach (var file in files)
             {
                 var fullPath = Path.Combine(scratchDir, file.RelativePath);
-                Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+                Directory.CreateDirectory((Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
                 await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
             }
 

@@ -33,7 +33,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             // layout, a plugin folder inside it with no plugin file left.
             var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
-            Directory.CreateDirectory(PathShape.DirectoryOf(orphanFile));
+            Directory.CreateDirectory((Path.GetDirectoryName(orphanFile) ?? throw new InvalidOperationException("Expected a parent directory.")));
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
             using var manager = Indexes.Open(holder);

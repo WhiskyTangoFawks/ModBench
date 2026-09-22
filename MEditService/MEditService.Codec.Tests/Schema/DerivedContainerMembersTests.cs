@@ -1,6 +1,5 @@
 using System.Reflection;
 using MEditService.Codec.Serialization;
-using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -99,14 +98,20 @@ public sealed class DerivedContainerMembersTests
     // Every record in every game module this build references, reached through its own getter
     // interface and Mutagen's "I<Name>Getter" naming convention.
     private static IEnumerable<Type> RecordTypes() =>
-        Enum.GetValues<GameCategory>()
-            .Select(GameModuleAssembly.For)
-            .OfType<Assembly>()
+        ReferencedGameModules()
             .SelectMany(module => module.GetTypes()
                 .Where(type => type.IsInterface && typeof(IMajorRecordGetter).IsAssignableFrom(type))
                 .Select(getter => ConcreteFor(module, getter))
                 .OfType<Type>()
                 .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic));
+
+    // The reflector's own support check names what this build references; a schema's RecordType
+    // sits in that same game module, so the first one found hands back the assembly.
+    private static IEnumerable<Assembly> ReferencedGameModules() =>
+        Enum.GetValues<GameRelease>()
+            .Where(release => SharedSchemaReflector.Instance.IsSupported(release))
+            .Select(release => SharedSchemaReflector.Instance.GetSchemas(release).Values.First().RecordType.Assembly)
+            .Distinct();
 
     private static Type? ConcreteFor(Assembly module, Type getterType) =>
         getterType.Name is ['I', .. var stem] && stem.EndsWith("Getter", StringComparison.Ordinal)

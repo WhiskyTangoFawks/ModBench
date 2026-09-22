@@ -67,7 +67,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         // A corrupt tree is Compile's refusal to report, not Keep's to crash on: taking the first
         // document keeps every unrelated record landing.
         var impostor = Path.Combine(
-            PathShape.DirectoryOf(_mod.NpcSourceFile), $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
+            (Path.GetDirectoryName(_mod.NpcSourceFile) ?? throw new InvalidOperationException("Expected a parent directory.")), $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
         File.WriteAllText(impostor, File.ReadAllText(_mod.NpcSourceFile));
         // Staged, or the parked snapshot would not carry it: git stash create ignores untracked files.
         GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, "add", "-A");

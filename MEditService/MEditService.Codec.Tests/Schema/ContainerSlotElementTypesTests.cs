@@ -1,6 +1,5 @@
 using System.Reflection;
 using MEditService.Codec.Schema;
-using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -57,12 +56,18 @@ public sealed class ContainerSlotElementTypesTests
     }
 
     private static IEnumerable<Type> RecordTypes() =>
-        Enum.GetValues<GameCategory>()
-            .Select(GameModuleAssembly.For)
-            .OfType<Assembly>()
+        ReferencedGameModules()
             .SelectMany(module => module.GetTypes())
             .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic
                            && typeof(IMajorRecord).IsAssignableFrom(type));
+
+    // The reflector's own support check names what this build references; a schema's RecordType
+    // sits in that same game module, so the first one found hands back the assembly.
+    private static IEnumerable<Assembly> ReferencedGameModules() =>
+        Enum.GetValues<GameRelease>()
+            .Where(release => SharedSchemaReflector.Instance.IsSupported(release))
+            .Select(release => SharedSchemaReflector.Instance.GetSchemas(release).Values.First().RecordType.Assembly)
+            .Distinct();
 
     private static Type? ElementTypeOf(Type slotType) =>
         slotType.GetInterfaces()

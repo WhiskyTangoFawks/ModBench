@@ -20,7 +20,7 @@ public sealed class ScriptStructListPropertyLinkGapTests
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
         var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, MutagenReadParameters.ForRead(PluginStrings.In(PathShape.DirectoryOf(FixturePath))));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, RealPluginReadParameters.For(PluginStrings.In((Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException("Expected a parent directory.")))));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
             .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");
