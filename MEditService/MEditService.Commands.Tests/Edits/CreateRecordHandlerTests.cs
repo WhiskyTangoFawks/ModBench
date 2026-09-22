@@ -5,7 +5,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;

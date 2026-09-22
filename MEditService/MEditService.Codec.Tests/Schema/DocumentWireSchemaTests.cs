@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
-using MEditService.Tests;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 

@@ -4,8 +4,8 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -57,7 +57,8 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
-        PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == origin).Path);
+        Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == origin).Path)
+            ?? throw new InvalidOperationException("Expected a parent directory.");
 
     // --- DeleteRecord ---
 

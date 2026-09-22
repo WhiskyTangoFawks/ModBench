@@ -2,7 +2,7 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
 

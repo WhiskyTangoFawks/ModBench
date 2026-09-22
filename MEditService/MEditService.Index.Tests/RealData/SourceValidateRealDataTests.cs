@@ -2,8 +2,8 @@ using System.Diagnostics;
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Xunit.Abstractions;
 
 namespace MEditService.Index.Tests.RealData;

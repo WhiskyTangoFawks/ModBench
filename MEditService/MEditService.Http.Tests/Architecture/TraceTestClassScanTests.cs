@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 

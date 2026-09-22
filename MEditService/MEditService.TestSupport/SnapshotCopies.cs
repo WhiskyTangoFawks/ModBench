@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 /// <summary>A snapshot's entries as the copies a load order value holds, registered exactly as Mod
 /// Management sent them. A fixture whose game directory forces plugins builds those

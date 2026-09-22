@@ -2,7 +2,7 @@ using MEditService.PluginAdapter;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>Mutagen's own read parameters, from its public surface, for a test opening a real
 /// fixture plugin straight through ModFactory.</summary>

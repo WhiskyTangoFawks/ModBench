@@ -1,6 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

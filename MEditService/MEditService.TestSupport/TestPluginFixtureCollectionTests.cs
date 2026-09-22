@@ -1,4 +1,4 @@
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 file static class SharedFixtureCapture
 {

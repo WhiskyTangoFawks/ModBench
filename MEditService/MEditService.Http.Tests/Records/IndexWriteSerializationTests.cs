@@ -1,7 +1,7 @@
 using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Queries;
-using MEditService.Tests;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Records;
 

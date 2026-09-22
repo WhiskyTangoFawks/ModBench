@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>PUT /load-order answers with the version it applied. A test waits for status to
 /// reach that version, never for a tick or the sequence, either missable before the wait even

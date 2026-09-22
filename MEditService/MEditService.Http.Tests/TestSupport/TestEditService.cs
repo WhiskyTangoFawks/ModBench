@@ -4,7 +4,7 @@ using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Tests;
+using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

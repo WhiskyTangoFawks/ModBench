@@ -5,8 +5,8 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

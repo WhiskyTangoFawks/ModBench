@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using MEditService.LoadOrder;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>Goldens were captured from a known-good implementation and reviewed by hand, so
 /// they are independent of what the code emits. <c>MEDIT_GOLDEN_UPDATE=1</c> regenerates.</summary>

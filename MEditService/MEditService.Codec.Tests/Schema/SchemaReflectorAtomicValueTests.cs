@@ -1,5 +1,5 @@
 using MEditService.Codec.Schema;
-using MEditService.Tests;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Indexing;

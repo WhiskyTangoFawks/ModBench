@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Tests;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;

@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. A tool,
 /// not an assertion: without <c>MEDIT_REGEN_TESTDATA=1</c> and a game install it does nothing.

@@ -1,5 +1,5 @@
 using MEditService.Codec.Serialization;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 namespace MEditService.Http.Tests.RealData;

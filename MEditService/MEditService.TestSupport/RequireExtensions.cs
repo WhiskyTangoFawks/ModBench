@@ -1,4 +1,4 @@
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>A value a test just built or a fixture just wrote: missing here is a broken fixture,
 /// not a case under test.</summary>

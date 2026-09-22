@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using MEditService.LoadOrder;
-using MEditService.Tests.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -11,7 +10,8 @@ namespace MEditService.Http.Tests.Api;
 /// unrelated directory, since <c>WebApplicationFactory</c> never reproduces this.</summary>
 public sealed class BackendContentRootTests
 {
-    private static readonly string ApiDirectory = PathShape.DirectoryOf(typeof(Program).Assembly.Location);
+    private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
+        ?? throw new InvalidOperationException("Expected a parent directory.");
 
     [Fact]
     public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory()

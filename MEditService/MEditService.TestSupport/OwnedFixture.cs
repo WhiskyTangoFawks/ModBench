@@ -1,4 +1,4 @@
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 public static class OwnedFixture
 {

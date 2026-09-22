@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>A test's own git process wrapper, for a test verifying tracked state directly against
 /// the real tree.</summary>

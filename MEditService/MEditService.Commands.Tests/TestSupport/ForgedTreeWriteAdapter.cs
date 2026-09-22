@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;

@@ -3,8 +3,8 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 

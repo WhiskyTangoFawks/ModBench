@@ -3,8 +3,8 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 

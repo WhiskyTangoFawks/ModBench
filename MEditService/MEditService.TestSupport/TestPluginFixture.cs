@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 public sealed class TestPluginFixture : IApiPluginFixture<TestPluginFixture>
 {

@@ -1,5 +1,5 @@
 using MEditService.Codec.Schema;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 

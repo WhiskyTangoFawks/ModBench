@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 

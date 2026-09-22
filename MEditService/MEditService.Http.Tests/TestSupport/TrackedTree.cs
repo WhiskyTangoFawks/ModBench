@@ -3,8 +3,8 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.TestSupport;

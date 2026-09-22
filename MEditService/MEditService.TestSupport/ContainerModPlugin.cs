@@ -2,7 +2,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 /// <summary>The nested shape every container fixture needs: a flat cell, an embedded cell with
 /// placed refs, a navmesh and a landscape, and a worldspace with its own top cell.</summary>

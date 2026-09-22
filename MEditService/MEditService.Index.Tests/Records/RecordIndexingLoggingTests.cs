@@ -1,6 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

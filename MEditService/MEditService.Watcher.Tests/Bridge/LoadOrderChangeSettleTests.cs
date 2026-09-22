@@ -1,5 +1,5 @@
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport.TestSupport;
 using MEditService.Watcher.Tests.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;

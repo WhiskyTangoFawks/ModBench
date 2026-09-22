@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 

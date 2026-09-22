@@ -1,7 +1,7 @@
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport.TestSupport;
 
 /// <summary>Rewrites a fixture plugin so its bytes differ while its record set does not: the
 /// external change a binary watch settles on, without moving any record a test asserts on.</summary>
