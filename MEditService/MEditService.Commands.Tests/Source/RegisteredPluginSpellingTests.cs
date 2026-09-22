@@ -1,8 +1,10 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -10,7 +12,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Commands.Tests.Source;
 
 /// <summary>A source tree's root is the plugin's name as the load order spells it: a ModKey renders
 /// the extension lowercase, so <c>Mixed.ESP</c> would be written under one root and read from

@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Compile enters the same door as the record gestures (ADR-0003): an unanswered
 /// question refuses it with the same kind and message, so upstream's bytes are never overwritten

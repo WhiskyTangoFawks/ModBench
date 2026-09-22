@@ -3,17 +3,20 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Xunit.Abstractions;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>Whole-document equality per gesture over a stride sample of the real plugin's records,
 /// through the real <see cref="EditRecordHandler"/> over a real tracked tree.</summary>
@@ -185,7 +188,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
     private static IEnumerable<string> Strays(RecordIdentity identity, string before, string after, string path)
     {
-        var diffs = JsonDocumentDiff.Of(before, after);
+        var diffs = ConditionEditTests.DocumentDiff(before, after);
         if (diffs.Count == 0) yield return $"{identity.RecordType} {identity.FormKey}: nothing changed at {path}";
         foreach (var stray in diffs.Where(d => !d.StartsWith(path, StringComparison.Ordinal)))
             yield return $"{identity.RecordType} {identity.FormKey}: {stray}";

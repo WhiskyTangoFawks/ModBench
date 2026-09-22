@@ -2,9 +2,11 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests.Edits;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,7 +16,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Commands.Tests.Source;
 
 /// <summary>Create refuses a container with a typed
 /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500; edit, delete
@@ -25,7 +27,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private string CellSourceFile => _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
+    private string CellSourceFile => _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
 
     [Fact]
     public void EditingACellsOwnField_WritesItsRecordDataJson_AndChangesNothingElseInTheFile()
@@ -63,7 +65,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
     {
         var oldDirectory = PathShape.DirectoryOf(CellSourceFile);
-        Assert.EndsWith(ContainerModFixture.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
+        Assert.EndsWith(ContainerModPlugin.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
         var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
 
@@ -87,7 +89,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .ToList();
 
         var rename = Assert.Single(staged, l => l.StartsWith('R'));
-        Assert.Contains(ContainerModFixture.CellEditorId, rename, StringComparison.Ordinal);
+        Assert.Contains(ContainerModPlugin.CellEditorId, rename, StringComparison.Ordinal);
         Assert.Contains("RenamedCell", rename, StringComparison.Ordinal);
     }
 
@@ -182,7 +184,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var file = _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
         Assert.Contains("\"WaterHeight\": 100.0", File.ReadAllText(file), StringComparison.Ordinal);
 
         MutateExternalBinary(pluginPath, mod => mod.Cells.Records
@@ -201,7 +203,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void KeepingAnExternalChangeOnAnEmbeddedChild_LandsViaTheOwningCellsDocument()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         Assert.Contains("\"Position\": \"11, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
 
         MutateExternalBinary(pluginPath, mod =>

@@ -2,12 +2,13 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Asserted against a real git repo through the real CLI, because "visible in the Source
 /// Control panel" is a claim about what <c>git status</c> says (ADR-0007).</summary>

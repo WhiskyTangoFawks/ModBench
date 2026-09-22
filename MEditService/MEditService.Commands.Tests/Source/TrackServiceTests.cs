@@ -2,10 +2,12 @@ using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -16,7 +18,7 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Commands.Tests.Source;
 
 /// <summary>A small synthetic fixture, not the mega-plugin: mega-scale timing is a measured,
 /// reported number, not a suite-gating assertion.</summary>
@@ -364,7 +366,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0006 decision 2: the gate runs at Track over every record of the plugin. A wrapper that
+    // ADR-0006 invariant 2: the gate runs at Track over every record of the plugin. A wrapper that
     // deserializes for real but counts its calls is what shows the gate genuinely ran, which Track
     // merely succeeding would not.
     [Fact]
@@ -390,7 +392,7 @@ public sealed class TrackServiceTests
                 return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
             }
 
-            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(CountingDeserialize));
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize));
 
             await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
@@ -404,7 +406,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0006 decision 2: a plugin that does not round-trip is refused, with the failing record
+    // ADR-0006 invariant 2: a plugin that does not round-trip is refused, with the failing record
     // named.
     [Fact]
     public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
@@ -429,7 +431,7 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc));
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc));
 
             var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
@@ -475,7 +477,7 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat));
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat));
 
             var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
@@ -575,7 +577,7 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenCorrupt));
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt));
 
             var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 

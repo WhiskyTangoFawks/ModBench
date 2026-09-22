@@ -2,8 +2,9 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The one envelope, spelled once for the tests: every gesture is an operation, a path of
 /// hops and an optional value (ADR-0005).</summary>

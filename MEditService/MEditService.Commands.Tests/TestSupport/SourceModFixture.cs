@@ -2,12 +2,14 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
 /// it: the caller fills the plugin, this writes, registers and tracks it. No index and no store

@@ -1,20 +1,21 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The container counterpart to <see cref="SourceEditFixture"/>, which holds only flat
-/// records and cannot exercise a container at all. No index anywhere in it (ADR-0014 invariant
-/// 7). Duplicated with Http.Tests' own copy, debt #944.</summary>
+/// <summary>The container counterpart to SourceEditFixture, which holds only flat records. No
+/// index anywhere in it (ADR-0015 invariant 1); the handlers below still need Commands, unlike
+/// the shared container shape.</summary>
 public sealed class ContainerModFixture : IDisposable
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
@@ -39,34 +40,22 @@ public sealed class ContainerModFixture : IDisposable
     public const string NpcEditorId = "FixtureNpc";
     public FormKey Npc { get; }
 
-    public const string CellEditorId = "FixtureCell";
-    public const float CellWaterHeight = 100f;
     public FormKey Cell { get; }
 
-    public const string EmbedCellEditorId = "EmbedCell";
-    public const float EmbedCellWaterHeight = 10f;
     public FormKey EmbedCell { get; }
 
-    public const string TemporaryRefEditorId = "TempRef";
     public FormKey TemporaryRef { get; }
 
-    public const string PersistentRefEditorId = "PersistRef";
     public FormKey PersistentRef { get; }
 
-    public const string NavmeshEditorId = "EmbedNavmesh";
     public FormKey Navmesh { get; }
 
-    public const string LandscapeEditorId = "EmbedLandscape";
     public FormKey Landscape { get; }
 
-    public const string WorldspaceEditorId = "EmbedWorld";
     public FormKey Worldspace { get; }
 
-    public const string TopCellEditorId = "EmbedTopCell";
-    public const float TopCellWaterHeight = 5f;
     public FormKey TopCell { get; }
 
-    public const string TopCellRefEditorId = "TopCellRef";
     public FormKey TopCellRef { get; }
 
     public const string QuestEditorId = "EmbedQuest";
@@ -118,42 +107,7 @@ public sealed class ContainerModFixture : IDisposable
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
         var npc = mod.Npcs.AddNew(NpcEditorId);
-
-        var cell = new Cell(mod) { EditorID = CellEditorId, WaterHeight = CellWaterHeight };
-        AddInteriorCell(mod, cell, blockNumber: 0);
-
-        var embedCell = new Cell(mod) { EditorID = EmbedCellEditorId, WaterHeight = EmbedCellWaterHeight };
-        var temporaryRef = new PlacedObject(mod)
-        {
-            EditorID = TemporaryRefEditorId,
-            Position = new P3Float(11f, 22f, 33f),
-            Scale = 1f,
-        };
-        var persistentRef = new PlacedObject(mod)
-        {
-            EditorID = PersistentRefEditorId,
-            Position = new P3Float(1f, 2f, 3f),
-            Scale = 4f,
-        };
-        var navmesh = new NavigationMesh(mod) { EditorID = NavmeshEditorId };
-        var landscape = new Landscape(mod) { EditorID = LandscapeEditorId };
-        embedCell.Temporary.Add(temporaryRef);
-        embedCell.Persistent.Add(persistentRef);
-        embedCell.NavigationMeshes.Add(navmesh);
-        embedCell.Landscape = landscape;
-        AddInteriorCell(mod, embedCell, blockNumber: 1);
-
-        var worldspace = new Worldspace(mod) { EditorID = WorldspaceEditorId };
-        var topCell = new Cell(mod) { EditorID = TopCellEditorId, WaterHeight = TopCellWaterHeight };
-        var topCellRef = new PlacedObject(mod)
-        {
-            EditorID = TopCellRefEditorId,
-            Position = new P3Float(7f, 8f, 9f),
-            Scale = 6f,
-        };
-        topCell.Temporary.Add(topCellRef);
-        worldspace.TopCell = topCell;
-        mod.Worldspaces.Add(worldspace);
+        var containerKeys = ContainerModPlugin.AddTo(mod);
 
         var quest = new Quest(mod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(mod) { EditorID = DialogTopicEditorId };
@@ -176,10 +130,10 @@ public sealed class ContainerModFixture : IDisposable
         mod.WriteToBinary(pluginPath);
 
         Npc = npc.FormKey;
-        Cell = cell.FormKey;
-        (EmbedCell, TemporaryRef, PersistentRef) = (embedCell.FormKey, temporaryRef.FormKey, persistentRef.FormKey);
-        (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
-        (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
+        Cell = containerKeys.Cell;
+        (EmbedCell, TemporaryRef, PersistentRef) = (containerKeys.EmbedCell, containerKeys.TemporaryRef, containerKeys.PersistentRef);
+        (Navmesh, Landscape) = (containerKeys.Navmesh, containerKeys.Landscape);
+        (Worldspace, TopCell, TopCellRef) = (containerKeys.Worldspace, containerKeys.TopCell, containerKeys.TopCellRef);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
         (Response, Response2) = (response.FormKey, response2.FormKey);
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
@@ -215,15 +169,6 @@ public sealed class ContainerModFixture : IDisposable
     /// does not alter.</summary>
     public SourceDocument? CommittedDocument(string formKey, string recordType, string? editorId) =>
         TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
-
-    private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-    }
 
     public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
 

@@ -1,13 +1,16 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The adapter with the tree write's deserialize replaced, which is how the round-trip
 /// gate's negative tests forge a codec defect no real codec has.</summary>
-internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : ReadOnlyPluginAdapter
+internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserializer deserialize)
+    : ReadOnlyPluginAdapter
 {
     public override async Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default)
@@ -22,7 +25,7 @@ internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : Rea
                 await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
             }
 
-            var treeRoot = Path.Combine(scratchDir, SharedRootOf(files));
+            var treeRoot = Path.Combine(scratchDir, SourceRepository.RootFor(pluginFileName));
             var recompiled = await deserialize(treeRoot, cancel);
 
             await recompiled.BeginWrite
@@ -37,21 +40,5 @@ internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : Rea
         {
             Directory.Delete(scratchDir, recursive: true);
         }
-    }
-
-    private static string SharedRootOf(IReadOnlyList<TreeFile> files)
-    {
-        var shared = Path.GetDirectoryName(files.Count > 0 ? files[0].RelativePath : "") ?? "";
-        foreach (var file in files)
-        {
-            var directory = Path.GetDirectoryName(file.RelativePath) ?? "";
-            while (shared.Length > 0
-                   && !directory.Equals(shared, StringComparison.Ordinal)
-                   && !directory.StartsWith(shared + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            {
-                shared = Path.GetDirectoryName(shared) ?? "";
-            }
-        }
-        return shared;
     }
 }

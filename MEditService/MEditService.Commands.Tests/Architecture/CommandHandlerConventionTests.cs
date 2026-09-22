@@ -3,7 +3,7 @@ using MEditService.Commands;
 using MEditService.Commands.Composition;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Commands.Tests.Architecture;
 
 /// <summary>The command convention, enforced rather than described (ADR-0014 invariant 3): one type
 /// per gesture, one public method, applied-or-refusal returned. No interface states it, because

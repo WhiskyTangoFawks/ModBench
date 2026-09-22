@@ -1,12 +1,13 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Copy as New Record covers the QUST/DIAL/INFO family (xEdit allows exactly these;
 /// CELL/WRLD stay on the permanent blacklist).</summary>
