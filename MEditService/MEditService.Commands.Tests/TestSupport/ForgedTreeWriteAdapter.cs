@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -21,7 +20,7 @@ internal sealed class ForgedTreeWriteAdapter(string pluginFileName, TreeDeserial
             foreach (var file in files)
             {
                 var fullPath = Path.Combine(scratchDir, file.RelativePath);
-                Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException($"Expected '{fullPath}' to have a parent directory."));
                 await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
             }
 

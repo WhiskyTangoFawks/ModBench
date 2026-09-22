@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 

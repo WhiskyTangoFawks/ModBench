@@ -2,7 +2,6 @@ using System.Linq;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 

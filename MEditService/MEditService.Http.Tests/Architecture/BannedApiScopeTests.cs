@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Xml.Linq;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.CodeAnalysis;
 
 namespace MEditService.Http.Tests.Architecture;

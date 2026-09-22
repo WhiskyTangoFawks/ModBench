@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.SourceRepo.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceRepo.Tests.Source;
@@ -38,9 +37,15 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
-    private string NpcGroupFolder =>
-        PathShape.DirectoryOf(
-            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4));
+    private string NpcGroupFolder
+    {
+        get
+        {
+            var documentPath = SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4);
+            return Path.GetDirectoryName(documentPath)
+                ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
+        }
+    }
 
     // Tracks an empty tree, then puts the fixture's NPC through the repository — the same door a real
     // edit uses — so its file lands wherever the repository's own placement decides.

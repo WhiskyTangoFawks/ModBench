@@ -9,7 +9,7 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using MEditService.Watcher;
 
 namespace MEditService.Http.Tests.Architecture;

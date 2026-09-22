@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceRepo.Tests.Source;
 
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryLastCompileRefTests
     private static void AssertRefIsCheckRefFormatValid(string plugin)
     {
         var gitDir = Path.Combine(Directory.CreateTempSubdirectory("medit-checkrefformat-").FullName, ".git");
-        var workTree = PathShape.DirectoryOf(gitDir);
+        var workTree = Path.GetDirectoryName(gitDir) ?? throw new InvalidOperationException($"Expected '{gitDir}' to have a parent directory.");
         try
         {
             GitProbe.Run(gitDir, workTree, "init", "-q", "-b", "main");

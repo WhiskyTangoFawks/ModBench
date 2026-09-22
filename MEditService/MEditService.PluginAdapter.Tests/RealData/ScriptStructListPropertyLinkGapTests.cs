@@ -1,13 +1,13 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings.DI;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.PluginAdapter.Tests.RealData;
 
 /// <summary>Pins Mutagen-Modding/Mutagen#688 so a pin bump that walks <c>Structs[*].Members</c> names the
 /// Kind A row to retire.</summary>
@@ -20,7 +20,7 @@ public sealed class ScriptStructListPropertyLinkGapTests
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
         var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, MutagenReadParameters.ForRead(PluginStrings.In(PathShape.DirectoryOf(FixturePath))));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(PluginStrings.In(Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException($"Expected '{FixturePath}' to have a parent directory."))));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
             .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");

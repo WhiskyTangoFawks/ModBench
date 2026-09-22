@@ -4,7 +4,7 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -137,7 +137,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         // structurally cannot emit, so nothing about the plugin's parked state should move.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
+        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
         File.WriteAllText(collidingPath, npcSourceText);
 
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();

@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 
@@ -29,7 +28,7 @@ public sealed class ForeignIndexHolder : IDisposable
 
     public static ForeignIndexHolder Hold(string indexPath)
     {
-        Directory.CreateDirectory(PathShape.DirectoryOf(indexPath));
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath) ?? throw new InvalidOperationException($"Expected '{indexPath}' to have a parent directory."));
         var python = Python() ?? throw new InvalidOperationException("Expected python3 on PATH (callers gate on Available).");
         var psi = new ProcessStartInfo(python)
         {

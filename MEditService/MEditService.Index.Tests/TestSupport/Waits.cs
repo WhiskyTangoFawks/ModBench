@@ -1,6 +1,5 @@
 using System.Diagnostics;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 

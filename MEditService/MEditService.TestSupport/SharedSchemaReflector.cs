@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 public static class SharedSchemaReflector
 {

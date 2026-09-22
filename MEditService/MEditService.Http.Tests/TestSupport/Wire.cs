@@ -1,8 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.TestSupport;
 

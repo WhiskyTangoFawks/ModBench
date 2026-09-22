@@ -1,6 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceRepo.Tests.Source;
 

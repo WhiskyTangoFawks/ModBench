@@ -1,10 +1,10 @@
 using MEditService.Codec.Schema;
 using MEditService.PluginAdapter;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.PluginAdapter;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 /// <summary>Where a link points, answered from the plugin files the load order loads (ADR-0005 rule
 /// 2): a link cache over those files, and nothing live crossing back out.</summary>

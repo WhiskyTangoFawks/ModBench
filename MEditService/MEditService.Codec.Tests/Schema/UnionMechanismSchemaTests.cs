@@ -1,8 +1,9 @@
 using MEditService.Codec.Schema;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>Record classes sharing a signature, OMOD's generic-closed properties, abstract and
 /// concrete unions: every base with leaves is one sparse union, the document's discriminator

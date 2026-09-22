@@ -1,11 +1,11 @@
 using MEditService.Codec.Schema;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 public class PartialFormFlagTests
 {

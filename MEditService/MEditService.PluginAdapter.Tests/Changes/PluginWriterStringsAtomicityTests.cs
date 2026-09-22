@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.Tests.Changes;
+namespace MEditService.PluginAdapter.Tests.Changes;
 
 /// <summary>Fallout 4's one IL-sourced field sits on a nested group not worth building, so only
 /// Normal and DL carry content; <c>StringsWriter.Dispose</c> stubs the third anyway, so all three

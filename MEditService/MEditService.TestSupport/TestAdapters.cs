@@ -1,6 +1,6 @@
 using MEditService.PluginAdapter;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>The production Plugin adapter, for a test with no composition root to resolve it
 /// from. Built per call: the adapter holds no state, and a shared instance would be a second

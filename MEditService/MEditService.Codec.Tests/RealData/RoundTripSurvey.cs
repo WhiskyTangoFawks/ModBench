@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Codec.Tests.RealData;
 
 /// <summary>Survey: how far a real, mixed-tool plugin population sits from
 /// <c>write(parse(plugin)) == plugin</c>, and why, under <c>MEDIT_SURVEY_MODS</c>. Gated like

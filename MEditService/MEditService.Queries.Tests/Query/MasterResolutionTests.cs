@@ -2,8 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.Queries.Tests.TestSupport;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;

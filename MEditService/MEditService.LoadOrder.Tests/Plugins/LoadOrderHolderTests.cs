@@ -1,7 +1,7 @@
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.LoadOrder.Tests.Plugins;
 
 // The one place a read refuses for want of a load order: every query service asks the holder for
 // the value it must have, and the refusal is this exception with this message.

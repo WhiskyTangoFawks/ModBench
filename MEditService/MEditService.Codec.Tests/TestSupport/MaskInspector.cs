@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Codec.Tests.TestSupport;
 
 /// <summary>Flattens a Mutagen <c>Mask&lt;bool&gt;</c> graph to (dotted path, value) leaves, so a
 /// fidelity failure names the field and a walker that visited nothing is distinguishable from

@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.LoadOrder.Tests.Plugins;
 
 public sealed class PluginNameTests
 {

@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 public sealed class PluginFixtureBuilder(string prefix = "medit")
 {

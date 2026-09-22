@@ -3,7 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -96,12 +96,14 @@ public sealed class RenumberRollbackTests
             mod.Cells.Records.Add(block);
             referenced = npc.FormKey;
         });
-        var cellDirectory = PathShape.DirectoryOf(Directory.EnumerateFiles(
+        var referencerFile = Directory.EnumerateFiles(
                 Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
                 SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal)));
+            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
+        var cellDirectory = Path.GetDirectoryName(referencerFile)
+            ?? throw new InvalidOperationException($"Expected '{referencerFile}' to have a parent directory.");
         var impostor = Path.Combine(
-            PathShape.DirectoryOf(cellDirectory), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
+            Path.GetDirectoryName(cellDirectory) ?? throw new InvalidOperationException($"Expected '{cellDirectory}' to have a parent directory."), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
         Directory.CreateDirectory(impostor);
         File.Copy(Path.Combine(cellDirectory, "RecordData.json"), Path.Combine(impostor, "RecordData.json"));
         var before = TreeSnapshot.Of(referencer.ModFolder);
@@ -139,8 +141,9 @@ public sealed class RenumberRollbackTests
     public void TheGroupFolder_ReturnsToItsPreActionEntries()
     {
         using var fixture = new CascadeRollbackFixture();
-        var racesFolder = PathShape.DirectoryOf(
-            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId));
+        var raceFile = fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId);
+        var racesFolder = Path.GetDirectoryName(raceFile)
+            ?? throw new InvalidOperationException($"Expected '{raceFile}' to have a parent directory.");
         Block(fixture.CascadeWritePaths(NewRaceFormKey)[0]);
 
         var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
@@ -188,9 +191,11 @@ public sealed class RenumberRollbackTests
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var directory = PathShape.DirectoryOf(SourceDocumentPath.Of(
+        var documentPath = SourceDocumentPath.Of(
             fixture.ModFolder, fixture.Plugin.Name, "wrld", newFormKey, SourceContainerFixture.WorldspaceEditorId,
-            GameRelease.Fallout4));
+            GameRelease.Fallout4);
+        var directory = Path.GetDirectoryName(documentPath)
+            ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
         repository.Remove(fixture.Plugin, identity);
         return directory;
     }

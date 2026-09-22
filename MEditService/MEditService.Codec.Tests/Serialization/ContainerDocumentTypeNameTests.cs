@@ -1,9 +1,9 @@
 using System.Text;
 using MEditService.Codec.Serialization;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The name a refusal prints for a document comes from here, and a refusal naming nothing
 /// documents nothing.</summary>

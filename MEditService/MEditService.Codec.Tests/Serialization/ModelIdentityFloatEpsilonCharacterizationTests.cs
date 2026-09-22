@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Mutagen's <c>FillEqualsMask</c> compares floats within a literal 1e-9 band, which only differs
 /// from bit-exact very close to zero.</summary>

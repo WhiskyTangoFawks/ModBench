@@ -1,10 +1,9 @@
-using System.Reflection;
 using MEditService.Codec.Schema;
-using MEditService.Tests.TestSupport;
+using MEditService.Codec.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>Each slot's element type, derived from the same game modules as the slots themselves, so
 /// a document read names an embedded child's class without deserializing its owner.</summary>
@@ -57,9 +56,7 @@ public sealed class ContainerSlotElementTypesTests
     }
 
     private static IEnumerable<Type> RecordTypes() =>
-        Enum.GetValues<GameCategory>()
-            .Select(GameModuleAssembly.For)
-            .OfType<Assembly>()
+        ReferencedGameModules.Sweep()
             .SelectMany(module => module.GetTypes())
             .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic
                            && typeof(IMajorRecord).IsAssignableFrom(type));

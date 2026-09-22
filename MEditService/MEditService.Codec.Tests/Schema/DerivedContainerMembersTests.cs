@@ -1,11 +1,12 @@
 using System.Reflection;
 using MEditService.Codec.Serialization;
-using MEditService.Tests.TestSupport;
+using MEditService.Codec.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>A container's members come from the game assembly, so the next <c>Quest.Scenes</c> cannot
 /// be missed. Swept through each record's getter interface, a route the derivation never takes, so
@@ -99,9 +100,7 @@ public sealed class DerivedContainerMembersTests
     // Every record in every game module this build references, reached through its own getter
     // interface and Mutagen's "I<Name>Getter" naming convention.
     private static IEnumerable<Type> RecordTypes() =>
-        Enum.GetValues<GameCategory>()
-            .Select(GameModuleAssembly.For)
-            .OfType<Assembly>()
+        ReferencedGameModules.Sweep()
             .SelectMany(module => module.GetTypes()
                 .Where(type => type.IsInterface && typeof(IMajorRecordGetter).IsAssignableFrom(type))
                 .Select(getter => ConcreteFor(module, getter))

@@ -1,10 +1,10 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>The codec omits a member equal to the default Mutagen declares, not the CLR zero
 /// (VirtualMachineAdapter.ObjectFormat is 2 when absent), so the metadata spells that default and

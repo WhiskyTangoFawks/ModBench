@@ -1,7 +1,7 @@
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.LoadOrder.Tests.Plugins;
 
 // ADR-0013's participation and winner rules, on the immutable value the shared kernel holds. No
 // DuckDB and no disk: a snapshot goes in, participation and winners come out.

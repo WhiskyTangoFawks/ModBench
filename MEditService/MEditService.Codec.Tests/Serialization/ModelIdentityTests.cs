@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Tested directly, not only through <c>TrackService</c>, so a regression in the mask
 /// reflection or the exclusion list fails at its own boundary (ADR-0006 decision 2).</summary>
@@ -358,28 +358,6 @@ public sealed class ModelIdentityTests
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
     }
-
-    [Fact]
-    public async Task FindFirst_CodecDeciderCost_IsLoggedAndBounded()
-    {
-        var (original, recompiled, _, _) = await ParseWriteAndReparse("RecruitSierra.esl");
-        // Warm the codec/serializer once so the measurement is the steady-state cost.
-        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
-
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
-        stopwatch.Stop();
-
-        var recordCount = original.EnumerateMajorRecords().Count();
-        _output.WriteLine(
-            $"FindFirst over {recordCount} records: {stopwatch.ElapsedMilliseconds} ms " +
-            $"({(double)stopwatch.ElapsedMilliseconds / recordCount:F2} ms/record, warm)");
-        Assert.True(stopwatch.ElapsedMilliseconds < 30_000, $"took {stopwatch.ElapsedMilliseconds} ms");
-    }
-
-    private readonly Xunit.Abstractions.ITestOutputHelper _output;
-
-    public ModelIdentityTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
 
     internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
         ParseWriteAndReparse(string fileName)

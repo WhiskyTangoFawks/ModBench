@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>Carries the level and the exception, so a test can tell "logged at Info" from "logged
 /// this exception", not just that the message text appeared.</summary>

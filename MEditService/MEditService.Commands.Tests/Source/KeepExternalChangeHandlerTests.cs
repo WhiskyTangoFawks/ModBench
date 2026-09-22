@@ -5,7 +5,7 @@ using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -66,8 +66,10 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     {
         // A corrupt tree is Compile's refusal to report, not Keep's to crash on: taking the first
         // document keeps every unrelated record landing.
+        var npcSourceFile = _mod.NpcSourceFile;
         var impostor = Path.Combine(
-            PathShape.DirectoryOf(_mod.NpcSourceFile), $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
+            Path.GetDirectoryName(npcSourceFile) ?? throw new InvalidOperationException($"Expected '{npcSourceFile}' to have a parent directory."),
+            $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
         File.WriteAllText(impostor, File.ReadAllText(_mod.NpcSourceFile));
         // Staged, or the parked snapshot would not carry it: git stash create ignores untracked files.
         GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, "add", "-A");

@@ -6,8 +6,7 @@ using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -64,7 +63,9 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
     {
-        var oldDirectory = PathShape.DirectoryOf(CellSourceFile);
+        var cellSourceFile = CellSourceFile;
+        var oldDirectory = Path.GetDirectoryName(cellSourceFile)
+            ?? throw new InvalidOperationException($"Expected '{cellSourceFile}' to have a parent directory.");
         Assert.EndsWith(ContainerModPlugin.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
         var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
@@ -74,7 +75,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         // The new directory is named by identity alone: a rename carries no position, because the cell's
         // slot lives in its sub-block's ordered child list keyed by FormKey, which a rename does not touch.
         var newDirectory = Path.Combine(
-            PathShape.DirectoryOf(oldDirectory), "RenamedCell - " + FilesafeCellKey);
+            Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException($"Expected '{oldDirectory}' to have a parent directory."), "RenamedCell - " + FilesafeCellKey);
         Assert.True(Directory.Exists(newDirectory));
         Assert.Contains(
             "\"EditorID\": \"RenamedCell\"",

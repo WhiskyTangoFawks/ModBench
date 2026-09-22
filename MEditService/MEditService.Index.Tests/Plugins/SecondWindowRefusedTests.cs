@@ -2,8 +2,7 @@ using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
@@ -26,7 +25,7 @@ public sealed class SecondWindowRefusedTests
         // The file exists with real rows before the other window takes it, so the final load is warm.
         using (var earlier = MakeIndex(holder)) earlier.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var indexPath = IndexFiles.In(data.InstanceRoot);
-        var indexDir = PathShape.DirectoryOf(indexPath);
+        var indexDir = Path.GetDirectoryName(indexPath) ?? throw new InvalidOperationException($"Expected '{indexPath}' to have a parent directory.");
 
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
         var filesWhileHeld = Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList();

@@ -4,7 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Http;
 using MEditService.Http.Tests.Api;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 

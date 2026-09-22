@@ -2,13 +2,13 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.PluginAdapter;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.PluginAdapter;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 /// <summary>ADR-0005 rule 2's document-shaped read verb: the adapter opens the plugin, the codec
 /// serializes each record, and what leaves the pair is text under the schema's own table name.</summary>

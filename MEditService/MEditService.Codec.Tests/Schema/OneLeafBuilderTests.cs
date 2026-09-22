@@ -1,7 +1,8 @@
 using MEditService.Codec.Schema;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>A leaf kind is built once, so its facts do not depend on where the walk reached it: a
 /// top-level column, a member nested inside a struct and an array element all read alike (ADR-0005).</summary>

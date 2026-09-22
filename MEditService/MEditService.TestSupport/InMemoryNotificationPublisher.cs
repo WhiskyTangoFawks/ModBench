@@ -1,7 +1,7 @@
 using MEditService.Ports;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>One published notification as its wire event reads, for a suite whose box draws no
 /// arrow to the ports and so names no notification type.</summary>

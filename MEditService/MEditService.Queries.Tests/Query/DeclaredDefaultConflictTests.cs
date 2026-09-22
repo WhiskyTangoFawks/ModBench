@@ -2,8 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.Queries;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;

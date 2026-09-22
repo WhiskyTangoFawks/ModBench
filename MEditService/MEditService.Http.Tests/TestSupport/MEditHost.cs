@@ -1,5 +1,5 @@
 using System.Globalization;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using MEditService.Watcher;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

@@ -4,10 +4,10 @@ using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The codec mints the document of an empty instance, so nothing outside it constructs a
-/// container level in order to serialize one.</summary>
+/// container level to serialize one.</summary>
 public sealed class RecordTextCodecBlankDocumentTests
 {
     private static JsonObject ParseObject(string document) =>

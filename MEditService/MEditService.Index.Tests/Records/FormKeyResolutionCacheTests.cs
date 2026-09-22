@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 

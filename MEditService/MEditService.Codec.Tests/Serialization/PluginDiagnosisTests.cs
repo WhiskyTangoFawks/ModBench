@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Masters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Exceptions;
 
-namespace MEditService.SourceRepo.Tests.Source;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The shapes the real fixtures cannot reach cheaply, chiefly the nested
 /// <see cref="AggregateException"/> chain walk, built from real defects' captured messages rather

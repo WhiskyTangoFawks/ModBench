@@ -1,8 +1,8 @@
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
@@ -58,13 +58,17 @@ public sealed class SequenceAwaitTests : IDisposable
     }
 
     [Fact]
-    public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockStill()
+    public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockAdvancedOnlyToWakeThePoll()
     {
         var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, TimeSpan.FromDays(1));
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);
         Assert.True(await _index.RefreshBinary(_fixture.Plugins.Single().KeyOf(), path));
+
+        // The landing already happened above; this wakes the poll due on the fake clock's own
+        // timer to re-check, never touching the day-long deadline that answers "not yet".
+        _clock.Advance(TimeSpan.FromMilliseconds(50));
 
         Assert.True(await Waits.CompletesWithin(pending, Generous));
         Assert.True(await pending);

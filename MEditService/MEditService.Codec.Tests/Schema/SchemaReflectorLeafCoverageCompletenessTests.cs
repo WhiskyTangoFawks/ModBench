@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using MEditService.Codec.Schema;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 /// <summary>Re-derives "is this property in the schema" from Mutagen's reflection rather than the
 /// reflector's classification, to whatever depth the record graph goes, and accepts no gap.</summary>

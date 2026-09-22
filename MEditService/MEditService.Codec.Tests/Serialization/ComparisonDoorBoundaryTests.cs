@@ -1,6 +1,6 @@
 using MEditService.Codec.Serialization;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Record comparison goes through <c>ModelIdentity</c>, never Mutagen's generated equality: the
 /// generated comparers lie in both directions (upstream #685/#686) and the pin stays 0.53.1.</summary>

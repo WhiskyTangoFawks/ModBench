@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>A discriminator is written only when the group element type is abstract (ADR-0007); otherwise
 /// the type identity is the index's <c>record_type</c>.</summary>

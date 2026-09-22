@@ -1,4 +1,4 @@
-namespace MEditService.Tests;
+namespace MEditService.TestSupport;
 
 [CollectionDefinition(Name)]
 public sealed class TestPluginFixtureCollection : ICollectionFixture<TestPluginFixture>

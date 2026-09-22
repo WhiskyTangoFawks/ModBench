@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Tests;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.TestSupport;

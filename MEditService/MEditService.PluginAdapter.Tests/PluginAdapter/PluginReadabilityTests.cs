@@ -1,8 +1,8 @@
 using MEditService.PluginAdapter;
-using MEditService.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.PluginAdapter;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 /// <summary>Whether a registered copy's file opens for the read that follows, asked of real files.
 /// Another tool owns them too, so the answer is about this moment and no other.</summary>

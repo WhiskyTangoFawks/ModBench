@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Populated, not empty, on purpose: a childless container is one file no matter what,
 /// so an empty fixture would pass forever without testing anything.</summary>

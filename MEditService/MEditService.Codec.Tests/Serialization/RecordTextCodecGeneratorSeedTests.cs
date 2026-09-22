@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 public class RecordTextCodecGeneratorSeedTests
 {

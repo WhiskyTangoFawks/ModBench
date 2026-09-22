@@ -3,7 +3,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Synthetic header because <c>ScopeOverlayDOF.esp</c> is not in this repo. Author and Description
 /// are checked empirically: <c>ModHeaderWriteLogic</c> never touches either.</summary>
