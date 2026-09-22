@@ -3,7 +3,7 @@ using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 // Game discovery must skip an installed game whose Mutagen assembly is not referenced: log and
 // continue, never throw. This build references only Fallout4, so SkyrimSE is a real unreferenced

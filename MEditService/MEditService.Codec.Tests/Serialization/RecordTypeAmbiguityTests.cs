@@ -1,11 +1,12 @@
 using System.Reflection;
 using MEditService.Codec.Serialization;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Derived is only better than tabulated if the derivation is swept: a rule read off
 /// reflection can be quietly wrong for a whole class of types and look right for two.</summary>

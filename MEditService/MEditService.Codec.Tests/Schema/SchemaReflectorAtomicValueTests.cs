@@ -1,7 +1,8 @@
 using MEditService.Codec.Schema;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 /// <summary>A Color is one text leaf the codec spells as "#AARRGGBB". Whether the alpha byte is the
 /// field's to edit is decided per field, not per type (ADR-0018): xEdit renders most as RGB, four

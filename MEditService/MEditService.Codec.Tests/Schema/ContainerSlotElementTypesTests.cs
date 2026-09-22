@@ -1,9 +1,10 @@
 using System.Reflection;
 using MEditService.Codec.Schema;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>Each slot's element type, derived from the same game modules as the slots themselves, so
 /// a document read names an embedded child's class without deserializing its owner.</summary>

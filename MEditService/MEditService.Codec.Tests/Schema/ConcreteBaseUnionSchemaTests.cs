@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -9,7 +10,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 /// <summary>A concrete Loqui base with subclasses in the same assembly (ScriptProperty and its
 /// fourteen leaves) is a union like an abstract one, with the base itself as one more leaf.</summary>

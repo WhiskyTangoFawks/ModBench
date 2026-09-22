@@ -1,8 +1,9 @@
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.PluginAdapter;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 /// <summary>The plugins an install loads with no load-order line of its own (ADR-0013 invariant
 /// 2), read off a real Data folder: the release's implicit masters that are present, then that

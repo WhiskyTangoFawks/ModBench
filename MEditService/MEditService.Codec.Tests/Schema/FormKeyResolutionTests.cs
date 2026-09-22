@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 public class FormKeyResolutionTests
 {

@@ -1,9 +1,10 @@
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>The metadata describes the codec document by Mutagen's own names: every field a
 /// declared property, every discriminator the document's MutagenObjectType, a type-varying member

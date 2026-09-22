@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Zero normalization: codec bytes and the whole-mod door's file are the same bytes
 /// (ADR-0007). Linux only — that door indents with <c>Environment.NewLine</c>. Tests-side because

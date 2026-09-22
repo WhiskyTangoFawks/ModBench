@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The codec adopts Spriggit's embed customization verbatim (ADR-0007): the five embedded
 /// slots serialize inline in the container's own document.</summary>

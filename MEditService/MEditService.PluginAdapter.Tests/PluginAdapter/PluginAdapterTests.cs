@@ -2,13 +2,14 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.PluginAdapter;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 // ADR-0005 rule 2: the verbs a plugin's bytes reach a live Mutagen mod through, and go back to
 // bytes through, driven at IPluginAdapter and PluginWriter rather than the adapter's own internals.

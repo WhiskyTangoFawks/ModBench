@@ -1,7 +1,7 @@
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.LoadOrder.Tests.Plugins;
 
 // ADR-0012: once a load order can hold two copies of one filename, "which origin does this bare
 // filename mean?" has two candidates and one right answer.

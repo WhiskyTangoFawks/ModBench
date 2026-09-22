@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings.DI;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.PluginAdapter.Tests.RealData;
 
 /// <summary>Pins Mutagen-Modding/Mutagen#688 so a pin bump that walks <c>Structs[*].Members</c> names the
 /// Kind A row to retire.</summary>

@@ -1,8 +1,9 @@
 using MEditService.Codec.Schema;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 public sealed class LeafLabelTests
 {

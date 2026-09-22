@@ -1,12 +1,12 @@
 using MEditService.Codec.Serialization;
-using MEditService.Tests.TestSupport;
+using MEditService.Codec.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Two positive types on purpose: Npc and a childless Cell, differently shaped generated
 /// classes, which is what distinguishes "resolves for the one type tried" from "resolves by a

@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Tested directly, not only through <c>TrackService</c>, so a regression in the mask
 /// reflection or the exclusion list fails at its own boundary (ADR-0006 decision 2).</summary>

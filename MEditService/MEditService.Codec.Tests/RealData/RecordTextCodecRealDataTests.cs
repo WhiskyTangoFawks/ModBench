@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -8,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Xunit.Abstractions;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Codec.Tests.RealData;
 
 /// <summary>The two production readers agree on a real weapon at the 0.53.1 pin; 0.54.0's
 /// overlay regression splits this weapon's ObjectTemplates from 2 to 3.</summary>

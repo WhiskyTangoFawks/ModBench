@@ -3,7 +3,7 @@ using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 /// <summary>Unlike the leaf-coverage sweep, this needs no shape filter or depth cap: it does not
 /// re-derive classification, it asks the reflector what it failed to classify, so there is no

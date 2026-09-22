@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 public class ColumnSpecTests
 {

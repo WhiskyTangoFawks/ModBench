@@ -1,10 +1,11 @@
 using System.Reflection;
 using MEditService.Codec.Serialization;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Schema;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>A container's members come from the game assembly, so the next <c>Quest.Scenes</c> cannot
 /// be missed. Swept through each record's getter interface, a route the derivation never takes, so

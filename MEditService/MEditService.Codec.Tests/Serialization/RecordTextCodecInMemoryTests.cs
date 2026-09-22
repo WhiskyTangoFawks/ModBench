@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.Codec.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -7,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Serialization;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The in-memory bytes must be the source file's bytes (ADR-0007), so they are asserted
 /// against the committed golden and against what <see cref="RecordTextCodec.SerializeAsync"/>

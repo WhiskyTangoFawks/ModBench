@@ -1,12 +1,13 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Changes;
+namespace MEditService.PluginAdapter.Tests.Changes;
 
 public sealed class PluginWriterSaveTests
 {

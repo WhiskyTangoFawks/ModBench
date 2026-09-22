@@ -1,7 +1,8 @@
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Codec.Tests.Indexing;
 
 /// <summary>The shipped annotation table resolves cleanly against the real assembly, so a Mutagen
 /// rename that leaves a stale annotation behind fails here rather than in a user's first
