@@ -72,7 +72,7 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
 /// releases it, once, which is what makes progressive loading testable without sleeps.</summary>
 internal sealed class GatedPluginAdapter(
     string? gateBefore = null, string? poisonPlugin = null, IPluginAdapter? inner = null)
-    : DelegatingPluginAdapter(inner ?? MutagenPluginAdapter.Instance), IDisposable
+    : DelegatingPluginAdapter(inner ?? TestAdapters.Mutagen()), IDisposable
 {
     private readonly SemaphoreSlim _released = new(0, 1);
     private readonly SemaphoreSlim _arrived = new(0, 1);

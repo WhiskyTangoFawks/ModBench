@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -22,7 +21,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
     public SequenceAwaitTests()
     {
-        _index = new IndexProjector(_holder, MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance, timeProvider: _clock);
+        _index = new IndexProjector(_holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
     }
 

@@ -9,11 +9,15 @@ namespace MEditService.Commands;
 public sealed class TrackHandler
 {
     private readonly TrackService _trackService;
+    private readonly LoadOrderHolder _loadOrder;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal TrackHandler(TrackService trackService) => _trackService = trackService;
+    internal TrackHandler(TrackService trackService, LoadOrderHolder loadOrder) =>
+        (_trackService, _loadOrder) = (trackService, loadOrder);
 
-    public Task<TrackResult> TrackAsync(
-        LoadOrderSnapshot loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
-        _trackService.TrackAsync(loadOrder, origin, preset, cancel);
+    /// <summary>Origin names the mod folder, which the held load order resolves (ADR-0013
+    /// invariant 4). Throws <see cref="NoLoadOrderException"/> with nothing written when none is
+    /// held.</summary>
+    public Task<TrackResult> TrackAsync(string origin, SourcePreset preset, CancellationToken cancel = default) =>
+        _trackService.TrackAsync(_loadOrder.Require(), origin, preset, cancel);
 }

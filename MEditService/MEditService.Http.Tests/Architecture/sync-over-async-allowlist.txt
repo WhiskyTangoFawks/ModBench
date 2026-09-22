@@ -1,5 +1,0 @@
-# Every sync-over-async block left in production, as file, form and count. A task's result is
-# reached by awaiting it: `.Result` is banned in BannedSymbols.txt and these spellings block the
-# calling thread on exactly the same hazard, so this list is the work remaining rather than
-# permission. It shrinks as each caller learns to await, and when it is empty the ban grows the
-# entries and this gate goes. A line added here is a new block that needs the maintainer's ruling.

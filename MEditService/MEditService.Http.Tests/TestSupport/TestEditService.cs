@@ -47,11 +47,11 @@ internal static class TestEditService
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CompilePluginHandler>();
 
-    internal static AbsorbExternalChangeHandler AbsorbHandler() =>
-        Over(new LoadOrderHolder()).GetRequiredService<AbsorbExternalChangeHandler>();
+    internal static AbsorbExternalChangeHandler AbsorbHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<AbsorbExternalChangeHandler>();
 
-    internal static KeepExternalChangeHandler KeepHandler(Action<ILoggingBuilder>? logging = null) =>
-        Over(new LoadOrderHolder(), logging).GetRequiredService<KeepExternalChangeHandler>();
+    internal static KeepExternalChangeHandler KeepHandler(LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null) =>
+        Over(holder, logging).GetRequiredService<KeepExternalChangeHandler>();
 
     internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<RebaseEditBranchHandler>();

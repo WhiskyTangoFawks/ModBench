@@ -11,7 +11,7 @@ public sealed class ImplicitPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
 
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     [Fact]
     public void ImplicitPluginsIn_AreTheImplicitMastersOnDisk_ThenTheCreationClubCatalog()

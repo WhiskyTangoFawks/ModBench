@@ -14,20 +14,28 @@ namespace MEditService.Commands;
 public sealed class AbsorbExternalChangeHandler
 {
     private readonly IPluginAdapter _adapter;
+    private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger<AbsorbExternalChangeHandler> _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal AbsorbExternalChangeHandler(IPluginAdapter adapter, ILogger<AbsorbExternalChangeHandler> logger) =>
-        (_adapter, _logger) = (adapter, logger);
+    internal AbsorbExternalChangeHandler(
+        IPluginAdapter adapter, LoadOrderHolder loadOrder, ILogger<AbsorbExternalChangeHandler> logger) =>
+        (_adapter, _loadOrder, _logger) = (adapter, loadOrder, logger);
 
-    public async Task<AbsorbResult> AbsorbAsync(string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
+    /// <summary>Origin-scoped: the mod, not one plugin in it, is the unit of a baseline. Null when
+    /// the origin names no tracked mod in the load order, which is an addressing failure rather
+    /// than a refusal.</summary>
+    public async Task<AbsorbResult?> AbsorbAsync(string origin)
     {
-        var result = await Run(_adapter, modFolder, plugins, loadOrder);
+        var loadOrder = _loadOrder.Current;
+        if (TrackedOrigin.Resolve(loadOrder, origin) is not { } mod) return null;
+
+        var result = await Run(_adapter, mod.ModFolder, mod.Plugins, loadOrder);
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
-            _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", modFolder, result.RefusalReason);
+            _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", mod.ModFolder, result.RefusalReason);
         else if (result.Rebase is { Outcome: not RebaseOutcome.Clean } rebase)
-            _logger.LogWarning("Absorbed {ModFolder}; its rebase {Outcome}: {Reason}", modFolder, rebase.Outcome, rebase.RefusalReason);
+            _logger.LogWarning("Absorbed {ModFolder}; its rebase {Outcome}: {Reason}", mod.ModFolder, rebase.Outcome, rebase.RefusalReason);
         return result;
     }
 

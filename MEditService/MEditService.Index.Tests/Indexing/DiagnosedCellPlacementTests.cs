@@ -97,7 +97,7 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
 
     // Hand-built rather than serialized from a mod: no fixture plugin holds a cell the codec refuses,
     // and what is under test is what the ingest does with a diagnosis, not how one arises.
-    private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override IPluginDocuments OpenDocuments(
             ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,

@@ -7,10 +7,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>install-a-mod: the install renames a folder into mods/ and forgets it, so mEdit learns
-/// of a folder that appeared while it was already loaded.</summary>
+/// <summary>install-mod: the install renames a folder into mods/ and forgets it. Nothing on the
+/// mEdit side watches mods/, so the folder arrives as the next snapshot: the tail is enable-a-mod's.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class InstallAModTraceTests : HostedTests
+public sealed class InstallModTraceTests : HostedTests
 {
     private const string Installed = "Installed.esp";
     private const string InstalledMod = "InstalledMod";

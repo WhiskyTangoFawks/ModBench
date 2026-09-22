@@ -4,7 +4,6 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
@@ -631,7 +630,7 @@ public sealed class VmadEditTests : IDisposable
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 

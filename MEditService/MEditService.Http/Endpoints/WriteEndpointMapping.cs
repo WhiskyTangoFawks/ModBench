@@ -1,6 +1,7 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;
 
@@ -13,6 +14,12 @@ internal static class WriteEndpointMapping
     /// through here: a literal <c>%</c> would be double-unescaped.</summary>
     internal static PluginCopyKey PluginCopyKeyOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
+
+    /// <summary>The release a request names, or the 400 that says which names are known.</summary>
+    internal static IResult? ParseGameRelease(string? raw, out GameRelease release) =>
+        Enum.TryParse(raw, out release)
+            ? null
+            : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
 
     /// <summary>The FormKey an applied create, renumber or copy allocated. Every caller here reaches
     /// this only once the result is known applied.</summary>

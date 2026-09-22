@@ -292,6 +292,23 @@ internal sealed class IndexStore : IDisposable
         return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
     }
 
+    /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
+    /// holds no rows for it.</summary>
+    internal DerivedFrom? DerivationOf(PluginCopyKey key) =>
+        DuckDbSql.ScalarString(Connection,
+            $"SELECT derived_from FROM {CopySourceRelation} WHERE plugin = $1 AND origin = $2",
+            key.Name, key.Origin) is { } stamp && Enum.TryParse<DerivedFrom>(stamp, out var derivedFrom)
+            ? derivedFrom
+            : null;
+
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
+    /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
+    /// is still the file on disk.</summary>
+    internal void RestampDerivation(PluginCopyKey key, DerivedFrom derivedFrom) =>
+        DuckDbSql.ExecuteFor(Connection,
+            $"UPDATE {CopySourceRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
+            derivedFrom.ToString(), key.Name, key.Origin);
+
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginCopyKey key)
     {

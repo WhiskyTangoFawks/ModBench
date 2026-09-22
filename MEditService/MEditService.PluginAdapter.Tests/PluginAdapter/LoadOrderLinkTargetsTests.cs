@@ -13,7 +13,7 @@ public sealed class LoadOrderLinkTargetsTests
     private const string BaseName = "LinkBase.esm";
     private const string PatchName = "LinkPatch.esp";
 
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private FormKey _keyword;
     private FormKey _race;

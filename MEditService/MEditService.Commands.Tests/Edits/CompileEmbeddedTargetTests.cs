@@ -67,7 +67,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
                 Referrer,
             ]));
 
-        var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
+        var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
         trackService.TrackAsync(_loadOrder, ReferrerOrigin, SourcePreset.Edits)
@@ -135,7 +135,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     [Fact]
     public void TheTargetsFile_CarriesTheEmbeddedRecord_AndTheLinkCacheNamesIt()
     {
-        var targets = MutagenPluginAdapter.Instance.LinkTargets(
+        var targets = TestAdapters.Mutagen().LinkTargets(
             _loadOrder,
             _loadOrder.Copy(_referrer).Require(),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),

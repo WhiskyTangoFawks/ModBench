@@ -4,7 +4,6 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
@@ -83,7 +82,7 @@ public sealed class SourceEditFixture : IDisposable
         if (track)
         {
             beforeTrack?.Invoke(ModFolder);
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(LoadOrder, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
@@ -95,8 +94,8 @@ public sealed class SourceEditFixture : IDisposable
         CreateHandler = TestEditService.CreateHandler(holder);
         PeekHandler = TestEditService.PeekHandler(holder);
         CompileHandler = TestEditService.CompileHandler(holder);
-        AbsorbHandler = TestEditService.AbsorbHandler();
-        KeepHandler = TestEditService.KeepHandler();
+        AbsorbHandler = TestEditService.AbsorbHandler(holder);
+        KeepHandler = TestEditService.KeepHandler(holder);
     }
 
     public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
@@ -126,11 +125,6 @@ public sealed class SourceEditFixture : IDisposable
         TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
 
     public SourceRepository? Repository => SourceRepository.Open(ModFolder, GameRelease.Fallout4);
-
-    /// <summary>The mod-level Absorb/Keep gestures take a plugin list, not one plugin — this fixture's
-    /// own single plugin, wrapped.</summary>
-    public IReadOnlyList<RegisteredCopy> PluginCopies(string pluginPath) =>
-        [new RegisteredCopy(ActualPluginName, ModFolderOrigin, pluginPath, 0, true, true)];
 
     /// <summary>The question as the watcher raises it: the plugin's bytes differ from the parked
     /// snapshot, and the marker names the change.</summary>

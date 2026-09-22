@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
@@ -90,7 +89,7 @@ public sealed class InjectedChildTests : IDisposable
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));
 
-        var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
+        var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
             track.TrackAsync(_loadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
     }

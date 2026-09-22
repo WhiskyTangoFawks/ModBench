@@ -86,7 +86,7 @@ public sealed class WarmReconcileTests
 
     // Every copy's open, the step before its registration, is asked how much progress the load
     // order was reporting at that moment.
-    private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public IndexProjector? Index { get; set; }
 

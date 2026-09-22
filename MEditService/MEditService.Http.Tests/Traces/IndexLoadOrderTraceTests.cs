@@ -9,11 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>project: the snapshot arrives, the Projector reconciles it against what the plugins
-/// actually hold, and the Store announces what changed — so the client sees status, then a
-/// rows-changed push, then its own re-read.</summary>
+/// <summary>index-load-order: the snapshot arrives, the Indexer reconciles it against what the
+/// plugins actually hold, and the Store announces what changed — so the client sees status, then
+/// a rows-changed push, then its own re-read.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ProjectTraceTests : HostedTests
+public sealed class IndexLoadOrderTraceTests : HostedTests
 {
     private const string Plugin = "Projected.esp";
     private const string Origin = "ProjectedMod";
@@ -46,8 +46,8 @@ public sealed class ProjectTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
-    // Nothing watches an untracked copy, so its answers stay stale until the reconcile asks; a
-    // binary has no smaller unit than itself, so the copy is re-derived whole rather than by key.
+    // A binary has no smaller unit than itself, so the copy the reconcile names is re-derived whole
+    // rather than by key.
     [Fact]
     public async Task ReconcilingOnePlugin_RederivesTheCopyWhoseBytesMoved_AndTheAnswerFollows()
     {

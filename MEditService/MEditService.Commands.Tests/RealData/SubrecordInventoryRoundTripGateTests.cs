@@ -3,7 +3,6 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
@@ -77,7 +76,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(_loadOrder, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()

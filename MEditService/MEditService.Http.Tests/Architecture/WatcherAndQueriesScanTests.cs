@@ -11,12 +11,6 @@ public sealed class WatcherAndQueriesScanTests
 
     private const string QueriesRoot = "MEditService.Queries";
 
-    // The ticket that gives the watcher's signal back to the Index and drops the ports arrow.
-    private const string WatcherTicket = "#946";
-
-    // The ticket that puts the malformed-plugin diagnosis behind a door Queries may take.
-    private const string QueriesTicket = "#945";
-
     // The port and the verb it is held for: either one is a second answer to "what changed", beside
     // the read model's own.
     private static readonly (string Label, string Pattern)[] PublisherNeedles =
@@ -53,8 +47,7 @@ public sealed class WatcherAndQueriesScanTests
             named.Count == 0,
             "The Mod watcher publishes. It announces nothing and tells the Index and Commands, and "
             + "the read model is what says which rows changed and at which sequence (ADR-0015 "
-            + $"invariant 3). {WatcherTicket} hands the signal back and drops the watcher's arrow to "
-            + "the ports:\n"
+            + "invariant 3):\n"
             + string.Join("\n", named));
     }
 
@@ -72,8 +65,7 @@ public sealed class WatcherAndQueriesScanTests
         Assert.True(
             named.Count == 0,
             "A query reads the disk. Queries hide the Index's reads and reach no system of record "
-            + $"(ADR-0014 invariant 1), so the answer comes from a row. {QueriesTicket} moves the "
-            + "diagnosis behind a door Queries may take:\n"
+            + "(ADR-0014 invariant 1), so the answer comes from a row:\n"
             + string.Join("\n", named));
     }
 

@@ -16,6 +16,7 @@ namespace MEditService.Commands;
 public sealed class KeepExternalChangeHandler
 {
     private readonly WriteTargets _targets;
+    private readonly LoadOrderHolder _loadOrder;
     private readonly IPluginAdapter _adapter;
     private readonly SchemaReflector _reflector;
     private readonly RecordTextCodec _codec;
@@ -23,14 +24,23 @@ public sealed class KeepExternalChangeHandler
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal KeepExternalChangeHandler(
-        WriteTargets targets, IPluginAdapter adapter, SchemaReflector reflector, RecordTextCodec codec,
-        ILogger<KeepExternalChangeHandler> logger) =>
-        (_targets, _adapter, _reflector, _codec, _logger) = (targets, adapter, reflector, codec, logger);
+        WriteTargets targets, LoadOrderHolder loadOrder, IPluginAdapter adapter, SchemaReflector reflector,
+        RecordTextCodec codec, ILogger<KeepExternalChangeHandler> logger) =>
+        (_targets, _loadOrder, _adapter, _reflector, _codec, _logger) = (targets, loadOrder, adapter, reflector, codec, logger);
 
-    public ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
+    /// <summary>Origin-scoped, as Absorb is. Null when the origin names no tracked mod in the load
+    /// order: an addressing failure rather than a refusal.</summary>
+    public ExternalChangeLandResult? Keep(string origin)
+    {
+        var loadOrder = _loadOrder.Current;
+        if (TrackedOrigin.Resolve(loadOrder, origin) is not { } mod) return null;
+        return Keep(mod.ModFolder, mod.Plugins, loadOrder.GameRelease);
+    }
+
+    private ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
     {
         var repository = SourceRepository.Open(modFolder, gameRelease)
-            ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
+            ?? throw new InvalidOperationException($"'{modFolder}' holds no repository, which TrackedOrigin.Resolve rules out.");
         var schemas = _reflector.GetSchemas(gameRelease);
 
         var touchedByPlugin = new Dictionary<string, List<TouchedRecord>>(StringComparer.OrdinalIgnoreCase);

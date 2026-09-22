@@ -30,13 +30,29 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         mod.WriteToBinary(pluginPath);
     }
 
+    private async Task<AbsorbResult> Absorb() =>
+        (await _mod.AbsorbHandler.AbsorbAsync(SourceEditFixture.ModFolderOrigin)).Require();
+
+    [Fact]
+    public async Task Absorb_OfAnOriginNoLoadedPluginHas_AnswersNothing()
+    {
+        Assert.Null(await _mod.AbsorbHandler.AbsorbAsync("NoSuchMod"));
+    }
+
+    [Fact]
+    public async Task Absorb_OfAnUntrackedMod_AnswersNothing()
+    {
+        using var untracked = SourceEditFixture.Untracked();
+
+        Assert.Null(await untracked.AbsorbHandler.AbsorbAsync(SourceEditFixture.ModFolderOrigin));
+    }
+
     [Fact]
     public async Task Absorb_CommitsTheExternalBinarysContent_AsANewBaselineOnMain()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        var result = await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        var result = await Absorb();
 
         Assert.True(result.Applied, result.RefusalReason);
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
@@ -53,9 +69,8 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var dirtBefore = _mod.GitStatus();
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        var result = await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        var result = await Absorb();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal(RebaseOutcome.Clean, result.Rebase?.Outcome);
@@ -71,9 +86,8 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        await Absorb();
 
         Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
@@ -84,9 +98,8 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     public async Task Absorb_WritesACompleteSourceTree_IncludingTheModHeader()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        await Absorb();
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var tree = GitProbe.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
@@ -108,7 +121,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         var mainBefore = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
-        var result = await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        var result = await Absorb();
 
         Assert.False(result.Applied);
         Assert.Contains(SourceEditFixture.PluginName, result.RefusalReason, StringComparison.Ordinal);
@@ -119,9 +132,8 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     public async Task Absorb_AdvancesTheParkedRefToTheNewBaseline()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        await _mod.AbsorbHandler.AbsorbAsync(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
+        await Absorb();
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var mainSha = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();

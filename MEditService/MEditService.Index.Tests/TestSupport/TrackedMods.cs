@@ -21,7 +21,7 @@ internal static class TrackedMods
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
         var pluginName = Path.GetFileName(pluginPath);
         var modPath = new ModPath(ModKey.FromFileName(pluginName), pluginPath);
-        var (files, missingStrings) = MutagenPluginAdapter.Instance
+        var (files, missingStrings) = TestAdapters.Mutagen()
             .ReadSourceAsync(modPath, pluginName, release, new PluginStrings(modFolder, dataFolder))
             .GetAwaiter().GetResult();
         if (missingStrings is not null)

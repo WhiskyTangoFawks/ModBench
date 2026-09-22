@@ -154,11 +154,9 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public async Task AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
         var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        await TestEditService.AbsorbHandler().AbsorbAsync(
-            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), _fixture.LoadOrder);
+        await TestEditService.AbsorbHandler(_fixture.Holder).AbsorbAsync(ContainerModFixture.ModFolderOrigin);
 
         var afterMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
@@ -176,10 +174,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void KeepingAnExternalChange_OnAnUnchangedCell_LandsNothing()
     {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-
-        var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -197,8 +192,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .SelectMany(sub => sub.Cells)
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
-        var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -220,8 +214,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             placedRef.Position = new P3Float(999f, 22f, 33f);
         });
 
-        var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -242,8 +235,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .SelectMany(sub => sub.Cells)
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
-        var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -268,9 +260,9 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var entries = new List<LogEntry>();
         var handler = TestEditService.KeepHandler(
-            b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
+            _fixture.Holder, b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
 
-        var result = handler.Keep(_fixture.ModFolder, ContainerModFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
+        var result = handler.Keep(ContainerModFixture.ModFolderOrigin).Require();
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

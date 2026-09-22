@@ -14,7 +14,7 @@ public sealed class PluginReadabilityTests : IDisposable
         .WithPlugin(PluginName)
         .Build();
 
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private string PluginPath => Path.Combine(_data.DataFolder, PluginName);
 

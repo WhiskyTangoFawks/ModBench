@@ -20,7 +20,7 @@ public sealed class PluginDocumentReadTests
 
     private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
 
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
+    private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);

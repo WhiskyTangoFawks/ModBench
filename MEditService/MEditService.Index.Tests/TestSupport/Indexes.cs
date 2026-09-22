@@ -18,7 +18,7 @@ internal static class Indexes
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null) =>
-        new(holder, adapter ?? MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance, loggerFactory, notifications);
+        new(holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications);
 
     internal static IndexProjector Reconciled(
         PluginFixtureData fixture,

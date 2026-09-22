@@ -21,10 +21,6 @@ internal interface ILoadedMod : IDisposable
 /// release the caller passed and never by a game this code names.</summary>
 public sealed class MutagenPluginAdapter : IPluginAdapter
 {
-    /// <summary>The one instance, for a caller with no constructor to inject the port
-    /// through.</summary>
-    public static readonly IPluginAdapter Instance = new MutagenPluginAdapter();
-
     internal static ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
 

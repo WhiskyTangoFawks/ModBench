@@ -30,7 +30,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
         Holder.Apply(loadOrder);
 
-        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackAsync(loadOrder, Plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

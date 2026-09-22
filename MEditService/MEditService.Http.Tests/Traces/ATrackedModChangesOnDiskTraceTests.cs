@@ -73,6 +73,25 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         Client.PostAsJsonAsync($"/plugins/external-change/{verb}", new { origin });
 
     [Fact]
+    public async Task AnsweringForAModNobodyTracked_Is503()
+    {
+        using var fx = OneMod();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", Origin)).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("keep", Origin)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AnsweringForAnOriginNoLoadedPluginHas_Is503()
+    {
+        using var fx = await Watched();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", "NoSuchMod")).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("keep", "NoSuchMod")).StatusCode);
+    }
+
+    [Fact]
     public async Task ATrackedPluginRewrittenByAnotherTool_OpensOneQuestion_AndTheBaselineAnswerApplies()
     {
         using var fx = await Watched();

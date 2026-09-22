@@ -144,7 +144,7 @@ public sealed class MasterPruningRoundTripGateTests
     {
         var fixturePath = PathTo(LegendariesFixtureFileName);
         var modPath = new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath);
-        var (files, _) = await MutagenPluginAdapter.Instance.ReadSourceAsync(
+        var (files, _) = await TestAdapters.Mutagen().ReadSourceAsync(
             modPath, LegendariesFixtureFileName, GameRelease.Fallout4,
             PluginStrings.In(PathShape.DirectoryOf(fixturePath)));
 
@@ -195,7 +195,7 @@ public sealed class MasterPruningRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(_loadOrder, _origin, SourcePreset.Edits);
 
         public void Dispose()

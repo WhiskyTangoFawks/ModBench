@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// itself rather than passing on a silent stub.</summary>
 public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 {
-    private static IPluginAdapter Real => MutagenPluginAdapter.Instance;
+    private static IPluginAdapter Real => TestAdapters.Mutagen();
 
     public IPluginDocuments OpenDocuments(
         ModPath modPath,

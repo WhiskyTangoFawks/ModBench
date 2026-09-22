@@ -223,7 +223,7 @@ public static class PluginEndpoints
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
+        TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -233,7 +233,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await trackHandler.TrackAsync(holder.Require(), req.Origin, preset);
+            var result = await trackHandler.TrackAsync(req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
 
@@ -313,20 +313,16 @@ public static class PluginEndpoints
     // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
     internal static async Task<IResult> AbsorbExternalChange(
-        ExternalChangeActionRequest req, LoadOrderHolder holder, AbsorbExternalChangeHandler handler,
-        ILoggerFactory loggerFactory)
+        ExternalChangeActionRequest req, AbsorbExternalChangeHandler handler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(holder, req.Origin, logger);
-        if (modFolder is null)
-            return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
-
         try
         {
-            var result = await handler.AbsorbAsync(modFolder, plugins, loadOrder);
+            if (await handler.AbsorbAsync(req.Origin) is not { } result)
+                return NotATrackedMod(req.Origin, logger);
             var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
         }
@@ -340,20 +336,16 @@ public static class PluginEndpoints
     // Keep, origin-scoped. A collision (a record or an already-staged tracked file) is a
     // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
     internal static IResult KeepExternalChange(
-        ExternalChangeActionRequest req, LoadOrderHolder holder, KeepExternalChangeHandler handler,
-        ILoggerFactory loggerFactory)
+        ExternalChangeActionRequest req, KeepExternalChangeHandler handler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(holder, req.Origin, logger);
-        if (modFolder is null)
-            return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
-
         try
         {
-            var result = handler.Keep(modFolder, plugins, loadOrder.GameRelease);
+            if (handler.Keep(req.Origin) is not { } result)
+                return NotATrackedMod(req.Origin, logger);
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -363,23 +355,11 @@ public static class PluginEndpoints
         }
     }
 
-    // Every plugin the origin's mod folder holds; null ModFolder means untracked or unknown, the
-    // caller's single refusal path for both.
-    private static (IReadOnlyList<RegisteredCopy> Plugins, LoadOrderSnapshot LoadOrder, string? ModFolder) ResolveTrackedMod(
-        LoadOrderHolder holder, string origin, ILogger logger)
+    // Untracked or unknown: the handler's one null answer, the caller's single refusal path for both.
+    private static IResult NotATrackedMod(string origin, ILogger logger)
     {
-        var loadOrder = holder.Current;
-        var plugins = loadOrder.CopiesOfOrigin(origin);
-        if (plugins.Count == 0)
-        {
-            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
-            return ([], loadOrder, null);
-        }
-
-        var modFolder = LoadOrderSnapshot.ModFolderOf(plugins[0].Origin, plugins[0].Path);
-        return modFolder is null || !SourceRepository.IsTracked(modFolder)
-            ? (plugins, loadOrder, null)
-            : (plugins, loadOrder, modFolder);
+        logger.LogWarning("No tracked mod in the load order has origin {Origin}", origin);
+        return Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
     }
 
     // The manual rebase, origin-scoped — the repo is the unit of baselines and rebase, not

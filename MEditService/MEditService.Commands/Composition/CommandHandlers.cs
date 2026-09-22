@@ -76,7 +76,9 @@ public static class CommandHandlers
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
-        services.AddSingleton(sp => new TrackHandler(sp.GetRequiredService<TrackService>()));
+        services.AddSingleton(sp => new TrackHandler(
+            sp.GetRequiredService<TrackService>(),
+            sp.GetRequiredService<LoadOrderHolder>()));
 
         // The watcher's verb, not a gesture: built here so the port it publishes through is the
         // composition root's, never borrowed from the watcher that calls it.
@@ -88,10 +90,12 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new AbsorbExternalChangeHandler(
             sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ILogger<AbsorbExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new KeepExternalChangeHandler(
             sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<RecordTextCodec>(),
@@ -99,7 +103,7 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<TrackHandler>(),
+            sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new RebaseEditBranchHandler(
