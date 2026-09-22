@@ -1,7 +1,8 @@
 using System.Text.Json;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Nothing on the write side opens another plugin's contents to answer an edit: a link
 /// whose target document is unreadable lands like any other well-shaped value.</summary>

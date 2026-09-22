@@ -1,9 +1,10 @@
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>What a compile at a named ref asks of that ref rather than of the files on disk: which
 /// FormKeys more than one document claims, and where a diagnostic's record lives.</summary>

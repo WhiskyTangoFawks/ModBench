@@ -1,14 +1,15 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
-using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Commands.Tests.Source;
 
 /// <summary>How a settled mod is classified, observed at the one door the watcher has: a genuine
 /// external change is the question it publishes, with the halves it found named on it.</summary>

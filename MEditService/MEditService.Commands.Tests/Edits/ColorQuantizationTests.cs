@@ -1,6 +1,6 @@
 using Mutagen.Bethesda.Binary;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Byte to float to byte is exact for all 256 values, and that is the round trip an
 /// edit performs; the lossy direction happens once at Track, upstream of any edit.</summary>

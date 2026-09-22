@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 // GetOrAddAsOverride is defined only on the typed ILinkCache<TMod, TModGetter>, and the load order
 // itself holds an untyped one that exposes only resolution, so the placed-record write paths need

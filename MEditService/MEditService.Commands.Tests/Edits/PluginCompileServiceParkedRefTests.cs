@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Every compile re-parks the last-compile ref only after the binary write lands,
 /// including a compile at a named ref, which touches neither working tree nor HEAD.</summary>

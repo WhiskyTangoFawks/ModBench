@@ -4,8 +4,10 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -13,7 +15,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>Compile builds from source text, so there is no original to byte-match: what it
 /// promises is content fidelity and determinism.</summary>
@@ -49,8 +51,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
     }
 
-    // TrackService's own canonicalization at the door, mirrored here so the derived tree is compared
-    // against the tracked one on equal terms rather than differing by line endings on Windows.
+    // Production strips carriage returns when it writes a tree (PluginTrees), but that helper is
+    // internal to PluginAdapter with no grant to this project, so the derived side is stripped
+    // here the same way to compare bytes.
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
     private static JsonNode RequireNode(JsonNode? node, string what) =>

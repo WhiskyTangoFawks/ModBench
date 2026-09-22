@@ -3,10 +3,11 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The real adapter's reads, throwing on every write verb so a test that reaches one names
 /// itself rather than passing on a silent stub.</summary>

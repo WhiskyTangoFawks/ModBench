@@ -1,7 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The renumber cascade computes every affected record's new content before it writes
 /// anything; a computation failure is a typed refusal with the tree untouched.</summary>

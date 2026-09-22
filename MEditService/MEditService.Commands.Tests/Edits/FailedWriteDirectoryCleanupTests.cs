@@ -1,8 +1,9 @@
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Assertions walk the real tree, never git: git tracks files, not directories, so an
 /// empty directory produces no porcelain line. The failing write is an EditorID longer than the

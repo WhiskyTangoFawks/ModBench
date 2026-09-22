@@ -1,9 +1,10 @@
 using MEditService.Commands;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 // ADR-0013: the handler that turns a validated snapshot into Load order state's one arrival —
 // what a reconcile does with that arrival is the Index's subscription, not this handler's.

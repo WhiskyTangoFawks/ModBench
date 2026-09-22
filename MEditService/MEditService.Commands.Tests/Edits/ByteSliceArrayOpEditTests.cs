@@ -1,10 +1,11 @@
 using System.Text.Json;
 using MEditService.Commands;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>An array op reconstructs the whole list from the column's own extracted value, so any
 /// member the schema does not carry is silently dropped from every element the op rewrites.</summary>
