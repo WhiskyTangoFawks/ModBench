@@ -421,6 +421,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // One signal, one advance, however many documents and refs it moves.
         using var projection = BeginProjection();
 
+        // The tree is what these rows are re-derived from, so it is what the copy is derived from
+        // (ADR-0007 invariant 3), bytes moved or not: a copy tracked after indexing arrives here
+        // still stamped from its binary.
+        if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
+            _indexStore.RestampDerivation(key, DerivedFrom.SourceTree);
+
         // A key at neither ref is a record the tree has gained, and no document says where the tree
         // puts it: a new exterior cell's block is a directory, not a field.
         if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
@@ -537,6 +543,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return ValidateAgainstBinary(key);
     }
 
+    /// <summary>Restates which truth <paramref name="key"/>'s rows read as, for Validate's tracked
+    /// half.</summary>
+    internal void RestampDerivation(PluginCopyKey key, DerivedFrom derivedFrom) =>
+        _indexStore.RestampDerivation(key, derivedFrom);
+
     // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
     // every reconciled record of a whole plugin, where a notification per record would be noise.
     internal void PublishRowsChanged(PluginCopyKey key, IReadOnlyList<string> formKeys) =>
@@ -561,6 +572,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
             return ValidationReport.Clean(key);
         }
+
+        // Reached only for a copy no repository holds, so rows stamped from a source tree came from
+        // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
+        if (_indexStore.DerivationOf(key) == DerivedFrom.SourceTree)
+            return new ValidationReport(key, [], NeedsRebuild: true, []);
 
         // A file that cannot be read is no evidence its rows are still true, so it counts as a
         // mismatch — IndexStore.ValidateAgainstDisk's own rule.

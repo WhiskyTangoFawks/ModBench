@@ -10,10 +10,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>compile-a-plugin: compile writes the source tree's documents back as the plugin's
+/// <summary>compile-plugin: compile writes the source tree's documents back as the plugin's
 /// bytes, so the proof is another load of those same bytes answering with the edit.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class CompileAPluginTraceTests : HostedTests
+public sealed class CompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Compiled.esp";
     private const string Origin = "CompiledMod";

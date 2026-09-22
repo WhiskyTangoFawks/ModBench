@@ -9,11 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>edit-a-record: the envelope goes down to the source tree and the projection comes back
+/// <summary>edit-record: the envelope goes down to the source tree and the projection comes back
 /// up, so the editor sees an applied reply or a typed refusal, then a rows-changed push, then its
 /// own re-read.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EditARecordTraceTests : HostedTests
+public sealed class EditRecordTraceTests : HostedTests
 {
     private const string Plugin = "Editable.esp";
     private const string Origin = "EditableMod";

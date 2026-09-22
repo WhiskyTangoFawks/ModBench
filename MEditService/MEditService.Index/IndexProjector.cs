@@ -393,10 +393,18 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         // A copy in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !StillFailing(r)).ToList();
+        // ADR-0007 invariant 3: which truth a copy reads is its folder's answer, and the stamp
+        // records the one its rows came from. Tracking and untracking move the first alone, and no
+        // load-order difference above names them.
+        var stampedFromSource = index.At(RecordRef.Effective).GetTrackedCopies();
+        var reDerived = resolved
+            .Where(r => open.ContainsKey(r.Key)
+                        && SourceIngest.HoldsTree(r.Origin, r.Path, r.Name) != stampedFromSource.Contains(r.Key))
+            .ToList();
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
-        if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && conflictsComputed)
+        if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
         {
             _logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
             return;
@@ -431,6 +439,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             var metadata = held.Update(open[plugin.Key], plugin.Registration);
             index.Register(metadata.Key, metadata.Registration);
         }
+
+        ReDeriveMovedTruths(held, index, reDerived, token);
 
         // Two distinct numbers — time to the first queryable plugin (the tree becomes usable) and
         // time to the winner sweep completing. Measured here rather than client-side, where the
@@ -473,6 +483,27 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
                 "Load order reconciled in {TotalMs} ms: {Arrived} arrived, {Moved} moved, {Left} left, {Held} held (first plugin usable after {FirstUsableMs} ms, winner sweep {WinnersMs} ms)",
                 timer.ElapsedMilliseconds, arriving.Count, moved.Count, leaving.Count, held.Plugins.Count,
                 firstUsableMs, winnersTimer.ElapsedMilliseconds);
+        }
+    }
+
+    // A copy whose folder was tracked or untracked since it was indexed. Nothing here has compared
+    // the two truths, so the copy is re-derived whole from the one its folder now offers.
+    private void ReDeriveMovedTruths(
+        HeldPlugins held, IRecordIndex index, IReadOnlyList<RegisteredCopy> copies, CancellationToken token)
+    {
+        foreach (var plugin in copies)
+        {
+            token.ThrowIfCancellationRequested();
+            if (held.Find(plugin.Key) is not { } metadata) continue;
+
+            var holdsTree = SourceIngest.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "{Plugin} ({Origin}) now reads from {Truth}; re-deriving it", plugin.Name, plugin.Origin,
+                    holdsTree ? "its source tree" : "its binary");
+            }
+            IndexOnePlugin(held, index, metadata, holdsTree, token);
         }
     }
 

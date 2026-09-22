@@ -36,6 +36,10 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
         }
 
+        // The tree files the records the rows hold, so from here the copy loads from it (ADR-0007
+        // invariant 3): a copy tracked after it was indexed needs no more than the stamp.
+        if (treeFullyRead) index.RestampDerivation(key, DerivedFrom.SourceTree);
+
         // A set, not a list: a document that disagrees at both refs is one drifted document and one
         // refresh, which re-derives it at both.
         var drifted = onDisk

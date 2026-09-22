@@ -9,10 +9,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>query: a question and its answer are two arrows, and the Store is all the Queries
+/// <summary>query-index: a question and its answer are two arrows, and the Store is all the Queries
 /// read, so every answer here is one the client asked for and got back.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class QueryTraceTests : HostedTests
+public sealed class QueryIndexTraceTests : HostedTests
 {
     private const string UserPlugin = "UserMod.esp";
     private const string ImmutablePlugin = "Fallout4.esm";

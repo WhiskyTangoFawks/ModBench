@@ -9,11 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Traces;
 
-/// <summary>project: the snapshot arrives, the Projector reconciles it against what the plugins
-/// actually hold, and the Store announces what changed — so the client sees status, then a
-/// rows-changed push, then its own re-read.</summary>
+/// <summary>index-load-order: the snapshot arrives, the Indexer reconciles it against what the
+/// plugins actually hold, and the Store announces what changed — so the client sees status, then
+/// a rows-changed push, then its own re-read.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ProjectTraceTests : HostedTests
+public sealed class IndexLoadOrderTraceTests : HostedTests
 {
     private const string Plugin = "Projected.esp";
     private const string Origin = "ProjectedMod";
