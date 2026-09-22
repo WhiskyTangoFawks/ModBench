@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>Two captions the code contradicts: the Mod watcher announces nothing and tells the
 /// Index and Commands, and Queries hide the Index's reads and draw no arrow to a store.</summary>

@@ -3,7 +3,7 @@ using System.Xml.Linq;
 using MEditService.Tests.TestSupport;
 using Microsoft.CodeAnalysis;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>RS0030 is error everywhere. BannedSymbols.txt (time, blocking waits) binds
 /// unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 rule 2) binds by name the eight production
@@ -209,11 +209,10 @@ public sealed class BannedApiScopeTests
             .Where(name => !IsATestProject(name))
             .Order(StringComparer.Ordinal)];
 
-    // Every box's own test project (MEditService.<Box>.Tests), the process-isolated suite, and the
-    // shared fixture library — none of them a box the target architecture draws.
+    // Every box's own test project (MEditService.<Box>.Tests) and the shared fixture library —
+    // neither a box the target architecture draws.
     private static bool IsATestProject(string name) =>
-        name.StartsWith("MEditService.Tests", StringComparison.Ordinal)
-        || name.EndsWith(".Tests", StringComparison.Ordinal)
+        name.EndsWith(".Tests", StringComparison.Ordinal)
         || string.Equals(name, "MEditService.TestSupport", StringComparison.Ordinal);
 
     // A game assembly is Mutagen's per-release package. Core carries identity alone and is ambient

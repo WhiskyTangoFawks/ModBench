@@ -146,11 +146,14 @@ public sealed class ModFolderWatcher : IDisposable
         {
             if (window.ModTouched || window.Binaries.Count > 0)
                 RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
-            return;
+        }
+        else
+        {
+            foreach (var binary in window.Binaries)
+                await _sinks.RefreshBinary(binary.Key, binary.Path).ConfigureAwait(false);
         }
 
-        foreach (var binary in window.Binaries)
-            await _sinks.RefreshBinary(binary.Key, binary.Path).ConfigureAwait(false);
+        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Live settle of {ModFolder} done", mod.ModFolder);
     }
 
     // An operating-system overflow dropped events, so nothing this mod's watch saw can be trusted.

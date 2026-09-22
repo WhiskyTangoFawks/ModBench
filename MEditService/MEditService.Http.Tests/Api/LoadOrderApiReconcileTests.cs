@@ -2,13 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // ADR-0013: the three registration facts are Mod Management's to state, so they travel on
 // the wire the same way Origin does, and participation comes back derived.

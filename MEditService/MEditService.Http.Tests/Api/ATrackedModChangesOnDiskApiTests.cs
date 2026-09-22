@@ -1,19 +1,22 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>a-tracked-mod-changes-on-disk: the mod settles, the classifier decides what changed,
 /// one question per mod reaches the client, and the human's answer comes back as an envelope whose
 /// reply says what landed.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
+public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
     private const string Origin = "WatchedMod";
@@ -22,9 +25,53 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     private const string ChangedAsset = "Meshes/Thing.nif";
     private const string DeletedAsset = "Meshes/Gone.nif";
 
-    // Outlasts the watcher's own settle window, so a question that should not have opened has had
-    // its chance to.
-    private static readonly TimeSpan Settled = TimeSpan.FromSeconds(2);
+    // A safety bound against a hang, never the proof: the proof is the settle line itself.
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(20);
+
+    private readonly List<LogEntry> _logs = [];
+
+    protected override MEditHost CreateHost() => new(_logs);
+
+    // Where the log stands right now: a caller takes this before the write under test, so the
+    // settle it later awaits is one this write produced, never one an earlier step already logged.
+    private int LogMark()
+    {
+        lock (_logs) return _logs.Count;
+    }
+
+    // The watcher's own settle completion (ModFolderWatcher, Debug) logged no earlier than
+    // <paramref name="since"/>: the module's one signal that a classification — and any question it
+    // would have opened — is now final for this mod folder.
+    private async Task<bool> AwaitSettleLine(string modFolder, int since, TimeSpan timeout)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
+        {
+            lock (_logs)
+            {
+                if (_logs.Skip(since).Any(l =>
+                    l.Message.Contains(modFolder, StringComparison.Ordinal)
+                    && (l.Message.Contains("Live settle of", StringComparison.Ordinal)
+                        || l.Message.Contains("Load-time settle of", StringComparison.Ordinal))))
+                    return true;
+            }
+            await Task.Delay(20);
+        }
+        return false;
+    }
+
+    // A harmless resend: it changes nothing, but it publishes load-order-status carrying its own
+    // applied version, so we skip past any unread frame an earlier PUT on this stream already left.
+    private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerResend(
+        StreamReader stream, ScatteredFixtureData fx)
+    {
+        var response = await Client.PutLoadOrder(fx);
+        response.EnsureSuccessStatusCode();
+        var applied = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var version = applied.GetProperty("version").GetInt64();
+        return await stream.FramesThrough(
+            "load-order-status", d => d.GetProperty("loadOrderStatus").GetProperty("version").GetInt64() == version);
+    }
 
     private static ScatteredFixtureData OneMod() =>
         new PluginFixtureBuilder("trace-tracked-mod-changes")
@@ -75,7 +122,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AnsweringForAModNobodyTracked_Is503()
     {
-        using var fx = OneMod();
+        var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", Origin)).StatusCode);
@@ -85,7 +132,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AnsweringForAnOriginNoLoadedPluginHas_Is503()
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", "NoSuchMod")).StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("keep", "NoSuchMod")).StatusCode);
@@ -94,7 +141,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task ATrackedPluginRewrittenByAnotherTool_OpensOneQuestion_AndTheBaselineAnswerApplies()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         using var stream = await Client.NotificationStream();
 
         ARelease(fx);
@@ -114,8 +161,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AChangedAssetUnderEverything_OpensAQuestionNamingThePath()
     {
-        using var fx = await Watched(
-            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         using var stream = await Client.NotificationStream();
 
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
@@ -129,13 +176,17 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheSameAssetChangeUnderEdits_OpensNoQuestion()
     {
-        using var fx = await Watched(
-            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         using var stream = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
-        OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
+        var since = LogMark();
+        OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "changed-by-the-release");
 
-        await stream.NoEventOf("question-open", Settled);
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        var frames = await FramesThroughAMarkerResend(stream, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // meta.ini is a tell, never a trigger: its version chooses the default answer to a question
@@ -143,13 +194,17 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AMetaIniVersionBumpAlone_OpensNoQuestion()
     {
-        using var fx = await Watched(
-            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n"));
+        var fx = Owned(await Watched(
+            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n")));
         using var stream = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
-        OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), "meta.ini"), "version=2.0.0\n");
+        var since = LogMark();
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
-        await stream.NoEventOf("question-open", Settled);
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        var frames = await FramesThroughAMarkerResend(stream, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // One dialog per mod: a release-sized burst reaches the client as a question that names the
@@ -158,10 +213,10 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     public async Task AReleaseTouchingManyFiles_OpensOneQuestionNamingAllOfThem()
     {
         var assets = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
-        using var fx = await Watched("Everything", modFolder =>
+        var fx = Owned(await Watched("Everything", modFolder =>
         {
             foreach (var name in assets) OtherTool.WritesTheFile(Path.Combine(modFolder, name), "original");
-        });
+        }));
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         using var stream = await Client.NotificationStream();
 
@@ -179,8 +234,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AChangeMadeWhileTheServiceWasDown_IsClassifiedAtTheNextLoad()
     {
-        using var fx = await Watched(
-            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         Restart();
 
         OtherTool.WritesTheFile(
@@ -198,7 +253,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("keep")]
     public async Task AnAnsweredQuestion_StaysAnsweredAcrossARestart(string verb)
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         using (var stream = await Client.NotificationStream())
         {
             ARelease(fx);
@@ -209,8 +264,13 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         Restart();
 
         using var afterRestart = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var since = LogMark();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        await afterRestart.NoEventOf("question-open", Settled);
+
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
+        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     [Theory]
@@ -218,7 +278,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("keep")]
     public async Task AnsweringForAnOriginNoLoadOrderHolds_Is503(string verb)
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var response = await Answer(verb, "NoSuchMod");
 
@@ -230,7 +290,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAChangeThatCollidesWithALocalEdit_RefusesInsideA200_NamingTheRecord()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
         using var stream = await Client.NotificationStream();
@@ -248,7 +308,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAChangeThatCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         using var stream = await Client.NotificationStream();
         ARelease(fx);
@@ -272,7 +332,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaselineAndRefusesTheRebaseNamingThePath()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
         using var stream = await Client.NotificationStream();
@@ -294,7 +354,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task RebasingACleanEditBranch_ReportsClean()
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
 
@@ -309,7 +369,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("/plugins/rebase/continue")]
     public async Task RebasingAnOriginNoLoadOrderHolds_Is404(string route)
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var response = await Client.PostAsJsonAsync(route, new { origin = "NoSuchMod" });
 
@@ -322,7 +382,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheBaselineAnswerUnderEverything_TakesTheChangedAndTheDroppedAssetToo()
     {
-        using var fx = await WatchedWithAssets();
+        var fx = Owned(await WatchedWithAssets());
         using (var stream = await Client.NotificationStream())
         {
             AReleaseOverTheAssets(fx);
@@ -341,8 +401,13 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
 
         Restart();
         using var afterRestart = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var since = LogMark();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        await afterRestart.NoEventOf("question-open", Settled);
+
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
+        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // Keep answers the question and stages what it landed, so a second release touching the same
@@ -350,7 +415,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAnAssetTheLastKeepStaged_RefusesInsideA200_NamingThePath()
     {
-        using var fx = await WatchedWithAssets();
+        var fx = Owned(await WatchedWithAssets());
         using (var first = await Client.NotificationStream())
         {
             AReleaseOverTheAssets(fx);

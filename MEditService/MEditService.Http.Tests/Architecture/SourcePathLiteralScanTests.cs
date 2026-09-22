@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The repository is the only type naming a path under source (ADR-0014 invariant 5): the
 /// root folder, the door's file names and the JSON suffix are spelled in its own files and nowhere

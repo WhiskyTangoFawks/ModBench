@@ -1,16 +1,18 @@
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>switch-profile: the profile line is written and forgotten, and what reaches mEdit is
 /// the next whole snapshot, so a profile with another plugin set replaces the held one rather than
 /// merging into it.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class SwitchProfileTraceTests : HostedTests
+public sealed class SwitchProfileApiTests : HostedTests
 {
     private const string Shared = "Shared.esp";
     private const string OnlyInDefault = "DefaultOnly.esp";

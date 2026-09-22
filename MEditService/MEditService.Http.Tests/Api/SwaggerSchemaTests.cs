@@ -1,9 +1,10 @@
 using System.Linq;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits `nullable: true`
 // alongside a bare $ref. The generated swagger.json is asserted directly, since that is the

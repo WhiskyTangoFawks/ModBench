@@ -1,6 +1,6 @@
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The retired external-change button strings, modelled on <see cref="CarrierScanTests"/>,
 /// so a comment, commit message, or fixture cannot regrow them under the wording the service now

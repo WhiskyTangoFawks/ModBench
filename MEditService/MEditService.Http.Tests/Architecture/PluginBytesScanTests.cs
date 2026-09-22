@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>ADR-0005 rule 2 in both directions: a plugin's bytes are opened only inside the Plugin
 /// adapter, and the adapter answers from bytes, never from a source tree (ADR-0015 invariant 5).</summary>

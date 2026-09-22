@@ -2,7 +2,7 @@ using MEditService.Http;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 public sealed class PluginResponseTests
 {

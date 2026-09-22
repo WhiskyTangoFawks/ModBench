@@ -1,8 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>Pins what the classifier makes of several plugins disagreeing, at the wire, including
 /// the two easy to get wrong: an override identical to its master (not a conflict) and one

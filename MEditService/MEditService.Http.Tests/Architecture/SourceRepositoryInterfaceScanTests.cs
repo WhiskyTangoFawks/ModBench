@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The Source repository is entered through its interface (ADR-0007): git and the layout
 /// are named nowhere else. Its own project is the whole of the inside; every other project is a

@@ -1,6 +1,6 @@
 using MEditService.Index;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>Holds the write gate on a helper thread: <see cref="IndexWriteGate"/> is reentrant, so a
 /// test holding it itself would observe nothing. The constructor returns only once the gate is

@@ -1,7 +1,8 @@
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>The committed cut-down Fallout 4 plugin, loaded through the real host exactly as a
 /// game-directory copy: an empty temp game folder standing in for one, the plugin itself the

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The write side's four shared concerns have one implementation each, in the module the
 /// gestures share (ADR-0014). A gesture resolving its own target, deferral, rename or FormKey fails
