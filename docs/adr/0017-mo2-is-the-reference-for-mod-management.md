@@ -2,8 +2,10 @@
 
 Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventions. Where MO2 has
 an answer, Mod Management adopts it, and it goes further than a UX reference: MO2's files are
-Modbench's files. Every divergence is recorded here. The rule does not govern record editing,
-which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)).
+Modbench's files. Every divergence and omission is recorded in
+[mo2.md](../out-of-scope/mo2.md). The rule does not govern record editing,
+which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)), or deployment,
+which follows Vortex ([ADR-0020](0020-vortex-is-the-reference-for-deployment.md)).
 
 ## Strategic invariants
 
@@ -32,16 +34,7 @@ which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.m
 
 ## Permitted divergences
 
-1. **The top bar is the Toolbox**, the container's first view: a small readout of the Instance's
-   value, Profile and Deployment, with the workspace-scope actions in its title bar, because VS
-   Code has no container-title contribution point to hang them on
-   ([containers.md](../specs/containers.md)). Platform limitation.
-2. **Downloads starts collapsed.** Downloads is occasional, unlike Mods and Plugins. That is the
-   argument for staying collapsed, not for a different surface. The status-bar item for the
-   ambient glance is deferred to Nexus integration, with the `nxm://` handler
-   ([downloads.md](../specs/downloads.md)). Maintainer ruling.
-3. **There is no Archives view.** Modbench never builds a merged view
-   ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
+[mo2.md](../out-of-scope/mo2.md) lists every divergence and every omission, with the reason for each.
 
 ## Alternatives rejected
 
