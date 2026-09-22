@@ -1,4 +1,5 @@
-using MEditService.TestSupport.TestSupport;
+
+using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 

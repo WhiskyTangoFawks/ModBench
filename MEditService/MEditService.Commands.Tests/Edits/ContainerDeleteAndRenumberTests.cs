@@ -4,7 +4,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -30,7 +29,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
     {
-        var directory = (Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
+        var embedCellFile = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        var directory = Path.GetDirectoryName(embedCellFile)
+            ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory.");
         Assert.True(Directory.Exists(directory));
 
         var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
@@ -121,8 +122,10 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void RenumberingAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
     {
-        var oldDirectory = (Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.CellEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
-        var parent = (Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException("Expected a parent directory."));
+        var cellFile = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
+        var oldDirectory = Path.GetDirectoryName(cellFile)
+            ?? throw new InvalidOperationException($"Expected '{cellFile}' to have a parent directory.");
+        var parent = Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException($"Expected '{oldDirectory}' to have a parent directory.");
 
         var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 

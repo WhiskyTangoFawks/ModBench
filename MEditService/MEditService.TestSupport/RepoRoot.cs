@@ -1,4 +1,4 @@
-namespace MEditService.TestSupport.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>The checkout's own root, walked up from the test output directory: every project's
 /// architecture-style scan starts here.</summary>

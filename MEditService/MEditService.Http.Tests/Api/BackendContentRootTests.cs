@@ -11,7 +11,7 @@ namespace MEditService.Http.Tests.Api;
 public sealed class BackendContentRootTests
 {
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
-        ?? throw new InvalidOperationException("Expected a parent directory.");
+        ?? throw new InvalidOperationException($"Expected '{typeof(Program).Assembly.Location}' to have a parent directory.");
 
     [Fact]
     public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory()

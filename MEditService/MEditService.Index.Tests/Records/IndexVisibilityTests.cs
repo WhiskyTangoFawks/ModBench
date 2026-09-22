@@ -3,7 +3,6 @@ using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;

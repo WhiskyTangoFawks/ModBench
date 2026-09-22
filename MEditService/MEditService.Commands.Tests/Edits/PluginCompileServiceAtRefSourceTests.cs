@@ -2,7 +2,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -22,7 +21,7 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
     public async Task Compile_AtARefWhoseSourceHasTwoDocumentsClaimingOneFormKey_RefusesNamingTheFormKey()
     {
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory((Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
+        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
         File.WriteAllText(collidingPath, File.ReadAllText(_mod.NpcSourceFile));
         _mod.CommitWorkingTree("two documents, one FormKey");
         File.Delete(collidingPath);

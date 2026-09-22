@@ -1,7 +1,7 @@
 using System.Reflection;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;
 

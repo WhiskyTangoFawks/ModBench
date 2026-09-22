@@ -1,4 +1,4 @@
-namespace MEditService.TestSupport.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>The repository's own C# source, for the guards that scan text rather than metadata:
 /// build output is generated, so a needle found there names nobody.</summary>

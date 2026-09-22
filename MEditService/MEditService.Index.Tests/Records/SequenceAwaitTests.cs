@@ -2,7 +2,6 @@ using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
@@ -59,7 +58,7 @@ public sealed class SequenceAwaitTests : IDisposable
     }
 
     [Fact]
-    public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockStill()
+    public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockAdvancedOnlyToWakeThePoll()
     {
         var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, TimeSpan.FromDays(1));
 

@@ -4,7 +4,6 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Ports;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

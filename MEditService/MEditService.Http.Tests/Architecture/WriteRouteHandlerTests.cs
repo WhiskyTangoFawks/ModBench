@@ -2,7 +2,6 @@ using System.Reflection;
 using MEditService.Commands;
 using MEditService.Http.Tests.Api;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;

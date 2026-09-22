@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using MEditService.LoadOrder;
 
-namespace MEditService.TestSupport.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>Goldens were captured from a known-good implementation and reviewed by hand, so
 /// they are independent of what the code emits. <c>MEDIT_GOLDEN_UPDATE=1</c> regenerates.</summary>
@@ -41,7 +41,7 @@ public static class Golden
     // The caller's own file (CallerFilePath), two levels up from any TestProject/Subfolder/File.cs,
     // reaches this project's sibling TestData — the one committed copy every test project shares.
     private static string GoldenDirectory(string callerFile) =>
-        Path.Combine((Path.GetDirectoryName(callerFile) ?? throw new InvalidOperationException("Expected a parent directory.")), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
+        Path.Combine(Path.GetDirectoryName(callerFile) ?? throw new InvalidOperationException($"Expected '{callerFile}' to have a parent directory."), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
 
     private static string Canonical(object? value)
     {

@@ -2,7 +2,7 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceRepo.Tests.Source;

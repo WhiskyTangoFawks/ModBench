@@ -4,7 +4,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
@@ -220,7 +219,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // Branch one: no document of its own, and no other record's document carries it. An interior
         // cell removed from disk by something outside Modbench is exactly that, and the tree is the
         // only thing asked (ADR-0015 invariant 5).
-        Directory.Delete((Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId)) ?? throw new InvalidOperationException("Expected a parent directory.")), recursive: true);
+        var embedCellFile = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        Directory.Delete(Path.GetDirectoryName(embedCellFile)
+            ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory."), recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
@@ -291,7 +292,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAWorldspacesEditorId_MovesItsSourceDirectory()
     {
-        var oldDirectory = (Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId)) ?? throw new InvalidOperationException("Expected a parent directory."));
+        var worldspaceFile = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
+        var oldDirectory = Path.GetDirectoryName(worldspaceFile)
+            ?? throw new InvalidOperationException($"Expected '{worldspaceFile}' to have a parent directory.");
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
 

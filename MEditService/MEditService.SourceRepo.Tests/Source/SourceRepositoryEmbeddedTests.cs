@@ -4,7 +4,6 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -278,7 +277,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
         var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
-        Directory.CreateDirectory((Path.GetDirectoryName(carrier) ?? throw new InvalidOperationException("Expected a parent directory.")));
+        Directory.CreateDirectory(Path.GetDirectoryName(carrier) ?? throw new InvalidOperationException($"Expected '{carrier}' to have a parent directory."));
         File.WriteAllText(
             carrier,
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +

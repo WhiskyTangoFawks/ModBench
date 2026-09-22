@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.SourceRepo.Tests.TestSupport;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceRepo.Tests.Source;
@@ -46,8 +46,12 @@ public sealed class SourceTransactionTests : IDisposable
     private string FlatFile(string formKey, string recordType, string editorId) =>
         FlatFile(_root, formKey, recordType, editorId);
 
-    private string ContainerDirectory(string formKey, string recordType, string editorId) =>
-        (Path.GetDirectoryName(SourceDocumentPath.Of(_root, PluginName, recordType, formKey, editorId, Release)) ?? throw new InvalidOperationException("Expected a parent directory."));
+    private string ContainerDirectory(string formKey, string recordType, string editorId)
+    {
+        var documentPath = SourceDocumentPath.Of(_root, PluginName, recordType, formKey, editorId, Release);
+        return Path.GetDirectoryName(documentPath)
+            ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
+    }
 
     // A directory at the destination's own ".tmp" name blocks the write-then-rename that lands
     // there, before it ever reaches the real path.

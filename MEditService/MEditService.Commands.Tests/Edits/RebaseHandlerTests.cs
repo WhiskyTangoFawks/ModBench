@@ -1,7 +1,7 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 

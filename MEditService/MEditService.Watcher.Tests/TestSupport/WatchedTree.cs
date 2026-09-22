@@ -5,7 +5,7 @@ using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

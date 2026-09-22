@@ -7,7 +7,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -137,7 +136,7 @@ public sealed class MasterPruningRoundTripGateTests
         return ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath),
             GameRelease.Fallout4,
-            RealPluginReadParameters.For(PluginStrings.In((Path.GetDirectoryName(fixturePath) ?? throw new InvalidOperationException("Expected a parent directory.")))));
+            FixtureReadParameters.For(PluginStrings.In(Path.GetDirectoryName(fixturePath) ?? throw new InvalidOperationException($"Expected '{fixturePath}' to have a parent directory."))));
     }
 
     private static async Task<IFallout4Mod> DeserializeLegendariesThroughSource(string scratchDir)
@@ -146,12 +145,12 @@ public sealed class MasterPruningRoundTripGateTests
         var modPath = new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath);
         var (files, _) = await TestAdapters.Mutagen().ReadSourceAsync(
             modPath, LegendariesFixtureFileName, GameRelease.Fallout4,
-            PluginStrings.In((Path.GetDirectoryName(fixturePath) ?? throw new InvalidOperationException("Expected a parent directory."))));
+            PluginStrings.In(Path.GetDirectoryName(fixturePath) ?? throw new InvalidOperationException($"Expected '{fixturePath}' to have a parent directory.")));
 
         foreach (var file in files)
         {
             var fullPath = Path.Combine(scratchDir, file.RelativePath);
-            Directory.CreateDirectory((Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException($"Expected '{fullPath}' to have a parent directory."));
             await File.WriteAllBytesAsync(fullPath, file.Content);
         }
 

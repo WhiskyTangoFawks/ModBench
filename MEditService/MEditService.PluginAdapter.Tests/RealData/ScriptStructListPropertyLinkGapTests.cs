@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.TestSupport.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -20,7 +20,7 @@ public sealed class ScriptStructListPropertyLinkGapTests
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
         var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, RealPluginReadParameters.For(PluginStrings.In((Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException("Expected a parent directory.")))));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, FixtureReadParameters.For(PluginStrings.In(Path.GetDirectoryName(FixturePath) ?? throw new InvalidOperationException($"Expected '{FixturePath}' to have a parent directory."))));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
             .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");

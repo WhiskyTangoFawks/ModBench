@@ -2,7 +2,6 @@ using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -33,7 +32,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             // layout, a plugin folder inside it with no plugin file left.
             var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
-            Directory.CreateDirectory((Path.GetDirectoryName(orphanFile) ?? throw new InvalidOperationException("Expected a parent directory.")));
+            Directory.CreateDirectory(Path.GetDirectoryName(orphanFile) ?? throw new InvalidOperationException($"Expected '{orphanFile}' to have a parent directory."));
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
             using var manager = Indexes.Open(holder);

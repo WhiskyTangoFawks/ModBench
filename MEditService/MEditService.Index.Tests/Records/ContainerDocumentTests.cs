@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

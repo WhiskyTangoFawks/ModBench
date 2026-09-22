@@ -1,7 +1,6 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Serialization;

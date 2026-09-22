@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
@@ -6,12 +7,10 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -77,10 +76,10 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         Assert.True(result.Succeeded, result.RefusalReason);
 
         // The recompiled binary keeps the Localized flag.
-        using var overlayDisposable = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4,
-            RealPluginReadParameters.For(new PluginStrings(_modFolder, _gameDir)));
-        Assert.True(((IFallout4ModGetter)overlayDisposable).UsingLocalization);
+        var formIds = TestAdapters.Mutagen().ReadFormIds(new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
+        using var header = JsonDocument.Parse(formIds.HeaderText);
+        var flags = header.RootElement.GetProperty("ModHeader").GetProperty("Flags").EnumerateArray().Select(f => f.GetString());
+        Assert.Contains("Localized", flags);
 
         // Every strings file compile rewrote is byte-identical to what Track captured. A real change
         // (StringsWriter re-assigns sequential keys in registration order) would show up here even though

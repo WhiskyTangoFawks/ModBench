@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 

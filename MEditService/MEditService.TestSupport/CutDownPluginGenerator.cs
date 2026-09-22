@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.TestSupport.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. A tool,
 /// not an assertion: without <c>MEDIT_REGEN_TESTDATA=1</c> and a game install it does nothing.
@@ -63,7 +63,7 @@ public sealed class CutDownPluginGenerator
         CopyInteriorCells(source, target);
 
         var outPath = Path.Combine(SourceTestDataDir(), RealDataPlugin.PluginFileName);
-        Directory.CreateDirectory((Path.GetDirectoryName(outPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
+        Directory.CreateDirectory(Path.GetDirectoryName(outPath) ?? throw new InvalidOperationException($"Expected '{outPath}' to have a parent directory."));
         target.WriteToBinary(outPath, new BinaryWriteParameters
         {
             // Override records keep their Fallout4.esm FormKeys; iterate so the header lists the

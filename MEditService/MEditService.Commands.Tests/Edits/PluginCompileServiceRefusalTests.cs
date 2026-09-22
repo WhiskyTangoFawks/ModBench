@@ -2,7 +2,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
-using MEditService.TestSupport.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -49,7 +48,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // records without changing one's FormKey.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory((Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException("Expected a parent directory.")));
+        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
         File.WriteAllText(collidingPath, npcSourceText);
 
         var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
@@ -68,8 +67,10 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         // The name still has to round-trip to the NPC's own FormKey — only the EditorID half differs —
         // or compile would refuse the mismatch before it ever reaches the duplicate check under test.
+        var npcSourceFile = _mod.NpcSourceFile;
         var duplicatePath = Path.Combine(
-            (Path.GetDirectoryName(_mod.NpcSourceFile) ?? throw new InvalidOperationException("Expected a parent directory.")), $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
+            Path.GetDirectoryName(npcSourceFile) ?? throw new InvalidOperationException($"Expected '{npcSourceFile}' to have a parent directory."),
+            $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
         // Guards the arrangement itself: a leaf this close to the real one must still land beside it,
         // never overwrite it, or the "two files" premise below is false.
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);

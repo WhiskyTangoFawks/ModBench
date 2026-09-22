@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace MEditService.TestSupport.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>A filesystem oracle beside <c>git status</c>: git tracks files, not directories, so a stray
 /// empty record directory is invisible to status while failing the next ingest.</summary>

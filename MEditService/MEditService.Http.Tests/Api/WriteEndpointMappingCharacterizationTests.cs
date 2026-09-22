@@ -5,7 +5,6 @@ using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using MEditService.TestSupport.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -56,9 +55,12 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         return DocumentNodes.StringValueOf(records.GetProperty("items")[0].GetProperty("formKey"));
     }
 
-    private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
-        Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == origin).Path)
-            ?? throw new InvalidOperationException("Expected a parent directory.");
+    private static string ModFolderOf(ScatteredFixtureData fx, string origin)
+    {
+        var path = fx.Plugins.Single(p => p.Origin == origin).Path;
+        return Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory.");
+    }
 
     // --- DeleteRecord ---
 
