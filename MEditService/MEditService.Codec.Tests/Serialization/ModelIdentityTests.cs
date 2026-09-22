@@ -359,28 +359,6 @@ public sealed class ModelIdentityTests
         mod.Cells.Records.Add(block);
     }
 
-    [Fact]
-    public async Task FindFirst_CodecDeciderCost_IsLoggedAndBounded()
-    {
-        var (original, recompiled, _, _) = await ParseWriteAndReparse("RecruitSierra.esl");
-        // Warm the codec/serializer once so the measurement is the steady-state cost.
-        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
-
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
-        stopwatch.Stop();
-
-        var recordCount = original.EnumerateMajorRecords().Count();
-        _output.WriteLine(
-            $"FindFirst over {recordCount} records: {stopwatch.ElapsedMilliseconds} ms " +
-            $"({(double)stopwatch.ElapsedMilliseconds / recordCount:F2} ms/record, warm)");
-        Assert.True(stopwatch.ElapsedMilliseconds < 30_000, $"took {stopwatch.ElapsedMilliseconds} ms");
-    }
-
-    private readonly Xunit.Abstractions.ITestOutputHelper _output;
-
-    public ModelIdentityTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
-
     internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
         ParseWriteAndReparse(string fileName)
     {

@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using MEditService.Codec.Serialization;
 
-namespace MEditService.SourceRepo.Tests.Source;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Per-row fixtures are synthetic reproductions of the surveyed defects, never the mod
 /// author's payload bytes: the repo commits no third-party plugin content (MEditService/CLAUDE.md).</summary>
