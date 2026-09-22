@@ -83,26 +83,8 @@ public sealed class ProjectionSequenceApiTests : IDisposable
         Assert.True(timer.ElapsedMilliseconds < 3000, $"took {timer.ElapsedMilliseconds} ms for a 300 ms bound");
     }
 
-    [Fact]
-    public async Task AwaitSequence_ProjectionLandsWhileWaiting_ReturnsTrueAtTheLandedSequence()
-    {
-        var current = await _client.GetFromJsonAsync<long>("/load-order/sequence");
-        using var fx = new PluginFixtureBuilder("api-sequence-landing")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .Build();
-
-        // Nothing but the write below can satisfy current + 1, so a true answer proves the await
-        // observed that write land rather than a value already there when it was asked.
-        var awaitTask = _client.GetAsync(new Uri($"/load-order/sequence/await?atLeast={current + 1}&timeoutMs=20000", UriKind.Relative));
-        var put = await _client.PutAsJsonAsync("/load-order", LoadOrderBody(fx));
-        put.EnsureSuccessStatusCode();
-
-        var response = await awaitTask;
-        response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(result.GetProperty("reached").GetBoolean());
-        Assert.True(result.GetProperty("sequence").GetInt64() > current);
-    }
+    // Landing-while-waiting is retired here: no observable of "waiting" orders the GET and the PUT
+    // on their separate connections. SequenceAwaitTests holds the fact at AwaitSequenceAsync's seam.
 
     [Fact]
     public async Task AwaitSequence_NonPositiveTimeout_Returns400()

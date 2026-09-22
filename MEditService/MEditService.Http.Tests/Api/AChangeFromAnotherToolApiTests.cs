@@ -8,12 +8,12 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>a-change-from-another-tool: a change from another tool and a change from Modbench are
 /// the same signal, because each read model learns only by watching.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class AChangeFromAnotherToolTraceTests : HostedTests
+public sealed class AChangeFromAnotherToolApiTests : HostedTests
 {
     private const string Plugin = "Shared.esp";
     private const string Origin = "SharedMod";

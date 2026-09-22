@@ -5,8 +5,8 @@ using MEditService.Tests;
 
 namespace MEditService.Http.Tests.Records;
 
-/// <summary>AC4 alone: a read is never queued behind an in-flight write. That a write takes the
-/// gate is pinned as the Index's own module fact by
+/// <summary>A read is never queued behind an in-flight write. That a write takes the gate is
+/// pinned as the Index's own module fact by
 /// <c>IndexWriteGateTests.ASecondCaller_EntersOnlyAfterTheFirstReleases</c>.</summary>
 public sealed class IndexWriteSerializationTests : IDisposable
 {

@@ -10,13 +10,13 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>a-tracked-mod-changes-on-disk: the mod settles, the classifier decides what changed,
 /// one question per mod reaches the client, and the human's answer comes back as an envelope whose
 /// reply says what landed.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
+public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
     private const string Origin = "WatchedMod";
@@ -51,7 +51,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
             {
                 if (_logs.Skip(since).Any(l =>
                     l.Message.Contains(modFolder, StringComparison.Ordinal)
-                    && l.Message.Contains("settle", StringComparison.Ordinal)))
+                    && (l.Message.Contains("Live settle of", StringComparison.Ordinal)
+                        || l.Message.Contains("Load-time settle of", StringComparison.Ordinal))))
                     return true;
             }
             await Task.Delay(20);
@@ -59,13 +60,17 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         return false;
     }
 
-    // A harmless resend: it changes nothing, but it still publishes load-order-status (own doc on
-    // AwaitTerminalLoadOrderStatus), so its frame is a delivery oracle for whatever settled first.
+    // A harmless resend: it changes nothing, but it publishes load-order-status carrying its own
+    // applied version, so we skip past any unread frame an earlier PUT on this stream already left.
     private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerResend(
         StreamReader stream, ScatteredFixtureData fx)
     {
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        return await stream.FramesThrough("load-order-status", _ => true);
+        var response = await Client.PutLoadOrder(fx);
+        response.EnsureSuccessStatusCode();
+        var applied = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var version = applied.GetProperty("version").GetInt64();
+        return await stream.FramesThrough(
+            "load-order-status", d => d.GetProperty("loadOrderStatus").GetProperty("version").GetInt64() == version);
     }
 
     private static ScatteredFixtureData OneMod() =>
@@ -117,7 +122,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AnsweringForAModNobodyTracked_Is503()
     {
-        using var fx = OneMod();
+        var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", Origin)).StatusCode);
@@ -127,7 +132,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AnsweringForAnOriginNoLoadedPluginHas_Is503()
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("absorb", "NoSuchMod")).StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Answer("keep", "NoSuchMod")).StatusCode);
@@ -136,7 +141,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task ATrackedPluginRewrittenByAnotherTool_OpensOneQuestion_AndTheBaselineAnswerApplies()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         using var stream = await Client.NotificationStream();
 
         ARelease(fx);
@@ -156,8 +161,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AChangedAssetUnderEverything_OpensAQuestionNamingThePath()
     {
-        using var fx = await Watched(
-            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         using var stream = await Client.NotificationStream();
 
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
@@ -171,8 +176,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheSameAssetChangeUnderEdits_OpensNoQuestion()
     {
-        using var fx = await Watched(
-            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         using var stream = await Client.NotificationStream();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
@@ -189,8 +194,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AMetaIniVersionBumpAlone_OpensNoQuestion()
     {
-        using var fx = await Watched(
-            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n"));
+        var fx = Owned(await Watched(
+            beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n")));
         using var stream = await Client.NotificationStream();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
@@ -208,10 +213,10 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     public async Task AReleaseTouchingManyFiles_OpensOneQuestionNamingAllOfThem()
     {
         var assets = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
-        using var fx = await Watched("Everything", modFolder =>
+        var fx = Owned(await Watched("Everything", modFolder =>
         {
             foreach (var name in assets) OtherTool.WritesTheFile(Path.Combine(modFolder, name), "original");
-        });
+        }));
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         using var stream = await Client.NotificationStream();
 
@@ -229,8 +234,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task AChangeMadeWhileTheServiceWasDown_IsClassifiedAtTheNextLoad()
     {
-        using var fx = await Watched(
-            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
+        var fx = Owned(await Watched(
+            "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original")));
         Restart();
 
         OtherTool.WritesTheFile(
@@ -248,7 +253,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("keep")]
     public async Task AnAnsweredQuestion_StaysAnsweredAcrossARestart(string verb)
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         using (var stream = await Client.NotificationStream())
         {
             ARelease(fx);
@@ -273,7 +278,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("keep")]
     public async Task AnsweringForAnOriginNoLoadOrderHolds_Is503(string verb)
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var response = await Answer(verb, "NoSuchMod");
 
@@ -285,7 +290,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAChangeThatCollidesWithALocalEdit_RefusesInsideA200_NamingTheRecord()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
         using var stream = await Client.NotificationStream();
@@ -303,7 +308,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAChangeThatCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         using var stream = await Client.NotificationStream();
         ARelease(fx);
@@ -327,7 +332,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaselineAndRefusesTheRebaseNamingThePath()
     {
-        using var fx = await Watched();
+        var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
         using var stream = await Client.NotificationStream();
@@ -349,7 +354,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task RebasingACleanEditBranch_ReportsClean()
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
 
@@ -364,7 +369,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [InlineData("/plugins/rebase/continue")]
     public async Task RebasingAnOriginNoLoadOrderHolds_Is404(string route)
     {
-        using var fx = await Watched();
+        Owned(await Watched());
 
         var response = await Client.PostAsJsonAsync(route, new { origin = "NoSuchMod" });
 
@@ -377,7 +382,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task TheBaselineAnswerUnderEverything_TakesTheChangedAndTheDroppedAssetToo()
     {
-        using var fx = await WatchedWithAssets();
+        var fx = Owned(await WatchedWithAssets());
         using (var stream = await Client.NotificationStream())
         {
             AReleaseOverTheAssets(fx);
@@ -410,7 +415,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     [Fact]
     public async Task KeepingAnAssetTheLastKeepStaged_RefusesInsideA200_NamingThePath()
     {
-        using var fx = await WatchedWithAssets();
+        var fx = Owned(await WatchedWithAssets());
         using (var first = await Client.NotificationStream())
         {
             AReleaseOverTheAssets(fx);

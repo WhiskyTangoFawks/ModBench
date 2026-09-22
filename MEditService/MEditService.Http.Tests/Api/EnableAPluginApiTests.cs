@@ -9,12 +9,12 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>enable-a-plugin: the plugins.txt splice reaches mEdit as the next snapshot, and the
 /// implicit masters the splice needs are asked of mEdit with no load order held at all.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EnableAPluginTraceTests : HostedTests
+public sealed class EnableAPluginApiTests : HostedTests
 {
     private const string First = "First.esp";
     private const string Second = "Second.esp";

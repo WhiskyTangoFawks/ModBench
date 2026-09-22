@@ -34,6 +34,29 @@ public sealed class TraceTestClassScanTests
             + string.Join("\n", missing));
     }
 
+    // decompile-plugin is the rename of track-a-plugin (commit eb63f559); the class follows the
+    // rename in debt #966, the ticket that merges track, absorb and keep into one command.
+    private const string DeferredRenameClass = "TrackAPluginTraceTests";
+
+    [Fact]
+    public void EveryTraceSuffixedClass_NamesATraceFile()
+    {
+        var solution = ArchitectureTests.SolutionDirectory();
+        var traceStems = TraceFileStems(solution);
+        var orphans = TraceSuffixedClasses(solution)
+            .Where(name => !string.Equals(name, DeferredRenameClass, StringComparison.Ordinal))
+            .Where(name => !traceStems.Contains(TraceStemFor(name)))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(
+            orphans.Count == 0,
+            $"{orphans.Count} class(es) end in TraceTests but name no file under docs/architecture/traces/. "
+            + "Rename the class to the trace it now covers, or drop the suffix (to *ApiTests) once its flow "
+            + "is folded into a trace another class already covers:\n"
+            + string.Join("\n", orphans));
+    }
+
     private static List<string> TracesWithAnMEditActor(string solution) =>
         [.. Directory
             .EnumerateFiles(Path.Combine(ServiceProjects.DocsArchitecture(solution), "traces"), "*.d2")
@@ -50,4 +73,21 @@ public sealed class TraceTestClassScanTests
         string.Concat(Path.GetFileNameWithoutExtension(trace)
             .Split('-')
             .Select(word => char.ToUpperInvariant(word[0]) + word[1..])) + "TraceTests";
+
+    private static HashSet<string> TraceFileStems(string solution) =>
+        [.. Directory
+            .EnumerateFiles(Path.Combine(ServiceProjects.DocsArchitecture(solution), "traces"), "*.d2")
+            .Select(trace => Path.GetFileNameWithoutExtension(trace))];
+
+    private static List<string> TraceSuffixedClasses(string solution) =>
+        [.. SourceTree.CSharpFiles(ServiceProjects.Folder(solution, Endpoints))
+            .SelectMany(file => Regex.Matches(File.ReadAllText(file), @"\bclass\s+(\w+TraceTests)\b"))
+            .Select(match => match.Groups[1].Value)];
+
+    // The inverse of ClassNameFor: each capital starts a new word, lowercased and hyphen-joined.
+    private static string TraceStemFor(string traceSuffixedClass)
+    {
+        var stem = traceSuffixedClass[..^"TraceTests".Length];
+        return string.Join('-', Regex.Matches(stem, "[A-Z][a-z0-9]*").Select(m => m.Value.ToLowerInvariant()));
+    }
 }

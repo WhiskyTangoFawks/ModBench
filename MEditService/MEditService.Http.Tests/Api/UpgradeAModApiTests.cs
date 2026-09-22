@@ -8,13 +8,13 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>upgrade-a-mod: the install replaces the tracked folder's contents around .git, and from
 /// there this is a-tracked-mod-changes-on-disk with the version as the tell that pre-selects the
 /// baseline answer.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class UpgradeAModTraceTests : HostedTests
+public sealed class UpgradeAModApiTests : HostedTests
 {
     private const string Plugin = "Upgraded.esp";
     private const string Origin = "UpgradedMod";
