@@ -109,7 +109,8 @@ public sealed class WatchArmingTests
         await tree.ApplyLoadOrder();
 
         // The source root appearing while the mod is still untracked: a batch opens and closes with
-        // nothing to project from.
+        // nothing to project from. A fresh directory has no bytes to move in; creation is already
+        // one event.
         await tree.Observes(() => Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName)));
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Of("validate"));

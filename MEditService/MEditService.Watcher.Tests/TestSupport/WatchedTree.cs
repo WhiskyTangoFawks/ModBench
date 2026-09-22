@@ -194,20 +194,17 @@ internal sealed class WatchedTree : IDisposable
     {
         var expected = Clock.Observations + writes.Length;
         foreach (var write in writes) write();
-        Assert.True(await Reached(() => Clock.Observations >= expected),
-            "a write never reached the watcher's own watch");
+        await Reached(() => Clock.Observations >= expected);
+        Assert.True(Clock.Observations == expected,
+            $"expected {expected} observations, saw {Clock.Observations}");
     }
 
     /// <summary>Advances past both windows until <paramref name="reached"/> holds. The clock is the
     /// only thing that closes a batch, so no batch lands between turns.</summary>
-    internal Task<bool> Settles(Func<bool> reached) => Settles(reached, PastBothWindows);
-
-    /// <summary>Advances by <paramref name="perTurn"/> until <paramref name="reached"/> holds, for a
-    /// test whose subject is which of the two windows closed the batch.</summary>
-    internal Task<bool> Settles(Func<bool> reached, TimeSpan perTurn) =>
+    internal Task<bool> Settles(Func<bool> reached) =>
         Reached(() =>
         {
-            Clock.Advance(perTurn);
+            Clock.Advance(PastBothWindows);
             return reached();
         });
 

@@ -42,8 +42,9 @@ internal sealed class ObservingClock : TimeProvider
     {
         public bool Change(TimeSpan dueTime, TimeSpan period)
         {
-            if (dueTime == clock._quiet) clock.Observed();
-            return timer.Change(dueTime, period);
+            var armed = timer.Change(dueTime, period);
+            if (armed && dueTime == clock._quiet) clock.Observed();
+            return armed;
         }
 
         public void Dispose() => timer.Dispose();

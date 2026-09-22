@@ -62,6 +62,7 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
+        // A delete has no bytes to move in; the filesystem already delivers it as one event.
         await tree.Observes(() => File.Delete(pluginPath));
 
         tree.AdvancePastBothWindows();
@@ -77,6 +78,7 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
+        // A delete has no bytes to move in; the filesystem already delivers it as one event.
         await tree.Observes(() => File.Delete(pluginPath));
         tree.AdvancePastBothWindows();
 
@@ -101,8 +103,8 @@ public sealed class IndexedBinaryWatchTests
         Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
     }
 
-    // A copy the load order dropped must stop re-indexing itself. The copy beside it keeps the
-    // folder watched, so the dropped copy's own write is observed and settles all the same.
+    // The copy beside it keeps the folder watched, so the dropped copy's own write is observed and
+    // settles all the same.
     [Fact]
     public async Task ACopyTheLoadOrderHasDropped_StopsReachingTheIndex()
     {
