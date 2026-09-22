@@ -1,13 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>The create gesture, which no trace draws: the endpoint is the load order's second
 /// writer, so what it answers and what the next reader sees are one thing.</summary>
@@ -52,7 +54,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPluginInAModOfItsOwn_AnswersWithTheCopyItRegistered_AndItIsWritableAtOnce()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var modFolder = Path.Combine(fx.Root, "mod-minted");
 
         var created = await CreateAndAwait("Minted.esp", modFolder, "MintedMod");
@@ -68,7 +70,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPlugin_ListsItOnTheNextPluginsRead()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
 
         await CreateAndAwait("Listed.esp", Path.Combine(fx.Root, "mod-listed"), "ListedMod");
 
@@ -80,7 +82,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPlugin_TakesTheSlotPastTheHighestRegisteredOne()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var highest = (await Client.Plugins())
             .Max(p => p.GetProperty("loadOrderIndex").ValueKind == JsonValueKind.Null
                 ? 0
@@ -107,7 +109,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPluginWithAnInvalidExtension_Is400_AndRegistersNothing()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
 
         var created = await Create("Mod.txt", OtherTool.ModFolderOf(fx, Origin));
 
@@ -123,7 +125,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [InlineData("New.esp", "   ")]
     public async Task CreatingAPluginWithAnEmptyArgument_Is400(string name, string origin)
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
 
         var created = await Create(name, OtherTool.ModFolderOf(fx, Origin), origin);
 
@@ -133,7 +135,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPluginWithoutADestination_Is400()
     {
-        using var fx = await Loaded();
+        Owned(await Loaded());
 
         var created = await Client.PostAsJsonAsync("/plugins/create", new { name = "NoPath.esp" });
 
@@ -145,7 +147,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPluginOverAFileAlreadyThere_Is409_AndRegistersNothing()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         OtherTool.WritesTheFile(Path.Combine(modFolder, "Occupied.esp"), "not a plugin");
 
@@ -158,7 +160,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingAPluginWithAFilenameTheWriterRefuses_Is400_AndRegistersNothing()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
 
         var created = await Create("Bad|Name.esp", OtherTool.ModFolderOf(fx, Origin));
 
@@ -169,7 +171,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingTheSameNameTwice_Is409_AndLeavesTheFirstRegistration()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var first = await CreateAndAwait("Twice.esp", modFolder);
 
@@ -185,7 +187,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingIntoAnUntrackedDestination_LeavesThePluginEditable()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         await CreateAndAwait("Editable.esp", OtherTool.ModFolderOf(fx, Origin));
 
         var record = await CreateARecordIn("Editable.esp");
@@ -199,7 +201,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task CreatingASecondPluginIntoTheSameDestination_Succeeds_AndReusesTheRepository()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         await CreateAndAwait("First.esp", modFolder);
         var record = await CreateARecordIn("First.esp");
@@ -220,7 +222,7 @@ public sealed class CreatePluginApiTests : HostedTests
     [Fact]
     public async Task AfterCreate_AHandEditToTheDestinationsSource_ReachesTheNextQuery()
     {
-        using var fx = await Loaded();
+        var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var formKey = await Client.FirstFormKey(Held);
         await CreateAndAwait("Minted.esp", modFolder);

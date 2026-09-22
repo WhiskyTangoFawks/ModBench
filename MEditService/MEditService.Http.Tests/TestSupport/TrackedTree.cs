@@ -3,9 +3,11 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>What a tracked mod folder's tree holds, read back through the repository the write side
 /// wrote through — the whole read model a fixture with no index has.</summary>

@@ -1,8 +1,9 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests;
+namespace MEditService.Http.Tests;
 
 /// <summary>The snapshot door as the put-load-order handler works it, with nothing forced: the value
 /// lands in the kernel, then the Index reconciles it off the same holder.</summary>

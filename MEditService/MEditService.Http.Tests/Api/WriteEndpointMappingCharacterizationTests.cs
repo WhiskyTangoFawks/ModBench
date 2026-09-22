@@ -2,12 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>Status code and body shape for the write handlers' error-mapping paths the endpoint
 /// suites do not reach, including the IO/UnauthorizedAccess to 500 mapping.</summary>

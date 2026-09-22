@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>The extension spawns the backend with no working directory, so an unanchored content
 /// root would never load the committed <c>appsettings.json</c>. A real child process from an
@@ -65,8 +65,14 @@ public sealed class BackendContentRootTests
             for (var i = 0; i < 3; i++)
                 await client.GetAsync(new Uri($"http://localhost:{port}/health"));
 
-            // Give the request's log lines a moment to reach the redirected stream.
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            // A 404 always logs a WRN line (proven below); once it appears, every earlier request's
+            // own lines are already in the captured stream, since output for one process is ordered.
+            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
+            var sawMarker = await WaitForLineAsync(lines,
+                l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(10));
+            Assert.True(sawMarker,
+                $"expected the marker 404 to produce a visible line; captured output:\n{string.Join('\n', Snapshot(lines))}");
             var snapshot = Snapshot(lines);
 
             // The six-line ASP.NET Core pipeline log that must stay suppressed. Distinct from — and

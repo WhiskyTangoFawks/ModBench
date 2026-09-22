@@ -1,9 +1,10 @@
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFixture>
 {

@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>Refresh's own first step, which no trace draws: the index file is dropped and the
 /// PUT that follows is an ordinary cold load.</summary>

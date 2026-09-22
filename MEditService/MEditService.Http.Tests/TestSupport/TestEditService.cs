@@ -4,10 +4,11 @@ using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>The write side as the composition root builds it: the one registration the host calls,
 /// over the held load order. Nothing here names the module the handlers share — the handlers are its

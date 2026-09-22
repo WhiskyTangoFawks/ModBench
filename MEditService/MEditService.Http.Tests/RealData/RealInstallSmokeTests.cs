@@ -2,12 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http;
-using MEditService.Tests.Api;
+using MEditService.Http.Tests.Api;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Http.Tests.RealData;
 
 /// <summary>Against whatever real game is installed, discovered rather than hardcoded. Gated behind
 /// <c>MEDIT_SMOKE=1</c>: loads full vanilla masters, so never in a normal run or under mutation.</summary>

@@ -1,12 +1,14 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // ADR-0012: a load order holding two physical files of one filename, so a route that resolved a
 // Quest's children through the wrong copy shows in the assertion, not just in the row count.

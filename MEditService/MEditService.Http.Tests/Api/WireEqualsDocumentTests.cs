@@ -2,9 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>Every value <c>/compare</c> shows for a field is the same node the independent
 /// <c>GET /records/{formKey}</c> read already carries for it — the compare tree invents no second

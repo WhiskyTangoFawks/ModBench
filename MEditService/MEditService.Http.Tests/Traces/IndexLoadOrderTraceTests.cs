@@ -1,13 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Traces;
 
 /// <summary>index-load-order: the snapshot arrives, the Indexer reconciles it against what the
 /// plugins actually hold, and the Store announces what changed — so the client sees status, then

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>Retirements, one scan: the source order carrier, the Index's push verbs and
 /// validate-on-read (ADR-0015 invariant 2). References are counted against an allowlist that

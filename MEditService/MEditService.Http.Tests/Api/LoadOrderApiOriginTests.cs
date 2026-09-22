@@ -1,12 +1,14 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // ADR-0012: the wire contract's Origin round-trip — a caller-supplied ExplicitPlugin.Origin
 // travels through /load-order and back out on GET /plugins.

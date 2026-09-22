@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Http.Endpoints;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Ports;
 using MEditService.SourceRepo;
@@ -7,7 +8,7 @@ using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>Swashbuckle only honors a per-enum <c>JsonStringEnumConverter</c> attribute while
 /// <c>Program.cs</c> registers the converter globally, so adding the attribute must leave the bytes

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>ADR-0014 invariant 1: a driven adapter reads the kernel for type facts and the
 /// spelling of a layout level it mints, never for a record's content.</summary>

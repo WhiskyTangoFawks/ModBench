@@ -3,12 +3,14 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>A real tracked mod folder with an index over it, holding flat records only: for the
 /// suites that are the Index side. A write-side suite takes SourceEditFixture

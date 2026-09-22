@@ -12,7 +12,7 @@ using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using MEditService.Watcher;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>Source-text and reflection checks for the invariants a compiling change can still break
 /// silently. Each test names the ADR it enforces.</summary>

@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>A box's interface is its test surface: the captions in
 /// docs/architecture/target-architecture.d2 are the interfaces, so no production project lets any

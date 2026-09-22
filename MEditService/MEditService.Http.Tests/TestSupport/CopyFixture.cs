@@ -1,15 +1,17 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Http.Tests.Edits;
 
 /// <summary>Two mod folders and one load order, since a copy across plugins is unaskable of one.
 /// <see cref="SourcePlugin"/> defaults untracked: a Data-directory master's own file is its only

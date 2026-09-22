@@ -1,16 +1,18 @@
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>enable-a-mod: Modbench flips the modlist line and forgets it; the Instance recomputes
 /// and the load order snapshot is what reaches mEdit, so mEdit's whole side is the snapshot
 /// arriving and the plugins it brought answering.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EnableAModTraceTests : HostedTests
+public sealed class EnableAModApiTests : HostedTests
 {
     private const string BasePlugin = "Base.esp";
     private const string BaseMod = "BaseMod";

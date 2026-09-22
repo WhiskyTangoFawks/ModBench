@@ -1,9 +1,11 @@
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>The hand mEdit does not own: MO2, xEdit, the game or the user, writing the same files
 /// from outside the process. Every method here writes; none of them asks the service anything.</summary>

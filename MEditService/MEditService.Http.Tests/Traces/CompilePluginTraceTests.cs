@@ -1,14 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Traces;
 
 /// <summary>compile-plugin: compile writes the source tree's documents back as the plugin's
 /// bytes, so the proof is another load of those same bytes answering with the edit.</summary>

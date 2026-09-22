@@ -1,5 +1,7 @@
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -7,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // Plugin header reachable through the existing generic FormKey lookup/compare path, with no new
 // endpoint — a red result here signals a gap in the schema/indexer design, not a missing endpoint.
