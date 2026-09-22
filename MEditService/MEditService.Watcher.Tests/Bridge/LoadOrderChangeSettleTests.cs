@@ -69,10 +69,8 @@ public sealed class LoadOrderChangeSettleTests
         using var _ = tree;
         await tree.ApplyLoadOrder();
         Assert.Empty(tree.Notifications.Published);
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
 
-        File.WriteAllBytes(PluginPath(tree), "changed-by-xedit"u8.ToArray());
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-by-xedit"u8.ToArray()));
         tree.AdvancePastBothWindows();
         Assert.Single(Questions(tree));
 
@@ -97,9 +95,7 @@ public sealed class LoadOrderChangeSettleTests
         var (live, liveFolder) = TrackedBeforeWatching();
         using var ___ = live;
         await live.ApplyLoadOrder();
-        using var oracle = WatchedTree.ArmOracleIn(liveFolder);
-        File.WriteAllBytes(PluginPath(live), "changed-by-xedit"u8.ToArray());
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        await live.Observes(() => live.WriteFile(PluginPath(live), "changed-by-xedit"u8.ToArray()));
         live.AdvancePastBothWindows();
         var fromLiveChange = Assert.Single(Questions(live));
 
@@ -215,9 +211,10 @@ public sealed class LoadOrderChangeSettleTests
         await tree.ApplyLoadOrder();
         Assert.Empty(Questions(tree));
 
-        File.WriteAllBytes(PluginPath(tree), "changed-live-after-load"u8.ToArray());
+        await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-live-after-load"u8.ToArray()));
 
-        Assert.True(await tree.Settles(() => Questions(tree).Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Single(Questions(tree));
         Assert.Single(tree.Index.Reconciles);
     }
@@ -233,14 +230,14 @@ public sealed class LoadOrderChangeSettleTests
         var keptFolder = tree.AddMod("KeptMod", "Kept.esp");
         WatchedTree.Track(keptFolder, "Kept.esp");
         await tree.ApplyLoadOrder();
-        using var oracle = WatchedTree.ArmOracleIn(droppedFolder);
 
         tree.RemoveCopy(PluginName);
         await tree.ApplyLoadOrder();
 
-        File.WriteAllBytes(PluginPath(tree), "changed-after-the-load-order-dropped-it"u8.ToArray());
-        File.WriteAllText(Path.Combine(droppedFolder, "texture.dds"), "a tracked file changed too");
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        // The reconcile this load order recorded comes after its re-arm, so the folder's watch is
+        // already disposed here and these writes reach no watch at all.
+        tree.WriteFile(PluginPath(tree), "changed-after-the-load-order-dropped-it"u8.ToArray());
+        tree.WriteFile(Path.Combine(droppedFolder, "texture.dds"), "a tracked file changed too"u8.ToArray());
         tree.AdvancePastBothWindows();
 
         Assert.Empty(tree.Notifications.Published);

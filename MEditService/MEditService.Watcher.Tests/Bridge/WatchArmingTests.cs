@@ -21,8 +21,11 @@ public sealed class WatchArmingTests
 
         await tree.ApplyLoadOrder();
 
-        File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Mirrored.esp"), "changed-by-xedit"u8.ToArray());
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
+        await tree.Observes(() =>
+            tree.WriteFile(WatchedTree.PluginPath(modFolder, "Mirrored.esp"), "changed-by-xedit"u8.ToArray()));
+
+        tree.AdvancePastBothWindows();
+
         Assert.Equal("Mirrored.esp", (Assert.Single(tree.Index.Of("reindex")).Plugin
             ?? throw new InvalidOperationException("a reindex names no plugin")).Name);
     }
@@ -71,7 +74,7 @@ public sealed class WatchArmingTests
         WatchedTree.Track(modFolder, PluginName);
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
 
-        WatchedTree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
+        tree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
 
         Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
         Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
@@ -90,7 +93,7 @@ public sealed class WatchArmingTests
         WatchedTree.Track(modFolder, PluginName);
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
 
-        WatchedTree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
+        tree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
 
         Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count > 0));
         Assert.Equal(["000800:Tracked.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
@@ -105,12 +108,10 @@ public sealed class WatchArmingTests
         var modFolder = tree.AddMod(Origin, PluginName);
         await tree.ApplyLoadOrder();
 
-        // A write under the source root while the mod is still untracked: a batch opens and closes
-        // with nothing to project from.
-        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
-        WatchedTree.WriteUnnamedDocument(modFolder, PluginName);
-        Assert.True(await oracle.Delivered(), "the write never reached a watch on the mod folder");
+        // The source root appearing while the mod is still untracked: a batch opens and closes with
+        // nothing to project from. A fresh directory has no bytes to move in; creation is already
+        // one event.
+        await tree.Observes(() => Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName)));
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Of("validate"));
 
@@ -131,18 +132,19 @@ public sealed class WatchArmingTests
         Directory.Delete(modFolder, recursive: true);
         await tree.ApplyLoadOrder();
 
+        // The arming this load order did came before the folder existed, so nothing Track writes
+        // here has a watch to reach.
         Directory.CreateDirectory(modFolder);
         WatchedTree.Track(modFolder, PluginName);
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
-        Assert.True(await oracle.Delivered(), "the tree never reached a watch on the mod folder");
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Projections);
 
         await tree.ApplyLoadOrder();
-        WatchedTree.WriteUnnamedDocument(modFolder, PluginName);
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, PluginName));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
-        Assert.Equal(PluginName, (tree.Index.Of("validate")[0].Plugin
+        tree.AdvancePastBothWindows();
+
+        Assert.Equal(PluginName, (Assert.Single(tree.Index.Of("validate")).Plugin
             ?? throw new InvalidOperationException("a validate names no plugin")).Name);
     }
 }
