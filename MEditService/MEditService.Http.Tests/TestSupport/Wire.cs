@@ -113,8 +113,29 @@ internal static class Wire
     internal static Task<IReadOnlyList<JsonElement>> EventsUntil(this StreamReader reader, string kind) =>
         reader.EventsUntil(kind, _ => true);
 
-    /// <summary>Nothing of this kind arrives within a window that outlasts the watcher's own settle,
-    /// so a notification that should not have fired has had time to.</summary>
-    internal static async Task NoEventOf(this StreamReader reader, string kind, TimeSpan window) =>
-        await Assert.ThrowsAsync<OperationCanceledException>(() => reader.EventsUntil(kind, _ => true, window));
+    /// <summary>Every frame, of any kind, up to and including the next <paramref name="anchorKind"/>
+    /// that satisfies <paramref name="isTerminal"/>: an absence claim reads off this list, never off
+    /// a window where nothing arrived.</summary>
+    internal static async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThrough(
+        this StreamReader reader, string anchorKind, Func<JsonElement, bool> isTerminal, TimeSpan? within = null)
+    {
+        using var cts = new CancellationTokenSource(within ?? Patience);
+        var collected = new List<(string Kind, JsonElement Data)>();
+        string? currentKind = null;
+        while (true)
+        {
+            var line = await reader.ReadLineAsync(cts.Token);
+            if (line is null) continue;
+            if (line.StartsWith("event: ", StringComparison.Ordinal))
+            {
+                currentKind = line["event: ".Length..];
+                continue;
+            }
+            if (!line.StartsWith("data: ", StringComparison.Ordinal) || currentKind is null) continue;
+
+            var data = JsonDocument.Parse(line["data: ".Length..]).RootElement;
+            collected.Add((currentKind, data));
+            if (currentKind == anchorKind && isTerminal(data)) return collected;
+        }
+    }
 }

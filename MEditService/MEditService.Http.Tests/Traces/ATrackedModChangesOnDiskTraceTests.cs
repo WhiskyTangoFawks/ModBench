@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -24,9 +25,48 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
     private const string ChangedAsset = "Meshes/Thing.nif";
     private const string DeletedAsset = "Meshes/Gone.nif";
 
-    // Outlasts the watcher's own settle window, so a question that should not have opened has had
-    // its chance to.
-    private static readonly TimeSpan Settled = TimeSpan.FromSeconds(2);
+    // A safety bound against a hang, never the proof: the proof is the settle line itself.
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(20);
+
+    private readonly List<LogEntry> _logs = [];
+
+    protected override MEditHost CreateHost() => new(_logs);
+
+    // Where the log stands right now: a caller takes this before the write under test, so the
+    // settle it later awaits is one this write produced, never one an earlier step already logged.
+    private int LogMark()
+    {
+        lock (_logs) return _logs.Count;
+    }
+
+    // The watcher's own settle completion (ModFolderWatcher, Debug) logged no earlier than
+    // <paramref name="since"/>: the module's one signal that a classification — and any question it
+    // would have opened — is now final for this mod folder.
+    private async Task<bool> AwaitSettleLine(string modFolder, int since, TimeSpan timeout)
+    {
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
+        {
+            lock (_logs)
+            {
+                if (_logs.Skip(since).Any(l =>
+                    l.Message.Contains(modFolder, StringComparison.Ordinal)
+                    && l.Message.Contains("settle", StringComparison.Ordinal)))
+                    return true;
+            }
+            await Task.Delay(20);
+        }
+        return false;
+    }
+
+    // A harmless resend: it changes nothing, but it still publishes load-order-status (own doc on
+    // AwaitTerminalLoadOrderStatus), so its frame is a delivery oracle for whatever settled first.
+    private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerResend(
+        StreamReader stream, ScatteredFixtureData fx)
+    {
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        return await stream.FramesThrough("load-order-status", _ => true);
+    }
 
     private static ScatteredFixtureData OneMod() =>
         new PluginFixtureBuilder("trace-tracked-mod-changes")
@@ -134,10 +174,14 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         using var fx = await Watched(
             beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
         using var stream = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
-        OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
+        var since = LogMark();
+        OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "changed-by-the-release");
 
-        await stream.NoEventOf("question-open", Settled);
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        var frames = await FramesThroughAMarkerResend(stream, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // meta.ini is a tell, never a trigger: its version chooses the default answer to a question
@@ -148,10 +192,14 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         using var fx = await Watched(
             beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n"));
         using var stream = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
-        OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), "meta.ini"), "version=2.0.0\n");
+        var since = LogMark();
+        OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
-        await stream.NoEventOf("question-open", Settled);
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        var frames = await FramesThroughAMarkerResend(stream, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // One dialog per mod: a release-sized burst reaches the client as a question that names the
@@ -211,8 +259,13 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         Restart();
 
         using var afterRestart = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var since = LogMark();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        await afterRestart.NoEventOf("question-open", Settled);
+
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
+        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     [Theory]
@@ -343,8 +396,13 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
 
         Restart();
         using var afterRestart = await Client.NotificationStream();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var since = LogMark();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        await afterRestart.NoEventOf("question-open", Settled);
+
+        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
+        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
     // Keep answers the question and stages what it landed, so a second release touching the same
