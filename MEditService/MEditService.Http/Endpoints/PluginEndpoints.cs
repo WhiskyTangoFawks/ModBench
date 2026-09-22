@@ -223,7 +223,7 @@ public static class PluginEndpoints
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
+        TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -233,7 +233,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await trackHandler.TrackAsync(holder.Require(), req.Origin, preset);
+            var result = await trackHandler.TrackAsync(req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
 

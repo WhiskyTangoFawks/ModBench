@@ -1,3 +1,4 @@
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -11,11 +12,11 @@ namespace MEditService.Commands;
 public sealed class CreatePluginHandler
 {
     private readonly IPluginAdapter _adapter;
-    private readonly TrackHandler _track;
+    private readonly TrackService _track;
     private readonly LoadOrderHolder _holder;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CreatePluginHandler(IPluginAdapter adapter, TrackHandler track, LoadOrderHolder holder) =>
+    internal CreatePluginHandler(IPluginAdapter adapter, TrackService track, LoadOrderHolder holder) =>
         (_adapter, _track, _holder) = (adapter, track, holder);
 
     /// <summary><paramref name="pluginPath"/> is where the file goes, as Mod Management resolved

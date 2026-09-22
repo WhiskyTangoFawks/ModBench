@@ -365,8 +365,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private static bool SamePath(string a, string b) =>
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
-    // The diff is computed first and without side effects, so an identical snapshot returns before
-    // touching the index or the status: a redundant PUT is free.
+    // The diff is computed first and without side effects — one stamp read and a folder probe per
+    // copy — so a snapshot that moves nothing writes nothing and publishes no status.
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.
