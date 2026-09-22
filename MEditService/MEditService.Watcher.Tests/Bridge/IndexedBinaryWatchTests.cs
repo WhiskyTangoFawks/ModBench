@@ -31,9 +31,10 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
-        File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+        await tree.Observes(() => tree.WriteFile(pluginPath, "changed-by-xedit"u8.ToArray()));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
         Assert.Empty(tree.Index.Of("unindex"));
     }
@@ -45,12 +46,8 @@ public sealed class IndexedBinaryWatchTests
     {
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
-        using var oracle = WatchedTree.ArmOracleIn(Path.GetDirectoryName(pluginPath) ?? throw new InvalidOperationException("no folder"));
 
-        File.WriteAllBytes(pluginPath, "original"u8.ToArray());
-        // Every event one write raises is queued before the window closes, so the one poke is one
-        // window's rather than the operating system's event count.
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        await tree.Observes(() => tree.WriteFile(pluginPath, "original"u8.ToArray()));
 
         tree.AdvancePastBothWindows();
 
@@ -65,9 +62,11 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
-        File.Delete(pluginPath);
+        // A delete has no bytes to move in; the filesystem already delivers it as one event.
+        await tree.Observes(() => File.Delete(pluginPath));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("unindex").Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal(Copy, Assert.Single(tree.Index.Of("unindex")).Plugin);
         Assert.Empty(tree.Index.Of("reindex"));
     }
@@ -79,12 +78,13 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
 
-        File.Delete(pluginPath);
-        Assert.True(await tree.Settles(() => tree.Index.Of("unindex").Count > 0));
+        // A delete has no bytes to move in; the filesystem already delivers it as one event.
+        await tree.Observes(() => File.Delete(pluginPath));
+        tree.AdvancePastBothWindows();
 
-        File.WriteAllBytes(pluginPath, "reinstalled"u8.ToArray());
+        await tree.Observes(() => tree.WriteFile(pluginPath, "reinstalled"u8.ToArray()));
+        tree.AdvancePastBothWindows();
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
         Assert.Equal(["unindex", "reindex"], tree.Index.Projections.Select(p => p.Verb));
     }
 
@@ -96,28 +96,30 @@ public sealed class IndexedBinaryWatchTests
         var (tree, pluginPath) = await Watching(seeded: false);
         using var _ = tree;
 
-        File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+        await tree.Observes(() => tree.WriteFile(pluginPath, "changed-by-xedit"u8.ToArray()));
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
     }
 
-    // A watch must not outlive the load order that asked for it, or a copy the load order has
-    // dropped would keep re-indexing itself into the Index.
+    // The copy beside it keeps the folder watched, so the dropped copy's own write is observed and
+    // settles all the same.
     [Fact]
     public async Task ACopyTheLoadOrderHasDropped_StopsReachingTheIndex()
     {
-        var (tree, pluginPath) = await Watching();
-        using var _ = tree;
-        var modFolder = Path.GetDirectoryName(pluginPath)
-            ?? throw new InvalidOperationException("the plugin has no folder");
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, PluginName, "original"u8.ToArray());
+        tree.AddCopy(Origin, modFolder, "Kept.esp", "kept"u8.ToArray());
+        var pluginPath = WatchedTree.PluginPath(modFolder, PluginName);
+        tree.Index.SeedIndexed(Copy, WatchedTree.ContentHashOf(pluginPath));
+        await tree.ApplyLoadOrder();
 
         tree.RemoveCopy(PluginName);
         await tree.ApplyLoadOrder();
 
-        File.WriteAllBytes(pluginPath, "changed-after-the-load-order-dropped-it"u8.ToArray());
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        await tree.Observes(() => tree.WriteFile(pluginPath, "dropped-then-changed"u8.ToArray()));
+
         tree.AdvancePastBothWindows();
 
         Assert.Empty(tree.Index.BinaryPokes);
@@ -131,14 +133,15 @@ public sealed class IndexedBinaryWatchTests
         using var _ = tree;
         tree.Index.Refuses = true;
 
-        File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 0));
+        await tree.Observes(() => tree.WriteFile(pluginPath, "changed-by-xedit"u8.ToArray()));
+        tree.AdvancePastBothWindows();
 
         // The same bytes settle again. Had the refused projection advanced the remembered hash,
         // this would raise nothing and the Index would stay stale.
-        File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+        await tree.Observes(() => tree.WriteFile(pluginPath, "changed-by-xedit"u8.ToArray()));
+        tree.AdvancePastBothWindows();
 
-        Assert.True(await tree.Settles(() => tree.Index.Of("reindex").Count > 1));
+        Assert.Equal(2, tree.Index.Of("reindex").Count);
         Assert.All(tree.Index.Of("reindex"), r => Assert.Equal(Copy, r.Plugin));
     }
 
@@ -152,9 +155,8 @@ public sealed class IndexedBinaryWatchTests
         WatchedTree.Track(modFolder, "Tracked.esp");
         await tree.ApplyLoadOrder();
 
-        using var oracle = WatchedTree.ArmOracleIn(modFolder);
-        File.WriteAllBytes(WatchedTree.PluginPath(modFolder, "Tracked.esp"), "changed-by-xedit"u8.ToArray());
-        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
+        await tree.Observes(() =>
+            tree.WriteFile(WatchedTree.PluginPath(modFolder, "Tracked.esp"), "changed-by-xedit"u8.ToArray()));
 
         tree.AdvancePastBothWindows();
 

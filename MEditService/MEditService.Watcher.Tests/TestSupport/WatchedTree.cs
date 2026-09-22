@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
 using MEditService.Index;
@@ -8,7 +9,6 @@ using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using FakeClock = Microsoft.Extensions.Time.Testing.FakeTimeProvider;
 
 namespace MEditService.Watcher.Tests.TestSupport;
 
@@ -30,7 +30,7 @@ internal sealed class WatchedTree : IDisposable
     // or a dedicated thread to run. Exceeding it fails the wait rather than passing it.
     internal static readonly TimeSpan DeliveryBound = TimeSpan.FromSeconds(30);
 
-    internal FakeClock Clock { get; } = new(DateTimeOffset.UnixEpoch);
+    internal ObservingClock Clock { get; }
     internal RecordingRefreshIndex Index { get; }
     internal InMemoryNotificationPublisher Notifications { get; } = new();
     internal LoadOrderHolder Holder { get; } = new();
@@ -47,6 +47,10 @@ internal sealed class WatchedTree : IDisposable
     internal string InstanceRoot { get; }
     internal string GameDirectory { get; }
 
+    // Outside every watch and on the same filesystem, so a file staged here reaches its mod folder
+    // as a single rename.
+    private readonly string _staging;
+
     private readonly List<RegisteredCopy> _copies = [];
 
     /// <summary>The watcher's verb as the composition root builds it, over the port this tree
@@ -61,9 +65,11 @@ internal sealed class WatchedTree : IDisposable
     {
         Quiet = quiet ?? DefaultQuiet;
         MaxWindow = maxWindow ?? DefaultMaxWindow;
+        Clock = new ObservingClock(Quiet, MaxWindow);
         Index = new RecordingRefreshIndex(writeGate);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-watch-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
+        _staging = Directory.CreateDirectory(Path.Combine(InstanceRoot, "staging")).FullName;
         Watcher = new ModFolderWatcher(
             Holder, Index, Settled(Notifications), new CollectingLogger(_log), Quiet, MaxWindow, Clock);
         Watcher.Subscribe();
@@ -148,35 +154,57 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>A document whose body names the record it carries, which is what lets the batch be
     /// refreshed by key rather than validated whole.</summary>
-    internal static string WriteRecord(string modFolder, string plugin, string formKey)
+    internal string WriteRecord(string modFolder, string plugin, string formKey)
     {
         var path = Path.Combine(SourceRepository.RootIn(modFolder, plugin), $"Named - {formKey.Replace(':', '_')}.json");
-        File.WriteAllText(path, $$"""{"FormKey":"{{formKey}}"}""");
+        MoveIn(path, $$"""{"FormKey":"{{formKey}}"}""");
         return path;
     }
 
     /// <summary>A document naming no record, so the batch it lands in can only be a whole-copy
     /// validate.</summary>
-    internal static string WriteUnnamedDocument(string modFolder, string plugin, string name = "record.json")
+    internal string WriteUnnamedDocument(string modFolder, string plugin, string name = "record.json")
     {
         var path = Path.Combine(SourceRepository.RootIn(modFolder, plugin), name);
-        File.WriteAllText(path, Guid.NewGuid().ToString());
+        MoveIn(path, Guid.NewGuid().ToString());
         return path;
     }
 
-    internal static void MoveRef(string modFolder) =>
-        File.WriteAllText(SourceRepository.GitWatchPathsIn(modFolder).Head, "ref: refs/heads/main\n");
+    /// <summary>Another tool's compile or install: any file under the mod folder, written whole
+    /// under the live watch.</summary>
+    internal void WriteFile(string path, byte[] bytes) => MoveIn(path, bytes);
+
+    internal void MoveRef(string modFolder) =>
+        MoveIn(SourceRepository.GitWatchPathsIn(modFolder).Head, "ref: refs/heads/main\n");
+
+    private void MoveIn(string path, string text) => MoveIn(path, Encoding.UTF8.GetBytes(text));
+
+    // One file event, never the create-and-modify pair a direct write raises: what a watch
+    // observes is then countable, and no window closes holding half a write.
+    private void MoveIn(string path, byte[] bytes)
+    {
+        var staged = Path.Combine(_staging, Guid.NewGuid().ToString("n"));
+        File.WriteAllBytes(staged, bytes);
+        File.Move(staged, path, overwrite: true);
+    }
+
+    /// <summary>Performs the writes and returns once the watcher's own watches have observed every
+    /// one of them: each write here raises exactly one file event.</summary>
+    internal async Task Observes(params Action[] writes)
+    {
+        var expected = Clock.Observations + writes.Length;
+        foreach (var write in writes) write();
+        await Reached(() => Clock.Observations >= expected);
+        Assert.True(Clock.Observations == expected,
+            $"expected {expected} observations, saw {Clock.Observations}");
+    }
 
     /// <summary>Advances past both windows until <paramref name="reached"/> holds. The clock is the
     /// only thing that closes a batch, so no batch lands between turns.</summary>
-    internal Task<bool> Settles(Func<bool> reached) => Settles(reached, PastBothWindows);
-
-    /// <summary>Advances by <paramref name="perTurn"/> until <paramref name="reached"/> holds, for a
-    /// test whose subject is which of the two windows closed the batch.</summary>
-    internal Task<bool> Settles(Func<bool> reached, TimeSpan perTurn) =>
+    internal Task<bool> Settles(Func<bool> reached) =>
         Reached(() =>
         {
-            Clock.Advance(perTurn);
+            Clock.Advance(PastBothWindows);
             return reached();
         });
 
@@ -193,16 +221,13 @@ internal sealed class WatchedTree : IDisposable
 
     internal void AdvancePastBothWindows() => Clock.Advance(PastBothWindows);
 
-    private const string ProbePlugin = "Probe.esp";
-
-    /// <summary>A second, recursive watch over the same mod folder, for a probe the subject never
-    /// registers: its delivery says everything written before it has reached a watch on this folder
-    /// too.</summary>
-    internal static DeliveryOracle ArmOracleIn(string modFolder)
-    {
-        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, ProbePlugin));
-        return new DeliveryOracle(modFolder);
-    }
+    /// <summary>Puts the repository aside, the way another tool's reinstall replaces it. Renamed
+    /// in place, never moved out: a watched directory moved out of a live watch loses its own
+    /// event and the next one.</summary>
+    internal static void RemoveRepository(string modFolder) =>
+        Directory.Move(
+            SourceRepository.GitWatchPathsIn(modFolder).GitDirectory,
+            Path.Combine(modFolder, ".git.replaced"));
 
     public void Dispose()
     {
@@ -210,42 +235,5 @@ internal sealed class WatchedTree : IDisposable
         try { Directory.Delete(InstanceRoot, recursive: true); }
         catch (IOException) { /* scratch, best-effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }
-    }
-
-    internal sealed class DeliveryOracle : IDisposable
-    {
-        private readonly FileSystemWatcher _watcher;
-        private readonly string _modFolder;
-        private readonly object _gate = new();
-        private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
-        private int _probes;
-
-        internal DeliveryOracle(string modFolder)
-        {
-            _modFolder = modFolder;
-            _watcher = new FileSystemWatcher(modFolder)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-            };
-            _watcher.Created += (_, e) => Seen(e.FullPath);
-            _watcher.Changed += (_, e) => Seen(e.FullPath);
-            _watcher.EnableRaisingEvents = true;
-        }
-
-        private void Seen(string path)
-        {
-            lock (_gate) _seen.Add(path);
-        }
-
-        /// <summary>Writes a probe under the probe plugin's source root and waits for its event: the
-        /// kernel queues each write to every watch on the folder in order.</summary>
-        internal async Task<bool> Delivered()
-        {
-            var probe = WriteUnnamedDocument(_modFolder, ProbePlugin, $"probe-{++_probes}.json");
-            return await Reached(() => { lock (_gate) return _seen.Contains(probe); });
-        }
-
-        public void Dispose() => _watcher.Dispose();
     }
 }
