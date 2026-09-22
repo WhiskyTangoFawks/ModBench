@@ -1,11 +1,12 @@
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A minted interior block level has no Track-written document behind it, so only
 /// compiling the tree and reading the block back out of the binary proves the level the repository

@@ -2,9 +2,11 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -12,7 +14,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A record the codec cannot read would land as a stub of its FormKey and EditorID rather
 /// than the record. Both copies refuse it with the reader's own diagnosis.</summary>

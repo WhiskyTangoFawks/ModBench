@@ -1,9 +1,11 @@
 using System.Globalization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -11,7 +13,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The one sanctioned write to header flag bit 14: clearing it restores full
 /// editability, touches only that bit, and no other write surface can flip it.</summary>

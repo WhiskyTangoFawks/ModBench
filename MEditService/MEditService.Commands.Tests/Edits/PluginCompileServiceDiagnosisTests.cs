@@ -1,11 +1,12 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Forged corruption, as in <c>BinaryRoundTripGateTests</c>: no real tracked-source
 /// corruption exists to lift into TestData. A corrupt FormKey in source JSON throws

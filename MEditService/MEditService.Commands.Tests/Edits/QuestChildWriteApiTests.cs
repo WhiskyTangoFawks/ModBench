@@ -2,15 +2,16 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A quest's children live inline in its document, transitively, so every gesture on one
 /// patches the quest's document at the edited path only, and compile keeps the document's

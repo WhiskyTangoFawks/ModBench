@@ -2,11 +2,12 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A change to one record's document, made the way the source is made: read through the
 /// codec, changed, written back through it. Any other text fails compile's round-trip gate.</summary>

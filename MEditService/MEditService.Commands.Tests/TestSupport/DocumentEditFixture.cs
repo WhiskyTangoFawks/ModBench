@@ -4,12 +4,14 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A real tracked plugin with no records of its own: a case seeds the document it needs,
 /// then edits it through the real <see cref="EditRecordHandler"/>.</summary>

@@ -1,9 +1,10 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CopyRecordAsOverrideHandlerTests
 {

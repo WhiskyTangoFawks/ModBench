@@ -1,14 +1,15 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>An array op is computed server-side from the record's current value, never
 /// round-tripped as a client-computed whole array; the envelope is <c>value</c> itself, told apart

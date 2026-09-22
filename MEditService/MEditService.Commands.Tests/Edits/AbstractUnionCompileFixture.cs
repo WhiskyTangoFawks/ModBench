@@ -1,15 +1,17 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>One mod tracked once, holding one record of every owning type: the expensive part is the <see
 /// cref="TrackService"/> setup, not the records.</summary>

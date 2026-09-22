@@ -5,10 +5,12 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>The write side as the composition root builds it: the one registration the host calls,
 /// over the held load order. Nothing here names the module the handlers share — the handlers are its

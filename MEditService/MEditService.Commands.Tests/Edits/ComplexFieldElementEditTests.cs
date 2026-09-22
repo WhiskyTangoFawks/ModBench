@@ -1,14 +1,16 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A complex field (array or struct) is written as one atomic value; a payload shaped
 /// like a single element of one is refused rather than silently dropped.</summary>

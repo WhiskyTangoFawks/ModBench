@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Commands.Tests.RealData;
 
 /// <summary>The committed cut-down Fallout 4 plugin: real game data without the 316 MB master, so
 /// the fixture is hermetic. Regenerate with the Index box's own generator when the schema or

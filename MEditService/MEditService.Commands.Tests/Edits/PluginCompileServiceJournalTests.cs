@@ -1,9 +1,10 @@
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The journal wired in through the real <see cref="PluginCompileService.CompileAsync"/> door;
 /// <c>CompileJournalTests</c> covers the primitive in isolation.</summary>

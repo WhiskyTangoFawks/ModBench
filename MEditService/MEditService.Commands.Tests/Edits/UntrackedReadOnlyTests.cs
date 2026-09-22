@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
@@ -10,7 +11,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The friction is deliberate (ADR-0007), which is why the refusal must name the way
 /// out.</summary>

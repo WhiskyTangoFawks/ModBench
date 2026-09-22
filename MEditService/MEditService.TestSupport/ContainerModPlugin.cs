@@ -20,7 +20,7 @@ public static class ContainerModPlugin
 
     public readonly record struct Keys(
         FormKey Cell, FormKey EmbedCell, FormKey TemporaryRef, FormKey PersistentRef,
-        FormKey Worldspace, FormKey TopCell, FormKey TopCellRef);
+        FormKey Navmesh, FormKey Landscape, FormKey Worldspace, FormKey TopCell, FormKey TopCellRef);
 
     public static Keys AddTo(Fallout4Mod mod)
     {
@@ -62,7 +62,7 @@ public static class ContainerModPlugin
 
         return new Keys(
             cell.FormKey, embedCell.FormKey, temporaryRef.FormKey, persistentRef.FormKey,
-            worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
+            navmesh.FormKey, landscape.FormKey, worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
     }
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)

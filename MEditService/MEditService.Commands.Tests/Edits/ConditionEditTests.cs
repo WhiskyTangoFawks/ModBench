@@ -2,17 +2,19 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using static MEditService.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Each gesture is diffed member by member (<see cref="DocumentDiff"/>): a document
 /// comparison is the only thing that can make the "round-trips losslessly" claim.</summary>

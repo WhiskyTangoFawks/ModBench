@@ -1,8 +1,9 @@
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 // Origin-scoped (ADR-0003): the repo, not any one plugin inside it, is the unit of baselines and
 // rebase, and the load order is where the write side asks which folder that is.

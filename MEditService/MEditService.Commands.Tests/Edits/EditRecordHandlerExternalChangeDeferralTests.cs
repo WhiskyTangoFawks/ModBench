@@ -1,10 +1,11 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>An unanswered external-change question refuses every gesture on the single write path
 /// (ADR-0003), checked once ahead of anything the write would touch.</summary>
