@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.TestSupport;
 
 /// <summary>Held for the maintainer, like <see cref="GitProbe"/>: a test needing a raw, live
-/// Mutagen mod has no door to build these from (ADR-0005 rule 2 forbids one).</summary>
+/// Mutagen mod has no door to build these from (ADR-0005 invariant 2 forbids one).</summary>
 public static class FixtureReadParameters
 {
     // Mutagen's listings resolution reads the LocalAppData environment variable with no
