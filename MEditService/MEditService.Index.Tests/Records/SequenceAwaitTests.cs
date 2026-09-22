@@ -3,6 +3,7 @@ using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Tests;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;

@@ -1,8 +1,8 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Tests;
-using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

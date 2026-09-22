@@ -26,7 +26,6 @@
 
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\MEditService.TestSupport\TestData\**" LinkBase="TestData" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
