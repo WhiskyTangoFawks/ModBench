@@ -27,6 +27,7 @@ Gestures Modbench does differently.
 | 1 | The top bar | The Toolbox, the container's first view: a small readout of the Instance's value, Profile and Deployment, with the workspace actions in its title bar ([containers.md](../specs/containers.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
 | 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads.md](../specs/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. Modbench never builds a merged view ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). | An Archives tab | Ruling. |
+| 4 | Deploy and run | The alpha does not deploy, run the game or run tools. MO2 does. After the alpha, deployment follows Vortex ([ADR-0020](../adr/0020-vortex-is-the-reference-for-deployment.md)). | Runs every program through its virtual file system | Ruling. |
 
 ## Omissions by object
 

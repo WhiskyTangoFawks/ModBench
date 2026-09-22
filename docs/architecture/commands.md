@@ -179,8 +179,8 @@ Offered on Toolbox. Run entries are not an object yet; the run-list gestures nam
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | debt #967, unspecified | deploy-mods |
-| run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | debt #956, #967 | - |
+| deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | planned | - |
+| run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | planned | - |
 | select game | ? | Toolbox: ? | `modbench.instance.selectGame` | game | - | MO2 toolbar | Choose the game the instance is for. | ? | - |
 | open settings | reads | Toolbox: ? | `modbench.instance.openSettings` | - | - | MO2 toolbar | Open the Modbench settings. | ? | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | debt #967 | load-instance |

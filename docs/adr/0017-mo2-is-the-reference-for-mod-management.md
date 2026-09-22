@@ -4,7 +4,8 @@ Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventio
 an answer, Mod Management adopts it, and it goes further than a UX reference: MO2's files are
 Modbench's files. Every divergence and omission is recorded in
 [mo2.md](../out-of-scope/mo2.md). The rule does not govern record editing,
-which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)).
+which follows xEdit ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)), or deployment,
+which follows Vortex ([ADR-0020](0020-vortex-is-the-reference-for-deployment.md)).
 
 ## Strategic invariants
 
