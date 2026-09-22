@@ -1,7 +1,7 @@
 # Mod Management lives in the extension
 
 Record editing is split across the extension and the C# service. Mod Management is not: install,
-enable and disable, ordering, the file conflict index, hardlink deploy and purge, and game-path
+enable and disable, ordering, the file order conflict index, hardlink deploy and purge, and game-path
 resolution all live in the extension, in TypeScript. It is file, HTTP and JSON work, Node provides
 hardlinks natively, and the trees and status bar are already there, so a C# home would be a chatty
 HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record

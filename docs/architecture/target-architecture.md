@@ -20,14 +20,15 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
   references. This picture is each project's reference list. A thin purple arrow is a read or
   write of a system of record. A grey arrow is the user, another tool, or the wire between the
   two processes.
-- [traces/](traces/) holds one sequence diagram per gesture family, and two that cross families
-  end to end, a tracked mod changing on disk and upgrading a mod. Actors are the zoom-out's
+- [traces/](traces/) holds one sequence diagram per flow. Gestures whose arrows are the same share
+  one, and the diagram names each one's command and the box it calls. Beside each diagram a `.md`
+  file of the same name holds its contract. Actors are the zoom-out's
   boxes, imported by name; time runs down; a message is labelled with what moves, never with the
   call, so a request and its reply are two messages. A note on an actor is what it does between
   messages.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
   kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
-  mark. A message class says which gesture family the payload belongs to, and a reply takes its
+  mark. A message class says which kind of payload it is, and a reply takes its
   request's class. A signal is dashed grey and carries no payload, a watch event or a bare
   request; a push is dashed purple and names what changed, and the receiver re-reads.
 
@@ -48,8 +49,8 @@ a Core box or a driven adapter, every box of its column's kernel by the band's r
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
 Every arrow points down or into the kernel, with four same-band references the captions name: the
-record index reads the two adapters beside it, Ports reads Load order state, the Instance reads MO2
-files, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
+record index reads the two adapters beside it, Ports reads Load order state, the Instance loader reads the Instance
+adapter, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
 the HTTP endpoints on mEdit, the activation file and Toolbox on Modbench, references every box below
 it by definition.
 A reference the reference view does not draw is a compile error and a question for the
@@ -58,27 +59,33 @@ maintainer, never a line an agent adds.
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them, built only by
-watching: the record index over the plugin files and the source tree, the Instance over MO2's
+watching: the record index over the plugin files and the source tree, the instance value over MO2's
 files. A command writes a file and forgets, so a change from another tool and a change from
-Modbench are the same signal in both, which is what
-[a-change-from-another-tool](traces/a-change-from-another-tool.d2) draws. The two meet at one
+Modbench are the same signal in both
+([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
+draws that signal on its own, because there is no separate path: it is the watch that opens
+[load-instance](traces/load-instance.d2) and [index-load-order](traces/index-load-order.d2), and the
+settle that opens decompile-plugin's trigger. The two meet at one
 value, the load order snapshot, and one stream. mEdit is always running, so no view has a mode
 for its absence; a disconnect is an error the views surface.
 
 ## Rules the Modbench column draws
 
 Change flows up only through watchers and the notification port. mEdit watches one folder per
-mod, and the Source repository names the paths inside it, so layout has one owner; on the
-Modbench side MO2 files is that owner, the one box that reads or writes the instance and Game
-Data/. A command splices through the pure codec and puts through MO2 files. No command reads the
-Instance; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
+mod, and the Source adapter names the paths inside it, so layout has one owner; on the
+Modbench side the Instance adapter is that owner, the one box that reads or writes the instance and Game
+Data/. A command splices through the pure codec and puts through the Instance adapter. No command reads the
+Instance loader; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
 the first-deploy consent.
-The Instance is derived from disk and nothing else; it recomputes whole, keeps its last value on
-a parse failure, and validates on activation and Refresh through the same path
-([the-instance-recomputes](traces/the-instance-recomputes.d2)). Outside two per-release tables,
+The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
+keeps the last value on a parse failure. It validates on activation and on refresh, through the
+same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
-holds it. Mods, Downloads and Toolbox never see a record.
+holds it. Modbench does not depend on one mod manager. The game owns the format of `plugins.txt`.
+The mod manager owns every other file in the instance. The Instance adapter is a repository. MO2
+is one implementation of it. Only that implementation names MO2. A source scan holds this rule,
+as it holds game names. Mods, Downloads and Toolbox never see a record.
 
 ## What is left out
 
@@ -117,11 +124,11 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   actor.
 - A trace message runs between two boxes the reference view joins, or through a port, where one
   end implements it and the other references Ports, or across the wire, or inside one box, or
-  between two boxes a composition root wires, as Toolbox hands the Instance's value to the mEdit
-  client. Any other message is a reference the maintainer has not drawn. The one exception is an end-to-end trace that abbreviates another trace as one
-  message named after it, as upgrade-a-mod does with a-tracked-mod-changes-on-disk.
+  between two boxes a composition root wires, as Toolbox hands the instance value to the mEdit
+  client. Any other message is a reference the maintainer has not drawn. The one exception is a trace
+  that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.
-  A new gesture family is a new trace and a new class in the styles file.
+  A new flow is a new trace and, if its payload is a new kind, a new class in the styles file.
 - Render before committing and look at the picture. A change that makes a diagram false changes
   the diagram in the same change, and the ADR it cites with it.

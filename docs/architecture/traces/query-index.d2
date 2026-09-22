@@ -1,4 +1,6 @@
-# Query, purple. A question and its answer are two arrows. Queries read only the Store.
+# Query the record index, purple. A question and its answer are two arrows. A query reads the Store
+# and never a file, so it answers from the last projection. index-load-order is what writes it.
+# Governed by ADR-0009, ADR-0010, ADR-0015 and ADR-0019. Contract: query-index.md.
 ...@../styles
 shape: sequence_diagram
 views: "Plugins · Editor" {class: driving}
