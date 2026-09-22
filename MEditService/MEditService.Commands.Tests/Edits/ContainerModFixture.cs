@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -38,34 +37,22 @@ public sealed class ContainerModFixture : IDisposable
     public const string NpcEditorId = "FixtureNpc";
     public FormKey Npc { get; }
 
-    public const string CellEditorId = "FixtureCell";
-    public const float CellWaterHeight = 100f;
     public FormKey Cell { get; }
 
-    public const string EmbedCellEditorId = "EmbedCell";
-    public const float EmbedCellWaterHeight = 10f;
     public FormKey EmbedCell { get; }
 
-    public const string TemporaryRefEditorId = "TempRef";
     public FormKey TemporaryRef { get; }
 
-    public const string PersistentRefEditorId = "PersistRef";
     public FormKey PersistentRef { get; }
 
-    public const string NavmeshEditorId = "EmbedNavmesh";
     public FormKey Navmesh { get; }
 
-    public const string LandscapeEditorId = "EmbedLandscape";
     public FormKey Landscape { get; }
 
-    public const string WorldspaceEditorId = "EmbedWorld";
     public FormKey Worldspace { get; }
 
-    public const string TopCellEditorId = "EmbedTopCell";
-    public const float TopCellWaterHeight = 5f;
     public FormKey TopCell { get; }
 
-    public const string TopCellRefEditorId = "TopCellRef";
     public FormKey TopCellRef { get; }
 
     public const string QuestEditorId = "EmbedQuest";

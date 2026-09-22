@@ -13,9 +13,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- TestEditService composes a real ServiceCollection with AddLogging: the concrete DI and
-         logging packages, not Mvc.Testing's ASP.NET Core framework reference this project never
-         hosts a server to need. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

@@ -51,8 +51,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         }
     }
 
-    // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so both sides of every byte
-    // comparison below are normalized here rather than differing by line endings alone.
+    // Production strips carriage returns when it writes a tree (PluginTrees), but that helper is
+    // internal to PluginAdapter with no grant to this project, so the derived side is stripped
+    // here the same way to compare bytes.
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
     private static JsonNode RequireNode(JsonNode? node, string what) =>

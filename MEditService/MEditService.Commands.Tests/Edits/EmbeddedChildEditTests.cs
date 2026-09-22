@@ -3,6 +3,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
@@ -26,14 +27,14 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     private string CommittedCell() =>
         _fixture.CommittedDocument(
-            _fixture.EmbedCell.ToString(), "cell", ContainerModFixture.EmbedCellEditorId).Require().Body;
+            _fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId).Require().Body;
 
     // ---- the parent's untouched bytes are untouched ----
 
     [Fact]
     public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsFile()
     {
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var before = File.ReadAllText(file);
         // Positive control for every Assert.Empty(GitStatus()) in the refusal tests below: Track has just
         // committed the pristine tree, so without this those emptiness assertions could pass for the
@@ -52,7 +53,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAnEmbeddedChild_LeavesTheParentsOwnFieldsAlone()
     {
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("7.0")).Applied);
 
@@ -60,7 +61,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // reserialized the parent from anything other than its own text would be free to move it.
         var after = File.ReadAllText(file);
         Assert.Contains("\"WaterHeight\": 10.0", after, StringComparison.Ordinal);
-        Assert.Contains($"\"EditorID\": \"{ContainerModFixture.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
+        Assert.Contains($"\"EditorID\": \"{ContainerModPlugin.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
     }
 
     // ---- both rows move, and the parent reads dirty ----
@@ -179,15 +180,15 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // from the two above — the case that falls through a resolver built only for cells.
         Assert.True(service.Set(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
 
-        var cellFile = File.ReadAllText(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId));
+        var cellFile = File.ReadAllText(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
         Assert.Contains("\"Scale\": 2.0", cellFile, StringComparison.Ordinal);
         Assert.Contains("\"Scale\": 3.0", cellFile, StringComparison.Ordinal);
 
         // The top cell has no file of its own anywhere in the tree — that is what "embedded" means, and
         // it is why locating it by content finds the worldspace's own document.
-        var worldspaceFile = _fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId);
+        var worldspaceFile = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
         Assert.Contains("\"WaterHeight\": 42.0", File.ReadAllText(worldspaceFile), StringComparison.Ordinal);
-        Assert.Equal(worldspaceFile, _fixture.SourceFileContaining(ContainerModFixture.TopCellEditorId));
+        Assert.Equal(worldspaceFile, _fixture.SourceFileContaining(ContainerModPlugin.TopCellEditorId));
     }
 
     // ---- containment nests deeper than one level inside a single document ----
@@ -198,7 +199,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // worldspace RecordData.json → TopCell (embedded) → Temporary[0] (embedded). The ref has no
         // file of its own and no directory of its own; the only bytes it exists in are the
         // worldspace's. A one-level search refused this with SourceUnitNotFound.
-        var file = _fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
         var before = File.ReadAllText(file);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TopCellRef.ToString(), "Scale", Json("9.5"));
@@ -219,7 +220,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // Branch one: no document of its own, and no other record's document carries it. An interior
         // cell removed from disk by something outside Modbench is exactly that, and the tree is the
         // only thing asked (ADR-0015 invariant 5).
-        Directory.Delete(PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId)), recursive: true);
+        Directory.Delete(PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId)), recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
@@ -233,11 +234,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         // Branch two: the document that carried the child has been edited out from under it, so the
         // locator answers absent rather than naming a document whose own text lacks the child.
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
-            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModFixture.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
+            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModPlugin.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
             System.Text.RegularExpressions.RegexOptions.Singleline);
-        Assert.DoesNotContain(ContainerModFixture.TemporaryRefEditorId, withoutTheRef, StringComparison.Ordinal);
+        Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, withoutTheRef, StringComparison.Ordinal);
         File.WriteAllText(file, withoutTheRef);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
@@ -254,9 +255,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         // A FormKey outside every embed slot is a reference, not a child, so no document holds the
         // record and the refusal says that rather than claiming the delete landed.
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var withoutTheRef = System.Text.RegularExpressions.Regex.Replace(
-            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModFixture.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
+            File.ReadAllText(file), $@"\s*\{{[^{{}}]*""{ContainerModPlugin.TemporaryRefEditorId}""[^{{}}]*\}},?", "",
             System.Text.RegularExpressions.RegexOptions.Singleline);
         File.WriteAllText(
             file,
@@ -290,7 +291,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAWorldspacesEditorId_MovesItsSourceDirectory()
     {
-        var oldDirectory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId));
+        var oldDirectory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId));
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
 
@@ -322,7 +323,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAnEmbeddedChild_WhoseOwnerTheTreeNoLongerHolds_RefusesNamingTheDocument()
     {
-        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var declared = $"\"FormKey\": \"{_fixture.EmbedCell}\"";
         var text = File.ReadAllText(file);
         Assert.Contains(declared, text, StringComparison.Ordinal);
