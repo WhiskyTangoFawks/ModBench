@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -8,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 // ADR-0012 for the spatial routes, over a load order really holding two files of one filename.
 // Real mod-folder origins: ColumnKey.Of elides PluginOrigin.DataDirectory, so a default-origin

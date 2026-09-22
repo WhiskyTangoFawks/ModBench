@@ -1,8 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.LoadOrder;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>What a client says and hears over the wire, spelled once: the gestures a trace starts
 /// from, the notification stream it listens on, and the answers it reads back.</summary>

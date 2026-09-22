@@ -1,6 +1,6 @@
 using System.Xml.Linq;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The service's projects as the gates read them from disk: a directory beside
 /// MEditService.sln holding the csproj of the same name.</summary>

@@ -1,12 +1,14 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Traces;
 
 /// <summary>upgrade-a-mod: the install replaces the tracked folder's contents around .git, and from
 /// there this is a-tracked-mod-changes-on-disk with the version as the tell that pre-selects the

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>A test project is a caller. Its references are its box, the arrows the reference view
 /// draws from its box, the kernel by the band rule, and test support; the arrows are read from the

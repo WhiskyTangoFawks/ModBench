@@ -1,4 +1,4 @@
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>A class whose subject is the running service: one host, one client for it, and the
 /// restart that proves what a process boundary carries.</summary>

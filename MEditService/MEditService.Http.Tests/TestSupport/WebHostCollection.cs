@@ -1,4 +1,4 @@
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>Every class that boots a <c>WebApplicationFactory&lt;Program&gt;</c>: two starting at once
 /// race on the entry-point host builder, so they serialize behind one collection while the rest of

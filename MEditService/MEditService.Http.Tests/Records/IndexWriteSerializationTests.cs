@@ -1,9 +1,11 @@
+using MEditService.Http.Tests.Edits;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Queries;
-using MEditService.Tests.Edits;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Http.Tests.Records;
 
 /// <summary>The gate is held by a helper thread for the whole measurement and the call under test is
 /// observed to block or finish; no sleep decides the outcome.</summary>

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The traces are the integration suite: a trace that draws an mEdit box as an actor is a
 /// flow the endpoints compose, so it has one test class here, named for the trace file.</summary>

@@ -1,12 +1,13 @@
 using System.Reflection;
 using MEditService.Commands;
-using MEditService.Tests.Api;
+using MEditService.Http.Tests.Api;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>Every write route reaches a handler named for its gesture, and the handlers and the
 /// gestures are one set (ADR-0014 invariant 3). No route is excused, so a gesture written inline in

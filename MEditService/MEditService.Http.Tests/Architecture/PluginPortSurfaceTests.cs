@@ -1,7 +1,7 @@
 using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>ADR-0005 rule 2 on the port itself: no member of <see cref="IPluginAdapter"/> names a
 /// live Mutagen object, directly or through a value it returns. The banned namespaces are the

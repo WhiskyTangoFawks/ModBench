@@ -1,9 +1,11 @@
 using System.Net.Http.Json;
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     where TPlugin : IApiPluginFixture<TPlugin>

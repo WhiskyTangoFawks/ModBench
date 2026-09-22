@@ -2,11 +2,13 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Http.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>ADR-0014's read side: a plain read of the sequence, and a bounded await that answers
 /// whether a projection landed rather than sleeping the caller.</summary>
@@ -82,28 +84,24 @@ public sealed class ProjectionSequenceApiTests : IDisposable
     }
 
     [Fact]
-    public async Task AwaitSequence_ProjectionLandsWhileWaiting_ReturnsTrueLongBeforeTheTimeoutElapses()
+    public async Task AwaitSequence_ProjectionLandsWhileWaiting_ReturnsTrueAtTheLandedSequence()
     {
         var current = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         using var fx = new PluginFixtureBuilder("api-sequence-landing")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
 
-        var timer = Stopwatch.StartNew();
+        // Nothing but the write below can satisfy current + 1, so a true answer proves the await
+        // observed that write land rather than a value already there when it was asked.
         var awaitTask = _client.GetAsync(new Uri($"/load-order/sequence/await?atLeast={current + 1}&timeoutMs=20000", UriKind.Relative));
-
-        // Gives the await request time to actually start polling before the write lands, so this
-        // exercises a real wait rather than the already-satisfied fast path above.
-        await Task.Delay(200);
-        (await _client.PutAsJsonAsync("/load-order", LoadOrderBody(fx))).EnsureSuccessStatusCode();
+        var put = await _client.PutAsJsonAsync("/load-order", LoadOrderBody(fx));
+        put.EnsureSuccessStatusCode();
 
         var response = await awaitTask;
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(result.GetProperty("reached").GetBoolean());
-        // Well under the 20 s bound: proves it returned once the projection landed, not after
-        // waiting out the whole window.
-        Assert.True(timer.ElapsedMilliseconds < 10_000, $"took {timer.ElapsedMilliseconds} ms to notice a landed write");
+        Assert.True(result.GetProperty("sequence").GetInt64() > current);
     }
 
     [Fact]

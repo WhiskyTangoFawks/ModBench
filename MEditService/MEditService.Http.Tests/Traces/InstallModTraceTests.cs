@@ -1,11 +1,13 @@
+using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Traces;
+namespace MEditService.Http.Tests.Traces;
 
 /// <summary>install-mod: the install renames a folder into mods/ and forgets it. Nothing on the
 /// mEdit side watches mods/, so the folder arrives as the next snapshot: the tail is enable-a-mod's.</summary>

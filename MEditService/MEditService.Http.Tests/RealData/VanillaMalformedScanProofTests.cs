@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
-namespace MEditService.Tests.RealData;
+namespace MEditService.Http.Tests.RealData;
 
 /// <summary>Scanning the shipped game's plugins must produce zero diagnoses: "malformed" means departing
 /// from what the Creation Kit writes, so a vanilla hit is a false positive and the fix is tightening the

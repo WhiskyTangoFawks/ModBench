@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>A path names the Source repository (ADR-0014.5); a plugin's bytes name the Plugin
 /// adapter (ADR-0005.2). Commands and Edits ask one of those layers instead. Counted against an

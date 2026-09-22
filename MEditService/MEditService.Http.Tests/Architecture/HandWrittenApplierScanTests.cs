@@ -1,8 +1,9 @@
 using System.Text.RegularExpressions;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Architecture;
+namespace MEditService.Http.Tests.Architecture;
 
 public sealed class HandWrittenApplierScanTests
 {
