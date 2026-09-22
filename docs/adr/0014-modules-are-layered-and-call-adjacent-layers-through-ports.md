@@ -20,7 +20,7 @@ live in the glossary.
    readers of the read model. The gesture is the interface.
 4. **A command returns applied-or-refusal and what it did.** The carrier is each gesture's own; a
    refusal is returned, never thrown; no command returns state the read side owns.
-5. **A driven adapter is one deep module that hides its layout.** The Source repository is the
+5. **A driven adapter is one deep module that hides its layout.** The Source adapter is the
    only repository, and turning an identity into a path is its work alone. The record index is one
    module, projector and store, and nothing outside it names the store. On the Modbench side, each
    MO2 file's format lives in one kernel module that imports only Node builtins, so the kernel

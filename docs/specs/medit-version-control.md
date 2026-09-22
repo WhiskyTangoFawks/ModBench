@@ -75,7 +75,7 @@ using git.
 ## User Stories
 
 1. As a user, I want to track a mod with one explicit gesture and a clear preset choice, so
-   that forking someone's plugin is a decision I make, never something that happens to me.
+   that putting someone's plugin under version control is a decision I make, never something that happens to me.
 2. As a user, I want an untracked plugin to be visibly read-only with the way out named, so
    that I understand the friction is deliberate and one command away from gone.
 3. As a git-literate user, I want my changes reviewed, diffed, committed, branched, and
@@ -85,13 +85,13 @@ using git.
    everything wrong as diagnostics — refusing only what it structurally cannot emit — so
    that saving feels like building, and committing stays mine.
 5. As a user, I want `git diff main <branch>` to be "everything I changed against pristine
-   upstream", so that my fork is inspectable and redistributable by construction.
+   upstream", so that my changes are inspectable and redistributable by construction.
 6. As a user, I want a binary that changed outside Modbench to surface one question —
    upstream update or my own edit — with the likely answer pre-selected, so that xEdit
    edits and mod updates both have a safe, obvious path back in.
 7. As a user, I want an upstream update to land as new baselines with a rebase I can take
    now or later, conflicts opening in the merge editor I already know, so that updating a
-   forked mod is ordinary git work, structured for me.
+   vendored mod is ordinary git work, structured for me.
 8. As a user, I want a corrupt or stale binary detected at load with a loud offer to
    rebuild it from my text, so that a crash never silently costs me work.
 9. As a user, I want edits made by an agent or script to land as ordinary working-tree
@@ -123,7 +123,7 @@ using git.
   never name a file that does not yet exist, because nothing writes the line until the file and
   its index entry are already real.
 - **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
-  Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
+  Authored mode, no upstream flag. "Authored" is what merging to `main` at will already means
   (ADR-0007); a created plugin arrives no differently than any other tracked edit.
 
 ### Track
@@ -136,7 +136,7 @@ using git.
   the `.gitignore` is generated once and then owned by the user (ADR-0007).
 - **Progress**: eager, complete serialization is progress-reported (typically sub-second;
   ~21 s worst-case mega-plugin). On completion the repo exists with the pristine baseline
-  on `main` (provenance trailers: `Upstream-Version`, `Binary-SHA256`, `Meta-SHA256`, all
+  on `main` (baseline trailers: `Upstream-Version`, `Binary-SHA256`, `Meta-SHA256`, all
   optional, read from `meta.ini` as opaque bytes), the edit branch checked out, and the
   parked ref initialized — and the mod appears in the Source Control panel.
 - **The `source/` folder's lifecycle, in one place**: Track is what creates it —

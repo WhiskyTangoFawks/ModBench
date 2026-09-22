@@ -9,7 +9,7 @@ Modbench cannot classify on its own is a question for the user, never a silent r
 
 1. **Disk-derived state validates by content, never by clock and never by trust in its own last
    write.** The record index hashes every file it holds rows for
-   ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md)); the Instance is rebuilt
+   ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md)); the instance value is rebuilt
    whole from MO2's files
    ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md));
    a tracked plugin's bytes are compared against what Modbench last wrote.

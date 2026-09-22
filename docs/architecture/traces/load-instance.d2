@@ -1,0 +1,30 @@
+# Load the instance: every MO2 file that says what loads, read into one value. One watch over the
+# instance folder, debounced, and activation and refresh take the same path. One codec per file
+# parses. One whole value replaces the last, with the next sequence: no partial update and no
+# per-key patch, so no consumer holds two generations. A parse failure keeps the last value, and a
+# torn write is read again after it settles. The value goes to every view and on to mEdit.
+# Governed by ADR-0003, ADR-0013, ADR-0015 and ADR-0017. Contract: load-instance.md.
+...@../styles
+shape: sequence_diagram
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nprofiles/*/modlist.txt, plugins.txt · ModOrganizer.ini · mods/*/meta.ini · mods/ · overwrite/ · downloads/"
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance loader
+mo2files: @../target-architecture.modbench_driven.mo2files
+mo2files.label: Instance adapter
+codecs: @../target-architecture.modbench_kernel.codecs
+codecs.label: MO2 file codecs
+views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
+toolbox: @../target-architecture.modbench_driving.toolbox
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+
+mo2 -> instance: "watch: every file and folder, debounced" {class: signal}
+instance -> mo2files: "get: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadorder}
+mo2files -> instance: bytes {class: loadorder}
+instance -> codecs: bytes {class: loadorder}
+codecs -> instance: "parsed, one codec per file" {class: loadorder}
+instance."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
+instance -> views: value {class: loadorder}
+instance -> toolbox: load order snapshot, on change {class: loadorder}
+toolbox -> client: load order snapshot, on change {class: loadorder}

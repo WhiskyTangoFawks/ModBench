@@ -21,27 +21,28 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
 medit_driving: "MEDIT · Driving adapters — the API and the watcher" {
   class: band; grid-rows: 1
   http: "HTTP endpoints\ninterface: one endpoint per command and query; the notification\nstream\nhides: the SSE adapter of the notification port; the composition\nroot of mEdit" {class: driving}
-  watcher: "Mod watcher\ninterface: subscribe and dispose; nothing sends it a message; the\none listener to the load-order change\nhides: arming one watcher per mod folder from the snapshot, with\nthe Source repository naming the paths; settle per mod; the route\nper path: plugin bytes, source, git refs, anything else in a\ntracked mod. It announces nothing: it tells the Index and Commands" {class: driving}
+  watcher: "Mod watcher\ninterface: subscribe and dispose; nothing sends it a message; the\none listener to the load-order change\nhides: arming one watcher per mod folder from the snapshot, with\nthe Source adapter naming the paths; settle per mod; the route\nper path: plugin bytes, source, git refs, anything else in a\ntracked mod. It announces nothing: it tells the Index and Commands" {class: driving}
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
   toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: the first-deploy consent; the composition root of the MO2\nside" {class: driving}
   mods: "Mods\ninterface: enable, reorder, separators, uninstall, new empty\nmod, install from archive or folder, open folder\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges" {class: driving}
-  plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of Instance and client by plugin name and\norigin; the external-change dialog" {class: driving}
-  downloads: "Downloads\ninterface: install, upgrade\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
+  plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of the instance value and the client by plugin name and\norigin; the external-change dialog" {class: driving}
+  downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
   editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, track, compile, absorb, keep, put load order; each\nanswers applied or refusal\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
+  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, decompile, compile, put load order; each\nanswers applied or refusal\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nimplicit masters, the malformed-plugin diagnosis; the filter in\nforce\nhides: the Index's reads" {class: core}
 }
-modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through MO2 files and forgets" {
+modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
   modlist: "modlist commands\ninterface: enable, reorder, separators, uninstall, new empty\nmod, adopt unlisted folders\nhides: the splice of modlist.txt" {class: core}
   pluginscommands: "plugins commands\ninterface: enable, reorder, reconcile against disk\nhides: the splice of plugins.txt" {class: core}
   instancecommands: "instance commands\ninterface: switch profile\nhides: the splice of ModOrganizer.ini" {class: core}
+  downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: the splice of a download's .meta" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the value as an argument\nhides: which files to hardlink; the manifest's contents" {class: core}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
@@ -55,25 +56,25 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
-  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name to release" {class: kernel}
+  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini · a download's .meta\nhides: installedFiles in MO2's form; game name to release" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
   tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
-  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; the invariant lookup and the errno read\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
+  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; the invariant lookup and the errno read;\nmove a file to the system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads · refresh by keys · validate by hash · reconcile ·\nset and clear the filter · rebuild · the sequence and its await\nhides: the Projector and the Store" {
-    projector: "Projector\nasks the load order and the schema, decides nothing" {class: driven}
+  index: "Record index — one deep module, rebuildable\ninterface: reads · refresh by keys · validate by hash · reconcile ·\nset and clear the filter · rebuild · the sequence and its await\nhides: the Indexer and the Store" {
+    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB" {class: derived}
   }
-  sourcerepo: "Source repository\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
+  sourcerepo: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
   pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
 }
-modbench_driven: "MODBENCH · Driven adapters — MO2 files is the one reader and writer of the instance; the Instance is derived from it by watching, and nothing else" {
+modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instance: "Instance\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a parse failure keeps the last value" {class: driven}
-  mo2files: "MO2 files\ninterface: get, put, rename in mods/; hardlink and manifest into\nGame Data/; what to watch; where the game is\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the ini's game path, then Steam and\nWine detection" {class: driven}
+  instance: "Instance loader\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a parse failure keeps the last value" {class: driven}
+  mo2files: "Instance adapter\ninterface: get, put, rename in mods/; put in downloads/;\nhardlink and manifest into Game Data/; what to watch; where\nthe game is\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the ini's game path, then Steam and\nWine detection" {class: driven}
 }
 
 medit_data: "MEDIT · Systems of record" {

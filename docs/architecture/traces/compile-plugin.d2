@@ -1,5 +1,5 @@
-# Compile and keep, orange. Compile writes the source tree's documents back as bytes.
-# Keep is the same write, chosen over absorb when a tracked plugin changed.
+# Compile, orange. Compile writes the source tree's documents back as bytes. It is the
+# inverse of decompile plugin (decompile-plugin).
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -12,16 +12,16 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 source: @../target-architecture.medit_data.source
 sourcerepo: @../target-architecture.medit_driven.sourcerepo
-sourcerepo.label: Source repository
+sourcerepo.label: Source adapter
 pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
-projector: @../target-architecture.medit_driven.index.projector
-projector.label: Projector
+indexer: @../target-architecture.medit_driven.index.indexer
+indexer.label: Indexer
 
-plugins -> client: compile · keep {class: edit}
+plugins -> client: compile {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourcerepo: documents {class: compile}
@@ -29,4 +29,4 @@ sourcerepo -> commands: documents {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: bytes {class: compile}
 plugin -> watcher: bytes {class: signal}
-watcher -> projector: "plugin changed: validate by hash" {class: signal}
+watcher -> indexer: "plugin changed: validate by hash" {class: signal}
