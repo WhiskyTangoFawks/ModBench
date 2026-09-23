@@ -346,7 +346,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Working-tree changes ---
 
-    /// <summary>The projector's landing of re-derived documents: one transaction for the batch, so a
+    /// <summary>The indexer's landing of re-derived documents: one transaction for the batch, so a
     /// throw partway cannot leave Effective and Head disagreeing. A null body is the document
     /// gone.</summary>
     internal void ProjectDocuments(PluginCopyKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
@@ -595,7 +595,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;
 
-    // Empty until the projector points it somewhere: a store opened by a test that never reconciles
+    // Empty until the indexer points it somewhere: a store opened by a test that never reconciles
     // has no copies open, which is what an empty set says.
     private Func<IReadOnlyDictionary<PluginCopyKey, PluginContent>> _openedCopies =
         () => new Dictionary<PluginCopyKey, PluginContent>();

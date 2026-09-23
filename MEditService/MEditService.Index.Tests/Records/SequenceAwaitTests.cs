@@ -17,11 +17,11 @@ public sealed class SequenceAwaitTests : IDisposable
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("sequence-await")
         .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
         .Build();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     public SequenceAwaitTests()
     {
-        _index = new IndexProjector(_holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, timeProvider: _clock);
+        _index = new Indexer(_holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
     }
 

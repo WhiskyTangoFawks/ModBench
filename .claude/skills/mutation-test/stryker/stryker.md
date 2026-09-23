@@ -97,7 +97,7 @@ variance. The larger boxes (`Http`, `Commands`, `Index`) will cost more still.
 **Timeouts are a real but secondary tax.** Mutating the async load-order-lifecycle code deadlocks
 rather than fails: a broken cancellation check or loop-exit produces no answer at all, and from
 outside the process "hung" and "slow" are indistinguishable, so a timeout is the only sound
-detector Stryker has. One full pre-split run put 200 mutants in `Timeout` — `IndexProjector.cs`
+detector Stryker has. One full pre-split run put 200 mutants in `Timeout` — `Indexer.cs`
 (99, now in `MEditService.Index`), `RecordQueryService.cs` (61, now in `MEditService.Queries`),
 `LoadOrder.cs` (39, now in `MEditService.LoadOrder`), `LoadOrderStatus.cs` (1, now in
 `MEditService.Ports`) — which at the default 6-way concurrency cost roughly half that run's
@@ -113,7 +113,7 @@ What *was* done: `RecordQueryService.cs` (box `Queries`) and `LoadOrderStatus.cs
 `Ports`) are excluded via `run.sh`'s own `BOX_EXCLUSIONS_Queries` / `BOX_EXCLUSIONS_Ports`
 table, because they yielded **zero information** — 61 and 1 tested mutants respectively,
 all of them `Timeout`, nothing killed and nothing survived. `LoadOrder.cs` (box
-`LoadOrder`) and `IndexProjector.cs` (box `Index`) are kept: they time out heavily but
+`LoadOrder`) and `Indexer.cs` (box `Index`) are kept: they time out heavily but
 still produce real findings (25 killed, 1 survived, 6 uncovered). `run.sh` applies a
 box's exclusion even when it builds an explicit mutate list from the working tree, so
 having that file dirty does not quietly put it back in scope — but naming it via `--file`

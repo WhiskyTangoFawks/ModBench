@@ -193,7 +193,7 @@ internal sealed class HeldPlugins
         return metadata;
     }
 
-    /// <summary>Lets the projector report a post-open failure (an indexing throw from malformed record
+    /// <summary>Lets the indexer report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
     internal void SetFailure(PluginCopyKey key, string reason)
     {

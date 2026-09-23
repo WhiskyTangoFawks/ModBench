@@ -15,7 +15,7 @@ public sealed class GoneReportChecksDiskTests : IDisposable
         .Build();
 
     private readonly LoadOrderHolder _holder = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     private PluginCopyKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
     private string HeldPath => _data.Plugins[0].Path;

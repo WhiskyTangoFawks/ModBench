@@ -16,7 +16,7 @@ public sealed class TrackedCopyReadTests : IDisposable
         .BuildScattered();
 
     private readonly LoadOrderHolder _holder = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     public TrackedCopyReadTests()
     {

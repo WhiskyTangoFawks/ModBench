@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()

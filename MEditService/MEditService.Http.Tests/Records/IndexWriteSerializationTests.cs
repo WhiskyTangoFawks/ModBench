@@ -14,7 +14,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IndexProjector Index => _mod.Index;
+    private Indexer Index => _mod.Index;
 
     private IRecordQueryService Reads() =>
         new RecordQueryService(_mod.Index, _mod.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());

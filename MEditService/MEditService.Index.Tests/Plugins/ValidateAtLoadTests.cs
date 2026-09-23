@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>ADR-0015 invariant 4: the projector validates at load, before the load order answers. A
+/// <summary>ADR-0015 invariant 4: the indexer validates at load, before the load order answers. A
 /// tracked copy whose documents moved while nothing ran is corrected there, not on the next
 /// read.</summary>
 public sealed class ValidateAtLoadTests : IDisposable

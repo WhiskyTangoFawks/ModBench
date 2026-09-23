@@ -17,7 +17,7 @@ public sealed class CopyKeyComparisonTests : IDisposable
 
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     public CopyKeyComparisonTests()
     {

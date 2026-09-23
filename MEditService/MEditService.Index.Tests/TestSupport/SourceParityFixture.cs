@@ -13,8 +13,8 @@ public sealed class SourceParityFixture : IDisposable
 
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
 
-    internal IndexProjector FromBinary { get; }
-    internal IndexProjector FromSource { get; }
+    internal Indexer FromBinary { get; }
+    internal Indexer FromSource { get; }
 
     // One store file per launch, so each side's rows stand on their own.
     private readonly string _binaryInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
@@ -34,7 +34,7 @@ public sealed class SourceParityFixture : IDisposable
         FromSource = NewIndex(pluginPath, _sourceInstanceRoot);
     }
 
-    private IndexProjector NewIndex(string pluginPath, string instanceRoot) =>
+    private Indexer NewIndex(string pluginPath, string instanceRoot) =>
         Indexes.Reconciled(
             _gameDirectory,
             [new LoadOrderEntry(RealDataPlugin.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],

@@ -26,7 +26,7 @@ public sealed class DeleteRecordHandler
         if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // One changed document either way: the owner without the child, or the record's own gone.
-        // Every descendant's row follows from that when the projector re-reads it.
+        // Every descendant's row follows from that when the indexer re-reads it.
         var removal = repository.Remove(plugin, identity);
         if (removal != SourceRemoval.Removed)
         {

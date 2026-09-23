@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Plugins;
 // window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
-    private static IndexProjector MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // One story, because the three assertions are one lifecycle: refused while the first
     // holds the file, nothing minted on disk meanwhile, admitted once the first lets go.

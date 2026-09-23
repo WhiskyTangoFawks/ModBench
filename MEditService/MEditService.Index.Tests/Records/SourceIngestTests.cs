@@ -58,9 +58,9 @@ public sealed class SourceIngestTests : IDisposable
 
     // A fresh Index over the same tracked tree: the launch that has to read whatever the tree now
     // holds, having been told nothing.
-    private IndexProjector Opened() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
+    private Indexer Opened() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
 
-    private string NpcSourceFile(IndexProjector index) =>
+    private string NpcSourceFile(Indexer index) =>
         _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
 
     private string RootDocument => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName), "RecordData.json");

@@ -12,14 +12,14 @@ namespace MEditService.Index.Tests.TestSupport;
 /// adapter, reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
-    internal static IndexProjector Open(
+    internal static Indexer Open(
         LoadOrderHolder holder,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null) =>
         new(holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications);
 
-    internal static IndexProjector Reconciled(
+    internal static Indexer Reconciled(
         PluginFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
@@ -27,7 +27,7 @@ internal static class Indexes
         INotificationPublisher? notifications = null) =>
         Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
 
-    internal static IndexProjector Reconciled(
+    internal static Indexer Reconciled(
         ScatteredFixtureData fixture,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
@@ -35,7 +35,7 @@ internal static class Indexes
         INotificationPublisher? notifications = null) =>
         Reconciled(fixture.GameDirectory, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications);
 
-    internal static IndexProjector Reconciled(
+    internal static Indexer Reconciled(
         string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins,
         string? instanceRoot = null,
@@ -59,7 +59,7 @@ internal static class Indexes
     /// <summary>The SQL door (ADR-0011): the filter is arbitrary SQL yielding form_key, so what it
     /// matches is the relational schema's own answer. The filter is cleared after, the door being
     /// shared.</summary>
-    internal static int Matching(this IndexProjector index, string sql)
+    internal static int Matching(this Indexer index, string sql)
     {
         index.SetFilter(sql);
         try
@@ -74,7 +74,7 @@ internal static class Indexes
 
     /// <summary>Whether a filter may name the relations and columns in <paramref name="sql"/>: the
     /// door refuses SQL it cannot resolve.</summary>
-    internal static bool Accepts(this IndexProjector index, string sql)
+    internal static bool Accepts(this Indexer index, string sql)
     {
         if (Record.Exception(() => index.SetFilter(sql)) is not null) return false;
         index.ClearFilter();

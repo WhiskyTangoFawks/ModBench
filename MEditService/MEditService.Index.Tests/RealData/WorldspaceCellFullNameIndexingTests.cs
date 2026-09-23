@@ -20,7 +20,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private readonly PluginCopyKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-cell-fullname-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-cell-fullname-game-").FullName;
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
     private readonly string _worldspaceFormKey;
 
     public WorldspaceCellFullNameIndexingTests()

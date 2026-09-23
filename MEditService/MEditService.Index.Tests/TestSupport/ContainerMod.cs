@@ -70,7 +70,7 @@ internal sealed class IndexedContainerMod : IDisposable
 {
     private readonly ContainerMod _mod = new();
 
-    public IndexProjector Index { get; }
+    public Indexer Index { get; }
 
     public IndexedContainerMod(INotificationPublisher? notifications = null) =>
         Index = Indexes.Reconciled(_mod.GameDirectory, [_mod.Entry], notifications: notifications);

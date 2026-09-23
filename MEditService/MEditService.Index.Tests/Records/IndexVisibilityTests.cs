@@ -65,7 +65,7 @@ public sealed class IndexVisibilityTests
     }
 
     // No store yet is a count of nothing, which is what a reader before the reconcile sees.
-    private static int CountOrNone(IndexProjector index, PluginCopyKey key)
+    private static int CountOrNone(Indexer index, PluginCopyKey key)
     {
         try
         {

@@ -14,7 +14,7 @@ internal interface IRecordIndex : IDisposable
     IRecordReads At(RecordRef recordRef);
 
     /// <summary>Where <see cref="IRecordReads.OpenedCopies"/> reads from. The store holds no header
-    /// flag, master list or record count, so the projector points it at the copies it holds
+    /// flag, master list or record count, so the indexer points it at the copies it holds
     /// open.</summary>
     void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginCopyKey, PluginContent>> opened);
 

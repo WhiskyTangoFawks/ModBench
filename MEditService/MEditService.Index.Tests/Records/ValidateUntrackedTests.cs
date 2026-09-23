@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0015 invariant 4 over the other system of record: an untracked copy's rows came from
-/// its binary, which carries no unit smaller than itself, so validate reports and the projector
+/// its binary, which carries no unit smaller than itself, so validate reports and the indexer
 /// re-derives.</summary>
 public sealed class ValidateUntrackedTests : IDisposable
 {
@@ -17,7 +17,7 @@ public sealed class ValidateUntrackedTests : IDisposable
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     public ValidateUntrackedTests()
     {

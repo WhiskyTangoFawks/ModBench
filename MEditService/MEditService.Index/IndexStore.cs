@@ -394,7 +394,7 @@ internal sealed class IndexStore : IDisposable
     // concurrency is not.
     private readonly AsyncLocal<ProjectionScope?> _openProjection = new();
 
-    /// <summary>The scope handed out with no store to advance — a projector holding no index still
+    /// <summary>The scope handed out with no store to advance — an indexer holding no index still
     /// answers its callers.</summary>
     internal static readonly IDisposable NoProjectionScope = new NoScope();
 

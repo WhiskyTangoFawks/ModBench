@@ -13,11 +13,11 @@ namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order
 /// value in, registrations and one sequence advance out, over a real DuckDB.</summary>
-public sealed class IndexProjectorTests
+public sealed class IndexerTests
 {
-    private static IndexProjector MakeProjector(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    private static (IndexProjector Projector, GatedPluginAdapter Opens) MakeCountingProjector(LoadOrderHolder holder)
+    private static (Indexer Indexer, GatedPluginAdapter Opens) MakeCountingIndexer(LoadOrderHolder holder)
     {
         var opens = new GatedPluginAdapter();
         return (Indexes.Open(holder, opens), opens);
@@ -38,63 +38,63 @@ public sealed class IndexProjectorTests
         new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
-    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
-        projector.Reconcile(snapshot, holder.Apply(snapshot));
+    private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
+        indexer.Reconcile(snapshot, holder.Apply(snapshot));
 
     // The binary watch's re-derivation: bytes that differ, then the settle's own poke.
-    private static async Task ReDerive(IndexProjector projector, LoadOrderEntry entry)
+    private static async Task ReDerive(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
-        Assert.True(await projector.RefreshBinary(entry.KeyOf(), entry.Path));
+        Assert.True(await indexer.RefreshBinary(entry.KeyOf(), entry.Path));
     }
 
-    private static string SharedNpc(IndexProjector projector) =>
-        projector.RequireReads()
+    private static string SharedNpc(Indexer indexer) =>
+        indexer.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(IndexProjector projector, string formKey)
+    private static string? WinnerOf(Indexer indexer, string formKey)
     {
-        var stack = projector.RequireReads().GetOverrideStack(formKey)
+        var stack = indexer.RequireReads().GetOverrideStack(formKey)
             ?? throw new InvalidOperationException($"Expected {formKey} to resolve to an override stack.");
         return stack.Entries.Single(e => e.IsWinner).Plugin.Name;
     }
 
     // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the copies the Index has open still carry the old winner: a projector
+    // next snapshot here, so the copies the Index has open still carry the old winner: an indexer
     // reading them answers B.esp.
     [Fact]
     public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-winners-from-holder");
-        using var projector = MakeProjector(holder);
-        Reconcile(projector, holder, Snapshot(fx));
-        var npc = SharedNpc(projector);
-        Assert.Equal("B.esp", WinnerOf(projector, npc));
+        using var fx = TwoProviders("indexer-winners-from-holder");
+        using var indexer = MakeIndexer(holder);
+        Reconcile(indexer, holder, Snapshot(fx));
+        var npc = SharedNpc(indexer);
+        Assert.Equal("B.esp", WinnerOf(indexer, npc));
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        await ReDerive(projector, b);
+        await ReDerive(indexer, b);
 
-        Assert.Equal("A.esm", WinnerOf(projector, npc));
+        Assert.Equal("A.esm", WinnerOf(indexer, npc));
     }
 
     [Fact]
     public void Reconcile_RegistersExactlyTheLoadOrdersCopies()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-registrations");
-        using var projector = MakeProjector(holder);
+        using var fx = TwoProviders("indexer-registrations");
+        using var indexer = MakeIndexer(holder);
         var snapshot = Snapshot(fx);
 
-        Reconcile(projector, holder, snapshot);
+        Reconcile(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Copies, copy => Assert.True(projector.Registers(copy.Key)));
+        Assert.All(snapshot.Copies, copy => Assert.True(indexer.Registers(copy.Key)));
         Assert.Equal(
             snapshot.Copies.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
-            projector.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
-        Assert.False(projector.Registers(new PluginCopyKey("Nobody.esp", PluginOrigin.DataDirectory)));
+            indexer.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
+        Assert.False(indexer.Registers(new PluginCopyKey("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
     // Header flags, the master list and the record count are read out of the file when the copy is
@@ -103,13 +103,13 @@ public sealed class IndexProjectorTests
     public void TheReads_CarryTheContentFactsOfEveryCopyTheIndexOpened()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-opened-content");
-        using var projector = MakeProjector(holder);
+        using var fx = TwoProviders("indexer-opened-content");
+        using var indexer = MakeIndexer(holder);
         var snapshot = Snapshot(fx);
 
-        Reconcile(projector, holder, snapshot);
+        Reconcile(indexer, holder, snapshot);
 
-        var opened = projector.RequireReads().OpenedCopies;
+        var opened = indexer.RequireReads().OpenedCopies;
         var patch = opened[snapshot.Copies.Single(c => c.Name == "B.esp").Key];
         Assert.Equal(["A.esm"], patch.Masters);
         Assert.Equal(1, patch.RecordCount);
@@ -123,14 +123,14 @@ public sealed class IndexProjectorTests
     public void TheReads_OmitACopyTheIndexCouldNotOpen()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-unopenable-content");
-        using var projector = MakeProjector(holder);
+        using var fx = TwoProviders("indexer-unopenable-content");
+        using var indexer = MakeIndexer(holder);
         var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.GameDirectory, "Gone.esp"), "SomeMod", 9, true, true);
         var snapshot = Snapshot(fx, [.. fx.Plugins, gone]);
 
-        Reconcile(projector, holder, snapshot);
+        Reconcile(indexer, holder, snapshot);
 
-        var opened = projector.RequireReads().OpenedCopies;
+        var opened = indexer.RequireReads().OpenedCopies;
         Assert.DoesNotContain(new PluginCopyKey("Gone.esp", "SomeMod"), opened.Keys);
         Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
@@ -139,49 +139,49 @@ public sealed class IndexProjectorTests
     public async Task AWholePluginProjection_AdvancesTheSequenceExactlyOnce()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-one-advance");
-        using var projector = MakeProjector(holder);
-        Reconcile(projector, holder, Snapshot(fx));
+        using var fx = TwoProviders("indexer-one-advance");
+        using var indexer = MakeIndexer(holder);
+        Reconcile(indexer, holder, Snapshot(fx));
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
-        var before = projector.Sequence;
+        var before = indexer.Sequence;
 
-        Assert.True(await projector.RefreshBinary(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
+        Assert.True(await indexer.RefreshBinary(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
 
-        Assert.Equal(before + 1, projector.Sequence);
+        Assert.Equal(before + 1, indexer.Sequence);
     }
 
     [Fact]
     public async Task ASettledBatchNamingSeveralPlugins_AdvancesTheSequenceOnce()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-batch");
-        using var projector = MakeProjector(holder);
-        Reconcile(projector, holder, Snapshot(fx));
+        using var fx = TwoProviders("indexer-batch");
+        using var indexer = MakeIndexer(holder);
+        Reconcile(indexer, holder, Snapshot(fx));
         foreach (var entry in fx.Plugins) PluginBinaries.Touch(entry.Path);
-        var before = projector.Sequence;
+        var before = indexer.Sequence;
 
-        using (projector.BeginProjection())
+        using (indexer.BeginProjection())
         {
             foreach (var entry in fx.Plugins)
-                Assert.True(await projector.RefreshBinary(entry.KeyOf(), entry.Path));
+                Assert.True(await indexer.RefreshBinary(entry.KeyOf(), entry.Path));
         }
 
-        Assert.Equal(before + 1, projector.Sequence);
+        Assert.Equal(before + 1, indexer.Sequence);
     }
 
     [Fact]
     public void AnArrivingCopy_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
         var holder = new LoadOrderHolder();
-        using var fx = TwoProviders("projector-arriving-filter");
-        using var projector = MakeProjector(holder);
-        Reconcile(projector, holder, Snapshot(fx, [fx.Plugins[0]]));
-        projector.SetFilter("SELECT form_key FROM records");
+        using var fx = TwoProviders("indexer-arriving-filter");
+        using var indexer = MakeIndexer(holder);
+        Reconcile(indexer, holder, Snapshot(fx, [fx.Plugins[0]]));
+        indexer.SetFilter("SELECT form_key FROM records");
 
-        Reconcile(projector, holder, Snapshot(fx));
+        Reconcile(indexer, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
-        var rows = projector.RequireReads().Search(new RecordQuery(
+        var rows = indexer.RequireReads().Search(new RecordQuery(
             Plugin: arrived.Name, Origin: arrived.Origin, Limit: 10, Offset: 0));
         Assert.NotEmpty(rows.Items);
     }
@@ -192,18 +192,18 @@ public sealed class IndexProjectorTests
         var holder = new LoadOrderHolder();
         // C.esp holds its own NPC rather than an override of A's, so its FormKey is one the filter
         // could not already have listed when it was first materialized.
-        using var fx = new PluginFixtureBuilder("projector-filter")
+        using var fx = new PluginFixtureBuilder("indexer-filter")
             .WithPlugin("A.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("CharlieNpc"))
             .BuildScattered();
-        using var projector = MakeProjector(holder);
+        using var indexer = MakeIndexer(holder);
         var onlyA = fx.Plugins.Where(p => p.Name == "A.esm").ToList();
-        Reconcile(projector, holder, Snapshot(fx, onlyA));
-        projector.SetFilter("SELECT form_key FROM npc_");
+        Reconcile(indexer, holder, Snapshot(fx, onlyA));
+        indexer.SetFilter("SELECT form_key FROM npc_");
 
-        Reconcile(projector, holder, Snapshot(fx));
+        Reconcile(indexer, holder, Snapshot(fx));
 
-        var matched = projector.RequireReads()
+        var matched = indexer.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
         Assert.Equal(["CharlieNpc"], matched.Items.Select(i => i.EditorId));
     }

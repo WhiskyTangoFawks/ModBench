@@ -27,7 +27,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     private string AnInstance(string name, string editorId)
     {
@@ -44,7 +44,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     // Records only: the plugin header is a document too, and its EditorID is null by definition, so
     // including it would put a meaningless null in front of every expectation here.
-    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager) =>
+    private static IReadOnlyList<string?> EditorIdsIn(Indexer manager) =>
         [.. manager.RequireReads().GetDocuments(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];

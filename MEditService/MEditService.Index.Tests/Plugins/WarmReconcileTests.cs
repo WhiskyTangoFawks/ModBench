@@ -14,7 +14,7 @@ namespace MEditService.Index.Tests.Plugins;
 // ADR-0009: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
+    private static Indexer MakeManager(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
         Indexes.Open(holder, loggerFactory: loggerFactory);
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -87,7 +87,7 @@ public sealed class WarmReconcileTests
     // order was reporting at that moment.
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
-        public IndexProjector? Index { get; set; }
+        public Indexer? Index { get; set; }
 
         public override (PluginContent Content, Exception? Unreachable) ReadContent(
             ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)

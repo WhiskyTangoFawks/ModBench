@@ -18,7 +18,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
     // typed, actionable message rather than a FileNotFoundException's from inside Initialize.
@@ -275,7 +275,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
-    private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
+    private Indexer MakeLoadedManager(LoadOrderHolder holder)
     {
         var m = MakeManager(holder);
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);

@@ -79,7 +79,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
     /// <paramref name="body"/>, then the narrow signal a Source watcher would send.</summary>
-    internal static void Edit(this IndexProjector index, LoadOrderEntry entry, RecordDocument document, string body)
+    internal static void Edit(this Indexer index, LoadOrderEntry entry, RecordDocument document, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body));
         index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
@@ -89,7 +89,7 @@ internal static class TrackedMods
     /// <paramref name="newEditorId"/> computes and rewritten there, then the narrow signal for
     /// it.</summary>
     internal static void Rename(
-        this IndexProjector index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
+        this Indexer index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
     {
         var repository = RepositoryOf(entry);
         repository.Rename(
@@ -100,7 +100,7 @@ internal static class TrackedMods
     }
 
     /// <summary>A document the working tree gains, then the narrow signal for it.</summary>
-    internal static void Create(this IndexProjector index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
+    internal static void Create(this Indexer index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body));
         index.RefreshKeys(entry.KeyOf(), [formKey]);
@@ -110,7 +110,7 @@ internal static class TrackedMods
     /// narrow signal a settled Source batch sends for them (ADR-0015 invariant 2). A null body is
     /// the document taken out.</summary>
     internal static void Project(
-        this IndexProjector index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
+        this Indexer index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var repository = RepositoryOf(entry);
         var reads = index.RequireReads();
@@ -127,7 +127,7 @@ internal static class TrackedMods
 
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the narrow
     /// signal for it.</summary>
-    internal static void Delete(this IndexProjector index, LoadOrderEntry entry, RecordDocument document)
+    internal static void Delete(this Indexer index, LoadOrderEntry entry, RecordDocument document)
     {
         var removed = RepositoryOf(entry).Remove(
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));

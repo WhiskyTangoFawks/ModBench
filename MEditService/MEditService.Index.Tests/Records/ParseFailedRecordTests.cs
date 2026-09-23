@@ -204,7 +204,7 @@ public sealed class ParseFailedRecordTests
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public IRecordReads Reads => Index.Projected();
         public PluginCopyKey Plugin { get; }
         public string PluginPath { get; }

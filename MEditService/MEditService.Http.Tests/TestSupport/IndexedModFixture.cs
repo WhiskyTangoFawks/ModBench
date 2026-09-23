@@ -24,7 +24,7 @@ public sealed class IndexedModFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public IndexProjector Index { get; }
+    public Indexer Index { get; }
 
     public LoadOrderHolder Holder { get; }
     public PluginCopyKey Plugin { get; }
@@ -62,7 +62,7 @@ public sealed class IndexedModFixture : IDisposable
         mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        Index = new IndexProjector(
+        Index = new Indexer(
             holder,
             TestAdapters.Mutagen(),
             SharedSchemaReflector.Instance,
