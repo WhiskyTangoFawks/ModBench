@@ -4,6 +4,5 @@ level: error
 nonword: true
 scope:
   - comment
-  - text
 raw:
   - '(?<!\b(?:Mutagen|upstream|VS ?Code|debt)\b[\w ./#-]{0,24})(?<![\w.-]/[\w.-]{1,40})(?!(?<=[''"`])#[0-9a-fA-F]{3,8}[''"`])(?!(?<=,\s{0,3})#[0-9a-fA-F]{3,8}\s*\))#\d{2,}\b'
