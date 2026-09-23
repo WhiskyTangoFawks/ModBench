@@ -20,7 +20,7 @@ public sealed class WatcherAsksTheIndexNoLoadOrderTests
 
     // IRefreshIndex is the whole of what the watcher can ask the Index, and
     // ArchitectureTests.TheIndexSurface_HandsOutNoLoadOrder is what keeps a load order off it. Take
-    // the projector or the store instead and that guard is bypassed.
+    // the Indexer or the store instead and that guard is bypassed.
     [Fact]
     public void TheWatcher_TakesTheRefreshSurface_AndNoOtherIndexType()
     {
@@ -32,7 +32,7 @@ public sealed class WatcherAsksTheIndexNoLoadOrderTests
     }
 
     // A member the watcher never calls is a widening nobody asked for, and every implementer — the
-    // projector and each test's recorder alike — pays for it.
+    // Indexer and each test's recorder alike — pays for it.
     [Fact]
     public void TheRefreshSurface_HoldsOnlyMembersTheWatcherCalls()
     {

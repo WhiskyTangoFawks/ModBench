@@ -19,7 +19,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-announce-game-").FullName;
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-announce-instance-").FullName;
     private readonly string _pluginPath;

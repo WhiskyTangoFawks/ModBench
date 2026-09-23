@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
@@ -23,7 +23,7 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
@@ -47,7 +47,7 @@ public sealed class ReconcileScatteredTests
             })
             .BuildScattered();
 
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
@@ -65,7 +65,7 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
 
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.RequireReads();
 

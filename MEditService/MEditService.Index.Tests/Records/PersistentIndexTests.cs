@@ -50,7 +50,7 @@ public sealed class PersistentIndexTests : IDisposable
             Index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
         }
 
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public GatedPluginAdapter Opens { get; }
 
         public void Dispose()

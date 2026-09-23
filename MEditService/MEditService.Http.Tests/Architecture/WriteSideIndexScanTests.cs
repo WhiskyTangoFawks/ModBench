@@ -14,7 +14,7 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
-        "IRecordReads", "RecordRef", "IndexProjector", "IQueryIndex", "IndexStore", "IndexWriteGate",
+        "IRecordReads", "RecordRef", "Indexer", "IQueryIndex", "IndexStore", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
         "FormKeyResolutionCache", "PlacementWalker",
@@ -69,7 +69,7 @@ public sealed class WriteSideIndexScanTests
         var root = ArchitectureTests.SolutionDirectory();
 
         AssertCountsMatchAllowlist(
-            Counts(root, ["MEditService.Commands.Tests/Edits"], [], ["new IndexProjector"]),
+            Counts(root, ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]),
             SourceTree.ReadAllowlist(Path.Combine(root, TestAllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
             TestAllowlistPath);
     }
@@ -107,8 +107,8 @@ public sealed class WriteSideIndexScanTests
             Assert.Contains("Edits/EditService.cs: IRecordReads: 1", newReference.Message, StringComparison.Ordinal);
 
             var deletedReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, "Edits/Gone.cs: IndexProjector: 4"], AllowlistPath));
-            Assert.Contains("Edits/Gone.cs: IndexProjector: 4", deletedReference.Message, StringComparison.Ordinal);
+                () => AssertCountsMatchAllowlist(counts, [.. counts, "Edits/Gone.cs: Indexer: 4"], AllowlistPath));
+            Assert.Contains("Edits/Gone.cs: Indexer: 4", deletedReference.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -123,7 +123,7 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
 
     // The read routes name the query services by definition, and the gate has its own fact below,
-    // so what is left is the store, the projector and the read surface.
+    // so what is left is the store, the Indexer and the read surface.
     private static readonly string[] ReadSideSymbols =
         ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
          "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
@@ -165,7 +165,7 @@ public sealed class WriteSideIndexScanTests
     // A member outside the doors above is the watcher's signal or the projection's own machinery;
     // a door nobody maps is a route that went missing.
     [Fact]
-    public void TheDoorMapping_NamesOnlyTheProjector_AndReachesItOnlyThroughItsDoors()
+    public void TheDoorMapping_NamesOnlyTheIndexer_AndReachesItOnlyThroughItsDoors()
     {
         var root = ArchitectureTests.SolutionDirectory();
         var text = File.ReadAllText(Path.Combine(root, DoorMappingFile.Replace('/', Path.DirectorySeparatorChar)));
@@ -177,7 +177,7 @@ public sealed class WriteSideIndexScanTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["IndexProjector"], named);
+        Assert.Equal(["Indexer"], named);
         Assert.Equal(IndexDoors.Order(StringComparer.Ordinal), members);
     }
 
@@ -215,7 +215,7 @@ public sealed class WriteSideIndexScanTests
         Assert.True(
             named.Count == 0,
             "An endpoint names the Index's write gate. A record gesture writes its system of record "
-            + "and returns (ADR-0015 invariant 2), so the gate stays the projector's own:\n"
+            + "and returns (ADR-0015 invariant 2), so the gate stays the Indexer's own:\n"
             + string.Join("\n", named));
     }
 

@@ -11,11 +11,11 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
+    private Indexer MakeLoadedManager(LoadOrderHolder holder)
     {
-        var m = MakeManager(holder);
+        var m = MakeIndexer(holder);
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }

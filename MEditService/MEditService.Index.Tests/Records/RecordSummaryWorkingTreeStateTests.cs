@@ -40,7 +40,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);
 
-    private PagedResult<RecordSummary> Listing(IndexProjector index) =>
+    private PagedResult<RecordSummary> Listing(Indexer index) =>
         index.RequireReads().Search(new RecordQuery(Plugin: _baseKey.Name, Origin: _baseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
     [Fact]

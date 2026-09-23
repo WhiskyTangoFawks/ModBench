@@ -14,7 +14,7 @@ namespace MEditService.Index.Tests.Plugins;
 public sealed class RefreshBinaryTests : IDisposable
 {
     private readonly LoadOrderHolder _holder = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-refresh-binary-game-").FullName;
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-refresh-binary-instance-").FullName;
     private const string PluginName = "Untracked.esp";

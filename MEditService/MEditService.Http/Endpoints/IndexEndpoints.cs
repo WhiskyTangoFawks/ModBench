@@ -93,15 +93,15 @@ public static class IndexEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(Indexer index, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(IndexEndpoints)).LogTrace("Received GetLoadOrderStatus");
         return Results.Ok(index.Status);
     }
 
-    private static IResult GetSequence(IndexProjector index) => Results.Ok(index.Sequence);
+    private static IResult GetSequence(Indexer index) => Results.Ok(index.Sequence);
 
-    private static async Task<IResult> AwaitSequence(IndexProjector index, long atLeast, int timeoutMs = 5000)
+    private static async Task<IResult> AwaitSequence(Indexer index, long atLeast, int timeoutMs = 5000)
     {
         if (timeoutMs <= 0)
             return Results.Problem("timeoutMs must be positive.", statusCode: 400);
@@ -110,7 +110,7 @@ public static class IndexEndpoints
         return Results.Ok(new SequenceAwaitResponse(reached, index.Sequence));
     }
 
-    private static IResult SetFilter(FilterRequest req, IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(FilterRequest req, Indexer index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -141,7 +141,7 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult ClearFilter(IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult ClearFilter(Indexer index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received ClearFilter");
@@ -162,7 +162,7 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult GetFilter(IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(Indexer index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
@@ -179,7 +179,7 @@ public static class IndexEndpoints
     }
 
     private static IResult Reconcile(
-        IndexProjector index, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
+        Indexer index, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -219,7 +219,7 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult PostRebuildIndex(RebuildIndexRequest req, IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult PostRebuildIndex(RebuildIndexRequest req, Indexer index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))

@@ -36,7 +36,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
             using var manager = Indexes.Open(holder);
-            IndexProjector index = manager;
+            Indexer index = manager;
 
             index.Reconcile(holder,
                 gameDir,

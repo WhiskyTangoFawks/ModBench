@@ -14,7 +14,7 @@ namespace MEditService.Index.Tests.Plugins;
 // move from a cold indexing one, and the sequence tells whether a sweep ran.
 public sealed class ReconcileDiffTests
 {
-    private static (IndexProjector Index, GatedPluginAdapter Opens) MakeIndex(LoadOrderHolder holder)
+    private static (Indexer Index, GatedPluginAdapter Opens) MakeIndex(LoadOrderHolder holder)
     {
         var opens = new GatedPluginAdapter();
         return (Indexes.Open(holder, opens), opens);
@@ -32,19 +32,19 @@ public sealed class ReconcileDiffTests
             })
             .BuildScattered();
 
-    private static IRecordReads ReadsOf(IndexProjector index) =>
+    private static IRecordReads ReadsOf(Indexer index) =>
         index.RequireReads();
 
-    private static RecordOverrides OverrideStackOf(IndexProjector index, string formKey) =>
+    private static RecordOverrides OverrideStackOf(Indexer index, string formKey) =>
         ReadsOf(index).GetOverrideStack(formKey)
             ?? throw new InvalidOperationException($"Expected an override stack for '{formKey}'.");
 
-    private static string SharedNpc(IndexProjector index) =>
+    private static string SharedNpc(Indexer index) =>
         ReadsOf(index)
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(IndexProjector index, string formKey) =>
+    private static string? WinnerOf(Indexer index, string formKey) =>
         OverrideStackOf(index, formKey).Entries.Single(e => e.IsWinner).Plugin.Name;
 
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>

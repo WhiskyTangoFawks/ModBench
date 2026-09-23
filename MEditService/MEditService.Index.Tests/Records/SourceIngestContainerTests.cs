@@ -13,7 +13,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IndexProjector Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+    private Indexer Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
     // ---- Embedded children survive the round trip through the tree ----
 

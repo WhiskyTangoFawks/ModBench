@@ -34,7 +34,7 @@ public class PluginParticipationTests
     private static IReadOnlyList<LoadOrderEntry> WithBDisabled(PluginFixtureData fixture) =>
         [.. fixture.Plugins.Select(p => p.Name == "PluginB.esp" ? p with { Enabled = false } : p)];
 
-    private static Dictionary<string, bool> WinnersByPlugin(IndexProjector index, FormKey npcKey) =>
+    private static Dictionary<string, bool> WinnersByPlugin(Indexer index, FormKey npcKey) =>
         index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
 
     [Fact]

@@ -73,15 +73,15 @@ try
     builder.Services.AddSingleton<LoadOrderHolder>();
     // ADR-0014 invariant 5: one Index for the whole process, so the two sides never project into
     // two stores. ADR-0009: which file it opens comes from the load request, not from here.
-    builder.Services.AddSingleton(sp => new IndexProjector(
+    builder.Services.AddSingleton(sp => new Indexer(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IPluginAdapter>(),
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILoggerFactory>(),
         sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<TimeProvider>()));
-    builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
-    builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<IndexProjector>());
+    builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<Indexer>());
+    builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<Indexer>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();

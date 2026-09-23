@@ -20,7 +20,7 @@ public sealed class TrackedProjectionTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _mod;
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
     private readonly string _npc;
     private readonly string _otherNpc;
 

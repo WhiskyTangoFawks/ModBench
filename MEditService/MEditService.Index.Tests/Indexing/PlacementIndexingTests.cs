@@ -81,7 +81,7 @@ public class PlacementIndexingTests
         }
 
         public PluginFixtureData Fixture { get; }
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string WorldspaceFk { get; }
         public string TopCellFk { get; }
@@ -360,7 +360,7 @@ public class PlacementIndexingTests
         }
 
         public ScatteredFixtureData Fixture { get; }
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string WorldspaceFk { get; }
         public string ExtCellFk { get; }

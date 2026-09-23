@@ -47,7 +47,7 @@ public sealed class IndexVisibilityTests
         await indexing.CancelAsync();
         await Task.WhenAll(readers);
 
-        // If reads ever block behind the indexer's transaction the sample count collapses and the assertion
+        // If reads ever block behind the Indexer's transaction the sample count collapses and the assertion
         // below starts passing for the wrong reason. It also is the "reads are served throughout the load"
         // property, measured where it originates.
         Assert.True(counts.Count > 50, $"only {counts.Count} reads completed during indexing — reads are being blocked by it");
@@ -65,7 +65,7 @@ public sealed class IndexVisibilityTests
     }
 
     // No store yet is a count of nothing, which is what a reader before the reconcile sees.
-    private static int CountOrNone(IndexProjector index, PluginCopyKey key)
+    private static int CountOrNone(Indexer index, PluginCopyKey key)
     {
         try
         {

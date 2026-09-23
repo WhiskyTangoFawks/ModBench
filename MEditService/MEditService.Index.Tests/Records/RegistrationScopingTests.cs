@@ -52,7 +52,7 @@ public class RegistrationScopingTests
         }
 
         public ScatteredFixtureData Plugins { get; }
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public GatedPluginAdapter Opens { get; }
         public LoadOrderHolder Holder { get; }
         public string SharedNpcFk { get; }

@@ -97,7 +97,7 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     public string? FilterSql { get; set; }
     public IRecordReads RequireReads() => reads;
 
-    // Mirrors IndexProjector's own SetFilter/ClearFilter shape; a hand double states the filter
+    // Mirrors Indexer's own SetFilter/ClearFilter shape; a hand double states the filter
     // directly rather than compiling SQL to evaluate it.
     internal void SetFilter(string sql) => FilterSql = sql;
     internal void ClearFilter() => FilterSql = null;

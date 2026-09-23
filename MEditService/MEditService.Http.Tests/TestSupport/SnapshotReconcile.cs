@@ -10,7 +10,7 @@ namespace MEditService.Http.Tests;
 internal static class SnapshotReconcile
 {
     internal static LoadOrderHolder Reconcile(
-        this IndexProjector index, LoadOrderHolder holder, string gameDirectory,
+        this Indexer index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
         var snapshot = new LoadOrderSnapshot(gameDirectory, instanceRoot, gameRelease, SnapshotCopies.Of(plugins));

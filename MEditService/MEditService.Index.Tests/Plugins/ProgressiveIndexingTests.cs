@@ -12,7 +12,7 @@ namespace MEditService.Index.Tests.Plugins;
 /// asserts at that instant: no sleeps, no timing assumptions (ADR-0013).</summary>
 public sealed class ProgressiveIndexingTests
 {
-    private static (IndexProjector Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
+    private static (Indexer Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
     {
         var gate = new GatedPluginAdapter(gateBefore);
         return (Indexes.Open(holder, gate), gate);
@@ -292,7 +292,7 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(0, readsWhileParked.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
-        // Superseded or run to completion: once the gate opens, either ordering is the projector's
+        // Superseded or run to completion: once the gate opens, either ordering is the Indexer's
         // to choose and everything below holds for both.
         await first;
         await second;

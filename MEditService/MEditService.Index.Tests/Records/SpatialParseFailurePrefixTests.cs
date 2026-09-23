@@ -82,7 +82,7 @@ public sealed class SpatialParseFailurePrefixTests
         private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
         private readonly string _path;
         private readonly DiagnosingAdapter _adapter = new();
-        private readonly IndexProjector _index;
+        private readonly Indexer _index;
 
         internal string WorldspaceFormKey { get; }
         internal string CellFormKey { get; }

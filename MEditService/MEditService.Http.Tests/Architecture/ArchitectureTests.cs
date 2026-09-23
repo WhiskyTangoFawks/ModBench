@@ -25,7 +25,7 @@ public sealed class ArchitectureTests
         typeof(RecordTextCodec).Assembly,
         typeof(TrackHandler).Assembly,
         typeof(RecordEditRequest).Assembly,
-        typeof(IndexProjector).Assembly,
+        typeof(Indexer).Assembly,
         typeof(LoadOrderSnapshot).Assembly,
         typeof(IPluginAdapter).Assembly,
         typeof(INotificationPublisher).Assembly,
@@ -238,7 +238,7 @@ public sealed class ArchitectureTests
     }
 
     // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
-    // calls is a widening nobody asked for — and every implementer, the projector and each query
+    // calls is a widening nobody asked for — and every implementer, the Indexer and each query
     // test's stub alike, pays for it.
     [Fact]
     public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
@@ -263,7 +263,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
-        var offenders = new[] { typeof(IndexProjector), typeof(IQueryIndex), typeof(IRefreshIndex), typeof(IRecordReads) }
+        var offenders = new[] { typeof(Indexer), typeof(IQueryIndex), typeof(IRefreshIndex), typeof(IRecordReads) }
             .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
             .Where(m => VisibleOutsideItsType(m.Member))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
@@ -278,7 +278,7 @@ public sealed class ArchitectureTests
     private const BindingFlags EveryMember =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
 
-    // Internal counts, private does not: the projector reads the kernel through a private field,
+    // Internal counts, private does not: the Indexer reads the kernel through a private field,
     // and the rule is about what it hands out.
     private static bool VisibleOutsideItsType(MemberInfo member) => member switch
     {

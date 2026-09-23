@@ -28,7 +28,7 @@ public class HeaderIndexingTests
             .WithPlugin(name, configure, writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, MastersListOrdering = MastersListOrderingOption.NoCheck })
             .Build();
 
-    private static RecordDocument Header(IndexProjector index, string name) =>
+    private static RecordDocument Header(Indexer index, string name) =>
         index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginCopyKey(name, "Data"));
 
     [Fact]

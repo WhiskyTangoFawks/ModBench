@@ -6,11 +6,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0012: the IndexProjector-level Reconcile call that carries a caller-supplied
+// ADR-0012: the Indexer-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class ReconcileOriginTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
@@ -21,8 +21,8 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager(holder);
-        IndexProjector index = manager;
+        using var manager = MakeIndexer(holder);
+        Indexer index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
@@ -41,8 +41,8 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager(holder);
-        IndexProjector index = manager;
+        using var manager = MakeIndexer(holder);
+        Indexer index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();

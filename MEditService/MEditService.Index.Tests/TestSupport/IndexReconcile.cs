@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests;
 internal static class IndexReconcile
 {
     internal static LoadOrderHolder Reconcile(
-        this IndexProjector index, LoadOrderHolder holder, string gameDirectory,
+        this Indexer index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
         var snapshot = Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);

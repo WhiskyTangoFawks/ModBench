@@ -11,7 +11,7 @@ public class FilterTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private IndexProjector LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+    private Indexer LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     // --- SetFilter: validation ---
 

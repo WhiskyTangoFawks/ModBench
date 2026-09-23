@@ -17,7 +17,7 @@ public sealed class StoreRebuildTests : IDisposable
 
     private readonly LoadOrderHolder _holder = new();
     private readonly GatedPluginAdapter _opens = new();
-    private readonly IndexProjector _index;
+    private readonly Indexer _index;
 
     public StoreRebuildTests() => _index = Indexes.Open(_holder, _opens);
 

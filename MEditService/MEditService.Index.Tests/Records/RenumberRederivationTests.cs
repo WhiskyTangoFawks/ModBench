@@ -165,7 +165,7 @@ public sealed class RenumberRederivationTests : IDisposable
 
         public LoadOrderEntry Entry { get; }
         public PluginCopyKey Plugin => Entry.KeyOf();
-        public IndexProjector Index { get; }
+        public Indexer Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string Worldspace { get; }
         public string ExteriorCell { get; }

@@ -17,7 +17,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     private readonly TestPluginFixture _fixture = fixture;
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
 
-    private IndexProjector LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
+    private Indexer LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     // --- Search ---
 
