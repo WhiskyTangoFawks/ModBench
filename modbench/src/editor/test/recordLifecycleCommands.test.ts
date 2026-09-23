@@ -367,7 +367,7 @@ describe('registerRecordCopyCommands', () => {
     expect(showQuickPick).not.toHaveBeenCalled();
   });
 
-  it('reports a failed destination lookup at error, with the gesture as the log detail', async () => {
+  it('reports a failed destination lookup at error, with its reason as the detail', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA' })]);
     client.setQueryFailure('getRecordOverridePlugins', new Error('backend down'));
@@ -376,7 +376,7 @@ describe('registerRecordCopyCommands', () => {
     await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up destination plugins: backend down', detail: 'copy-as-override' },
+      { severity: 'error', message: 'Could not look up destination plugins.', detail: 'backend down' },
     ]);
   });
 

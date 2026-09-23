@@ -1,13 +1,18 @@
 import { expect } from 'vitest';
 import type { AskQuestion } from '../ports/dialog';
-import type { Reporter, Severity } from '../ports/reporter';
+import { reportSelectionOutcome, type Reporter, type Severity } from '../ports/reporter';
 import { present } from '../ports/present';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string }
+
+export interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
 
 export interface RecordingReporter extends Reporter {
   readonly reports: RecordedReport[];
   readonly landings: string[];
+  readonly dialogFailures: RecordedReport[];
+  readonly selectionOutcomeCalls: RecordedSelectionOutcomeCall[];
 }
 
 /** ADR-0019's reporter seam, second adapter: a test injects this where production injects
@@ -15,11 +20,21 @@ export interface RecordingReporter extends Reporter {
 export function recordingReporter(): RecordingReporter {
   const reports: RecordedReport[] = [];
   const landings: string[] = [];
+  const dialogFailures: RecordedReport[] = [];
+  const selectionOutcomeCalls: RecordedSelectionOutcomeCall[] = [];
+  const report: Reporter['report'] = (severity, message, detail) => { reports.push({ severity, message, detail }); };
   return {
     reports,
     landings,
-    report: (severity, message, detail) => { reports.push({ severity, message, detail }); },
+    dialogFailures,
+    selectionOutcomeCalls,
+    report,
     landed: (message) => { landings.push(message); },
+    insideDialog: (severity, message, detail) => { dialogFailures.push({ severity, message, detail }); },
+    selectionOutcome: (message, outcome, nameOf) => {
+      selectionOutcomeCalls.push({ message, outcome });
+      reportSelectionOutcome(report, message, outcome, nameOf);
+    },
   };
 }
 

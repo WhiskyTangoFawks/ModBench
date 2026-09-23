@@ -67,7 +67,7 @@ async function appendCreatedPluginToLoadOrder(
   if (!result.applied) {
     reporter.report(
       'error',
-      `Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
+      `Created "${pluginName}", but could not add it to the load order; add it manually in the Plugins tree.`,
       result.refusal,
     );
     return;

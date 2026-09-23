@@ -97,7 +97,7 @@ async function installArchive(
   // get a duplicate mod.
   reporter.report(
     'warning',
-    `"${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
+    `"${name}" was installed, but its Downloads status could not be updated.`,
     downloadRefusal,
   );
 }

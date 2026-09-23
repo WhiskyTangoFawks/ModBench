@@ -236,7 +236,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     const reportEntry = present(report.reports[0], 'the one recorded report');
     expect(reportEntry.severity).toBe('warning');
-    expect(reportEntry.message).toContain('"foo.7z" was installed, but its Downloads status');
+    expect(reportEntry.message).toBe('"foo.7z" was installed, but its Downloads status could not be updated.');
     expect(reportEntry.detail).toContain('EISDIR');
     expect(installFromArchive).toHaveBeenCalledWith(
       root, { kind: 'new', name: 'foo' }, archive,

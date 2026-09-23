@@ -36,7 +36,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   const deps: RecordPanelContextCommandDeps = {
     meditClient,
     onRecordEdited,
-    reporter: { report, landed: vi.fn() },
+    reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     tempRoot: '/tmp/does-not-open-here',
     log: vi.fn(),
     ...overrides,
