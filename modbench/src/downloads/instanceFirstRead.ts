@@ -1,6 +1,3 @@
-// A view's first-render gate over the Instance (ADR-0015). The failed read's one Output line is
-// the Instance's own, so a view renders the error row and raises nothing (ADR-0019).
-
 import type * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 

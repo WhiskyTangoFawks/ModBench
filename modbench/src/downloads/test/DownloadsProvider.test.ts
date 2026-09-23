@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
 } from '../../test/vscodeMock';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
+  ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile },
 }));
@@ -15,6 +17,7 @@ vi.mock('vscode', () => ({
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
+import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
 import type { DownloadFile, InstanceValue } from '../../instanceLoader/instance';
@@ -59,7 +62,7 @@ class FakeInstance {
   sequence: number;
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: ((reason: string) => void)[] = [];
+  private failureListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -76,14 +79,14 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
-  onReadFailure(listener: (reason: string) => void) {
+  onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
   }
-  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {
     this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener(reason);
+    for (const listener of [...this.failureListeners]) listener();
   }
 }
 
@@ -336,25 +339,18 @@ describe('invalidate', () => {
 // ── DownloadsProvider — the Instance is the only way in ────────────────────
 
 describe('DownloadsProvider — reacts to the Instance, never scans on its own', () => {
-  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
-  // empty downloads/ lands at sequence 1. getChildren() must await the first landed value
-  // rather than claim "no downloads" for the former.
-  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const provider = makeProvider([], { instance });
+  // The empty value before the first read is "not read yet", never "no downloads": a render asked
+  // for before the read, and awaited after it, shows the rows that read lands.
+  it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
+    await withUnreadCorpusInstance(async (instance) => {
+      const provider = new DownloadsProvider({ instance });
 
-    let settled = false;
-    const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
-    // A macrotask boundary: a subscribe-that-never-resolves rival would still pass a bare
-    // `await Promise.resolve()`.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
+      const pending = provider.getChildren();
+      await instance.refresh();
 
-    instance.publish(valueOf([row({ name: 'a.zip' })]));
-    const rows = await pending;
-
-    expect(settled).toBe(true);
-    expect(rowNames(rows)).toEqual(['a.zip']);
+      expect(rowNames(await pending)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
+      provider.dispose();
+    });
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read

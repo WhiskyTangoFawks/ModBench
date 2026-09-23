@@ -13,7 +13,7 @@ describe('firstReadOf', () => {
       readFailure: initial.readFailure,
       subscribe: (fn: InstanceSubscriber) => { subscriber = fn; return { dispose: () => {} }; },
       onReadFailure: (fn: ReadFailureListener) => { failureListener = fn; return { dispose: () => {} }; },
-      fail: (reason: string) => { instance.readFailure = reason; failureListener?.(reason); },
+      fail: (reason: string) => { instance.readFailure = reason; failureListener?.(); },
       land: () => { instance.readFailure = undefined; instance.sequence++; subscriber?.(instanceValueFixture(), instance.sequence); },
     };
     return instance;

@@ -26,6 +26,7 @@ async function setup() {
     instanceRoot: root,
     resolveGameDirectory: () => Promise.resolve(undefined),
     log: () => {},
+    logReadFailure: () => {},
   });
   await instance.refresh();
   const provider = new ModListProvider({ instance, instanceRoot: root });

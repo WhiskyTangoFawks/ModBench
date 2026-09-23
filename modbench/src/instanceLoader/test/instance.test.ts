@@ -44,12 +44,14 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   root: string;
   instance: Instance;
   logs: string[];
+  readFailureLines: string[];
   iniTextsResolved: string[];
   setResolver: (resolve: GameDirectoryResolver) => void;
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const logs: string[] = [];
+  const readFailureLines: string[] = [];
   const iniTextsResolved: string[] = [];
   let resolve = hooks.resolveGameDirectory ?? resolvesDataFolder;
   const instance = new Instance({
@@ -59,10 +61,11 @@ async function realInstance(hooks: Hooks = {}): Promise<{
       return resolve(iniText);
     },
     log: (msg) => logs.push(msg),
+    logReadFailure: (line) => readFailureLines.push(line),
   });
   instances.push(instance);
   return {
-    root, instance, logs, iniTextsResolved,
+    root, instance, logs, readFailureLines, iniTextsResolved,
     setResolver: (next) => { resolve = next; },
   };
 }
@@ -375,7 +378,7 @@ describe('Instance — built by watching', () => {
 
 describe('Instance — a value that survives a bad read', () => {
   it('keeps the previous value and logs when a file is half-written', async () => {
-    const { root, instance, logs } = await realInstance();
+    const { root, instance, readFailureLines } = await realInstance();
     await instance.refresh();
     const value = instance.value;
     const before = instance.sequence;
@@ -385,13 +388,12 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    const failureLogs = logs.filter((m) => m.includes('recompute failed'));
-    expect(failureLogs).toHaveLength(1);
-    expect(failureLogs[0]).toContain('ModOrganizer.ini');
+    expect(readFailureLines).toHaveLength(1);
+    expect(readFailureLines[0]).toContain('ModOrganizer.ini');
   });
 
   it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
-    const { root, instance, logs } = await realInstance();
+    const { root, instance, readFailureLines } = await realInstance();
     await instance.refresh();
     const value = instance.value;
     const before = instance.sequence;
@@ -402,11 +404,11 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+    expect(readFailureLines).toHaveLength(1);
   });
 
   it('keeps the value when a folder inside overwrite/ is unreadable — never silently a smaller count', async () => {
-    const { root, instance, logs } = await realInstance();
+    const { root, instance, readFailureLines } = await realInstance();
     const nested = join(root, 'overwrite', 'SKSE');
     await mkdir(nested, { recursive: true });
     await writeFile(join(nested, 'skse.log'), '');
@@ -427,7 +429,7 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+    expect(readFailureLines).toHaveLength(1);
   });
 
   // The failure a tree hears about before anything has landed, so its first render can settle on
@@ -437,9 +439,9 @@ describe('Instance — a value that survives a bad read', () => {
     const ini = join(root, 'ModOrganizer.ini');
     const complete = await readFile(ini, 'utf8');
     await writeFile(ini, ''); // unreadable before anything has landed
-    const failures: string[] = [];
+    const failures: (string | undefined)[] = [];
     const landed: number[] = [];
-    instance.onReadFailure((reason) => failures.push(reason));
+    instance.onReadFailure(() => failures.push(instance.readFailure));
     instance.subscribe((_value, sequence) => landed.push(sequence));
 
     await instance.refresh();
@@ -462,8 +464,8 @@ describe('Instance — a value that survives a bad read', () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
     const value = instance.value;
-    const failures: string[] = [];
-    instance.onReadFailure((reason) => failures.push(reason));
+    const failures: (string | undefined)[] = [];
+    instance.onReadFailure(() => failures.push(instance.readFailure));
 
     await writeFile(join(root, 'ModOrganizer.ini'), '');
     await instance.refresh();
@@ -750,7 +752,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // activation joining its own.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNothing, log: () => {},
+      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNothing, log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
@@ -763,7 +765,8 @@ describe('Instance — downloads, profile and game directory', () => {
 // A bespoke minimal instance (not the corpus clone), so a mod's declared masters are exactly
 // what the test wrote — real xEdit-produced corpus bytes carry unknown master lists of their own.
 async function minimalInstance(): Promise<{
-  root: string; instance: Instance; logs: string[]; setResolver: (resolve: GameDirectoryResolver) => void;
+  root: string; instance: Instance; logs: string[]; readFailureLines: string[];
+  setResolver: (resolve: GameDirectoryResolver) => void;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
   roots.push(root);
@@ -773,14 +776,16 @@ async function minimalInstance(): Promise<{
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '');
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
   const logs: string[] = [];
+  const readFailureLines: string[] = [];
   let resolve: GameDirectoryResolver = resolvesNothing;
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: (iniText) => resolve(iniText),
     log: (msg) => logs.push(msg),
+    logReadFailure: (line) => readFailureLines.push(line),
   });
   instances.push(instance);
-  return { root, instance, logs, setResolver: (next) => { resolve = next; } };
+  return { root, instance, logs, readFailureLines, setResolver: (next) => { resolve = next; } };
 }
 
 describe('Instance — per-mod status and the overwrite count', () => {
@@ -821,7 +826,7 @@ describe('Instance — listing mods/', () => {
   // Only ENOENT is "no mods/ yet". A listing that fails for any other reason must not read as
   // "every folder has its line": the value stands until a read succeeds (ADR-0015).
   it('keeps the value when mods/ is present but cannot be listed', async () => {
-    const { root, instance, logs } = await minimalInstance();
+    const { root, instance, readFailureLines } = await minimalInstance();
     await separatorOnly(root);
     await instance.refresh();
     const value = instance.value;
@@ -834,7 +839,7 @@ describe('Instance — listing mods/', () => {
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
     expect(instance.readFailure).toBeDefined();
-    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+    expect(readFailureLines).toHaveLength(1);
   });
 
   // The other half, on the same isolated tree: ENOENT alone is tolerated, and the value lands.

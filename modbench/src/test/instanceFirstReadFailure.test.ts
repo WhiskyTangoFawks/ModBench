@@ -53,7 +53,10 @@ async function threeViewsOverOneInstance() {
   roots.push(root);
   const channel = new FakeLogOutputChannel();
   const log = (msg: string) => { channel.info(msg); };
-  const instance = new Instance({ instanceRoot: root, log, resolveGameDirectory: () => Promise.resolve(undefined) });
+  const instance = new Instance({
+    instanceRoot: root, log, logReadFailure: (line) => { channel.error(line); },
+    resolveGameDirectory: () => Promise.resolve(undefined),
+  });
   const mods = new ModListProvider({ instance, log, instanceRoot: root, reporter: makeReporter(channel, 'modList') });
   const plugins = new PluginsTreeProvider({
     instance,
@@ -92,9 +95,8 @@ describe('a failed first read across the Mods, Plugins and Downloads views', () 
       expect(error.tooltip).toBe(reason);
       expect(error.iconPath).toEqual(new ThemeIcon('error'));
     }
-    const lines = channelWrites(channel);
-    expect(lines).toHaveLength(1);
-    expect(String(lines[0]?.[0])).toContain(String(reason));
+    expect(channelWrites(channel)).toHaveLength(1);
+    expect(channel.error.mock.calls).toEqual([[`[instance] Failed to read the MO2 instance: ${reason}`]]);
     expect(showErrorMessage).not.toHaveBeenCalled();
     expect(showWarningMessage).not.toHaveBeenCalled();
     expect(showInformationMessage).not.toHaveBeenCalled();

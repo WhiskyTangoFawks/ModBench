@@ -14,8 +14,10 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
+  ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri: { file: uriFilePlain, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
@@ -31,6 +33,7 @@ import {
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
@@ -69,7 +72,7 @@ class FakeInstance {
   sequence: number;
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: ((reason: string) => void)[] = [];
+  private failureListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -86,14 +89,14 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
-  onReadFailure(listener: (reason: string) => void) {
+  onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
   }
-  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {
     this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener(reason);
+    for (const listener of [...this.failureListeners]) listener();
   }
 }
 
@@ -493,26 +496,21 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
-  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
-  // empty plugins.txt lands at sequence 1. getChildren() must not claim "No plugins" for the
-  // former; it awaits the first landed value instead.
-  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const { tree } = makeTree([], { instance });
+  // The empty value before the first read is "not read yet", never "No plugins": a render asked
+  // for before the read, and awaited after it, shows the rows that read lands.
+  it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
+    await withUnreadCorpusInstance(async (instance) => {
+      const tree = new PluginsTreeProvider({ instance, source: new FakeSource() });
 
-    let settled = false;
-    const pending = tree.getChildren().then((rows) => { settled = true; return rows; });
-    // A macrotask boundary, not a microtask one: buildRows() itself hops several microtasks
-    // (dataFolder(), implicitMasters()), so a single `await Promise.resolve()` would
-    // pass whether or not getChildren() actually waits on the Instance.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
+      const pending = tree.getChildren();
+      await instance.refresh();
+      const rendered = await pending;
 
-    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
-    const rows = await pending;
-
-    expect(settled).toBe(true);
-    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
+      expect(rendered.length).toBeGreaterThan(0);
+      expectInstancesOf(rendered, PluginNode);
+      expect(rendered.map((r) => r.label)).toEqual((await tree.getChildren()).map((r) => r.label));
+      tree.dispose();
+    });
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
