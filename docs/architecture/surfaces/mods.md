@@ -124,6 +124,7 @@ As a user, I want:
 5. The check box to flip as I click it. If the write fails, it returns to what the disk says, and I
    am told why. *A write is forgotten; common, Reporting*
 6. A click or double click on a row to do nothing but select it. *catalog: no row click on Mods*
+7. Copy value to copy each selected mod's or separator's name, one to a line. *catalog `copy value`*
 
 ## Drag and drop
 

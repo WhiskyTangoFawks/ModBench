@@ -35,8 +35,8 @@ As a user, I want:
 
 1. One row for each record that references the active one, however many plugins hold the
    reference: a referrer overridden in four plugins is one referrer, not four. *old spec*
-2. Beneath a referrer, one row for each plugin and field that holds the reference, in plugin order.
-   *xEdit; old spec*
+2. Beneath a referrer, one row for each plugin that holds the reference, in plugin order: each is
+   one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xEdit*
 3. A reference counted only where its field is in use: a condition parameter its function does not
    use is not a reference, whatever it holds. *xedit.md, divergence 15*
 4. A child record's references counted as its own: a quest and a dialog topic inside it each list
@@ -53,6 +53,7 @@ As a user, I want:
 |---|---|---|
 | Label | the EditorID, or the FormKey when it has none | Plugins' record row |
 | Description | the record type as xEdit names it, then `· 3 plugins` when more than one plugin holds the reference | xEdit's columns; old spec |
+| Icon | none | Plugins' record row |
 | Tooltip | `EditorID [FormKey]`, the record type, and the plugins that hold the reference | |
 | Identity | the referrer's FormKey | |
 
@@ -61,8 +62,8 @@ As a user, I want:
 | Part | What it shows | Source |
 |---|---|---|
 | Label | the plugin's file name | xEdit |
-| Description | the field, as its rows are labelled in the record panel, parent first | old spec |
-| Identity | the referrer's FormKey, the plugin and the field | |
+| Description | the fields that hold the reference, as mEdit gives their paths, joined by `, ` | old spec; mEdit's answer |
+| Identity | the referrer's FormKey and the plugin | |
 
 ## States
 
@@ -82,9 +83,9 @@ The row menus follow VS Code's groups: open, change, copy, then destroy.
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Collapse All last. |
-| Referrer menu | open to the side · copy… · copy value · delete |
-| Where it is held | none |
-| Keys | Enter: open, as a click does. Ctrl+C: copy value. Delete: delete. Ctrl+F: filter. |
+| Referrer menu | open to the side · copy value |
+| Where it is held | copy… · delete |
+| Keys | Enter: open, as a click does. Ctrl+C: copy value. Delete: delete, on a row beneath a referrer. Ctrl+F: filter. |
 
 As a user, I want:
 
@@ -93,8 +94,8 @@ As a user, I want:
 2. A click on a row beneath a referrer to select it and do nothing else.
 3. Copy value to copy each selected referrer as `EditorID [FormKey]`, one to a line. A row beneath a
    referrer adds nothing. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
-4. Copy and delete on the selected referrers, as in Plugins. *catalog `copy`, `delete`; xEdit's
-   Referenced By menu*
+4. Copy and delete on the selected rows beneath a referrer, each acting on that plugin's copy, as in
+   Plugins. *catalog `copy`, `delete`; xEdit's Referenced By menu*
 
 ## Deferred
 

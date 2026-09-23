@@ -175,8 +175,8 @@ As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
    Argument in the catalog says: enable or disable, compile, delete, copy, renumber and open take
-   the selection. Several records open as a comparison. *catalog Argument; commands.md, A selection
-   is one gesture*
+   the selection. Several records open each in a tab of its own, until #23 makes them one
+   comparison. *catalog Argument; commands.md, A selection is one gesture*
 2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
    identity*
 3. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
@@ -189,6 +189,8 @@ As a user, I want:
    tracked, editable plugin. *catalog Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
    and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
+8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
+   file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
 ## Drag and drop
 
@@ -295,7 +297,6 @@ By [common.md](common.md#reporting). As a user, I want:
 | `repair`, `validate`, sort rules, `apply suggested sort`, `rename`, `relink source`, `remove source` | their design |
 | `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
 | `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
-| Editing a plugin's header | the catalog's planned `edit field` |
 | A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
 ## Test seam

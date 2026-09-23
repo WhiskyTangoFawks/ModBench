@@ -43,11 +43,12 @@ As a user, I want:
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` | nothing |
 | Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record | the record picker, below | `EditorID [FormKey]` | `—` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text | `—` |
-| Colour | a struct: Red, Green and Blue, and Alpha on the four fields xEdit gives one | each part as an integer; an edit keeps the parts it does not name | as a struct | `—` |
+| Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text | `—` |
+| Vector | `x, y, z`, as mEdit gives it | a text box | the text | `—` |
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON | `{…}` |
 | Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON | `[0]` |
 
-*xEdit's editors by type; xedit.md, divergences 1 and 7; old spec*
+*xEdit's editors by type; xedit.md, divergences 1 and 7; old spec; mEdit's answer*
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field.
 *xEdit*
@@ -70,8 +71,8 @@ As a user, I want:
 
 1. The record picker to be VS Code's quick pick, opened on the current reference, with that record
    selected. *xedit.md, divergence 1*
-2. Typing to search by EditorID, or by FormKey, among the record types the field allows only.
-   *xEdit; old spec*
+2. Typing to search by EditorID, or by FormKey. When the field allows one record type, the search
+   is among that type only. *xEdit; old spec; mEdit's answer*
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone
    stale still finds the right record. *old spec*
 4. Enter to write the record I chose, and Esc to change nothing. *Esc changes nothing*
@@ -156,21 +157,15 @@ A condition list is an array like any other. As a user, I want:
 A record's script data (its VMAD) is a struct like any other, and its scripts, properties and values
 edit as the fields above. Editing Papyrus source is not the record panel's. *old spec*
 
-## The record header
+## Partial Form
 
-As a user, I want:
-
-1. The record header's rows as xEdit shows them: the signature, the record flags, the FormID, the
-   form version and the version control info. *xEdit*
-2. Only the record flags to edit. The FormID changes by renumber, in Plugins. *xEdit; catalog
-   `renumber`*
-3. In a Partial Form copy, every field read-only but the EditorID and the record flags, so clearing
-   the flag is how the copy's fields become editable. Its children stay editable. *xEdit*
+A Partial Form copy's own fields are read-only, and show empty: the game ignores them. Its children
+edit as any record's. *xEdit; mEdit's answer*
 
 ## A plugin's header
 
-A plugin's header is a record and reads as one. Its masters are the Effective masters, and are
-never edited. *ADR-0008, invariant 2*
+A plugin's header is a record, and reads and edits as one. Its masters are the Effective masters,
+and are never edited. *ADR-0008, invariant 2; catalog `edit field`*
 
 ## Deferred
 
@@ -178,7 +173,9 @@ never edited. *ADR-0008, invariant 2*
 |---|---|
 | More collapsed readings | #435 |
 | Setting the Partial Form flag | its design |
-| Editing a plugin's header | the catalog's planned `edit field` |
+| A Partial Form copy's EditorID and record flags editable, and its own values shown | mEdit's answer |
+| Colour and vector as structs of their parts, as xEdit shows them, with Alpha on the four colours xEdit gives one | mEdit's answer |
+| The picker's search limited to a field's record types when it allows several | mEdit's answer |
 | An alias number read as the alias's name | its design |
 
 ## Test seam

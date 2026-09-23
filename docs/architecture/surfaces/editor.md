@@ -23,17 +23,16 @@ Each story cites its source. A story with no source is owned here.
 
 As a user, I want:
 
-1. A record to open in an editor tab as a file does: a click on a record in Plugins or Referenced
-   By opens it in the preview tab, which the next click replaces, and an edit in the panel or a
-   double click on its tab keeps it. *catalog `open`; VS Code's preview editors*
-2. Open to the side to open the record in a tab of its own, beside the one I am in. *catalog
-   `open`, placement*
-3. A record already open in the group to be shown, not opened twice. *VS Code*
-4. Go Back and Go Forward to move between the records I opened, as between files. *xedit.md: VS
-   Code provides editor history and pinning*
-5. The tab titled with the EditorID, or the FormKey when there is none, with `EditorID [FormKey]`
-   in its tooltip. A plugin header's tab is titled with the plugin's file name. *catalog `open`:
-   a plugin header is a record*
+1. A click on a record in Plugins or Referenced By to open it in the record tab: one tab, which
+   the next click points at the next record, as VS Code replaces a preview tab. *catalog `open`;
+   VS Code's preview editors*
+2. Open to the side to open the record in a tab of its own, beside the one I am in, which later
+   clicks leave alone. *catalog `open`, placement*
+3. A record already open in a tab of its own to be shown, not opened twice. *VS Code*
+4. Several records opened at once each to open in a tab of its own. *catalog `open`; #23 makes
+   them one comparison*
+5. The tab titled with the EditorID, or the FormKey when there is none. A plugin header's tab is
+   titled with the plugin's file name. *catalog `open`: a plugin header is a record*
 6. Open from the palette, with no record given, to ask for one by FormID or EditorID. *catalog
    `open`*
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I
@@ -64,7 +63,7 @@ As a user, I want:
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | `[XX] File name`: the plugin's load order index and file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
+| Label | `[XX] File name`: the plugin's load order index in hex, `[FE:XXX]` for a light plugin, and its file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
 | Status | the column's status, from the table below | old spec |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |
@@ -74,7 +73,7 @@ As a user, I want:
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
 | `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | old spec |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007, invariant 1 |
-| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that only the EditorID and the record header's flags can be edited | xEdit; [editor-fields.md](editor-fields.md) |
+| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed,
@@ -85,17 +84,15 @@ spec*
 
 As a user, I want:
 
-1. The record header first, as xEdit shows it, with the record's flags. Partial Form is one of
-   them. *xEdit*
-2. Then one row for each field that any column holds, in the order xEdit shows the record type's
-   fields. *xEdit*
-3. A field that holds other fields, a struct or an array, to expand into a row for each of them,
+1. One row for each field that any column holds, in the order mEdit gives them. *mEdit's answer*
+2. A field that holds other fields, a struct or an array, to expand into a row for each of them,
    indented one step for each level. *xEdit*
-4. Every row expanded when the record opens, as xEdit opens it. *xEdit*
-5. To expand and collapse a row by double clicking its label, or from the keys below. *xEdit*
-6. Each row and each cell coloured by the record order conflict it shows.
+3. Every row expanded when the record opens, as xEdit opens it. *xEdit*
+4. To expand and collapse a row from the arrow beside its label, by double clicking the label, or
+   from the keys below. *VS Code's trees; xEdit*
+5. Each row and each cell coloured by the record order conflict it shows.
    *[editor-conflicts.md](editor-conflicts.md)*
-7. What each cell reads, and how it edits, as its field's type says.
+6. What each cell reads, and how it edits, as its field's type says.
    *[editor-fields.md](editor-fields.md)*
 
 ## The focused cell
@@ -155,9 +152,8 @@ As a user, I want:
 3. When the conflict colours are not yet computed for every plugin, a message above the grid:
    "This record's comparison is not complete: the colours are not final." It goes by itself once
    they are, and the grid reads again. *ADR-0019, invariant 1; old spec*
-4. When the record is gone from every plugin, the tab to stay, marked deleted as VS Code marks a
-   deleted file, and the panel to say the record is gone, naming it. *VS Code; A gone object is
-   refused*
+4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
+   naming it, in place of the grid. *A gone object is refused*
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
    scroll stay. *ADR-0015, invariant 3; edit-record, Shared, story 8*
@@ -166,6 +162,8 @@ As a user, I want:
 
 The row menus follow VS Code's groups: open, change, source control, copy, then destroy. Only
 these items show; VS Code's own Cut, Copy and Paste items, which act on text on the screen, do not.
+A gesture on a field acts on the focused cell, and is in the palette only while a record tab has
+focus. *commands.md, Record*
 
 | Where | Items, in order |
 |---|---|
@@ -175,8 +173,8 @@ these items show; VS Code's own Cut, Copy and Paste items, which act on text on 
 
 As a user, I want:
 
-1. Go to record to open the record the reference points to, in this group, so Go Back returns
-   here. *xedit.md, divergence 10; catalog `open`; Stay in the panel*
+1. Go to record to show the record the reference points to, in the same tab. *xedit.md, divergence
+   10; catalog `open`; Stay in the panel*
 2. Open field value to open the field's text in a text editor tab beside the panel, titled
    `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened
    again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long
@@ -202,9 +200,11 @@ By [common.md](common.md#reporting). As a user, I want:
 | Several records open as one comparison, with a column per record, and xEdit's grid items that work across them: remove from selected records, sort by this row, compare the records a row references | #23 |
 | `hide no-conflict rows` | #250 |
 | Showing the copies of a record the game does not load: a losing copy, or one in a disabled plugin | their design, as in Plugins |
-| Editing a plugin's header | the catalog's planned `edit field` |
 | `copy` as underride, and deep copy of a container | the catalog's planned Options |
 | Saying the panel is behind the disk | #973 |
+| The record tab as VS Code's own editor: preview and pinning, Go Back and Go Forward, a tooltip, and the deleted mark | #980 |
+| The record header's rows, with the record flags, and Partial Form cleared there | mEdit's answer |
+| The fields in xEdit's order | mEdit's answer |
 
 ## Test seam
 

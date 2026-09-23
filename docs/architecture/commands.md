@@ -274,11 +274,11 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 
 ## Record
 
-Offered on Plugins (the record children) and on Editor (the record panel and Referenced By). Following xEdit, create, renumber and filter are Plugins only; field gestures are Editor only; the rest are on both.
+Offered on Plugins (the record children) and on Editor (the record panel and Referenced By). Following xEdit, create, renumber and filter are Plugins only; field gestures are Editor only; the rest are on both. A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way (planned). | ? | edit-record |
+| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. | ? | edit-record |
 | add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | - | xEdit View grid | Add an element to an array field. Sorted arrays add too (planned). | debt #967 | edit-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | elements | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-record |
@@ -291,7 +291,7 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | filter | reads | Plugins: title icon, code action (on a `.sql` file) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | debt #964, #967 | query-index |
 | show referenced by | reads | Editor: automatic | `modbench.record.showReferencedBy` | active record | - | xEdit Referenced By tab | The Referenced By list follows the active record and shows the records that reference it. It has no menu entry; the command only focuses the view. | debt #967 | query-index |
 | hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | planned | - |
-| copy value | reads | Mods: context menu, key; Plugins: context menu, key; Editor: context menu, key | `modbench.record.copyValue` | selection | text: name, FormKey | xEdit navigator, Referenced By, View grid; MO2 mod list | Copy the selected rows, or a focused cell value, to the clipboard. | debt #967 | none |
+| copy value | reads | Mods: context menu, key; Plugins: context menu, key; Editor: context menu, key | `modbench.record.copyValue` | selection | - | xEdit navigator, Referenced By, View grid; MO2 mod list | Copy the selected rows, or a focused cell value, to the clipboard. Each surface says what a row copies. | debt #967 | none |
 
 ## Downloaded file
 
