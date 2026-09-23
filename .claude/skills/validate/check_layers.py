@@ -17,9 +17,9 @@ WILDCARD_RE = re.compile(r'^(?P<alias>\w+):\s*"[^"]*"\s*\{class:\s*(?P<band>\w+)
 # docs/architecture/target-architecture.md "The layers", drivers to systems of record.
 BANDS = ("drivers", "driving", "core", "kernel", "driven", "data")
 
-# target-architecture.md's reading guide names the composition roots; its activation file is
-# prose, never drawn, so only these two are ever a trace actor.
-COMPOSITION_ROOTS = {"medit_driving.http", "modbench_driving.toolbox"}
+# target-architecture.md's reading guide names the composition roots; Modbench's, the activation
+# file, is prose, never drawn, so only mEdit's is ever a trace actor.
+COMPOSITION_ROOTS = {"medit_driving.http"}
 
 
 class Arrow:

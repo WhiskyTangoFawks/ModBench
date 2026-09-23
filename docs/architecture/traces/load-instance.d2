@@ -16,6 +16,9 @@ codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
 toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
+instancecommands: @../target-architecture.modbench_core.instancecommands
+instancecommands.label: instance commands
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 
@@ -26,5 +29,14 @@ instance -> codecs: bytes {class: loadorder}
 codecs -> instance: "parsed, one codec per file" {class: loadorder}
 instance."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
 instance -> views: value {class: loadorder}
-instance -> toolbox: load order snapshot, on change {class: loadorder}
-toolbox -> client: load order snapshot, on change {class: loadorder}
+instance -> instancecommands: "put load order: the snapshot as an argument, on change" {class: loadorder}
+instancecommands -> client: load order snapshot {class: loadorder}
+
+refresh: "refresh, from the Toolbox" {
+  toolbox -> instancecommands: refresh {class: loadorder}
+  instancecommands -> client: "rebuild the index, then the load order snapshot" {class: loadorder}
+  client -> instancecommands: applied or refusal {class: loadorder}
+  instancecommands."a refused rebuild stops here: nothing sent, nothing read again"
+  instancecommands -> toolbox: applied or refusal {class: loadorder}
+  toolbox -> instance: "refresh: read every file again" {class: loadorder}
+}

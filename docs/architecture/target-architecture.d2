@@ -25,7 +25,7 @@ medit_driving: "MEDIT · Driving adapters — the API and the watcher" {
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
-  toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: the first-deploy consent; the composition root of the MO2\nside" {class: driving}
+  toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: the first-deploy consent" {class: driving}
   mods: "Mods\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, install, open folder, view on Nexus\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges" {class: driving}
   plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of the instance value and the client by plugin name and\norigin; the external-change dialog" {class: driving}
   downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
@@ -41,7 +41,7 @@ modbench_core: "MODBENCH · Core — one command per gesture, beside the codec o
   class: band; grid-rows: 1
   modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, import and prune mod lines\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
   pluginscommands: "plugins commands\ninterface: enable, disable, move, import plugin\nhides: the splice of plugins.txt" {class: core}
-  instancecommands: "instance commands\ninterface: switch profile\nhides: the splice of ModOrganizer.ini" {class: core}
+  instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex, then put load order\nhides: the splice of ModOrganizer.ini" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: the splice of a download's .meta" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git; the installed mark\non the downloaded file" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the value as an argument\nhides: which files to hardlink; writing the hardlinks and the\nmanifest into Game Data/" {class: core}

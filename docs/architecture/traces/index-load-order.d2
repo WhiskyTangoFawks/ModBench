@@ -8,7 +8,8 @@
 shape: sequence_diagram
 instance: @../target-architecture.modbench_driven.instance
 instance.label: Instance loader
-toolbox: @../target-architecture.modbench_driving.toolbox
+instancecommands: @../target-architecture.modbench_core.instancecommands
+instancecommands.label: instance commands
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -31,8 +32,8 @@ port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
-instance -> toolbox: load order snapshot {class: loadorder}
-toolbox -> client: load order snapshot {class: loadorder}
+instance -> instancecommands: "put load order: the snapshot as an argument" {class: loadorder}
+instancecommands -> client: load order snapshot {class: loadorder}
 client -> http: load order snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
 commands -> loadorder: load order snapshot {class: query}

@@ -48,11 +48,11 @@ A box is a project. Its reference list is the arrows that leave it in the refere
 a Core box or a driven adapter, every box of its column's kernel by the band's rule; a driving
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
-Every arrow points down or into the kernel, with four same-band references the captions name: the
+Every arrow points down or into the kernel, with five same-band references the captions name: the
 record index reads the two adapters beside it, Ports reads Load order state, the Instance loader reads the Instance
-adapter, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
-the HTTP endpoints on mEdit, the activation file and Toolbox on Modbench, references every box below
-it by definition.
+adapter, plugins commands ask the mEdit client which plugins load implicitly, and instance commands
+hand the mEdit client the load order and ask it to rebuild. A composition root, the HTTP endpoints
+on mEdit and the activation file on Modbench, references every box below it by definition.
 A reference the reference view does not draw is a compile error and a question for the
 maintainer, never a line an agent adds.
 
@@ -125,8 +125,8 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   actor.
 - A trace message runs between two boxes the reference view joins, or through a port, where one
   end implements it and the other references Ports, or across the wire, or inside one box, or
-  between two boxes a composition root wires, as Toolbox hands the instance value to the mEdit
-  client. Any other message is a reference the maintainer has not drawn. The one exception is a trace
+  between two boxes a composition root wires, as the HTTP endpoints hand a request to a Commands
+  handler. Any other message is a reference the maintainer has not drawn. The one exception is a trace
   that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.

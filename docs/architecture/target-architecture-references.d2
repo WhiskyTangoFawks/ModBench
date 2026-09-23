@@ -62,6 +62,8 @@ modbench_core.modlist -> modbench_driven.instance {class: ref}
 modbench_core.pluginscommands -> modbench_driven.instance {class: ref}
 modbench_core.deploy -> modbench_driven.instance {class: ref}
 modbench_core.pluginscommands -> modbench_core.client {class: ref}
+modbench_core.instancecommands -> modbench_driven.instance {class: ref}
+modbench_core.instancecommands -> modbench_core.client {class: ref}
 modbench_core.modlist -> modbench_driven.mo2files {class: ref}
 modbench_core.pluginscommands -> modbench_driven.mo2files {class: ref}
 modbench_core.instancecommands -> modbench_driven.mo2files {class: ref}
@@ -85,6 +87,6 @@ legend: "One arrow per reference, from the box that references to the box it ref
   store: "a read or write of a system of record" {class: store}
   outside: "the user, another tool, or the wire between the processes" {class: outside}
 }
-reading: "A box's reference list is the arrows that leave it here, plus, for a Core box or a driven adapter, its column's kernel by the band's rule; a view's kernel reads are drawn. Every arrow points down or into the kernel; a port lives in the kernel, so the box that implements it and the boxes that call it both reference the kernel. A composition root, the HTTP endpoints on mEdit and Toolbox and the activation file on Modbench, references every box below it by definition. A reference this picture does not draw is a question for the maintainer, never a line an agent adds." {
+reading: "A box's reference list is the arrows that leave it here, plus, for a Core box or a driven adapter, its column's kernel by the band's rule; a view's kernel reads are drawn. Every arrow points down or into the kernel; a port lives in the kernel, so the box that implements it and the boxes that call it both reference the kernel. A composition root, the HTTP endpoints on mEdit and the activation file on Modbench, references every box below it by definition. A reference this picture does not draw is a question for the maintainer, never a line an agent adds." {
   class: band
 }
