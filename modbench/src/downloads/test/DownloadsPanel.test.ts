@@ -350,8 +350,32 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(openExternal).not.toHaveBeenCalled();
   });
 
-  // runRowAction's catch -> log + error-notification path is shared by both open actions, so
-  // proving it once here (via openFile) covers both.
+  it('open: a caller that supplies the target is not asked for it', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }), 'meta');
+
+    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
+    expect(calledFsPath(showTextDocument)).toBe(meta);
+    expect(showQuickPick).not.toHaveBeenCalled();
+  });
+
+  // A context menu hands the selection as the second argument, which is no target.
+  it('open: the context menu\'s selection argument still asks for the target', async () => {
+    const root = await makeInstanceRoot();
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const row = node(root, 'foo.7z', { hasMeta: true });
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.open', row, [row]);
+
+    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+  });
+
+  // runRowAction's catch -> log + error-notification path is shared by both open targets, so
+  // proving it once here, on the file, covers both.
   it('nav actions: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
@@ -491,7 +515,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 describe('registerDownloadsMultiRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers Delete / Hide / Unhide', () => {
+  it('registers delete, exclude and include', () => {
     registerDownloadsMultiRowCommands('/instance', recordingReporter(), scriptedDialog());
     const ids = registerCommand.mock.calls.map((c) => c[0]);
     expect(ids).toEqual(expect.arrayContaining([
@@ -545,7 +569,18 @@ describe('registerDownloadsMultiRowCommands', () => {
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
-  it('hide: sets removed=true on the .meta sidecar (clicked row alone, no selection array)', async () => {
+  it('exclude: a refused write is reported under the gesture\'s own verb', async () => {
+    const root = await makeInstanceRoot();
+    const report = recordingReporter();
+
+    registerDownloadsMultiRowCommands(join(root, 'gone'), report, scriptedDialog());
+    invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
+
+    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
+    expect(present(report.reports[0], 'the one report').message).toBe('Exclude for "foo.7z" failed.');
+  });
+
+  it('exclude: sets removed=true on the .meta sidecar (clicked row alone, no selection array)', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
@@ -557,7 +592,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     });
   });
 
-  it('unhide: clears removed to false on the .meta sidecar (clicked row alone, no selection array)', async () => {
+  it('include: clears removed to false on the .meta sidecar (clicked row alone, no selection array)', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
@@ -705,7 +740,7 @@ describe('registerDownloadsSortCommand', () => {
 describe('registerDownloadsHiddenToggleCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers modbench.downloadedFile.showExcluded and .hideHidden', () => {
+  it('registers modbench.downloadedFile.showExcluded and .hideExcluded', () => {
     registerDownloadsHiddenToggleCommands(fakeDownloadsProvider());
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining([
       'modbench.downloadedFile.showExcluded',
@@ -713,7 +748,7 @@ describe('registerDownloadsHiddenToggleCommands', () => {
     ]));
   });
 
-  it('showHidden turns hidden rows on and sets the context key true', () => {
+  it('showExcluded turns excluded rows on and sets the context key true', () => {
     const provider = fakeDownloadsProvider();
     registerDownloadsHiddenToggleCommands(provider);
 
@@ -723,7 +758,7 @@ describe('registerDownloadsHiddenToggleCommands', () => {
     expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', true);
   });
 
-  it('hideHidden turns hidden rows off and sets the context key false', () => {
+  it('hideExcluded turns excluded rows off and sets the context key false', () => {
     const provider = fakeDownloadsProvider();
     registerDownloadsHiddenToggleCommands(provider);
 

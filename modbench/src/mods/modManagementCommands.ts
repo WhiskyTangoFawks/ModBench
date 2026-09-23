@@ -220,12 +220,19 @@ export function registerOpenFolderCommand(instance: Pick<Instance, 'value'>, rep
   return vscode.commands.registerCommand('modbench.mod.openFolder', async (node: ModNode | OverwriteNode | undefined) => {
     const target = node && folderOf(instance, node);
     if (!target) return;
-    try {
+    await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       await vscode.commands.executeCommand('revealInExplorer', target.folder);
-    } catch (err) {
-      reporter.report('error', `Failed to open the folder of "${target.name}".`, errorMessage(err));
-    }
+    });
   });
+}
+
+// A read gesture's failure path. Not `runModAction`, which refreshes the Mods tree after a write.
+async function reportFailure(reporter: Reporter, failMessage: string, action: () => Promise<void>): Promise<void> {
+  try {
+    await action();
+  } catch (err) {
+    reporter.report('error', failMessage, errorMessage(err));
+  }
 }
 
 // The value's own folder for a mod row, never a path joined here: the Instance adapter owns every
@@ -248,11 +255,9 @@ export function registerViewOnNexusCommand(instance: Pick<Instance, 'value'>, re
   return vscode.commands.registerCommand('modbench.mod.viewOnNexus', async (row: NexusModRow | undefined) => {
     const nexusModId = row?.nexusModId;
     if (!nexusModId) return;
-    try {
+    await reportFailure(reporter, `Failed to open the Nexus page of mod ${nexusModId}.`, async () => {
       await vscode.env.openExternal(
         vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusModId}`));
-    } catch (err) {
-      reporter.report('error', `Failed to open the Nexus page of mod ${nexusModId}.`, errorMessage(err));
-    }
+    });
   });
 }

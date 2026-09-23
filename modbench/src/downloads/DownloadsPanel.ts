@@ -171,16 +171,15 @@ export function registerDownloadsSingleRowCommands(
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
       if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
-    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode, supplied?: unknown) => {
       const row = node?.row;
       if (!row) return;
-      const target = row.hasMeta ? await pickOpenTarget(row) : 'file';
+      const target = isOpenTarget(supplied) ? supplied : await askOpenTarget(row);
       if (target === 'meta') {
         await runRowAction('Open Meta File', row.name, reporter, async () => {
           await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
         });
       } else if (target === 'file') {
-        // OS-open the archive in the system's associated application.
         await runRowAction('Open File', row.name, reporter, async () => {
           await vscode.env.openExternal(vscode.Uri.file(row.path));
         });
@@ -191,7 +190,14 @@ export function registerDownloadsSingleRowCommands(
 
 type OpenTarget = 'file' | 'meta';
 
-// The target is asked only when there is a choice: a row with no `.meta` opens its file.
+function isOpenTarget(value: unknown): value is OpenTarget {
+  return value === 'file' || value === 'meta';
+}
+
+async function askOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
+  return row.hasMeta ? pickOpenTarget(row) : 'file';
+}
+
 async function pickOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
   const items: (vscode.QuickPickItem & { target: OpenTarget })[] = [
     { label: row.name, description: 'the downloaded file', target: 'file' },
@@ -220,12 +226,12 @@ export function registerDownloadsMultiRowCommands(
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Hide', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
+        void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
       }
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Unhide', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
+        void runRowAction('Include', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
       }
     }),
   ];

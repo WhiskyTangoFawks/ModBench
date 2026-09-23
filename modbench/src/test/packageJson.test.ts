@@ -643,8 +643,8 @@ const catalog = catalogCommandIds(
   fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8'),
 );
 
-// The gate's only exception, as the maintainer approved it. Each line is a gesture whose merge
-// into its catalog ID belongs to another ticket, and that ticket deletes the line.
+// The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
+// another ticket, and that ticket deletes the line.
 const LEGACY_GESTURES = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.modList.installFromArchive', 'modbench.modList.installFromFolder', 'modbench.downloads.install'] },
   { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },

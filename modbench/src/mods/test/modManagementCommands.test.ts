@@ -235,6 +235,18 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
   });
 
+  it('reports a page that fails to open', async () => {
+    openExternal.mockRejectedValueOnce(new Error('no browser'));
+    const reporter = recordingReporter();
+
+    registerViewOnNexusCommand(instance, reporter);
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the Nexus page of mod 42.', detail: 'no browser' },
+    ]);
+  });
+
   it('opens nothing for a row with no Nexus id', async () => {
     registerViewOnNexusCommand(instance, recordingReporter());
     await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z')));
