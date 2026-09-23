@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Captures every registerCommand(id, handler) so a Toolbox gesture can be invoked directly.
-const { handlers, registerCommand, showQuickPick, fetchTasks, executeTask } = vi.hoisted(() => {
+const { handlers, registerCommand, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void> | void>();
   return {
     handlers,
@@ -10,60 +10,41 @@ const { handlers, registerCommand, showQuickPick, fetchTasks, executeTask } = vi
       return { dispose: vi.fn() };
     }),
     showQuickPick: vi.fn(),
-    fetchTasks: vi.fn(),
-    executeTask: vi.fn(),
   };
 });
 
 vi.mock('vscode', () => ({
   commands: { registerCommand },
   window: { showQuickPick },
-  tasks: { fetchTasks, executeTask },
 }));
 
-const { deployMods, purgeMods, listProfiles, switchProfile } = vi.hoisted(() => ({
-  deployMods: vi.fn(),
-  purgeMods: vi.fn(),
+const { listProfiles, switchProfile } = vi.hoisted(() => ({
   listProfiles: vi.fn(),
   switchProfile: vi.fn(),
 }));
 
-vi.mock('../deploy/deployment', () => ({ deployMods, purgeMods }));
 vi.mock('../instanceCommands/profile', () => ({ listProfiles, switchProfile }));
 vi.mock('../workspaceConfig', () => ({ meditConfig: () => ({ get: () => undefined }) }));
 
-import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
-import { recordingReporter, scriptedDialog } from './surfacingDoubles';
-import type { AskQuestion } from '../ports/dialog';
+import { registerToolboxCommands, type ToolboxCommandDeps } from '../toolboxCommands';
+import { recordingReporter } from './surfacingDoubles';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { FakeLogOutputChannel } from './fakeOutputChannel';
 import { present } from '../ports/present';
 
-// `deployed: true` is the steady state most tests want — a directory that already has a
-// manifest, so the deploy gesture never has to ask.
-const value = instanceValueFixture({
-  activeProfile: 'Default', deployed: true,
-  gameDirectory: {
-    root: '/game', dataFolder: '/game/Data', loadOrderFile: '/instance/profiles/Default/plugins.txt',
-  },
-});
+const value = instanceValueFixture({ activeProfile: 'Default' });
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
-  const ask = scriptedDialog();
   const updateProfileDescription = vi.fn(() => Promise.resolve());
   registerToolboxCommands({
     instanceRoot: '/instance',
     instance: { value },
-    outputChannel: new FakeLogOutputChannel(),
     updateProfileDescription,
     reporterFor: () => reporter,
-    ask,
     ...over,
   });
   return {
     reporter,
-    ask,
     updateProfileDescription,
     run: (id: string) => present(handlers.get(id), `the registered handler for "${id}"`)(),
   };
@@ -74,161 +55,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Deploy and Purge', () => {
-  it('lands the deployed toast once the deployment wrote a manifest', async () => {
-    deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
+describe('the Toolbox gestures', () => {
+  // The alpha leaves deploy, purge and run with the mod manager.
+  it('registers switch profile and no deploy, purge or run', () => {
+    register();
 
-    const { reporter, run } = register();
-    await run('modbench.toolbox.deploy');
-
-    expect(reporter.landings).toEqual(['Mods deployed.']);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('lands the purged toast once the purge wrote', async () => {
-    purgeMods.mockResolvedValueOnce({ applied: true, wrote: true });
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.purge');
-
-    expect(reporter.landings).toEqual(['Deployed mods purged.']);
-  });
-
-  // The rival: landing the toast on every applied outcome. A deployment that wrote nothing
-  // aborted and said so itself, so a second "Mods deployed." would contradict it.
-  it('lands nothing when the deployment aborted without writing', async () => {
-    deployMods.mockResolvedValueOnce({ applied: true, wrote: false });
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.deploy');
-
-    expect(reporter.landings).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('reports a refusal at error with the refusal as its detail, and lands nothing', async () => {
-    deployMods.mockResolvedValueOnce({ applied: false, refusal: 'no game directory is resolved' });
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.deploy');
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Deploy failed.', detail: 'no game directory is resolved' },
-    ]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('reports a thrown deployment as its own refusal', async () => {
-    purgeMods.mockRejectedValueOnce(new Error('the link farm is locked'));
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.purge');
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Purge failed.', detail: 'the link farm is locked' },
-    ]);
-  });
-
-  // The load-order target rides on the value's own game directory, so deploy is handed one
-  // generation and nothing else.
-  it('hands the command the Instance value alone, no reporter or dialog', async () => {
-    deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
-
-    const { run } = register();
-    await run('modbench.toolbox.deploy');
-
-    expect(deployMods).toHaveBeenCalledWith('/instance', value);
-  });
-
-  it('hands purge the Instance value alone', async () => {
-    purgeMods.mockResolvedValueOnce({ applied: true, wrote: true });
-
-    const { run } = register();
-    await run('modbench.toolbox.purge');
-
-    expect(purgeMods).toHaveBeenCalledWith('/instance', value);
-  });
-
-  it('reports each warning at warning severity, with its own detail, before landing the toast', async () => {
-    deployMods.mockResolvedValueOnce({
-      applied: true, wrote: true,
-      warnings: [{ message: 'a mod file was skipped', detail: 'textures/foo.dds' }],
-    });
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.deploy');
-
-    expect(reporter.reports).toEqual([
-      { severity: 'warning', message: 'a mod file was skipped', detail: 'textures/foo.dds' },
-    ]);
-    expect(reporter.landings).toEqual(['Mods deployed.']);
-  });
-
-  describe('the first-deploy consent', () => {
-    const notDeployed = { ...value, deployed: false };
-
-    it('asks once, and deploys once accepted', async () => {
-      deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
-      const ask = scriptedDialog(DEPLOY_CONFIRM_BUTTON);
-
-      const { reporter, run } = register({ instance: { value: notDeployed }, ask });
-      await run('modbench.toolbox.deploy');
-
-      expect(ask.asked).toHaveLength(1);
-      expect(deployMods).toHaveBeenCalledWith('/instance', notDeployed);
-      expect(reporter.landings).toEqual(['Mods deployed.']);
-    });
-
-    // Rival: deploy without asking. Declining must refuse without ever calling the command —
-    // a stubbed deployMods that "declines" itself would leave this rival undetected.
-    it('declining refuses without calling the command', async () => {
-      const ask = scriptedDialog(undefined); // the native cancel
-
-      const { reporter, run } = register({ instance: { value: notDeployed }, ask });
-      await run('modbench.toolbox.deploy');
-
-      expect(deployMods).not.toHaveBeenCalled();
-      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Deploy failed.', detail: DEPLOY_DECLINED }]);
-      expect(reporter.landings).toEqual([]);
-    });
-
-    // Rival: ask unconditionally. A directory the Instance already reports as deployed must
-    // never raise the prompt.
-    it('never asks when the Instance already reports deployed', async () => {
-      deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
-      const neverAsk: AskQuestion = () => { throw new Error('asked when the Instance already reports deployed'); };
-
-      const { run } = register({ ask: neverAsk });
-      await run('modbench.toolbox.deploy');
-
-      expect(deployMods).toHaveBeenCalled();
-    });
-  });
-});
-
-describe('Launch…', () => {
-  it('lands the no-targets message and starts nothing when no task is contributed', async () => {
-    fetchTasks.mockResolvedValueOnce([]);
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.launch');
-
-    expect(reporter.landings).toEqual([
-      'No launch targets — add an executable to MO2\'s executables list and it appears here.',
-    ]);
-    expect(executeTask).not.toHaveBeenCalled();
-  });
-
-  it('runs the picked task', async () => {
-    const task = { name: 'Fallout 4' };
-    fetchTasks.mockResolvedValueOnce([task]);
-    showQuickPick.mockResolvedValueOnce({ label: 'Fallout 4', task });
-
-    const { reporter, run } = register();
-    await run('modbench.toolbox.launch');
-
-    expect(executeTask).toHaveBeenCalledWith(task);
-    expect(reporter.landings).toEqual([]);
+    expect([...handlers.keys()]).toEqual(['modbench.toolbox.switchProfile']);
   });
 });
 

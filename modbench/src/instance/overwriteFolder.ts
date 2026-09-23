@@ -1,11 +1,11 @@
-// The overwrite/ folder holds runtime outputs a purge sweeps out of Data/ — files with no
-// owning mod. No vscode import: the reveal and watch wiring live in vscode-aware modules.
+// The overwrite/ folder holds runtime outputs — files with no owning mod. No vscode import:
+// the reveal and watch wiring live in vscode-aware modules.
 
 import { listRelativeFiles } from '../mo2Files/files';
 import { errnoCode } from '../ports/errno';
 
-/** Returns 0 when the folder is absent — it isn't created until a purge first deposits a
- *  stray file. Reuses MO2 files' walk so the two traversals cannot diverge. */
+/** Returns 0 when the folder is absent. Reuses MO2 files' walk so the two traversals cannot
+ *  diverge. */
 export async function countOverwriteFiles(dir: string): Promise<number> {
   try {
     return (await listRelativeFiles(dir)).length;

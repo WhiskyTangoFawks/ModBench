@@ -8,16 +8,13 @@ const execAsync = promisify(exec);
 
 export interface GamePaths {
   dataFolder: string;
-  pluginsTxt: string;
 }
 
-/** The per-release facts autodetection needs, already looked up from the two tables
- *  (`tables/gamePaths.ts`, `tables/loadOrderDestination.ts`) — this module names
- *  no game itself. */
+/** The per-release facts autodetection needs, already looked up from `tables/gamePaths.ts` —
+ *  this module names no game itself. */
 export interface GameAutodetect {
   steamAppId: string;
   steamFolderName: string;
-  loadOrderAppDataFolder: string;
 }
 
 // Parses Valve's VDF format just enough to find a library path that contains a given AppID.
@@ -38,7 +35,6 @@ export async function detectGamePaths(platform: NodeJS.Platform, game: GameAutod
   if (platform === 'win32') {
     return detectWindowsGamePaths(
       () => execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
-      process.env['LOCALAPPDATA'],
       game,
     );
   }
@@ -58,15 +54,9 @@ async function detectLinux(game: GameAutodetect): Promise<GamePaths | null> {
   const library = await findSteamLibrary(game.steamAppId);
   if (!library) return null;
   try {
-    const steamapps = path.join(library, 'steamapps');
-    const dataFolder = path.join(steamapps, 'common', game.steamFolderName, 'Data');
-    const pluginsTxt = path.join(
-      steamapps, 'compatdata', game.steamAppId, 'pfx',
-      'drive_c', 'users', 'steamuser', 'AppData', 'Local', game.loadOrderAppDataFolder, 'Plugins.txt'
-    );
-
+    const dataFolder = path.join(library, 'steamapps', 'common', game.steamFolderName, 'Data');
     await fs.access(dataFolder);
-    return { dataFolder, pluginsTxt };
+    return { dataFolder };
   } catch {
     return null;
   }
@@ -89,7 +79,6 @@ export function parseRegQuerySteamPath(stdout: string): string | null {
  *  `{ stdout }` shape this relies on. */
 export async function detectWindowsGamePaths(
   runRegQuery: () => Promise<string>,
-  localAppData: string | undefined,
   game: GameAutodetect,
 ): Promise<GamePaths | null> {
   try {
@@ -97,12 +86,9 @@ export async function detectWindowsGamePaths(
     const steamPath = parseRegQuerySteamPath(stdout);
     if (!steamPath) return null;
 
-    const steamapps = path.join(steamPath, 'steamapps');
-    const dataFolder = path.join(steamapps, 'common', game.steamFolderName, 'Data');
-    const pluginsTxt = path.join(localAppData ?? '', game.loadOrderAppDataFolder, 'Plugins.txt');
-
+    const dataFolder = path.join(steamPath, 'steamapps', 'common', game.steamFolderName, 'Data');
     await fs.access(dataFolder);
-    return { dataFolder, pluginsTxt };
+    return { dataFolder };
   } catch {
     return null;
   }

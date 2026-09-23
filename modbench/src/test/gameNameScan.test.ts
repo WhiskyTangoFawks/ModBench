@@ -7,7 +7,6 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { gamePathInfoForRelease } from '../tables/gamePaths';
-import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
@@ -16,17 +15,14 @@ const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
 const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 const SELF = 'gameNameScan.test.ts';
 
-const TABLE_FILES = [
-  join('tables', 'gamePaths.ts'),
-  join('tables', 'loadOrderDestination.ts'),
-];
+const TABLE_FILES = [join('tables', 'gamePaths.ts')];
 
 // detectRoot.ts's DATA_DIRS names the Bethesda Data folder layout, not a game — except f4se and
 // skse, each a game-specific directory name, which is why it needs the exemption below.
 const ALLOWLIST = [join('install', 'detectRoot.ts')];
 
 // Script-extender projects each name exactly one release, in their own alphabet — data the scan
-// needs as much as the two tables' own literals, so it lives here rather than in a third table.
+// needs as much as the table's own literals, so it lives here rather than in a second table.
 const SCRIPT_EXTENDER_TOKENS = ['f4se', 'skse', 'obse', 'fnvse', 'nvse'];
 
 // gamePaths.ts's own release keys: mirrored rather than exported, since nothing in production
@@ -45,8 +41,6 @@ function knownGameNameLiterals(): string[] {
       if (info.steamAppId) literals.add(info.steamAppId);
       if (info.steamFolderName) literals.add(info.steamFolderName);
     }
-    const appDataFolder = loadOrderAppDataFolder(release);
-    if (appDataFolder) literals.add(appDataFolder);
   }
   return [...literals];
 }
@@ -90,7 +84,7 @@ const allFiles = (roots: readonly string[]): string[] =>
 // case-insensitively. Not covered: a name built at runtime, or a game the table does not yet
 // know — pluginBinaryScan.test.ts's own limit.
 
-describe('no extension file names a game outside the two tables', () => {
+describe('no extension file names a game outside the table', () => {
   it('covers the whole extension source tree', () => {
     expect(allFiles(SRC_ROOTS).filter((path) => !path.endsWith(SELF)).length).toBeGreaterThan(100);
   });
@@ -100,7 +94,7 @@ describe('no extension file names a game outside the two tables', () => {
     expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
-  it('scans clean outside the two tables and the allowlist', () => {
+  it('scans clean outside the table and the allowlist', () => {
     expect(findOffenders(SRC_ROOTS, TABLE_FILES, ALLOWLIST)).toEqual({});
   });
 

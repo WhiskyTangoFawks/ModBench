@@ -73,7 +73,7 @@ export class FileConflictLookup {
 }
 
 /** The winner lookup minus its one mutator: a value is replaced whole, never patched (ADR-0015).
- *  Every reader of the Instance's `files` field, the deployer included, takes this. */
+ *  Every reader of the Instance's `files` field takes this. */
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
 export interface FileConflictIndex {
@@ -148,8 +148,8 @@ async function walkSymlink(
   }
   if (facts.kind === 'directory') return descend(absolutePath, root, ancestors, log);
   if (facts.kind === 'file') {
-    // Resolve to the real file so the deployer hardlinks the target, not the link itself;
-    // the relativePath key still comes from the symlink's own name.
+    // The winner is the file the link resolves to; the relativePath key still comes from the
+    // symlink's own name.
     const results: { relativePath: string; absolutePath: string }[] = [];
     pushEntry(results, root, absolutePath, facts.realPath);
     return results;

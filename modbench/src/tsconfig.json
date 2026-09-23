@@ -18,7 +18,6 @@
     { "path": "./pluginsCommands" },
     { "path": "./instanceCommands" },
     { "path": "./install" },
-    { "path": "./deploy" },
     { "path": "./client" },
     { "path": "./mods" },
     { "path": "./downloads" },

@@ -25,7 +25,6 @@ const CORE_BOXES: Record<string, string[]> = {
   pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
   instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
   install: ['mo2Codecs', 'mo2Files', 'ports'],
-  deploy: ['instance', 'mo2Files', 'ports'],
   client: ['ports', 'wire'],
 };
 

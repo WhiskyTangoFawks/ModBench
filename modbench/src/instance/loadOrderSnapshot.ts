@@ -114,7 +114,7 @@ export async function readDataFolderPlugins(
 }
 
 // MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
-// too, not just origin classification. Empty until a purge first creates the folder.
+// too, not just origin classification.
 async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
   try {
     const entries = await listDir(overwriteDir(instanceRoot));
