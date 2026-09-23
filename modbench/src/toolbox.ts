@@ -389,7 +389,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
   // resolver the Instance adapter answers "where is the game" with.
   const instance = own(new Instance({
-    instanceRoot, log, resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
+    instanceRoot, log, logReadFailure: (line) => outputChannel.error(line),
+    resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));
   // The Instance watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.

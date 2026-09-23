@@ -32,6 +32,7 @@ describe('New Plugin lands the file and the plugins.txt line, for both remaining
       instanceRoot: dir,
       resolveGameDirectory: () => Promise.resolve(undefined),
       log: () => {},
+    logReadFailure: () => {},
     });
     await instance.refresh();
   });
