@@ -77,8 +77,8 @@ Modbench side the Instance adapter is that owner, the one box that reads or writ
 manager's configuration, the load order, and which game it is for. Game Data/ is not a system of record but
 a projection, and deploy alone writes it. A command splices through the pure codec and puts through the Instance adapter. No command reads the
 Instance loader; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
-to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
-the first-deploy consent.
+to deploy, arrives as an argument. Deploy and purge are commands; Toolbox offers the gesture and
+keeps the first-deploy consent.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
 keeps the last value on a parse failure. It validates on activation and on refresh, through the
 same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,

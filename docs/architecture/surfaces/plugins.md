@@ -224,8 +224,8 @@ and the phase. *catalog `track`; decompile-plugin contract, story 2*
 
 As a user, I want:
 
-1. `compile` to build from the working tree. Whether it asks first is the compile contract's
-   question 1.
+1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
+   truth and the plugin a projection of it, so compile destroys nothing. *ruling*
 2. `compile from main…` to confirm first, saying my edit branch and working tree stay as they are.
    *catalog `compile`, source Option; compile-plugin contract, story 13*
 3. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems

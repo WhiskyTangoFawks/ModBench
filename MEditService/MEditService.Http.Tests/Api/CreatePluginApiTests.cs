@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>The create gesture, which no trace draws: the endpoint is the load order's second
+/// <summary>The create gesture: the endpoint is the load order's second
 /// writer, so what it answers and what the next reader sees are one thing.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class CreatePluginApiTests : HostedTests

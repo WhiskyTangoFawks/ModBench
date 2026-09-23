@@ -1,12 +1,12 @@
 # create-plugin: contract (draft)
 
-Diagram: none yet. Catalog row: `create` under Plugin in [commands.md](../commands.md). Governed by
+Diagram: [create-plugin.d2](create-plugin.d2). Catalog row: `create` under Plugin in [commands.md](../commands.md). Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-the-plugin-is-the-source-of-truth.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md) and
 [ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md).
 
-Each story cites its source. No diagram exists, so the seams below are provisional.
+Each story cites its source.
 
 ## create
 

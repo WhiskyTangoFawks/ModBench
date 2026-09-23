@@ -35,7 +35,7 @@ medit_drivers.scripts -> medit_driving.http {class: outside}
 modbench_core.client -> medit_driving.http {class: outside}
 medit_drivers.panel -> modbench_kernel.wire {class: ref}
 
-# Modbench: views
+# Modbench: views (a view's kernel reads are drawn)
 modbench_drivers.user -> modbench_driving {class: outside}
 modbench_driving.toolbox -> modbench_driven.instance {class: ref}
 modbench_driving.mods -> modbench_driven.instance {class: ref}
@@ -51,6 +51,12 @@ modbench_driving.downloads -> modbench_core.install {class: ref}
 modbench_driving.downloads -> modbench_core.downloadscommands {class: ref}
 modbench_driving.mods -> modbench_core.install {class: ref}
 modbench_driving.toolbox -> modbench_kernel.tables {class: ref}
+modbench_driving.toolbox -> modbench_kernel.ports {class: ref}
+modbench_driving.mods -> modbench_kernel.ports {class: ref}
+modbench_driving.plugins -> modbench_kernel.ports {class: ref}
+modbench_driving.downloads -> modbench_kernel.ports {class: ref}
+modbench_driving.editor -> modbench_kernel.ports {class: ref}
+modbench_driving.editor -> modbench_kernel.wire {class: ref}
 # Modbench: core (the kernel by the band's rule, not drawn; the instance value arrives as an argument)
 modbench_core.modlist -> modbench_driven.instance {class: ref}
 modbench_core.pluginscommands -> modbench_driven.instance {class: ref}
@@ -79,6 +85,6 @@ legend: "One arrow per reference, from the box that references to the box it ref
   store: "a read or write of a system of record" {class: store}
   outside: "the user, another tool, or the wire between the processes" {class: outside}
 }
-reading: "A box's reference list is the arrows that leave it here, plus its column's kernel by the band's rule. Every arrow points down or into the kernel; a port lives in the kernel, so the box that implements it and the boxes that call it both reference the kernel. A composition root, the HTTP endpoints on mEdit and Toolbox and the activation file on Modbench, references every box below it by definition. A reference this picture does not draw is a question for the maintainer, never a line an agent adds." {
+reading: "A box's reference list is the arrows that leave it here, plus, for a Core box or a driven adapter, its column's kernel by the band's rule; a view's kernel reads are drawn. Every arrow points down or into the kernel; a port lives in the kernel, so the box that implements it and the boxes that call it both reference the kernel. A composition root, the HTTP endpoints on mEdit and Toolbox and the activation file on Modbench, references every box below it by definition. A reference this picture does not draw is a question for the maintainer, never a line an agent adds." {
   class: band
 }

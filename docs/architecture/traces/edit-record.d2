@@ -29,9 +29,9 @@ source -> sourcerepo: documents {class: edit}
 sourcerepo -> commands: current document {class: edit}
 commands -> sourcerepo: new document {class: edit}
 sourcerepo -> source: documents {class: edit}
-commands -> http: applied or refusal {class: edit}
-http -> client: applied or refusal {class: edit}
-client -> editor: applied or refusal {class: edit}
+commands -> http: "applied or refusal, per item" {class: edit}
+http -> client: "applied or refusal, per item" {class: edit}
+client -> editor: "applied or refusal, per item" {class: edit}
 source -> watcher: source changed {class: signal}
 watcher -> indexer: "source changed: refresh keys" {class: signal}
 sourcerepo -> indexer: documents (tracked) {class: query}

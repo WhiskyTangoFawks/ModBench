@@ -26,7 +26,7 @@ medit_driving: "MEDIT · Driving adapters — the API and the watcher" {
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
   toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: the first-deploy consent; the composition root of the MO2\nside" {class: driving}
-  mods: "Mods\ninterface: enable, reorder, separators, uninstall, new empty\nmod, install from archive or folder, open folder\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges" {class: driving}
+  mods: "Mods\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, install, open folder, view on Nexus\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges" {class: driving}
   plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of the instance value and the client by plugin name and\norigin; the external-change dialog" {class: driving}
   downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
   editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
@@ -34,13 +34,13 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
 
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, decompile, compile, put load order; each\nanswers applied or refusal\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
+  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, decompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nimplicit masters, the malformed-plugin diagnosis; the filter in\nforce\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, reorder, separators, uninstall, new empty\nmod, adopt unlisted folders\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
-  pluginscommands: "plugins commands\ninterface: enable, reorder, reconcile against disk\nhides: the splice of plugins.txt" {class: core}
+  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, import and prune mod lines\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
+  pluginscommands: "plugins commands\ninterface: enable, disable, move, import plugin\nhides: the splice of plugins.txt" {class: core}
   instancecommands: "instance commands\ninterface: switch profile\nhides: the splice of ModOrganizer.ini" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: the splice of a download's .meta" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git; the installed mark\non the downloaded file" {class: core}
@@ -59,7 +59,7 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
   codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini · a download's .meta\nhides: installedFiles in MO2's form" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
   tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
-  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; the invariant lookup and the errno read;\nmove a file to the system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
+  ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; a selection's outcome: what landed and each\nrefusal; the invariant lookup and the errno read; move a file to\nthe system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
