@@ -25,7 +25,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly SchemaReflector _schemaReflector;
     private readonly TimeProvider _timeProvider;
-    // ADR-0013 invariant 4: the one load order, the kernel's. The indexer reads it for who
+    // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for who
     // participates and for a copy's mod folder; it never writes it and keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
@@ -112,7 +112,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private static string? ContentHashOnDisk(string pluginPath) => PluginBinaryHash.OfFile(pluginPath);
 
-    /// <summary>One per indexer, never replaced — a reconcile swaps the store underneath it, which
+    /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
     public IndexWriteGate WriteGate { get; } = new();
@@ -703,7 +703,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // A record set that moved is a whole-plugin re-derivation, which is the indexer's to
+            // A record set that moved is a whole-plugin re-derivation, which is the Indexer's to
             // run: it holds the mod and knows which truth this copy reads (ADR-0007 invariant 3).
             if (report.NeedsRebuild) ReindexHeldCopy(key);
             reports.Add(report);

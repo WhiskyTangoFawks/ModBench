@@ -99,7 +99,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         }
     }
 
-    // ADR-0013's rule, applied the same way the indexer's own sweep applies it: the winner of a
+    // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
     // FormKey is the highest-slot copy whose plugin participates.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
         List<RegisteredCopy> copies, List<(PluginCopyKey Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)

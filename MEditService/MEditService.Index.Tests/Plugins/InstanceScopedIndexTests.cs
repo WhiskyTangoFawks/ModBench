@@ -27,7 +27,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     private string AnInstance(string name, string editorId)
     {
@@ -59,14 +59,14 @@ public sealed class InstanceScopedIndexTests : IDisposable
         var a = AnInstance("instance-a", "NpcFromA");
         var b = AnInstance("instance-b", "NpcFromB");
 
-        using (var first = MakeManager(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
-        using (var second = MakeManager(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
+        using (var first = MakeIndexer(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var second = MakeIndexer(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
 
-        using var warmB = MakeManager(holder);
+        using var warmB = MakeIndexer(holder);
         warmB.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
         Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
 
-        using var warmA = MakeManager(holder);
+        using var warmA = MakeIndexer(holder);
         warmA.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
     }
@@ -80,9 +80,9 @@ public sealed class InstanceScopedIndexTests : IDisposable
         var gameDirectory = GameDirectory;
         var a = AnInstance("instance-warm", "NpcFromA");
 
-        using (var cold = MakeManager(holder)) cold.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
 
-        using var warm = MakeManager(holder);
+        using var warm = MakeIndexer(holder);
         warm.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warm));
     }

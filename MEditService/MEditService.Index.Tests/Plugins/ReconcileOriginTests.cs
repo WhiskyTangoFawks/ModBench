@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Plugins;
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class ReconcileOriginTests
 {
-    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
@@ -21,7 +21,7 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         Indexer index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
@@ -41,7 +41,7 @@ public sealed class ReconcileOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         Indexer index = manager;
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 

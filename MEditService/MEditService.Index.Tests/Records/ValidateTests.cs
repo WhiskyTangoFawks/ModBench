@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0015 invariant 4: the indexer compares what it holds against the system of record
+/// <summary>ADR-0015 invariant 4: the Indexer compares what it holds against the system of record
 /// and repairs the difference. Over a real git working tree, because what git answers is under
 /// test.</summary>
 public sealed class ValidateTests : IDisposable

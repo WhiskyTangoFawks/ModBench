@@ -17,7 +17,7 @@ public sealed class IndexerTests
 {
     private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    private static (Indexer Indexer, GatedPluginAdapter Opens) MakeCountingIndexer(LoadOrderHolder holder)
+    private static (Indexer Index, GatedPluginAdapter Opens) MakeCountingIndexer(LoadOrderHolder holder)
     {
         var opens = new GatedPluginAdapter();
         return (Indexes.Open(holder, opens), opens);
@@ -61,7 +61,7 @@ public sealed class IndexerTests
     }
 
     // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the copies the Index has open still carry the old winner: an indexer
+    // next snapshot here, so the copies the Index has open still carry the old winner: an Indexer
     // reading them answers B.esp.
     [Fact]
     public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()

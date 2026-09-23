@@ -238,7 +238,7 @@ public sealed class ArchitectureTests
     }
 
     // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
-    // calls is a widening nobody asked for — and every implementer, the indexer and each query
+    // calls is a widening nobody asked for — and every implementer, the Indexer and each query
     // test's stub alike, pays for it.
     [Fact]
     public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
@@ -278,7 +278,7 @@ public sealed class ArchitectureTests
     private const BindingFlags EveryMember =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
 
-    // Internal counts, private does not: the indexer reads the kernel through a private field,
+    // Internal counts, private does not: the Indexer reads the kernel through a private field,
     // and the rule is about what it hands out.
     private static bool VisibleOutsideItsType(MemberInfo member) => member switch
     {

@@ -1,4 +1,4 @@
 # Every reference on the write side to an Index type, as file, symbol and count. The write side
-# never reads the Index (ADR-0015 invariants 1, 2, 3 and 5): it writes source text and the indexer
+# never reads the Index (ADR-0015 invariants 1, 2, 3 and 5): it writes source text and the Indexer
 # follows, so this list is empty and stays empty. A line here is a reference that needs the
 # maintainer's ruling, not permission.

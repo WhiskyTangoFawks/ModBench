@@ -123,7 +123,7 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
 
     // The read routes name the query services by definition, and the gate has its own fact below,
-    // so what is left is the store, the indexer and the read surface.
+    // so what is left is the store, the Indexer and the read surface.
     private static readonly string[] ReadSideSymbols =
         ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
          "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
@@ -215,7 +215,7 @@ public sealed class WriteSideIndexScanTests
         Assert.True(
             named.Count == 0,
             "An endpoint names the Index's write gate. A record gesture writes its system of record "
-            + "and returns (ADR-0015 invariant 2), so the gate stays the indexer's own:\n"
+            + "and returns (ADR-0015 invariant 2), so the gate stays the Indexer's own:\n"
             + string.Join("\n", named));
     }
 

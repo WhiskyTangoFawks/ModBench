@@ -36,7 +36,7 @@ public sealed class RowsChangedNotificationTests
     }
 
     // A container's document is one row plus every embedded child's, so naming only the key the
-    // indexer was handed leaves a panel open on a placed reference with nothing to re-read on.
+    // Indexer was handed leaves a panel open on a placed reference with nothing to re-read on.
     [Fact]
     public void ProjectingAContainersDocument_NamesTheContainerAndEveryEmbeddedChildWhoseRowsChanged()
     {
@@ -44,7 +44,7 @@ public sealed class RowsChangedNotificationTests
         using var fixture = new IndexedContainerMod(notifications);
 
         // A hand edit to a child inside its owner's document: the child has no file of its own, and
-        // the indexer is asked about the owner alone.
+        // the Indexer is asked about the owner alone.
         var document = fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
         File.WriteAllText(
             document,

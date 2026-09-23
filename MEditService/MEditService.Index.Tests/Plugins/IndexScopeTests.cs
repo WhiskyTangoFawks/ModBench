@@ -18,7 +18,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static Indexer MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
+    private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
     // typed, actionable message rather than a FileNotFoundException's from inside Initialize.
@@ -26,7 +26,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Load_ForUnsupportedGameRelease_FailsNamingTheRelease()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
 
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
 
@@ -38,7 +38,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Load_PopulatesLoadOrderAndRepository()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
@@ -49,7 +49,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Load_IndexesRecordsIntoRepository()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var count = manager.RequireReads().CountOf(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), "npc_");
@@ -61,7 +61,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Load_SetsIsWinnerOnSinglePlugin()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var result = manager.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
@@ -74,7 +74,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Dispose_ClearsReferencesAndDisposesRepository()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.RequireReads();
         manager.Dispose();
@@ -88,7 +88,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Reconcile_SameInstance_KeepsTheStore()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.RequireReads();
 
@@ -104,7 +104,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void SetFilter_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         var ex = Assert.Throws<NoLoadOrderException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
         Assert.Contains("No load order", ex.Message);
     }
@@ -113,7 +113,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void ClearFilter_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         var ex = Assert.Throws<NoLoadOrderException>(() => manager.ClearFilter());
         Assert.Contains("No load order", ex.Message);
     }
@@ -152,7 +152,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             .Build();
         using (data)
         {
-            using var manager = MakeManager(holder);
+            using var manager = MakeIndexer(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var reads = manager.RequireReads();
 
@@ -180,7 +180,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             .Build();
         using (data)
         {
-            using var manager = MakeManager(holder);
+            using var manager = MakeIndexer(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var reads = manager.RequireReads();
 
@@ -248,7 +248,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Reconcile_ForADifferentInstance_OldRepositoryBecomesUnusable()
     {
         var holder = new LoadOrderHolder();
-        using var manager = MakeManager(holder);
+        using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var oldRepo = manager.RequireReads();
 
@@ -265,7 +265,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     public void Dispose_RepositoryBecomesUnusable()
     {
         var holder = new LoadOrderHolder();
-        var manager = MakeManager(holder);
+        var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.RequireReads();
 
@@ -277,7 +277,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
     private Indexer MakeLoadedManager(LoadOrderHolder holder)
     {
-        var m = MakeManager(holder);
+        var m = MakeIndexer(holder);
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }

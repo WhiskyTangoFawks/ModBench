@@ -292,7 +292,7 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(0, readsWhileParked.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
-        // Superseded or run to completion: once the gate opens, either ordering is the indexer's
+        // Superseded or run to completion: once the gate opens, either ordering is the Indexer's
         // to choose and everything below holds for both.
         await first;
         await second;
