@@ -26,8 +26,9 @@ As a user, I want:
    ADR-0019*
 5. The new or changed folder to reach every view through the watch. *A write is forgotten; ADR-0015,
    invariant 2*
-6. The download's `.meta` to record that it is installed, so its row shows Installed. *the Downloads
-   surface, [downloads_draft.md](../surfaces/downloads_draft.md)*
+6. The downloaded file's `.meta` marked installed, so MO2's Downloads tab agrees. A failure there
+   does not fail the install; it is a line in the Output. *ADR-0017, invariant 1;
+   [downloads_draft.md](../surfaces/downloads_draft.md)*
 
 ## install: a new mod
 
@@ -42,7 +43,8 @@ As a user, I want:
 
 1. To pick the target from the installed mods that share the download's Nexus mod ID, or to install a
    new mod. *catalog Meaning; the pick is in [downloads_draft.md](../surfaces/downloads_draft.md)*
-2. The target confirmed every time, pre-selected by file ID and never by file name. *diagram header*
+2. The target confirmed every time, pre-selected by file ID, else by the mod's recorded installation
+   file, and never by a guess from the file's name. *diagram*
 3. The folder's contents replaced in place, with its `.git` kept, and the folder never renamed, so its
    identity, its repository and its watchers survive. *diagram*
 4. `meta.ini` to reflect the new download, with the installed file IDs recorded. *diagram*
@@ -74,13 +76,11 @@ The external-change question is tested in
 5. **Which `meta.ini` keys change.** The old spec replaces the keys install owns and keeps the old value
    for a key the download does not know, so an unknown version never blanks a known one. Rule or
    detail?
-6. **Fallback pre-selection.** The diagram says "by file id". The old spec adds a fallback to the
-   recorded installation file, and `downloads.md` has it. Which is right?
-7. **The name checked twice.** The old spec checks the name at the prompt against `modlist.txt`, and
+6. **The name checked twice.** The old spec checks the name at the prompt against `modlist.txt`, and
    again at install against the disk, which also finds folders no line mentions. Rule or detail?
-8. **Reinstall and the installer choice.** Reinstall from the recorded archive, and quick, manual or
+7. **Reinstall and the installer choice.** Reinstall from the recorded archive, and quick, manual or
    FOMOD, are planned in the catalog.
-9. **The `Everything` preset.** An upgrade overwrites tracked assets as working-tree changes. Does that
+8. **The `Everything` preset.** An upgrade overwrites tracked assets as working-tree changes. Does that
    need a warning?
-10. **Does the tracked mod's question ask?** The diagram draws the dialog. The decompile contract says
+9. **Does the tracked mod's question ask?** The diagram draws the dialog. The decompile contract says
     whether it asks is open.

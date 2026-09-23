@@ -2,8 +2,10 @@
 # replaces the folder's contents in place around .git so the repository and the watchers
 # survive. The target is stated by the caller and never inferred from disk; Downloads picks it
 # and always confirms. No modlist.txt line is written here: the folder appears, and the system
-# commands adopt it (update-load-order-file). A tracked mod goes on to decompile-plugin, with
-# the moved meta.ini version pre-selecting the new baseline.
+# commands adopt it (update-load-order-file). A downloaded file is marked installed in its .meta
+# for MO2's sake; the Instance loader reads Installed from the mods, so a failed mark fails nothing.
+# A tracked mod goes on to decompile-plugin, with the moved meta.ini version pre-selecting the
+# new baseline.
 # Governed by ADR-0003, ADR-0007, ADR-0015 and ADR-0017. Contract: install-mod.md.
 ...@../styles
 shape: sequence_diagram
@@ -18,13 +20,13 @@ codecs.label: MO2 file codecs
 mo2files: @../target-architecture.modbench_driven.mo2files
 mo2files.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "MO2 instance\nmods/<name>/, meta.ini"
+mo2.label: "MO2 instance\nmods/<name>/, meta.ini · downloads/<file>.meta"
 views: "every view" {class: driving}
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: "Mod watcher\nmEdit"
 
 instance -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
-downloads."the target: a new mod, or a candidate pre-selected by file id. Always confirmed. Esc installs nothing"
+downloads."the target: a new mod, or a candidate pre-selected by file id, else by its recorded installation file. Always confirmed. Esc installs nothing"
 downloads -> install: "the source, and the target" {class: loadorder}
 install -> codecs: "meta.ini: the meta it knows" {class: loadorder}
 codecs -> install: bytes {class: loadorder}
@@ -36,7 +38,14 @@ upgrade: "an upgrade" {
   install -> mo2files: "staged tree in, old files out, .git kept" {class: loadorder}
 }
 
-mo2files -> mo2: the folder, then forget {class: loadorder}
+from download: "from a downloaded file" {
+  install -> codecs: "the .meta: installed" {class: loadorder}
+  codecs -> install: bytes {class: loadorder}
+  install -> mo2files: "put the .meta in downloads/" {class: loadorder}
+  install."a failed mark is a line in the Output, and the install still applied"
+}
+
+mo2files -> mo2: "the folder, the .meta, then forget" {class: loadorder}
 install -> downloads: applied or refusal {class: loadorder}
 mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadorder}

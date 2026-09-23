@@ -16,7 +16,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 16 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 1 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 3 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -25,9 +25,12 @@ Gestures Modbench does differently.
 | # | Where | Modbench | MO2 | Why |
 |---|---|---|---|---|
 | 1 | The top bar | The Toolbox, the container's first view: a small readout of the Instance's value, Profile and Deployment, with the workspace actions in its title bar ([containers.md](../specs/containers.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
-| 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads.md](../specs/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
+| 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads_draft.md](../architecture/surfaces/downloads_draft.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. Modbench never builds a merged view ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). | An Archives tab | Ruling. |
 | 4 | Deploy and run | The alpha does not deploy, run the game or run tools. MO2 does. After the alpha, deployment follows Vortex ([ADR-0020](../adr/0020-vortex-is-the-reference-for-deployment.md)). | Runs every program through its virtual file system | Ruling. |
+| 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
+| 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
+| 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
 
 ## Omissions by object
 
@@ -130,3 +133,5 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Choose columns | Downloads: header menu | VS Code provides it |
 | Refresh the list | Downloads: Refresh, watcher | An ADR decides it |
 | Visit the uploader's profile | Downloads | Metadata chrome |
+| Install by double click or Enter (the row menu is the one entry) | Downloads: double click, Enter | Maintainer ruling |
+| Drag a downloaded file onto the mod list to install (the row menu is the one entry) | Downloads: drag out | Maintainer ruling |

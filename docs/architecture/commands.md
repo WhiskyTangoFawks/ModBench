@@ -11,6 +11,10 @@ A gesture this file has and the model cannot hold is a ticket.
   realizes it.
 - **Gesture**: one thing the user does to an object. One row in the tables below, under the
   object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
+- **Exclude and hide**: to exclude is to mark an object durably on disk, so it is left out of
+  something until include clears the mark: a downloaded file out of its list, a mod's file out of
+  deployment. To hide is a view's own lens: it changes nothing on disk and ends with the window,
+  like hide excluded or a filter.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
   objects.

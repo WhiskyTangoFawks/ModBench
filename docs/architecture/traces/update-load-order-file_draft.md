@@ -18,7 +18,7 @@ diagram. **Ruling** means the maintainer decided it and nothing else states it.
 |---|---|---|
 | mod `enable` / `disable`, `move` | modlist commands | `modlist.txt` |
 | separator `add`, `rename`, `delete` | modlist commands | `modlist.txt` |
-| mod `uninstall` | modlist commands | `modlist.txt`, and the mod folder |
+| mod `uninstall` | modlist commands | `modlist.txt`, the mod folder, and the downloaded file's `.meta` |
 | mod `create empty mod` | modlist commands | `modlist.txt`, and an empty mod folder |
 | `import mod` | modlist commands | `modlist.txt` |
 | plugin `enable` / `disable`, `move` | plugins commands | `plugins.txt` |
@@ -71,6 +71,9 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 
 1. The mod's folder and its line removed. *catalog Meaning*
 2. To be asked first. *Confirm what destroys*
+3. The downloaded file it was installed from marked uninstalled in its `.meta`, so MO2's Downloads
+   tab agrees. A failure there does not fail the uninstall; it is a line in the Output. *ADR-0017,
+   invariant 1; [downloads_draft.md](../surfaces/downloads_draft.md)*
 
 ## mod create empty mod
 
@@ -127,7 +130,9 @@ The trigger is a plugin on disk with no line in `plugins.txt`, or a line that no
 
 ## downloaded file delete
 
-1. The file and its `.meta` moved to the system trash, the `.meta` first. *[downloads_draft.md](../surfaces/downloads_draft.md)*
+1. The file and its `.meta` moved to the system trash, the file first. A failure on the file writes
+   nothing; a failure on the `.meta` after it leaves a lone `.meta`, which no view shows, so the
+   delete is done. *A failed gesture writes nothing; [downloads_draft.md](../surfaces/downloads_draft.md)*
 2. To be asked first, once for the whole selection. *Confirm what destroys*
 3. The mod it installed left in place. *[downloads_draft.md](../surfaces/downloads_draft.md)*
 

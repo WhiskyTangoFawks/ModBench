@@ -2,7 +2,8 @@
 # declared here as sets and the contract's table says which command uses which. A command
 # splices through the pure codec and puts through the Instance adapter; the write is forgotten and the
 # watch closes the loop, so a change from MO2 takes the same path. A system command is handed
-# the instance value as an argument and reads nothing itself. Only plugins commands ask mEdit
+# the instance value as an argument and reads nothing itself. An uninstall also marks the downloaded
+# file it came from, for MO2's sake. Only plugins commands ask mEdit
 # which plugins load with no line. The tail, indexing the new load order, is index-load-order's.
 # Governed by ADR-0003, ADR-0013, ADR-0015, ADR-0016 and ADR-0017. Contract: update-load-order-file.md.
 ...@../styles
@@ -30,6 +31,12 @@ client -> cmds: the set, or unreachable {class: query}
 cmds -> codecs: "the lines to flip, move, add or drop" {class: loadorder}
 codecs -> cmds: bytes {class: loadorder}
 cmds -> mo2files: "put the file · the folder to make or remove" {class: loadorder}
+uninstall: "an uninstall, from a downloaded file" {
+  cmds -> codecs: "the download's .meta: uninstalled" {class: loadorder}
+  codecs -> cmds: bytes {class: loadorder}
+  cmds -> mo2files: "put the .meta in downloads/" {class: loadorder}
+  cmds."a failed mark is a line in the Output, and the uninstall still applied"
+}
 mo2files -> mo2: bytes, then forget {class: loadorder}
 cmds -> surfaces: applied or refusal {class: loadorder}
 mo2 -> instance: watch {class: signal}
