@@ -26,15 +26,17 @@ const DRIVEN_BOXES: Record<string, string[]> = {
 const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
   pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
-  instanceCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  instanceCommands: ['client', 'instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
   install: ['mo2Codecs', 'instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
 
 
 // The driving band: each view reads a value and fires a command, with the reference list
-// target-architecture-references.d2 draws for it.
+// target-architecture-references.d2 draws for it. No Toolbox file uses its drawn deploy commands
+// or tables, so both are left out.
 const VIEW_BOXES: Record<string, string[]> = {
+  toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
   mods: ['install', 'instanceLoader', 'modlist', 'ports'],
   downloads: ['install', 'instanceLoader', 'ports'],
   plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
@@ -203,8 +205,8 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
       .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'client']);
   });
 
-  it('names the four views the driving band draws, less the Toolbox', () => {
-    expect(Object.keys(VIEW_BOXES)).toEqual(['mods', 'downloads', 'plugins', 'editor']);
+  it('names the five views the driving band draws', () => {
+    expect(Object.keys(VIEW_BOXES)).toEqual(['toolbox', 'mods', 'downloads', 'plugins', 'editor']);
   });
 
   it('every box is a real directory holding production files', () => {

@@ -19,6 +19,7 @@
     { "path": "./src/instanceCommands" },
     { "path": "./src/install" },
     { "path": "./src/client" },
+    { "path": "./src/toolbox" },
     { "path": "./src/mods" },
     { "path": "./src/downloads" },
     { "path": "./src/plugins" },

@@ -23,15 +23,17 @@ const DRIVEN_BOXES: Record<string, string[]> = {
 const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
   pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
-  instanceCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  instanceCommands: ['client', 'instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
   install: ['mo2Codecs', 'instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
 
 
 // The driving band: each view reads a value and fires a command, with the reference list
-// target-architecture-references.d2 draws for it.
+// target-architecture-references.d2 draws for it. No Toolbox file uses its drawn deploy commands
+// or tables, so both are left out.
 const VIEW_BOXES: Record<string, string[]> = {
+  toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
   mods: ['install', 'instanceLoader', 'modlist', 'ports'],
   downloads: ['install', 'instanceLoader', 'ports'],
   plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
@@ -43,7 +45,7 @@ const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
 const ROOT_SOLUTION = 'tsconfig.json';
-// The composition root: the Toolbox and the activation file, which reference every box by
+// The composition root: the activation file and the wiring it calls, which reference every box by
 // definition (target-architecture-references.d2's reading).
 const ROOT_PROJECT = join('src', 'tsconfig.json');
 const TEST_PROJECT = 'tsconfig.test.json';
@@ -166,8 +168,7 @@ describe('the composition root is one project referencing every box', () => {
     expect(parsed(ROOT_PROJECT).options.composite).toBe(true);
   });
 
-  // The activation file and the Toolbox are the two composition roots, and the extension host
-  // is what they compose onto.
+  // The activation file is the composition root, and the extension host is what it composes onto.
   it('sees the Node and VS Code types', () => {
     expect(parsed(ROOT_PROJECT).options.types).toEqual(['node', 'vscode']);
   });
@@ -180,8 +181,8 @@ describe('the composition root is one project referencing every box', () => {
     expect(relative(MODBENCH, parsed(ROOT_PROJECT).options.outDir ?? '')).toBe(join('out', 'projects', 'root'));
   });
 
-  // The two roots and the glue they share, and no file of any box.
-  it('compiles the activation file, the Toolbox and no box file', () => {
+  // The root and the wiring it calls, and no file of any box.
+  it('compiles the activation file, its wiring and no box file', () => {
     const files = fileNames(ROOT_PROJECT);
     expect(files).toContain(join('src', 'extension.ts'));
     expect(files).toContain(join('src', 'toolbox.ts'));

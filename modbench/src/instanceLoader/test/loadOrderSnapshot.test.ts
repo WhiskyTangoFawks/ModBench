@@ -3,7 +3,9 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
-import { buildLoadOrderRows, originFolder, providedPluginsOf, resolvePluginPaths } from '../loadOrderSnapshot';
+import {
+  buildLoadOrderRows, loadOrderSnapshotOf, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
+} from '../loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
@@ -291,5 +293,27 @@ describe('providedPluginsOf', () => {
     const rows = [row('readme.txt', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'readme.txt'))];
 
     expect(providedPluginsOf(rows)).toEqual(new Map());
+  });
+});
+
+// ADR-0013: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
+describe('loadOrderSnapshotOf', () => {
+  const GAME_DIRECTORY = { root: '/game', dataFolder: '/game/Data' };
+  const resolved: LoadOrderPlugin = { name: 'a.esp', path: '/mods/A/a.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
+  const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };
+
+  it('is undefined — no put at all — when the game directory has not resolved', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: undefined })).toBeUndefined();
+  });
+
+  it('carries the game directory\'s dataFolder and every resolved plugin once it has', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: GAME_DIRECTORY }))
+      .toEqual({ dataFolder: '/game/Data', plugins: [resolved] });
+  });
+
+  // Rival: casting the union blind and sending `path: undefined` to the backend.
+  it('omits a line-only row rather than sending it with path: undefined', () => {
+    const snapshot = loadOrderSnapshotOf({ plugins: [resolved, unresolved], gameDirectory: GAME_DIRECTORY });
+    expect(snapshot?.plugins).toEqual([resolved]);
   });
 });

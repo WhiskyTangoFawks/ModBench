@@ -403,16 +403,3 @@ export class Instance implements vscode.Disposable {
     };
   }
 }
-
-/** ADR-0013's snapshot, read from the current value (ADR-0015) rather than a fresh walk.
- *  `undefined` — no PUT — when the game directory has not resolved. The filter states a
- *  resolved game directory's own guarantee, never an unchecked cast. */
-export function loadOrderSnapshotOf(
-  value: Pick<InstanceValue, 'plugins' | 'gameDirectory'>,
-): { dataFolder: string; plugins: LoadOrderPlugin[] } | undefined {
-  if (!value.gameDirectory) return undefined;
-  return {
-    dataFolder: value.gameDirectory.dataFolder,
-    plugins: value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined),
-  };
-}

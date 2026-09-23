@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../../test/vscodeMock';
 
 // The Toolbox renders the Instance's value and nothing else: no disk read, no backend state.
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { ToolboxProvider, type ToolboxDeps, type ToolboxState } from '../ToolboxProvider';
-import { present } from '../ports/present';
+import { present } from '../../ports/present';
 
 const VALUE: ToolboxState = { activeProfile: 'Default' };
 

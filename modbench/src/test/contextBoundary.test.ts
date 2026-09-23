@@ -6,8 +6,8 @@ import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
 // CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
-// origin, never by FormKey, and never reach the backend. The Plugins view is excluded — it
-// browses records by design.
+// origin, never by FormKey, and never reach the backend; instance commands reach it to put the
+// load order and rebuild the index.
 
 const SRC = join(__dirname, '..');
 
@@ -25,9 +25,8 @@ const EDITOR_DIR = 'editor';
 const GENERATED_DIR = 'generated';
 const WIRE_DIR = 'wire';
 
-// Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition
-// root). `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability —
-// same rule.
+// Wires every context together: the activation file and the wiring it calls.
+// `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability — same rule.
 const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts'];
 
 // Activation-scoped shared state: holds type-only handles into both contexts so other
@@ -41,6 +40,11 @@ const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
 // Wires a TreeView checkbox event to the Plugins view's own Mod-Management API
 // (`setPluginEnabled`/`invalidate`) — composition-root glue carrying no record vocabulary.
 const CHECKBOX_HANDLER_WIRING = ['pluginCheckboxHandler.ts'];
+
+// target-architecture-references.d2 draws instance commands -> mEdit client: put load order and
+// refresh. The client import alone is exempt; the FormKey vocabulary and every other context stay
+// refused.
+const CLIENT_CALLERS = ['instanceCommands'];
 
 const COMPOSITION_ROOT =
   [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE, ...CHECKBOX_HANDLER_WIRING];
@@ -90,8 +94,9 @@ function findOffenders(root: string): Offense[] {
     const imports = importsOf(text);
     // Every context a MO2-side file must never reach into: Editing's client, the Plugins view's
     // record browser, and Editor — all carry record types and FormKeys just as directly.
+    const clientImports = CLIENT_CALLERS.includes(relPath.split(sep)[0] ?? '') ? [] : importsFromDir(imports, CLIENT_DIR);
     const crossContext = [
-      ...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, CLIENT_DIR),
+      ...importsFromDir(imports, EDITING_DIR), ...clientImports,
       ...importsFromDir(imports, PLUGINS_VIEW_DIR), ...importsFromDir(imports, EDITOR_DIR),
     ];
     const vocab = domainVocabIn(text);
@@ -200,8 +205,30 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
     it('a Toolbox-shaped file that imports the mEdit client is caught', () => {
       withPlantedTree((root) => {
-        writeFileSync(join(root, 'ToolboxProvider.ts'), "import { ApiPluginRepository } from './medit/PluginRepository';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual(['ToolboxProvider.ts']);
+        mkdirSync(join(root, 'toolbox'), { recursive: true });
+        writeFileSync(join(root, 'toolbox', 'ToolboxProvider.ts'), "import type { MEditClient } from '../client';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('toolbox', 'ToolboxProvider.ts')]);
+      });
+    });
+
+    // The rival: the exemption keyed on the import rather than the importer, which would let any
+    // MO2-side file reach the client.
+    it('the mEdit-client import is exempt in instance commands alone', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'instanceCommands'), { recursive: true });
+        mkdirSync(join(root, 'mods'), { recursive: true });
+        const planted = "import type { LoadOrderSender } from '../client';\n";
+        writeFileSync(join(root, 'instanceCommands', 'loadOrder.ts'), planted);
+        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('mods', 'ModListProvider.ts')]);
+      });
+    });
+
+    it('instance commands reaching Editing or the Plugins view are still caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'instanceCommands'), { recursive: true });
+        writeFileSync(join(root, 'instanceCommands', 'loadOrder.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('instanceCommands', 'loadOrder.ts')]);
       });
     });
 

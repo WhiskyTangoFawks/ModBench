@@ -8,9 +8,9 @@ import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
 const PACKAGE_JSON = join(SRC, '..', 'package.json');
+// The root's wiring of the MO2 side, and the gestures the Toolbox box registers.
 const TOOLBOX = join(SRC, 'toolbox.ts');
-// The Toolbox box is both files: the composition root and the gestures it registers.
-const TOOLBOX_COMMANDS = join(SRC, 'toolboxCommands.ts');
+const TOOLBOX_COMMANDS = join(SRC, 'toolbox', 'toolboxCommands.ts');
 
 // The view is the Toolbox, and the Instance is the only reader of MO2's files, so nothing is a
 // "modlist source" any more. This file necessarily holds both words as data.
@@ -72,6 +72,7 @@ const DISPOSABLE_PRODUCERS = [
   'registerNotMo2InstanceWelcome',
   'registerOverwriteView',
   'registerPluginsReconcile',
+  'registerRefreshCommand',
   'registerSeparatorCommands',
   'subscribe',
 ];

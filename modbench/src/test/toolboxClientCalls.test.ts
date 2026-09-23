@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { implicitMastersFrom, rebuildIndexVia } from '../toolboxClientCalls';
+import { implicitMastersFrom } from '../toolboxClientCalls';
 import { InMemoryMEditClient } from '../client';
 
 describe('implicitMastersFrom', () => {
@@ -29,18 +29,5 @@ describe('implicitMastersFrom', () => {
 
     expect(client.calls).toEqual([]);
     expect(result).toBeUndefined();
-  });
-});
-
-describe('rebuildIndexVia', () => {
-  it('calls the port with the instance root, the failure callback and the game release', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('rebuildIndex', true);
-    const onFailure = () => {};
-
-    const result = await rebuildIndexVia(client, '/instance', onFailure, 'Fallout4');
-
-    expect(client.calls).toContainEqual({ method: 'rebuildIndex', args: ['/instance', onFailure, 'Fallout4'] });
-    expect(result).toBe(true);
   });
 });

@@ -1,7 +1,5 @@
-// toolbox.ts's `invalidateMods` closure must call `instance.refresh()` before
-// `modListProvider.invalidate()`, like its `invalidatePlugins`/`invalidateDownloads` siblings.
-// Reproduced against a real Instance and ModListProvider, so a regression is caught without the
-// full VS Code extension host.
+// Refresh ends with the Instance loader reading every file again and calls no view's own refresh:
+// the Mods tree picks the new value up through its own subscription.
 
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -46,22 +44,21 @@ async function addModOnDisk(root: string): Promise<void> {
 const hasNewMod = (roots: unknown[]): boolean =>
   roots.some((n) => n instanceof ModNode && n.label === 'NewMod');
 
-describe('refreshAll wiring for the Mods tree', () => {
-  it('rival: invalidate() alone leaves the tree stale after a disk change the watcher has not delivered', async () => {
+describe('an Instance re-read reaches the Mods tree', () => {
+  it('rival: the view\'s own invalidate() leaves the tree stale after a disk change the watcher has not delivered', async () => {
     const { root, provider } = await setup();
     await addModOnDisk(root);
 
-    provider.invalidate(); // the old `invalidateMods` shape
+    provider.invalidate();
 
     expect(hasNewMod(await provider.getChildren())).toBe(false);
   });
 
-  it('fixed: instance.refresh() then invalidate() picks up the disk change, matching Plugins/Downloads', async () => {
+  it('the Instance loader reading every file again reaches the tree with no view refresh', async () => {
     const { root, instance, provider } = await setup();
     await addModOnDisk(root);
 
-    await instance.refresh(); // the fixed `invalidateMods` shape
-    provider.invalidate();
+    await instance.refresh();
 
     expect(hasNewMod(await provider.getChildren())).toBe(true);
   });

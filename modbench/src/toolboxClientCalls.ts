@@ -12,11 +12,3 @@ export function implicitMastersFrom(
     ? Promise.resolve(undefined)
     : client.implicitMasters(folder, gameRelease);
 }
-
-/** ADR-0014: Refresh's first step. */
-export function rebuildIndexVia(
-  client: Pick<MEditClient, 'rebuildIndex'>,
-  instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
-): Promise<boolean> {
-  return client.rebuildIndex(instanceRoot, onFailure, gameRelease);
-}

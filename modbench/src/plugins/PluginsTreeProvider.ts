@@ -273,7 +273,7 @@ export class PluginsTreeProvider
   // ── rows ──────────────────────────────────────────────────────────────────
 
   // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
-  // a caller forcing a resync (a failed write, `refreshAll`) gets whatever the Instance is
+  // a caller forcing a resync (a failed write) gets whatever the Instance is
   // currently holding, not a snapshot that predates it.
   invalidate(): void {
     this.instanceValue = this.instance.value;

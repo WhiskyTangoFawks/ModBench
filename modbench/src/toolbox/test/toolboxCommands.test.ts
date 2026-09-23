@@ -18,18 +18,15 @@ vi.mock('vscode', () => ({
   window: { showQuickPick },
 }));
 
-const { listProfiles, switchProfile } = vi.hoisted(() => ({
-  listProfiles: vi.fn(),
-  switchProfile: vi.fn(),
-}));
+const { switchProfile } = vi.hoisted(() => ({ switchProfile: vi.fn() }));
 
-vi.mock('../instanceCommands/profile', () => ({ listProfiles, switchProfile }));
-vi.mock('../workspaceConfig', () => ({ meditConfig: () => ({ get: () => undefined }) }));
+vi.mock('../../instanceCommands/profile', () => ({ switchProfile }));
 
-import { registerToolboxCommands, type ToolboxCommandDeps } from '../toolboxCommands';
-import { recordingReporter } from './surfacingDoubles';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { present } from '../ports/present';
+import { registerRefreshCommand, registerToolboxCommands, type ToolboxCommandDeps } from '../toolboxCommands';
+import { recordingReporter } from '../../test/surfacingDoubles';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { present } from '../../ports/present';
+import type { RefreshResult } from '../../instanceCommands/loadOrder';
 
 const value = instanceValueFixture({ activeProfile: 'Default' });
 
@@ -66,7 +63,6 @@ describe('the Toolbox gestures', () => {
 
 describe('Switch profile', () => {
   it('reports a refused switch at error and leaves the readout alone', async () => {
-    listProfiles.mockResolvedValueOnce(['Default', 'Modding']);
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'ModOrganizer.ini is read-only' });
 
@@ -80,7 +76,6 @@ describe('Switch profile', () => {
   });
 
   it('refreshes the readout once the switch lands, and surfaces nothing', async () => {
-    listProfiles.mockResolvedValueOnce(['Default', 'Modding']);
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
     switchProfile.mockResolvedValueOnce({ applied: true });
 
@@ -93,12 +88,51 @@ describe('Switch profile', () => {
   });
 
   it('switches nothing when the picked profile is the active one', async () => {
-    listProfiles.mockResolvedValueOnce(['Default']);
     showQuickPick.mockResolvedValueOnce({ label: 'Default' });
 
     const { run } = register();
     await run('modbench.toolbox.switchProfile');
 
     expect(switchProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('Refresh', () => {
+  function registerRefresh(outcome: RefreshResult) {
+    const reporter = recordingReporter();
+    const steps: string[] = [];
+    registerRefreshCommand({
+      refresh: () => { steps.push('instance commands: refresh'); return Promise.resolve(outcome); },
+      instance: { refresh: () => { steps.push('Instance loader: read every file again'); return Promise.resolve(); } },
+      reporter,
+    });
+    return { reporter, steps, run: () => present(handlers.get('modbench.refresh'), 'the refresh handler')() };
+  }
+
+  it('asks instance commands to refresh, then the Instance loader to read every file again', async () => {
+    const { reporter, steps, run } = registerRefresh({ applied: true, loadOrder: { sent: false } });
+
+    await run();
+
+    expect(steps).toEqual(['instance commands: refresh', 'Instance loader: read every file again']);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports a refused refresh at error and reads nothing again', async () => {
+    const { reporter, steps, run } = registerRefresh({ applied: false, refusal: 'The index is held by another window.' });
+
+    await run();
+
+    expect(steps).toEqual(['instance commands: refresh']);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not rebuild the index.', detail: 'The index is held by another window.' },
+    ]);
+  });
+
+  // The title icon shows with no instance open, so the command must exist and do nothing.
+  it('is registered and does nothing when there is no instance', async () => {
+    registerRefreshCommand(undefined);
+
+    await expect(present(handlers.get('modbench.refresh'), 'the refresh handler')()).resolves.toBeUndefined();
   });
 });
