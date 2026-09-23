@@ -34,7 +34,6 @@ export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], show
 // regex makes any one of them testable regardless of the others.
 export function downloadContextValue(row: DownloadRow): string {
   const flags = [
-    row.hasMeta && 'hasMeta',
     row.modID !== undefined && 'hasModID',
     row.hidden && 'hidden',
   ].filter((f): f is string => f !== false);

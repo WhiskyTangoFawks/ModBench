@@ -22,7 +22,7 @@ function profileRow(activeProfile: string): vscode.TreeItem {
   row.description = activeProfile || '—';
   row.iconPath = new vscode.ThemeIcon('account');
   row.tooltip = 'Switch profile';
-  row.command = { command: 'modbench.toolbox.switchProfile', title: 'Switch Profile' };
+  row.command = { command: 'modbench.profile.switch', title: 'Switch Profile' };
   return row;
 }
 

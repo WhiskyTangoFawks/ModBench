@@ -30,13 +30,13 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
  *  the view it flips and needs nothing but the provider. */
 export function registerModListCoreCommands(modListProvider: ModListProvider): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
+      vscode.commands.registerCommand('modbench.mod.sortWinningAtTop', () => {
         modListProvider.toggleViewDirection();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', true);
+        void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', true);
       }),
-      vscode.commands.registerCommand('modbench.modList.view.losingAtTop', () => {
+      vscode.commands.registerCommand('modbench.mod.sortLosingAtTop', () => {
         modListProvider.toggleViewDirection();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', false);
+        void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', false);
       }),
   ];
 }
@@ -117,14 +117,6 @@ export function registerModContextCommands(
   ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
-        if (node?.kind !== 'mod') return;
-        // The value's own folder for this row, never a path joined here: the Instance adapter
-        // owns every path function, and the value carries its answer.
-        const folder = instance.value.paths.modDirs.get(node.mod.name);
-        if (folder === undefined) return;
-        await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
-      }),
       vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
@@ -134,7 +126,7 @@ export function registerModContextCommands(
           applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.mod.name));
         });
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode | undefined) => {
+      vscode.commands.registerCommand('modbench.mod.move', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const separators = instance.value.mods.filter((e) => e.kind === 'separator').map((e) => e.name);
         const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
@@ -148,7 +140,7 @@ export function registerModContextCommands(
           applyOrThrow(await moveModToSeparator(instanceRoot, profile, node.mod.name, picked.sepName));
         });
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode | undefined) => {
+      vscode.commands.registerCommand('modbench.mod.uninstall', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const answer = await ask(
           `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
@@ -163,15 +155,6 @@ export function registerModContextCommands(
           applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name, node.mod.archiveFilename));
         });
       }),
-      vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode | undefined) => {
-        if (node?.kind !== 'mod' || !node.mod.nexusId) return;
-        const nexusId = node.mod.nexusId;
-        await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
-          await vscode.env.openExternal(
-            vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusId}`),
-          );
-        });
-      }),
   ];
 }
 export function registerSeparatorCommands(
@@ -179,7 +162,7 @@ export function registerSeparatorCommands(
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.separator.rename', async (node: SeparatorNode | undefined) => {
+      vscode.commands.registerCommand('modbench.separator.rename', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         const newName = await vscode.window.showInputBox({
           prompt: 'Rename separator',
@@ -200,7 +183,7 @@ export function registerSeparatorCommands(
           applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.separator.name));
         });
       }),
-      vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode | undefined) => {
+      vscode.commands.registerCommand('modbench.separator.delete', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         await runModAction('deleteSeparator', 'Failed to delete separator.', async () => {
           const profile = instance.value.activeProfile;
@@ -215,7 +198,7 @@ export function registerCreateEmptyModCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.modList.newEmptyMod', async () => {
+  return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({ prompt: 'New mod name', placeHolder: 'My New Mod' });
     if (!name) return;
     await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
@@ -224,25 +207,52 @@ export function registerCreateEmptyModCommand(
     });
   });
 }
-/** The pinned Overwrite row's reddish tint and its sole action; the row's own visibility and
- *  count come from the Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
-export function registerOverwriteView(
-  instance: Pick<Instance, 'value'>,
-  reporter: Reporter,
-): vscode.Disposable[] {
-  return [
-    // Tint the pinned Overwrite row reddish. Stateless: keyed on the value's own overwrite path,
-    // which is what OverwriteNode.resourceUri carries.
-    vscode.window.registerFileDecorationProvider(
-      new OverwriteDecorationProvider(instance.value.paths.overwriteDir)),
-    vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
-      if (node?.kind !== OVERWRITE_NODE_KIND) return;
-      try {
-        await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
-      } catch (err) {
-        reporter.report(
-          'error', 'Failed to reveal the overwrite folder in the Explorer.', errorMessage(err));
-      }
-    }),
-  ];
+/** The pinned Overwrite row's reddish tint; the row's own visibility and count come from the
+ *  Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
+export function registerOverwriteView(instance: Pick<Instance, 'value'>): vscode.Disposable {
+  // Stateless: keyed on the value's own overwrite path, which is what OverwriteNode.resourceUri carries.
+  return vscode.window.registerFileDecorationProvider(
+    new OverwriteDecorationProvider(instance.value.paths.overwriteDir));
+}
+
+/** A mod row opens the mod's folder, and the Overwrite row the overwrite folder. */
+export function registerOpenFolderCommand(instance: Pick<Instance, 'value'>, reporter: Reporter): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.mod.openFolder', async (node: ModNode | OverwriteNode | undefined) => {
+    const target = node && folderOf(instance, node);
+    if (!target) return;
+    try {
+      await vscode.commands.executeCommand('revealInExplorer', target.folder);
+    } catch (err) {
+      reporter.report('error', `Failed to open the folder of "${target.name}".`, errorMessage(err));
+    }
+  });
+}
+
+// The value's own folder for a mod row, never a path joined here: the Instance adapter owns every
+// path function, and the value carries its answer.
+function folderOf(
+  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
+): { name: string; folder: vscode.Uri } | undefined {
+  if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: node.resourceUri };
+  const folder = instance.value.paths.modDirs.get(node.mod.name);
+  return folder === undefined ? undefined : { name: node.mod.name, folder: vscode.Uri.file(folder) };
+}
+
+/** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a
+ *  downloaded file row reach the same gesture. */
+export interface NexusModRow {
+  readonly nexusModId?: string;
+}
+
+export function registerViewOnNexusCommand(instance: Pick<Instance, 'value'>, reporter: Reporter): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.mod.viewOnNexus', async (row: NexusModRow | undefined) => {
+    const nexusModId = row?.nexusModId;
+    if (!nexusModId) return;
+    try {
+      await vscode.env.openExternal(
+        vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusModId}`));
+    } catch (err) {
+      reporter.report('error', `Failed to open the Nexus page of mod ${nexusModId}.`, errorMessage(err));
+    }
+  });
 }

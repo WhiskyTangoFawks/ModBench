@@ -38,7 +38,7 @@ export function registerTrackCommand(
   progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
+  return vscode.commands.registerCommand('modbench.plugin.track', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
@@ -80,7 +80,7 @@ export function registerRebaseCommand(
   outputChannel: vscode.LogOutputChannel, reporter: Reporter,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));

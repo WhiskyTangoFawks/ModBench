@@ -71,7 +71,7 @@ describe('registerTrackCommand', () => {
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     registerTrackCommand(progress, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
     return {
-      handler: present(handlers.get('modbench.pluginListTree.track'), 'the track command registerTrackCommand registers'),
+      handler: present(handlers.get('modbench.plugin.track'), 'the track command registerTrackCommand registers'),
       onTracked, reporter, refresh, said,
     };
   }
@@ -132,7 +132,7 @@ describe('registerRebaseCommand', () => {
     const reporter = recordingReporter();
     registerRebaseCommand(client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins);
     return {
-      handler: present(handlers.get('modbench.pluginListTree.rebase'), 'the rebase command registerRebaseCommand registers'),
+      handler: present(handlers.get('modbench.mod.rebaseEditBranch'), 'the rebase command registerRebaseCommand registers'),
       refresh, refreshMatchingPlugins, reporter,
     };
   }

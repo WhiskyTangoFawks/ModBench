@@ -137,16 +137,14 @@ function invoke(commandId: string, ...args: unknown[]): void {
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers Install / Visit on Nexus / Open File / Open Meta File', () => {
+  // View on Nexus is the mod's gesture, registered once for both views, so a second
+  // registration here would make activation throw.
+  it('registers install and open, and leaves view on Nexus to the mod', () => {
     registerDownloadsSingleRowCommands('/instance', fakeInstance(), recordingReporter(), installDeps());
-    const ids = registerCommand.mock.calls.map((c) => c[0]);
-    expect(ids).toEqual(expect.arrayContaining([
+    expect(registerCommand.mock.calls.map((c) => c[0])).toEqual([
       'modbench.downloads.install',
-      'modbench.downloads.visitNexus',
-      'modbench.downloads.openFile',
-      'modbench.downloads.openMeta',
-    ]));
-    expect(ids).not.toContain('modbench.downloads.reveal');
+      'modbench.downloadedFile.open',
+    ]);
   });
 
   it('invoking modbench.downloads.install with a DownloadNode installs that row\'s archive', async () => {
@@ -288,55 +286,72 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
 
-  it('visitNexus: opens the Nexus page for the row\'s mod id, on the game the value names', async () => {
-    const root = await makeInstanceRoot();
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloads.visitNexus', node(root, 'foo.7z', { modID: '123' }));
-
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    const target = calledWith<{ toString(): string }>(openExternal);
-    const url = target.toString();
-    expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
-  });
-
-  it('visitNexus: is a no-op when the row has no modID', async () => {
-    const root = await makeInstanceRoot();
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    // The handler's own missing-modID guard returns before scheduling anything, so the check
-    // needs no wait at all — a wait here would only be proving nothing about a schedule that
-    // was never made.
-    invoke('modbench.downloads.visitNexus', node(root, 'foo.7z'));
-
-    expect(openExternal).not.toHaveBeenCalled();
-  });
-
-  it('openFile: OS-opens the archive', async () => {
+  it('open: with no .meta, OS-opens the archive and asks nothing', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloads.openFile', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     expect(calledFsPath(openExternal)).toBe(archive);
+    expect(showQuickPick).not.toHaveBeenCalled();
   });
 
-  it('openMeta: opens the .meta sidecar in the editor', async () => {
+  it('open: with a .meta, offers the file and its .meta as the target', async () => {
     const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
+    showQuickPick.mockResolvedValueOnce(undefined);
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloads.openMeta', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
+
+    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+    const offered = calledWith<{ label: string }[]>(showQuickPick);
+    expect(offered.map((item) => item.label)).toEqual(['foo.7z', 'foo.7z.meta']);
+  });
+
+  it('open: a cancelled target pick opens nothing', async () => {
+    const root = await makeInstanceRoot();
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
+
+    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(showTextDocument).not.toHaveBeenCalled();
+  });
+
+  it('open: the file target OS-opens the archive', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    await writeMeta(root, 'foo.7z');
+    showQuickPick.mockImplementationOnce((items: { label: string }[]) => Promise.resolve(items[0]));
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
+
+    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
+    expect(calledFsPath(openExternal)).toBe(archive);
+    expect(showTextDocument).not.toHaveBeenCalled();
+  });
+
+  it('open: the .meta target opens the sidecar in the editor', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z');
+    showQuickPick.mockImplementationOnce((items: { label: string }[]) => Promise.resolve(items[1]));
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
     expect(calledFsPath(showTextDocument)).toBe(meta);
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
-  // runRowAction's catch -> log + error-notification path is shared by all three nav actions
-  // (visitNexus/openFile/openMeta) — proving it once here (via openFile) covers all of them;
-  // no need to duplicate per action.
+  // runRowAction's catch -> log + error-notification path is shared by both open actions, so
+  // proving it once here (via openFile) covers both.
   it('nav actions: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
@@ -344,7 +359,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), report, installDeps());
-    invoke('modbench.downloads.openFile', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.open', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([
@@ -480,9 +495,9 @@ describe('registerDownloadsMultiRowCommands', () => {
     registerDownloadsMultiRowCommands('/instance', recordingReporter(), scriptedDialog());
     const ids = registerCommand.mock.calls.map((c) => c[0]);
     expect(ids).toEqual(expect.arrayContaining([
-      'modbench.downloads.delete',
-      'modbench.downloads.hide',
-      'modbench.downloads.unhide',
+      'modbench.downloadedFile.delete',
+      'modbench.downloadedFile.exclude',
+      'modbench.downloadedFile.include',
     ]));
   });
 
@@ -492,7 +507,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const metaB = await writeMeta(root, 'b.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+    invoke('modbench.downloadedFile.exclude', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(metaA, 'utf8')).toContain('removed=true');
@@ -506,7 +521,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const visible = await writeMeta(root, 'visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node(root, 'visible.7z'), [node(root, 'already-hidden.7z'), node(root, 'visible.7z')]);
+    invoke('modbench.downloadedFile.exclude', node(root, 'visible.7z'), [node(root, 'already-hidden.7z'), node(root, 'visible.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(already, 'utf8')).toContain('removed=true');
@@ -521,7 +536,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const already = await writeMeta(root, 'already-visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.unhide', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
+    invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(hidden, 'utf8')).toContain('removed=false');
@@ -535,7 +550,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.hide', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=true');
@@ -547,7 +562,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog());
-    invoke('modbench.downloads.unhide', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.include', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=false');
@@ -560,7 +575,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
@@ -574,7 +589,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
@@ -589,7 +604,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog('Delete'));
-    invoke('modbench.downloads.delete', node(root, 'foo.7z'));
+    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
     const trashedPaths = calledFsPaths(fsDelete);
@@ -597,10 +612,10 @@ describe('registerDownloadsMultiRowCommands', () => {
   });
 });
 
-// ── deleteArchives — batch delete confirmation, driven through the modbench.downloads.delete
+// ── deleteArchives — batch delete confirmation, driven through the modbench.downloadedFile.delete
 // command (deleteArchives is not exported; a selection array of two-plus names is this seam's
 // only route to it) ──────────────────────────────────────────────────────────
-describe('modbench.downloads.delete — a multi-name selection', () => {
+describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('confirms once for the whole batch, then trashes every archive (+ its .meta, if present)', async () => {
@@ -611,7 +626,7 @@ describe('modbench.downloads.delete — a multi-name selection', () => {
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+    invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(() => expect(calledFsPaths(fsDelete)).toEqual(expect.arrayContaining([a, b])));
     assertAskedOnce(ask, { messageContains: '2 items', buttons: ['Delete'] });
@@ -624,7 +639,7 @@ describe('modbench.downloads.delete — a multi-name selection', () => {
     const ask = scriptedDialog(undefined);
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloads.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+    invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
@@ -642,7 +657,7 @@ describe('modbench.downloads.delete — a multi-name selection', () => {
     // A one-item *array*, not the no-array fallback the clicked-row-alone test above already
     // covers — deleteArchives' own names.length === 1 branch either way, reached by a different
     // selectionNames() path.
-    invoke('modbench.downloads.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
+    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
@@ -654,9 +669,9 @@ describe('modbench.downloads.delete — a multi-name selection', () => {
 describe('registerDownloadsSortCommand', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers modbench.downloads.sortBy', () => {
+  it('registers modbench.downloadedFile.sort', () => {
     registerDownloadsSortCommand(fakeDownloadsProvider());
-    expect(registerCommand.mock.calls.map((c) => c[0])).toContain('modbench.downloads.sortBy');
+    expect(registerCommand.mock.calls.map((c) => c[0])).toContain('modbench.downloadedFile.sort');
   });
 
   it('applies the picked option to DownloadsProvider.setSort', async () => {
@@ -664,7 +679,7 @@ describe('registerDownloadsSortCommand', () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Size (Largest First)', column: 'size', descending: true });
 
     registerDownloadsSortCommand(provider);
-    invoke('modbench.downloads.sortBy');
+    invoke('modbench.downloadedFile.sort');
 
     await vi.waitFor(() => {
       expect(provider.setSort).toHaveBeenCalledWith('size', true);
@@ -676,7 +691,7 @@ describe('registerDownloadsSortCommand', () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerDownloadsSortCommand(provider);
-    invoke('modbench.downloads.sortBy');
+    invoke('modbench.downloadedFile.sort');
 
     await vi.waitFor(() => {
       expect(showQuickPick).toHaveBeenCalled();
@@ -690,11 +705,11 @@ describe('registerDownloadsSortCommand', () => {
 describe('registerDownloadsHiddenToggleCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers modbench.downloads.showHidden and .hideHidden', () => {
+  it('registers modbench.downloadedFile.showExcluded and .hideHidden', () => {
     registerDownloadsHiddenToggleCommands(fakeDownloadsProvider());
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining([
-      'modbench.downloads.showHidden',
-      'modbench.downloads.hideHidden',
+      'modbench.downloadedFile.showExcluded',
+      'modbench.downloadedFile.hideExcluded',
     ]));
   });
 
@@ -702,19 +717,19 @@ describe('registerDownloadsHiddenToggleCommands', () => {
     const provider = fakeDownloadsProvider();
     registerDownloadsHiddenToggleCommands(provider);
 
-    invoke('modbench.downloads.showHidden');
+    invoke('modbench.downloadedFile.showExcluded');
 
     expect(provider.setShowHidden).toHaveBeenCalledWith(true);
-    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloads.showHidden', true);
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', true);
   });
 
   it('hideHidden turns hidden rows off and sets the context key false', () => {
     const provider = fakeDownloadsProvider();
     registerDownloadsHiddenToggleCommands(provider);
 
-    invoke('modbench.downloads.hideHidden');
+    invoke('modbench.downloadedFile.hideExcluded');
 
     expect(provider.setShowHidden).toHaveBeenCalledWith(false);
-    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloads.showHidden', false);
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', false);
   });
 });

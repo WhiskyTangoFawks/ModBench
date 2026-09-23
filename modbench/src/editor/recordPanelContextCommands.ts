@@ -70,13 +70,13 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
 
 const CONTEXT_COMMANDS: ContextCommand[] = [
   {
-    command: 'modbench.field.openExtended',
+    command: 'modbench.record.openFieldValue',
     run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },
   },
-  editCommand('modbench.array.add', isArrayParentContext, ctx => ({ op: 'add', path: ctx.path })),
-  editCommand('modbench.array.remove', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
-  editCommand('modbench.array.moveUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
-  editCommand('modbench.array.moveDown', isArrayElementContext, ctx => moveEnvelope(ctx.path, 1)),
+  editCommand('modbench.record.addElement', isArrayParentContext, ctx => ({ op: 'add', path: ctx.path })),
+  editCommand('modbench.record.removeElement', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
+  editCommand('modbench.record.moveElementUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
+  editCommand('modbench.record.moveElementDown', isArrayElementContext, ctx => moveEnvelope(ctx.path, 1)),
 ];
 
 /** The record panel's native right-click menus. Each command writes from the extension host with

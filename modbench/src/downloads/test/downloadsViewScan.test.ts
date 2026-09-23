@@ -55,6 +55,6 @@ describe('the Downloads view imports no filesystem module and names no filesyste
   });
 
   it('does not flag the word in a comment or a command id', () => {
-    expect(fileAccessIn("// re-reads nothing: no readFile( here\nvoid run('modbench.downloads.openFile');\n")).toEqual([]);
+    expect(fileAccessIn("// re-reads nothing: no readFile( here\nvoid run('modbench.downloadedFile.open');\n")).toEqual([]);
   });
 });

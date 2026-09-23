@@ -45,7 +45,7 @@ describe('ToolboxProvider', () => {
     const row = present(profile, 'the Profile row');
 
     expect(row.description).toBe('Survival');
-    expect(present(row.command, 'the Profile row\'s command').command).toBe('modbench.toolbox.switchProfile');
+    expect(present(row.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
   });
 
   // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
@@ -62,6 +62,6 @@ describe('ToolboxProvider', () => {
     const rows = makeProvider({ state: () => ({ activeProfile }) }).getChildren();
 
     expect(rows.map((r) => r.label)).toEqual(['Profile']);
-    expect(rows.map((r) => r.command?.command)).toEqual(['modbench.toolbox.switchProfile']);
+    expect(rows.map((r) => r.command?.command)).toEqual(['modbench.profile.switch']);
   });
 });

@@ -53,7 +53,7 @@ describe('registerCreatePluginCommand', () => {
   function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2, reporter);
-    return { run: present(handlers.get('modbench.newPlugin'), "the newPlugin command's registered handler"), reporter };
+    return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
   it('appends the created plugin to the load order and lands the created toast', async () => {
@@ -129,7 +129,7 @@ describe('registerRevealInExplorerCommand', () => {
   function invoke(resolvePluginPath: () => Promise<string | undefined>) {
     const reporter = recordingReporter();
     registerRevealInExplorerCommand({ resolvePluginPath }, reporter);
-    return { run: present(handlers.get('modbench.pluginListTree.revealInExplorer'), "the revealInExplorer command's registered handler"), reporter };
+    return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
   }
 
   it('reveals the resolved file in the OS explorer and says nothing', async () => {

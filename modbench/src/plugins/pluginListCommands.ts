@@ -13,7 +13,7 @@ import { errorMessage } from '../ports/errorMessage';
 export function registerRevealInExplorerCommand(
   pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode | undefined) => {
+  return vscode.commands.registerCommand('modbench.plugin.reveal', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const filePath = await pluginsTree.resolvePluginPath(name);
@@ -80,7 +80,7 @@ export function registerCreatePluginCommand(
   mo2: { instance: Pick<Instance, 'value'>; instanceRoot: string; pluginsTree: Pick<PluginsTreeProvider, 'invalidate'> } | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.newPlugin', async () => {
+  return vscode.commands.registerCommand('modbench.plugin.create', async () => {
     if (!mo2) {
       reporter.report('error', 'New Plugin needs an open MO2 instance workspace.');
       return;

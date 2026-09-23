@@ -7,10 +7,10 @@ export interface NameFilterDeps {
   /** Structural rather than a `TreeView`: the only properties touched are the two VS Code makes
    *  writable. */
   view: { description?: string; message?: string };
-  /** The two command ids and the context key are derived from this rather than passed, so the
-   *  three views cannot drift into three naming conventions. The key is not the record filter's
-   *  `modbench.filterActive`: two independent axes, two keys. */
-  viewId: string;
+  /** `modbench.<object>`, the catalog's prefix. The two command ids and the context key derive
+   *  from it, so the three views cannot drift apart. The key is not the record filter's
+   *  `modbench.filterActive`. */
+  object: string;
   placeholder: string;
   /** Applies the term to the view's provider, which is where the narrowing itself lives. The
    *  second argument is the Mods separator toggle; the other call sites ignore it. */
@@ -64,7 +64,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     term = text;
     toggleOn = nextToggleOn;
     deps.setFilter(text, nextToggleOn);
-    void vscode.commands.executeCommand('setContext', `${deps.viewId}.filterActive`, text !== '');
+    void vscode.commands.executeCommand('setContext', `${deps.object}.filterActive`, text !== '');
     render();
     void renderMessage();
   };
@@ -90,9 +90,9 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   };
 
   const disposables = [
-    vscode.commands.registerCommand(`${deps.viewId}.filter`, openBox),
+    vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
     // Clearing resets the separator toggle too: the option belongs to the filter that is going away.
-    vscode.commands.registerCommand(`${deps.viewId}.clearFilter`, () => apply('', true)),
+    vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
   ];
 
   return {

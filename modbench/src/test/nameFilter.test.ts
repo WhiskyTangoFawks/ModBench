@@ -56,10 +56,10 @@ vi.mock('vscode', () => ({
 import { registerNameFilter, type NameFilterDeps } from '../nameFilter';
 import { present } from '../ports/present';
 
-const VIEW_ID = 'test.view';
-const OPEN = `${VIEW_ID}.filter`;
-const CLEAR = `${VIEW_ID}.clearFilter`;
-const KEY = `${VIEW_ID}.filterActive`;
+const OBJECT = 'test.thing';
+const OPEN = `${OBJECT}.filter`;
+const CLEAR = `${OBJECT}.clearFilter`;
+const KEY = `${OBJECT}.filterActive`;
 
 interface Harness {
   view: { description?: string; message?: string };
@@ -72,7 +72,7 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
   const applied: { text: string; toggleOn: boolean }[] = [];
   const filter = registerNameFilter({
     view,
-    viewId: VIEW_ID,
+    object: OBJECT,
     placeholder: 'Filter things…',
     setFilter: (text, toggleOn) => applied.push({ text, toggleOn }),
     hasRows: () => Promise.resolve(true),
@@ -135,9 +135,9 @@ describe('the name filter is durable', () => {
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
-  it('names its commands and context key off the view id, so no two views can drift into different conventions', () => {
+  it('names its commands and context key off the object, so no two views can drift into different conventions', () => {
     setup();
-    expect([...h.state.commands.keys()]).toEqual(['test.view.filter', 'test.view.clearFilter']);
+    expect([...h.state.commands.keys()]).toEqual(['test.thing.filter', 'test.thing.clearFilter']);
   });
 
   it('treats a term typed back to empty as no filter, without needing the clear command', async () => {
