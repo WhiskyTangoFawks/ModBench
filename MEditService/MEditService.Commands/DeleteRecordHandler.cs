@@ -18,8 +18,40 @@ public sealed class DeleteRecordHandler
     internal DeleteRecordHandler(WriteTargets targets, ILogger<DeleteRecordHandler> logger) =>
         (_targets, _logger) = (targets, logger);
 
-    /// <summary>Every record shape resolves through the unit holding it.</summary>
-    public RecordEditResult DeleteRecord(PluginCopyKey plugin, string formKey)
+    /// <summary>Each record is deleted or refused on its own, so one refusal leaves the rest of the
+    /// selection to land. Every record shape resolves through the unit holding it.</summary>
+    public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
+    {
+        var applied = new List<RecordAt>();
+        var refused = new List<RecordRefused>();
+        foreach (var record in records)
+        {
+            var result = DeleteOrRefuseTheWriteFailure(record);
+            if (result.Applied) applied.Add(record);
+            else refused.Add(new RecordRefused(record, result.Refusal, result.Message));
+        }
+        return new PerRecordResult(applied, refused);
+    }
+
+    // A failed write is this record's answer, not the batch's: an exception here would hide the
+    // records already deleted before it.
+    private RecordEditResult DeleteOrRefuseTheWriteFailure(RecordAt record)
+    {
+        try
+        {
+            return Delete(record.Plugin, record.FormKey);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not delete the source file for {FormKey} in {Plugin} ({Origin})",
+                record.FormKey, record.Plugin.Name, record.Plugin.Origin);
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceWriteFailed,
+                $"Could not delete the source file for {record.FormKey}: {ex.Message}");
+        }
+    }
+
+    private RecordEditResult Delete(PluginCopyKey plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (_, identity, unit, repository) = target;

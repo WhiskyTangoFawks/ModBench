@@ -444,7 +444,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/delete": {
+    "/records/delete": {
         parameters: {
             query?: never;
             header?: never;
@@ -454,8 +454,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Delete a record as a working-tree change.
-         * @description Deletes the record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
+         * Delete records as working-tree changes, each on its own.
+         * @description Deletes each record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. Each record is deleted or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
         delete?: never;
@@ -920,6 +920,16 @@ export interface components {
             sequence: number;
             failures: string[];
         };
+        RecordAddress: {
+            formKey: string;
+            plugin: string;
+            origin: string;
+        };
+        RecordAddressRefusal: {
+            record: components["schemas"]["RecordAddress"];
+            refusal: components["schemas"]["RecordEditRefusal"];
+            message: string;
+        };
         RecordCopyAsNewRecordRequest: {
             sourcePlugin: string;
             sourceOrigin: string;
@@ -954,12 +964,11 @@ export interface components {
             recordType: string;
         };
         RecordDeleteRequest: {
-            plugin: string;
-            origin: string;
+            records: components["schemas"]["RecordAddress"][];
         };
         RecordDeleteResponse: {
-            applied: boolean;
-            formKey: string;
+            applied: components["schemas"]["RecordAddress"][];
+            refused: components["schemas"]["RecordAddressRefusal"][];
         };
         RecordDetail: {
             formKey: string;
@@ -976,7 +985,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "UntrackedReferencer" | "NotNativeRecord" | "ReferenceRemapIncomplete" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "UntrackedReferencer" | "NotNativeRecord" | "ReferenceRemapIncomplete" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -2267,9 +2276,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                formKey: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -2289,51 +2296,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };

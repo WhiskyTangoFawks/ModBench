@@ -9,6 +9,27 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class DeleteRecordHandlerTests
 {
     [Fact]
+    public void DeleteRecords_LandsEachRecordOnItsOwn_AndRefusesTheOneThatCannotWithItsReason()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var header = new RecordAt(mod.Plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName)));
+        var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
+        var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
+
+        var result = mod.DeleteHandler.DeleteRecords([npc, header, otherNpc]);
+
+        Assert.Equal([npc, otherNpc], result.Applied);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(header, refused.Record);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, refused.Refusal);
+        Assert.False(string.IsNullOrWhiteSpace(refused.Message));
+        Assert.False(result.AllApplied);
+        Assert.Null(mod.Document(mod.Npc.ToString()));
+        Assert.Null(mod.Document(mod.OtherNpc.ToString()));
+        Assert.NotNull(mod.Document(header.FormKey));
+    }
+
+    [Fact]
     public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
         using var mod = SourceEditFixture.Tracked();

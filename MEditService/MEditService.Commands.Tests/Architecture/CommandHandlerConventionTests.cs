@@ -16,7 +16,7 @@ public sealed class CommandHandlerConventionTests
     private static readonly (Type Handler, string Landed)[] Handlers =
     [
         (typeof(EditRecordHandler), "Applied"),
-        (typeof(DeleteRecordHandler), "Applied"),
+        (typeof(DeleteRecordHandler), "AllApplied"),
         (typeof(CreateRecordHandler), "Applied"),
         (typeof(PeekNextFreeFormKeyHandler), "Applied"),
         (typeof(TrackHandler), "Applied"),

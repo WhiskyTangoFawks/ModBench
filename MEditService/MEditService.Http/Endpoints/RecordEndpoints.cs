@@ -86,27 +86,21 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
-        // it from there. Same door, same refusals, same doctrine as EditRecord above.
-        app.MapPost("/records/{formKey}/delete", (
-            string formKey, RecordDeleteRequest request, DeleteRecordHandler edits) =>
-            DeleteRecord(formKey, request, edits, logger))
+        // Delete-record — each record's source file goes away and the null-Body working-tree
+        // mechanism takes it from there. Same refusals as EditRecord above, answered per record.
+        app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
+            DeleteRecord(request, edits, logger))
         .WithName("DeleteRecord")
-        .WithSummary("Delete a record as a working-tree change.")
+        .WithSummary("Delete records as working-tree changes, each on its own.")
         .WithDescription(
-            "Deletes the record's source file — a git-native, null-Body working-tree change: " +
+            "Deletes each record's source file — a git-native, null-Body working-tree change: " +
             "gone at Effective, still served at Head until the deletion is committed and " +
-            "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
-            "dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other " +
-            "dangling link.")
+            "compiled. Each record is deleted or refused on its own, and the answer names both. No " +
+            "reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and " +
+            "surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.")
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
-        .ProducesProblem(400)
-        .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422)
-        .ProducesProblem(500)
-        .ProducesProblem(503);
+        .ProducesProblem(400);
 
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RenumberRecordHandler edits) =>
@@ -227,36 +221,28 @@ public static class RecordEndpoints
             });
     }
 
-    internal static IResult DeleteRecord(
-        string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
+    internal static IResult DeleteRecord(RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
     {
-        var decoded = Uri.UnescapeDataString(formKey);
-        return WriteEndpointMapping.Execute(
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
-                }
-            },
-            validate: () =>
-                string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
-                    ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
-                    : null,
-            execute: () => edits.DeleteRecord(new PluginCopyKey(request.Plugin, request.Origin), decoded),
-            onApplied: result => Results.Ok(new RecordDeleteResponse(true, decoded)),
-            onWriteFailure: ex =>
-            {
-                logger.LogError(ex, "Could not delete the source file for {FormKey}", decoded);
-                return WriteEndpointMapping.WriteFailure($"Could not delete the source file for {decoded}: {ex.Message}");
-            },
-            onMalformedFormKey: null,
-            onNoLoadOrder: ex =>
-            {
-                logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
+        var records = request.Records ?? [];
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received DeleteRecord for {Count} records", records.Count);
+        }
+        if (records.Count == 0)
+            return Results.Problem("At least one record is required.", statusCode: 400);
+        if (records.Any(r =>
+                string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
+            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
+
+        var result = edits.DeleteRecords(
+            [.. records.Select(r => new RecordAt(new PluginCopyKey(r.Plugin, r.Origin), r.FormKey))]);
+        return Results.Ok(new RecordDeleteResponse(
+            [.. result.Applied.Select(Addressed)],
+            [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
     }
+
+    private static RecordAddress Addressed(RecordAt record) =>
+        new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
     internal static IResult RenumberRecord(
         string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, ILogger logger)

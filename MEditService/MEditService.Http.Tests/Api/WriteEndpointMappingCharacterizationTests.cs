@@ -65,60 +65,60 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     // --- DeleteRecord ---
 
     [Fact]
-    public async Task DeleteRecord_OnATrackedPlugin_Succeeds()
+    public async Task DeleteRecord_WhenOneSourceFileCannotBeDeleted_RefusesThatRecord_AndDeletesTheRest()
     {
-        using var fx = BuildOneModOnePlugin();
+        using var fx = BuildSourceAndDestination();
         await Load(fx);
         await Track(Origin);
-        var formKey = await FirstNpcFormKey(Plugin);
-
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/delete", new { plugin = Plugin, origin = Origin });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("applied").GetBoolean());
-        Assert.Equal(formKey, body.GetProperty("formKey").GetString());
-    }
-
-    [Fact]
-    public async Task DeleteRecord_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx); // deliberately not tracked
-        var formKey = await FirstNpcFormKey(Plugin);
-
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/delete", new { plugin = Plugin, origin = Origin });
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
-    }
-
-    [Fact]
-    public async Task DeleteRecord_WhenTheSourceFileCannotBeDeleted_IsAShapedProblem_NotAnUnhandled500()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx);
-        await Track(Origin);
-        var formKey = await FirstNpcFormKey(Plugin);
+        await Track(DestOrigin);
+        var locked = await FirstNpcFormKey(Plugin);
+        var writable = await FirstNpcFormKey(DestPlugin);
         var modFolder = ModFolderOf(fx, Origin);
 
         OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
         try
         {
-            var response = await _client.PostAsJsonAsync(
-                $"/records/{Uri.EscapeDataString(formKey)}/delete", new { plugin = Plugin, origin = Origin });
+            var response = await _client.PostAsJsonAsync("/records/delete", new
+            {
+                records = new[]
+                {
+                    new { formKey = locked, plugin = Plugin, origin = Origin },
+                    new { formKey = writable, plugin = DestPlugin, origin = DestOrigin },
+                },
+            });
 
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var applied = Assert.Single(body.GetProperty("applied").EnumerateArray().ToArray());
+            Assert.Equal(writable, applied.GetProperty("formKey").GetString());
+            var refused = Assert.Single(body.GetProperty("refused").EnumerateArray().ToArray());
+            Assert.Equal(locked, refused.GetProperty("record").GetProperty("formKey").GetString());
+            Assert.Equal("SourceWriteFailed", refused.GetProperty("refusal").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(refused.GetProperty("message").GetString()));
         }
         finally
         {
             OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
+    }
+
+    [Fact]
+    public async Task DeleteRecord_WithNoRecords_Is400()
+    {
+        var response = await _client.PostAsJsonAsync("/records/delete", new { records = Array.Empty<object>() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteRecord_WithARecordMissingItsOrigin_Is400()
+    {
+        var response = await _client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[] { new { formKey = "000800:Editable.esp", plugin = Plugin, origin = "" } },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // --- RenumberRecord (400/200 already pinned by MalformedFormKeyEndpointTests/RenumberApiTests) ---

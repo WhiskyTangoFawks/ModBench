@@ -56,6 +56,10 @@ public enum RecordEditRefusal
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
     SourceUnitNotFound,
 
+    /// <summary>The file system refused the write: the tree is not Modbench's alone (ADR-0003), so the
+    /// message is the file system's own words, and the way out is outside Modbench.</summary>
+    SourceWriteFailed,
+
     /// <summary>A light plugin's slot addresses local IDs only up to 0xFFF; native space is not exhausted,
     /// so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
     LightPluginFormIdOutOfRange,
