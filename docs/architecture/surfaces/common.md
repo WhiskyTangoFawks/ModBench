@@ -20,8 +20,9 @@ As a user, I want:
    default, so an unmarked row reads as the ordinary case.
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a
    setting.
-5. Keys to do what the same keys do in VS Code's Explorer: Space toggles a check box, Delete
-   destroys, F2 renames, Ctrl+C copies. A template's own keys are not adopted. *ruling*
+5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a
+   check box, Delete destroys, F2 renames, Ctrl+C copies. A template's own keys are not adopted.
+   *ruling*
 
 ## The name filter
 
@@ -44,17 +45,16 @@ As a user, I want:
 
 1. Before the first read lands, no rows and no empty message, so "not read yet" never reads as
    "nothing here".
-2. When the first read fails, one error row in place of the list: `$(error)`, "Failed to load:"
-   and the reason, the reason again in its tooltip, and one line in the Output for the failed read, however many
-   views show it. No notification;
-   this is the background tier. The next good read replaces it with rows. *ADR-0019, invariant 2*
-3. An empty list to render its own message. No view hides itself. *commands.md, Where surfaces
-   live*
-4. Opening a folder that is not an instance of a mod manager Modbench recognizes to be told so,
-   never to fail silently. Every view that shows the instance says it in place of its rows, and
-   says how to open an instance. The message waits for the check, so a folder not yet checked never
-   reads as not an instance. An instance Modbench recognizes whose files cannot be read is story 2,
-   not this. *ruling*
+2. When the first read fails, one error row in place of the list: `$(error)`, "Failed to load:" and
+   the reason, the reason again in its tooltip, and one line in the Output for the failed read,
+   however many views show it. No notification; this is the background tier. The next good read
+   replaces it with rows. *ADR-0019, invariant 2*
+3. An empty list to render its own message. No view hides itself. *commands.md, Where surfaces live*
+4. With no folder open, or a folder that is not an instance of a mod manager Modbench recognizes, to
+   be told so, never to fail silently. Every view that shows the instance says it in place of its
+   rows, and says how to open an instance. The message waits for the check, so a folder not yet
+   checked never reads as not an instance. An instance Modbench recognizes whose files cannot be
+   read is story 2, not this. *ruling*
 
 ## Reporting
 

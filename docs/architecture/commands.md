@@ -213,7 +213,7 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Mods: check box, key, context menu | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
-| move | writes | Mods: drag, key, context menu | `modbench.mod.move` | mods or separators | target: a separator (built); top, bottom, priority N, first or last conflict (planned) | MO2 mod list | Move mods in mod order. | debt #956, #967 | update-load-order-file |
+| move | writes | Mods: drag, context menu | `modbench.mod.move` | mods or separators | target: a separator (built); top, bottom, priority N, first or last conflict (planned) | MO2 mod list | Move mods in mod order. | debt #956, #967 | update-load-order-file |
 | uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | debt #967 | update-load-order-file |
 | rename | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | planned | - |
 | create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | position (planned) | MO2 mod list | Create an empty mod folder and its line. | debt #967 | update-load-order-file |
@@ -236,7 +236,7 @@ Offered on Mods. A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: below (built); above, inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | update-load-order-file |
+| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods; inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | update-load-order-file |
 | rename | writes | Mods: context menu, key (F2) | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | update-load-order-file |
 | delete | writes | Mods: context menu, key (Delete) | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | update-load-order-file |
 

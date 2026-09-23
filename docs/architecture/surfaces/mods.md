@@ -17,8 +17,8 @@ A native tree view, `modbench.modList`, second in the `modbench` container and o
 children, so it has Collapse All (Chrome). Several rows can be selected at once. *catalog Argument:
 mods*
 
-The view's description shows how many mods are enabled out of how many are listed, "12 / 30", and
-the name filter's term while one is active. *ruling; MO2's active-mod counter*
+The view's description shows how many mods are enabled out of how many are listed, counting the
+whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *ruling; MO2's active-mod counter*
 
 ## The tree
 
@@ -48,7 +48,7 @@ As a user, I want:
 | Description | the `meta.ini` version | MO2 |
 | Icon | `$(package)` | |
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known | MO2's columns |
-| Identity | the mod's name, so selection and expansion survive a change on disk | |
+| Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 A mod whose folder was deleted by hand is not a row: its line is pruned from `modlist.txt`, and the
 row goes with it. *ruling; MO2*
@@ -59,7 +59,7 @@ row goes with it. *ruling; MO2*
 |---|---|---|
 | Label | the separator's name, without MO2's `_separator` suffix | MO2 |
 | Check box, icon, description | none | MO2 draws a separator as a heading |
-| Identity | the separator's name | |
+| Identity | the row's kind and the separator's name | |
 
 ### Overwrite
 
@@ -70,7 +70,8 @@ row goes with it. *ruling; MO2*
 | Icon | `$(folder)`, tinted when it holds files | tinted, no badge |
 | Tooltip | what Overwrite is: the files tools wrote while MO2 ran them, which win over every mod | MO2 |
 
-Overwrite is not a mod: it has no check box and cannot be dragged.
+Overwrite is always a row, even when it holds nothing. It is not a mod: it has no check box and
+cannot be dragged. *ruling; MO2*
 
 ## Order and view state
 
@@ -93,7 +94,8 @@ story 4).
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
 1. With no mods and no separators, a message saying so, and that install or create empty mod, in the
-   title bar's overflow, adds one. *catalog Where*
+   title bar's overflow, adds one. Overwrite is always a row, so the message is the view's message
+   line, above it. *catalog Where*
 2. The title bar's gestures absent while the folder is not an instance. *No dead entries*
 
 ## Menus and keys
@@ -128,12 +130,14 @@ As a user, I want:
 As a user, I want:
 
 1. To drag mods and separators, one or several. A separator brings every mod it holds. *MO2*
-2. A drop on a mod to place what I dragged directly above it, as shown, in that mod's separator.
+2. A drop of mods on a mod to place them directly above it, as shown, in that mod's separator.
 3. A drop on a separator to make the mods I dragged its first mods, as shown. A separator dropped on
    a separator lands directly above it, as shown.
-4. A drop below the last row to place what I dragged at the bottom of the view, as shown.
-5. A drop on Overwrite, on a row I am dragging, or inside a separator I am dragging to change
-   nothing. *Doing nothing is not an error; collected in the CLAUDE.md review*
+4. A drop below the last row to place what I dragged at the bottom of the view, as shown, above
+   Overwrite when Overwrite is last.
+5. A drop where what I dragged cannot go to change nothing and say nothing: on Overwrite, on a row
+   I am dragging, inside a separator I am dragging, or a separator on a mod. *MO2 refuses a
+   separator on a mod; Doing nothing is not an error; collected in the CLAUDE.md review*
 6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *ruling;
    mo2.md*
 
@@ -143,9 +147,14 @@ A drop is `move`, so it is one gesture however it lands (commands.md, Entry poin
 
 ### Move
 
-As a user, I want a pick of the places to move to: "Ungrouped", then each separator in the order the
-view shows them, the current one marked. The mods become that separator's first mods, as shown. Esc
-moves nothing. *catalog `move`, target Option; MO2's Send to Separator*
+As a user, I want:
+
+1. For mods, a pick of the places to move to: "Ungrouped", then each separator in the order the view
+   shows them, the current one marked. The mods become that separator's first mods, as shown.
+   *catalog `move`, target Option; MO2's Send to Separator*
+2. For a separator, a pick of the other separators, in the order the view shows them. The separator
+   and its mods land directly above the one I choose, as shown.
+3. Esc to move nothing. *Esc changes nothing*
 
 ### Add separator
 
@@ -153,9 +162,9 @@ As a user, I want:
 
 1. A prompt for the name. Esc or an empty name adds nothing. A name another separator has is refused
    in the prompt: "A separator with this name already exists". *MO2*
-2. On a mod, the separator directly below that mod, as shown, taking the mods below it in that
-   separator. On a separator, directly below that separator's last mod, taking none. *catalog
-   `add`, position below*
+2. On a mod, the separator directly above that mod, as shown, so the mod and the mods below it in its
+   separator join the new one. On a separator, directly below that separator's last mod, taking
+   none. *ruling; catalog `add`, position*
 
 ### Rename separator
 

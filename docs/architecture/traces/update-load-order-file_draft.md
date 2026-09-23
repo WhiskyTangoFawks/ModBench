@@ -56,14 +56,16 @@ As a user, I want:
 ## mod move
 
 1. Mods and separators moved in mod order. *catalog Meaning*
-2. A target that is not a valid place refused, and nothing moved. *Refuse, do not repair*
+2. A target that is not a valid place refused, and nothing moved. A drop there changes nothing and
+   says nothing instead ([mods.md](../surfaces/mods.md), Drag and drop). *Refuse, do not repair*
 
 Options: a separator (built). Top, bottom, priority N, and first or last conflict are planned.
 *catalog Options*
 
 ## separator add, rename, delete
 
-1. A separator added below the mod or separator I chose. *catalog Options*
+1. A separator added above the mod I chose, which joins it, or below the separator I chose, after its
+   mods. *catalog Options*
 2. A separator renamed. *catalog Meaning*
 3. A deleted separator to leave its mods in place. They join the separator above, or become ungrouped
    when it was the first. *catalog Meaning*
@@ -74,8 +76,9 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 
 ## mod uninstall
 
-1. The mod's folder moved to the system trash, and its line removed. *catalog Meaning; MO2's recycle
-   bin*
+1. The mod's folder moved to the system trash, then its line removed. A failed trash changes nothing
+   and says why. A line left after the trash is a line whose folder is gone, which the next watch
+   hands to `prune mod`. *catalog Meaning; MO2's recycle bin; ADR-0015, invariant 2*
 2. To be asked first. *Confirm what destroys*
 3. The downloaded file it was installed from marked uninstalled in its `.meta`, so MO2's Downloads
    tab agrees. A failure there does not fail the uninstall; it is a line in the Output. *ADR-0017,
