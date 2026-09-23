@@ -159,7 +159,7 @@ first. The file for that template lists the gesture with its reason.
 
 | Surface | xEdit template | MO2 template | What it shows |
 |---|---|---|---|
-| Toolbox | main menu | toolbar, run box, profile combo | to write |
+| Toolbox | main menu | toolbar, run box, profile combo | [toolbox.md](surfaces/toolbox.md) |
 | Mods | - | mod list | [mods.md](surfaces/mods.md) |
 | Plugins | navigator | plugin list | [plugins.md](surfaces/plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
@@ -199,7 +199,7 @@ Offered on Toolbox. Run entries are not an object yet; the run-list gestures nam
 | set up instance | writes | Toolbox: context menu | - | instance | - | none | Create `mods/`, `profiles/`, `modlist.txt` and the config for a new instance. | planned | - |
 | track modlist | writes | ? | - | instance | - | none | Put the modlist under git, and rebuild it from git state and download targets. The design is open. | planned | - |
 | log in | writes | Toolbox: dialog answer | - | - | - | MO2 settings | Store a Nexus API key in VS Code's secret storage. | planned | - |
-| run script | runs | ? | - | script | debug | xEdit navigator | Run a Python script over the load order, a record or a plugin. Option: run it under the debugger. | planned | - |
+| run script | runs | Plugins: ? | - | script | debug | xEdit navigator | Run a Python script over the load order, a record or a plugin. Option: run it under the debugger. | planned | - |
 | cancel | ? | Toolbox: context menu, key; Downloads: context menu, key | - | a running operation: a download, Track, a large copy | - | MO2 Downloads | Stop a running operation. | planned | - |
 
 ## Profile

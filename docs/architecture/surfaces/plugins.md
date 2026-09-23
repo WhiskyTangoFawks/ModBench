@@ -291,6 +291,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `move` from the menu, with its targets: top, bottom, priority N | the catalog's planned Options |
 | `highlight origin`, `open details` on a plugin's mod | their design |
 | `repair`, `validate`, sort rules, `apply suggested sort`, `rename`, `relink source`, `remove source` | their design |
+| `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
 | `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
 | Editing a plugin's header | the catalog's planned `edit field` |
 
