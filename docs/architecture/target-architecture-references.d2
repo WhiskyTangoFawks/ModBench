@@ -16,18 +16,18 @@ medit_driving.http -> medit_kernel.ports {class: ref}
 medit_driving.watcher -> medit_core.commands {class: ref}
 medit_driving.watcher -> medit_kernel.loadorder {class: ref}
 medit_driving.watcher -> medit_driven.index {class: ref}
-medit_driving.watcher -> medit_driven.sourcerepo {class: ref}
+medit_driving.watcher -> medit_driven.sourceadapter {class: ref}
 medit_driving.watcher -> medit_data.plugin {class: store}
 medit_driving.watcher -> medit_data.source {class: store}
 medit_driving.watcher -> modbench_data.mo2 {class: store}
 # mEdit: core (the kernel by the band's rule, not drawn)
-medit_core.commands -> medit_driven.sourcerepo {class: ref}
+medit_core.commands -> medit_driven.sourceadapter {class: ref}
 medit_core.commands -> medit_driven.pluginadapter {class: ref}
 medit_core.queries -> medit_driven.index {class: ref}
 # mEdit: driven adapters (the kernel by the band's rule, not drawn)
-medit_driven.index -> medit_driven.sourcerepo {class: ref}
+medit_driven.index -> medit_driven.sourceadapter {class: ref}
 medit_driven.index -> medit_driven.pluginadapter {class: ref}
-medit_driven.sourcerepo -> medit_data.source {class: store}
+medit_driven.sourceadapter -> medit_data.source {class: store}
 medit_driven.pluginadapter -> medit_data.plugin {class: store}
 # the wire between the processes
 medit_drivers.panel -> medit_driving.http {class: outside}

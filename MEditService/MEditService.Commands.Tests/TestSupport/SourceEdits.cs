@@ -1,7 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

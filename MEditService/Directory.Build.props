@@ -29,7 +29,7 @@
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.LoadOrder'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Ports'">true</MutagenBanIncluded>
     <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Index'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.SourceRepo'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.SourceAdapter'">true</MutagenBanIncluded>
     <!-- Every production box, by the same naming rule the architecture gates read the solution
          with: a test project ends in .Tests, and TestSupport is the shared fixture library. -->
     <SyncOverAsyncBanIncluded Condition="!$(MSBuildProjectName.EndsWith('.Tests')) And '$(MSBuildProjectName)' != 'MEditService.TestSupport'">true</SyncOverAsyncBanIncluded>

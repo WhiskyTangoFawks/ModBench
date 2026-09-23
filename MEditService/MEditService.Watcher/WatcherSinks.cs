@@ -1,7 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Watcher;

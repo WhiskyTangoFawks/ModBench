@@ -36,7 +36,7 @@ driven -> data: {class: ref}
 data -> driving: "watch" {class: signal}
 kernel -> driving: "push" {class: push}
 
-fx_driven.index -> fx_driven.sourcerepo: "same band"
+fx_driven.index -> fx_driven.sourceadapter: "same band"
 """
 
 
@@ -82,7 +82,7 @@ class ReferenceViewAgainstLayers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_fixture(
                 pathlib.Path(tmp),
-                "fx_driven.index -> fx_driven.sourcerepo {class: ref}\n",
+                "fx_driven.index -> fx_driven.sourceadapter {class: ref}\n",
                 {},
             )
             self.assertEqual(cl.run(root), [])

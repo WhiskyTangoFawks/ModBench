@@ -68,7 +68,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB" {class: derived}
   }
-  sourcerepo: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
+  sourceadapter: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
   pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {

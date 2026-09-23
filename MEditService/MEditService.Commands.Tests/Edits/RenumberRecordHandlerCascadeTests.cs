@@ -1,5 +1,5 @@
 using MEditService.Commands.Edits;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests.Edits;
 

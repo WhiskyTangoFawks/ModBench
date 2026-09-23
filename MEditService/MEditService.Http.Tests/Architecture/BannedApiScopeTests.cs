@@ -21,7 +21,7 @@ public sealed class BannedApiScopeTests
         "MEditService.LoadOrder",
         "MEditService.Ports",
         "MEditService.Queries",
-        "MEditService.SourceRepo",
+        "MEditService.SourceAdapter",
         "MEditService.Watcher",
     ];
 

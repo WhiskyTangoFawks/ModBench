@@ -1,4 +1,4 @@
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.Watcher.Tests.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;

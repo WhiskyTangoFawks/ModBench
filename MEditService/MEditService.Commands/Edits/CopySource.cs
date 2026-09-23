@@ -3,7 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;

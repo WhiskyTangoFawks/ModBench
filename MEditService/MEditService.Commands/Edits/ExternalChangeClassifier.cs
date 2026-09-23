@@ -1,6 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
 

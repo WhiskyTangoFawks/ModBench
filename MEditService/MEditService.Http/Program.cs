@@ -13,7 +13,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Queries;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.Watcher;
 using Serilog;
 using Serilog.Events;

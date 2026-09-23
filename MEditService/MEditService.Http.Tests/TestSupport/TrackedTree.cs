@@ -2,7 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 

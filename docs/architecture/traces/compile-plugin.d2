@@ -11,8 +11,8 @@ http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 source: @../target-architecture.medit_data.source
-sourcerepo: @../target-architecture.medit_driven.sourcerepo
-sourcerepo.label: Source adapter
+sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter.label: Source adapter
 pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
@@ -24,8 +24,8 @@ indexer.label: Indexer
 plugins -> client: compile {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
-source -> sourcerepo: documents {class: compile}
-sourcerepo -> commands: documents {class: compile}
+source -> sourceadapter: documents {class: compile}
+sourceadapter -> commands: documents {class: compile}
 commands -> pluginadapter: bytes {class: compile}
 pluginadapter -> plugin: bytes {class: compile}
 plugin -> watcher: bytes {class: signal}

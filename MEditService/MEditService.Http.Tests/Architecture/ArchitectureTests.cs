@@ -8,7 +8,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Queries;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using MEditService.Watcher;
 
@@ -438,7 +438,7 @@ public sealed class ArchitectureTests
     private static readonly string[] Projects =
     ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

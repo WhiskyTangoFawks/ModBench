@@ -17,11 +17,11 @@ public sealed class SourcePathLiteralScanTests
     private static readonly string[] ScannedRoots =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
 
     // The repository's own files: the partials of SourceRepository — only inside Source itself.
     private const string RepositoryFilePrefix = "SourceRepository";
-    private const string RepositoryFolder = "MEditService.SourceRepo";
+    private const string RepositoryFolder = "MEditService.SourceAdapter";
 
     private const string AllowlistPath = "MEditService.Http.Tests/Architecture/source-path-allowlist.txt";
 
@@ -42,9 +42,9 @@ public sealed class SourcePathLiteralScanTests
         var root = Directory.CreateTempSubdirectory("medit-source-path-scan-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceRepo", "obj"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.SourceRepo", "SourceRepositoryLayout.cs"),
+                Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"),
                 "internal const string RootFolderName = \"source\";\n"
                 + "internal const string RecordDataFileName = \"RecordData.json\";\n");
             Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
@@ -57,7 +57,7 @@ public sealed class SourcePathLiteralScanTests
             File.WriteAllText(
                 Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"source\";");
 
-            var counts = Counts(root, ["MEditService.SourceRepo", "Layer"]);
+            var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
 
             Assert.Equal(
                 ["Layer/EditService.cs: \"source\": 1", "Layer/SourceRepositoryRival.cs: \"source\": 1"],

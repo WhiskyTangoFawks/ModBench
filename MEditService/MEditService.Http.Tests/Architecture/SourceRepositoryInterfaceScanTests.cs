@@ -11,9 +11,9 @@ public sealed class SourceRepositoryInterfaceScanTests
     private static readonly string[] ProductionRoots =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
 
-    private const string RepositoryRoot = "MEditService.SourceRepo";
+    private const string RepositoryRoot = "MEditService.SourceAdapter";
 
     // The git CLI and the object name it prints, the meta.ini reader, the unit a path resolves to and
     // the resolver answering one, the tree reader, the writer, then the verbs beneath the documents.

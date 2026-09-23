@@ -11,7 +11,7 @@
 #   bash ../.claude/skills/mutation-test/stryker/run.sh --box <Box> --diff-only    # narrow to diffed lines
 #
 # <Box> is one of the ten production projects (Codec, Commands, Http, Index, LoadOrder,
-# PluginAdapter, Ports, Queries, SourceRepo, Watcher). The generated config names exactly one test
+# PluginAdapter, Ports, Queries, SourceAdapter, Watcher). The generated config names exactly one test
 # project, MEditService.<Box>.Tests, and mutates exactly one production project, MEditService.<Box>.
 #
 # Exit: 0/1/2/3 — see stryker.md's table. 1 and 3 are not failures (survivors await
@@ -28,7 +28,7 @@ RUN_CONFIG=".stryker-run.json"
 BOX_EXCLUSIONS_Queries='!**/MEditService.Queries/RecordQueryService.cs'
 BOX_EXCLUSIONS_Ports='!**/MEditService.Ports/LoadOrderStatus.cs'
 
-VALID_BOXES="Codec Commands Http Index LoadOrder PluginAdapter Ports Queries SourceRepo Watcher"
+VALID_BOXES="Codec Commands Http Index LoadOrder PluginAdapter Ports Queries SourceAdapter Watcher"
 
 BOX=""
 FILE_FILTER=""

@@ -2,7 +2,7 @@ using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Index;
 
