@@ -194,10 +194,7 @@ async function pickCopyDestination(
     });
     return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
   } catch (error) {
-    const detail = errorMessage(error);
-    // gesture goes in `detail`, not `message` — it's context for the Output channel, not
-    // something the toast (already carrying `detail`) needs to repeat.
-    reporter.report('error', `Could not look up destination plugins: ${detail}`, gesture);
+    reporter.report('error', 'Could not look up destination plugins.', errorMessage(error));
     return undefined;
   }
 }

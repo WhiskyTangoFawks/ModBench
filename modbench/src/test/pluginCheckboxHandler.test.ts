@@ -53,7 +53,7 @@ describe('onPluginCheckboxChanged', () => {
 
     expect(channel.error).toHaveBeenCalledWith(
       '[pluginListTree.checkbox] error: Failed to update "TestMod.esp". — disk full');
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to update "TestMod.esp".');
+    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to update "TestMod.esp". — disk full');
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 

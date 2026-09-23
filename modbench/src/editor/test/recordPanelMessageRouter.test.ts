@@ -28,7 +28,7 @@ beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
 }
-const fakeReporter = { report: vi.fn(), landed: vi.fn() };
+const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
 
 // The router's one client covers both editField and the picker's search — rebuilt fresh here so
 // each test starts with `editRecord` answering `{ applied: true }`.

@@ -107,7 +107,7 @@ describe('registerCreatePluginCommand', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Created "MyPatch.esp", but could not add it to the load order — add it manually in the Plugins tree.',
+      message: 'Created "MyPatch.esp", but could not add it to the load order; add it manually in the Plugins tree.',
       detail: 'plugins.txt is read-only',
     }]);
     expect(reporter.landings).toEqual([]);
