@@ -516,8 +516,8 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
-  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+  // that threw spinning forever (ADR-0019).
+  it('settles a failed first read on the one error row naming the reason, raises nothing, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const reporter = recordingReporter();
     const { tree } = makeTree([], { instance, reporter });
@@ -527,17 +527,17 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(present(rows[0], 'the sole rendered row').label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EISDIR: illegal operation on a directory, read plugins.txt' },
-    ]);
+    const error = expectInstanceOf(rows[0], ErrorNode);
+    expect(error.label).toBe('Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
+    expect(error.tooltip).toBe('EISDIR: illegal operation on a directory, read plugins.txt');
+    expect(error.iconPath).toEqual(new ThemeIcon('error'));
+    expect(reporter.reports).toEqual([]);
 
     instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
     const after = await within(tree.getChildren(), 500);
 
     expect(after.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
-    expect(reporter.reports).toHaveLength(1);
+    expect(reporter.reports).toEqual([]);
   });
 
   // A genuinely empty plugins.txt (sequence already past 0) is not "not read yet" — it must
@@ -1552,7 +1552,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const children = await h.tree.getChildren(row);
 
     expect(children).toHaveLength(1);
-    expect(expectInstanceOf(children[0], ErrorNode).label).toBe('⚠ Failed to load: boom');
+    expect(expectInstanceOf(children[0], ErrorNode).label).toBe('Failed to load: boom');
   });
 
   it('forwards the record browser targeted change events, so a load-more refreshes one parent', async () => {

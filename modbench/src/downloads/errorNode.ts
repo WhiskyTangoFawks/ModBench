@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 export class ErrorNode extends vscode.TreeItem {
   readonly kind = 'error' as const;
   constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
+    super(`Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'error';
     this.tooltip = message;
     this.iconPath = new vscode.ThemeIcon('error');

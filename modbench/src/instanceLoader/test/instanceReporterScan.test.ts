@@ -1,5 +1,5 @@
 // ADR-0015: the Instance keeps a read failure in its value for a subscriber to render, and
-// reports nothing itself — that channel belongs to a view wrapping it (instanceFirstRead.ts).
+// raises no notification: a failed read is its one Output line (ADR-0019's background tier).
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -36,7 +36,7 @@ describe('the Instance imports no reporter', () => {
   });
 
   // Rival this catches: a recompute failure reported straight from the Instance instead of
-  // being left in `readFailure` for a subscriber (or instanceFirstRead.ts) to surface. Calls
+  // being left in `readFailure` for a subscriber to render. Calls
   // `reporterImportsIn` on a real file, so gutting that function cannot leave this test passing.
   it('flags a reporter import planted in a real file', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-instance-reporter-scan-'));

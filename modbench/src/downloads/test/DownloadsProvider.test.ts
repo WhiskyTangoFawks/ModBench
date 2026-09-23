@@ -14,7 +14,6 @@ vi.mock('vscode', () => ({
 
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../errorNode';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
@@ -98,10 +97,10 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 // would see an empty/ENOENT result instead of the fixture rows below.
 const makeProvider = (
   downloads: DownloadFile[],
-  extra: Partial<{ instance: FakeInstance; reporter: DownloadsProviderOptions['reporter'] }> = {},
+  extra: Partial<{ instance: FakeInstance }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instance, reporter: extra.reporter };
+  const options: DownloadsProviderOptions = { instance };
   return new DownloadsProvider(options);
 };
 
@@ -359,28 +358,25 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
-  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+  // that threw spinning forever (ADR-0019).
+  it('settles a failed first read on the one error row naming the reason, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reporter = recordingReporter();
-    const provider = makeProvider([], { instance, reporter });
+    const provider = makeProvider([], { instance });
 
     const pending = provider.getChildren();
     instance.fail('ENOENT: no such file or directory, open modlist.txt');
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(present(rows[0], 'the sole rendered row').label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
-    ]);
+    const error = expectInstanceOf(rows[0], ErrorNode);
+    expect(error.label).toBe('Failed to load: ENOENT: no such file or directory, open modlist.txt');
+    expect(error.tooltip).toBe('ENOENT: no such file or directory, open modlist.txt');
+    expect(error.iconPath).toEqual(new ThemeIcon('error'));
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
     const after = await within(provider.getChildren(), 500);
 
     expect(rowNames(after)).toEqual(['a.zip']);
-    expect(reporter.reports).toHaveLength(1);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {
