@@ -55,6 +55,7 @@ export function createModListView(
     // a modlist entry), so it is not evidence that the term matched anything.
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
+    onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
   // Async only because Refresh's own sequence awaits it (ADR-0014); the profile is a field of
   // the value the Instance already landed, so there is no disk read left to fail.
@@ -92,6 +93,7 @@ export function registerDownloadsView(
     view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
     setFilter: (text) => downloadsProvider.setFilter(text),
     hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
+    onRowsChanged: downloadsProvider.onDidChangeTreeData,
   }));
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [

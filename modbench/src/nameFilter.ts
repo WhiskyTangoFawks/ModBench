@@ -21,6 +21,9 @@ export interface NameFilterDeps {
   hasRows: () => Promise<boolean>;
   /** The Mods tree's group-by-separator option, or absent on views with no option to carry. */
   toggle?: { icon: string; label: string };
+  /** The view's own row-change signal. The message recomputes off it exactly as it does off a
+   *  keystroke, so a row change with nobody typing never leaves it stale. */
+  onRowsChanged?: vscode.Event<unknown>;
 }
 
 export interface NameFilter extends vscode.Disposable {
@@ -93,6 +96,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
     // Clearing resets the separator toggle too: the option belongs to the filter that is going away.
     vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
+    ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
   ];
 
   return {

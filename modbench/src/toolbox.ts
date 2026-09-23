@@ -12,7 +12,7 @@ import { Instance } from './instanceLoader/instance';
 import { gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider } from './mods/ModListProvider';
-import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
+import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -156,14 +156,16 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
-// filter's axis over which records appear under an expanded row.
-function registerPluginsNameFilter(
-  view: vscode.TreeView<PluginsTreeNode>, provider: PluginsTreeProvider,
+// filter's axis over which records appear under an expanded row. Exported for its own test;
+// `view` is structural, the same double `NameFilterDeps` itself declares.
+export function registerPluginsNameFilter(
+  view: { description?: string; message?: string }, provider: PluginsTreeProvider,
 ): NameFilter {
   return registerNameFilter({
     view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
+    onRowsChanged: provider.onDidChangeTreeData,
   });
 }
 

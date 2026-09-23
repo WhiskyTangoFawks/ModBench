@@ -83,6 +83,19 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
 
 const open = async () => { await present(h.state.commands.get(OPEN), "the filter's open command")(); };
 const clear = async () => { await present(h.state.commands.get(CLEAR), "the filter's clear command")(); };
+
+// A minimal `vscode.Event<unknown>` double: a view's own row-change signal, fired by the test in
+// place of a real provider's `onDidChangeTreeData`.
+function fakeRowsChangedEvent() {
+  const handlers: ((e: unknown) => void)[] = [];
+  return {
+    event: (cb: (e: unknown) => void) => {
+      handlers.push(cb);
+      return { dispose: () => { const i = handlers.indexOf(cb); if (i >= 0) handlers.splice(i, 1); } };
+    },
+    fire: () => handlers.forEach((cb) => cb(undefined)),
+  };
+}
 const currentBox = () => present(h.state.boxes.at(-1), 'the most recently created input box');
 
 beforeEach(() => {
@@ -246,6 +259,27 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBe('No matches for "zzz".');
   });
 
+  // The message follows the rows, not the keystrokes — a view's own row-change signal (a new
+  // instance value, a toggle) recomputes it in both directions with no keystroke at all.
+  it('recomputes on refresh alone, in both directions, with no keystroke between the two flips', async () => {
+    let matches = false;
+    const { view, filter } = setup({ hasRows: () => Promise.resolve(matches) });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    matches = true; // a row change lands elsewhere — nothing here types anything
+    filter.refresh();
+    await flush();
+    expect(view.message).toBeUndefined();
+
+    matches = false; // and back — the same row change reversing, still no keystroke
+    filter.refresh();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
   it('leaves the message alone when no filter is active — the view has other things to say', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     view.message = 'Loading plugins…';
@@ -253,6 +287,54 @@ describe('a term that matches nothing says so', () => {
     currentBox().hide();
     await flush();
     expect(view.message).toBe('Loading plugins…');
+  });
+});
+
+describe('the message follows the view\'s own row-change signal', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('recomputes in both directions off onRowsChanged alone, with no keystroke at all', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz'); // establishes an active term; the term itself never changes again
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBeUndefined();
+
+    matches = false;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('does nothing while no filter is active — a provider free to fire whenever must not conjure a message', async () => {
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(false), onRowsChanged: rows.event });
+    rows.fire();
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  it('stops recomputing once the filter is disposed, alongside its commands', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view, filter } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    filter.dispose();
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
   });
 });
 
