@@ -29,8 +29,10 @@
    not carry, a placed reference's cell or a cell's block, is GRUP structure read into tables
    beside the records at ingest, so placement is read-only. A write that cannot be honored leaves
    the file and the record index exactly as they were.
-6. **The webview decides nothing.** It renders a cell from the metadata, names no game, holds no
-   default beyond what an omitted member means, and posts what the user asked for. The codec and
+6. **The webview owns the view and decides nothing.** It derives what it shows from what it is
+   given: the metadata, the values and the lists mEdit sends. It renders a cell from the metadata,
+   names no game, holds no default beyond what an omitted member means, and posts what the user
+   asked for. The codec and
    a short closed list of pre-checks that need only the schema refuse on the server; anything not
    on that list is not a check. A value's resolution arrives with it, because a link affordance is
    decided before the hover
