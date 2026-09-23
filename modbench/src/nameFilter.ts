@@ -21,8 +21,6 @@ export interface NameFilterDeps {
   hasRows: () => Promise<boolean>;
   /** The Mods tree's group-by-separator option, or absent on views with no option to carry. */
   toggle?: { icon: string; label: string };
-  /** The view's own row-change signal. The message recomputes off it exactly as it does off a
-   *  keystroke, so a row change with nobody typing never leaves it stale. */
   onRowsChanged?: vscode.Event<unknown>;
 }
 
@@ -46,20 +44,23 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
   };
 
-  // Only ever clears a message it put there itself: the reconcile writes the same property.
-  // `generation` drops a `hasRows` answer a later keystroke has already overtaken.
-  let generation = 0;
-  let messageShown = false;
-  const renderMessage = async (): Promise<void> => {
+  // `lastWritten` is what this filter itself last put on the line — a row change leaves the line
+  // alone once something else holds it; `refresh` is the one caller that takes it regardless.
+  let generation = 0; // drops a `hasRows` answer a later call has already overtaken
+  let lastWritten: string | undefined;
+  const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
+  const renderMessage = async (force = false): Promise<void> => {
     const mine = ++generation;
     const empty = term !== '' && !(await deps.hasRows());
     if (mine !== generation) return;
+    if (!force && !ownsMessage()) return;
     if (empty) {
-      deps.view.message = `No matches for "${term}".`;
-      messageShown = true;
-    } else if (messageShown) {
+      const text = `No matches for "${term}".`;
+      deps.view.message = text;
+      lastWritten = text;
+    } else if (lastWritten !== undefined) {
       deps.view.message = undefined;
-      messageShown = false;
+      lastWritten = undefined;
     }
   };
 
@@ -101,7 +102,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
 
   return {
     setBaseDescription: (text) => { base = text; render(); },
-    refresh: () => { render(); void renderMessage(); },
+    refresh: () => { render(); void renderMessage(true); },
     dispose: () => { for (const d of disposables) d.dispose(); },
   };
 }

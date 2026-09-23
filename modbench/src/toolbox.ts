@@ -156,8 +156,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
-// filter's axis over which records appear under an expanded row. Exported for its own test;
-// `view` is structural, the same double `NameFilterDeps` itself declares.
+// filter's axis over which records appear under an expanded row.
 export function registerPluginsNameFilter(
   view: { description?: string; message?: string }, provider: PluginsTreeProvider,
 ): NameFilter {

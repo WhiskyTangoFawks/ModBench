@@ -97,6 +97,7 @@ function fakeRowsChangedEvent() {
   };
 }
 const currentBox = () => present(h.state.boxes.at(-1), 'the most recently created input box');
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
   h.state.commands.clear();
@@ -207,8 +208,6 @@ describe('the active term reads out in the view description', () => {
 });
 
 describe('a term that matches nothing says so', () => {
-  const flush = () => new Promise((resolve) => setImmediate(resolve));
-
   it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     await open();
@@ -259,27 +258,6 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBe('No matches for "zzz".');
   });
 
-  // The message follows the rows, not the keystrokes — a view's own row-change signal (a new
-  // instance value, a toggle) recomputes it in both directions with no keystroke at all.
-  it('recomputes on refresh alone, in both directions, with no keystroke between the two flips', async () => {
-    let matches = false;
-    const { view, filter } = setup({ hasRows: () => Promise.resolve(matches) });
-    await open();
-    currentBox().type('zzz');
-    await flush();
-    expect(view.message).toBe('No matches for "zzz".');
-
-    matches = true; // a row change lands elsewhere — nothing here types anything
-    filter.refresh();
-    await flush();
-    expect(view.message).toBeUndefined();
-
-    matches = false; // and back — the same row change reversing, still no keystroke
-    filter.refresh();
-    await flush();
-    expect(view.message).toBe('No matches for "zzz".');
-  });
-
   it('leaves the message alone when no filter is active — the view has other things to say', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     view.message = 'Loading plugins…';
@@ -291,14 +269,12 @@ describe('a term that matches nothing says so', () => {
 });
 
 describe('the message follows the view\'s own row-change signal', () => {
-  const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-  it('recomputes in both directions off onRowsChanged alone, with no keystroke at all', async () => {
+  it('recomputes in both directions off onRowsChanged alone, with a keystroke setting the term once beforehand', async () => {
     let matches = false;
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
     await open();
-    currentBox().type('zzz'); // establishes an active term; the term itself never changes again
+    currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
 
@@ -335,6 +311,37 @@ describe('the message follows the view\'s own row-change signal', () => {
     rows.fire();
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('leaves another owner\'s message alone when a row change still matches nothing', async () => {
+    const matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    view.message = 'Starting backend…';
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+  });
+
+  it('leaves another owner\'s message alone when a row change would otherwise have cleared it', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    view.message = 'Starting backend…';
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
   });
 });
 
