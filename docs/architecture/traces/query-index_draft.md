@@ -61,11 +61,7 @@ As a user, I want:
    fetch. I did not copy the wording. Do you want exact text?
 4. **The title count.** The old spec shows `Referenced By (N)` with N as groups, and no count when unknown.
    Accept?
-5. **Partial results.** The old spec shows a banner when a record opens before the conflict sweep has
-   finished. Accept?
-6. **Excluded record types.** Some signatures are not indexed, so their references do not show.
+5. **Excluded record types.** Some signatures are not indexed, so their references do not show.
    Ledger row, or a story?
-7. **Open on a reference.** The catalog puts "Go to Record" in the context menu only. No story
-   needed?
-8. **Referenced By actions.** The old spec offers Open, Open to the Side and Copy on a group, and defers
+6. **Referenced By actions.** The old spec offers Open, Open to the Side and Copy on a group, and defers
    the rest. Accept?

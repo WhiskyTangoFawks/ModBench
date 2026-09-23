@@ -6,10 +6,13 @@ user arrives fluent in it. [The xEdit UX audit](../research/xedit-ux-audit.md) a
 
 ## Strategic invariants
 
-1. **Where xEdit has an answer, mEdit adopts it.** A divergence needs a platform limitation that
-   cannot be worked around, or a maintainer ruling, and every divergence is on
-   [the register](../out-of-scope/xedit.md). Nicer, cleaner or more modern is not a reason. Mod
-   Management has no xEdit counterpart and follows MO2
+1. **xEdit decides what, VS Code decides how.** Where xEdit has an answer for what a record shows,
+   what a gesture does and what it is called, mEdit adopts it. How the user reaches a gesture
+   (keys, navigation, tabs, menus and selection) follows VS Code. A departure from xEdit's what
+   needs a platform limitation or a maintainer ruling, and is on
+   [the register](../out-of-scope/xedit.md). Nicer, cleaner or more modern is not a reason. An
+   xEdit gesture that VS Code already provides, or that only repeats another, is an omission on
+   the register. Mod Management has no xEdit counterpart and follows MO2
    ([ADR-0017](0017-mo2-is-the-reference-for-mod-management.md)).
 2. **Baseline, not ceiling.** The rule governs replacing xEdit's answers, not adding what xEdit
    never had. An addition is opt-in behind an explicit affordance, the default stays xEdit's, no

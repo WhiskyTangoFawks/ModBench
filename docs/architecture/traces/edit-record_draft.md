@@ -95,5 +95,3 @@ The panel re-reading is tested in [index-load-order_draft.md](index-load-order_d
    any plugin that already holds the record. Accept?
 7. **Copy to `new`.** The old spec keeps the source EditorID and takes the next free FormID. The
    catalog notes a contradiction between two tickets about prompting for an EditorID.
-8. **Editor gestures.** The old spec defines click, F2, drag, paste, cut and the keys. They are a
-    surface document, not a contract. Where should they live?

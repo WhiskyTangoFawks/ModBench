@@ -2,7 +2,7 @@
 
 Diagram: [decompile-plugin.d2](decompile-plugin.d2). It draws the detection and the question as
 the system trigger, because they are how the command is fired, and the command is one. Catalog rows: `track`
-under Mod, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
+under Mod and under Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
 [commands.md](../commands.md). Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-the-plugin-is-the-source-of-truth.md),
@@ -31,19 +31,23 @@ As a user, I want:
 5. My own concurrent change preserved and named, never reverted. *ADR-0003, invariant 4*
 6. Review and commit to be git's own, in the Source Control panel. *ADR-0007, invariant 5*
 
-## track: the destination is a new repository
+## track: the destination is the mod's repository
 
-1. Track offered only for a mod that is untracked, which means no `.git` in its folder. *catalog Where;
-   ADR-0007, invariant 2*
-2. To choose a preset: `Edits` or `Everything`. *catalog Options*
-3. Track to be my own deliberate gesture, with no confirmation. *ADR-0007, invariant 2*
-4. The pristine state committed to `main`, and the edit branch checked out. *ADR-0007, invariant 2*
-5. The baseline commit to carry the upstream version and the binary's hash as trailers. *ADR-0007,
+1. Track offered on a plugin that is untracked, and on a mod that holds one. *catalog Where; ADR-0007,
+   invariant 2*
+2. Track on a plugin to track that plugin alone, creating the mod's repository if it has none. Track
+   on a mod to track every untracked plugin it holds. *ADR-0007, invariant 2*
+3. Tracking a plugin into a mod that already has a repository to do only what track does. Keeping
+   `main` and the edit branch in order when several plugins share a repository is mine. *ruling*
+4. To choose a preset: `Edits` or `Everything`. *catalog Options*
+5. Track to be my own deliberate gesture, with no confirmation. *ADR-0007, invariant 2*
+6. The pristine state committed to `main`, and the edit branch checked out. *ADR-0007, invariant 2*
+7. The baseline commit to carry the upstream version and the binary's hash as trailers. *ADR-0007,
    invariant 6*
-6. `meta.ini` never tracked, because one MO2 update check rewrites it across every mod. *ADR-0007,
+8. `meta.ini` never tracked, because one MO2 update check rewrites it across every mod. *ADR-0007,
    invariant 7*
-7. The `.gitignore` generated once, and then mine. *ADR-0007, invariant 7*
-8. The mod to appear in Source Control as one group. *ADR-0007, invariant 5*
+9. The `.gitignore` generated once, and then mine. *ADR-0007, invariant 7*
+10. The mod to appear in Source Control as one group. *ADR-0007, invariant 5*
 
 ## The external change: how the destination is chosen
 
@@ -61,7 +65,8 @@ The trigger is the watcher settling a tracked mod that changed.
 6. While the question is open, every plugin of the mod to refuse writes, including compile, because a
    compile would overwrite the evidence. *ADR-0003, invariant 3*
 7. Bytes I restore by hand to end the question with no answer. *ADR-0003, invariant 3*
-8. A mod whose `.git` has gone to read as untracked, with no question, so Track applies again.
+8. A mod whose `.git` has gone to read as untracked, with every plugin in it, with no question, so
+   Track applies again.
    *ADR-0007, invariant 2*
 9. A refusal to leave the question open, so the other answer is still available. *Refuse, do not
    repair*
