@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventE
 import { ToolboxProvider, type ToolboxDeps, type ToolboxState } from '../ToolboxProvider';
 import { present } from '../ports/present';
 
-const VALUE: ToolboxState = { activeProfile: 'Default', deployed: false };
+const VALUE: ToolboxState = { activeProfile: 'Default' };
 
 function makeProvider(overrides: Partial<ToolboxDeps> = {}) {
   return new ToolboxProvider({
@@ -27,7 +27,7 @@ describe('ToolboxProvider', () => {
   it('never renders an mEdit row', () => {
     const rows = makeProvider().getChildren();
 
-    expect(rows.map((r) => r.label)).toEqual(['Profile', 'Deployment']);
+    expect(rows.map((r) => r.label)).toEqual(['Profile']);
   });
 
   it('refresh() fires the change event VS Code re-renders the tree on', () => {
@@ -41,7 +41,7 @@ describe('ToolboxProvider', () => {
   });
 
   it('reads the active profile out of the value as a row that activates Switch Profile', () => {
-    const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival', deployed: false }) }).getChildren();
+    const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival' }) }).getChildren();
     const row = present(profile, 'the Profile row');
 
     expect(row.description).toBe('Survival');
@@ -51,25 +51,17 @@ describe('ToolboxProvider', () => {
   // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
   // names no profile, and the row must say so rather than inventing one.
   it('reads out an em-dash while the value names no profile yet', () => {
-    const [profile] = makeProvider({ state: () => ({ activeProfile: '', deployed: false }) }).getChildren();
+    const [profile] = makeProvider({ state: () => ({ activeProfile: '' }) }).getChildren();
 
     expect(present(profile, 'the Profile row').description).toBe('—');
   });
 
-  it('offers Deploy from the deployment row while the value says nothing is deployed', () => {
-    const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: false }) }).getChildren();
+  // The alpha leaves deploy, purge and run with the mod manager, so no value, whatever profile
+  // it names, reads out a deployment or offers one.
+  it.each(['Default', 'Survival', ''])('shows no Deployment row for a value naming profile %j', (activeProfile) => {
+    const rows = makeProvider({ state: () => ({ activeProfile }) }).getChildren();
 
-    expect(rows).toHaveLength(2);
-    const deployment = present(rows[1], 'the Deployment row');
-    expect(deployment.description).toBe('not deployed');
-    expect(present(deployment.command, 'the Deployment row\'s command').command).toBe('modbench.toolbox.deploy');
-  });
-
-  it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', () => {
-    const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: true }) }).getChildren();
-
-    const deployment = present(rows[1], 'the Deployment row');
-    expect(deployment.description).toBe('deployed');
-    expect(deployment.command).toBeUndefined();
+    expect(rows.map((r) => r.label)).toEqual(['Profile']);
+    expect(rows.map((r) => r.command?.command)).toEqual(['modbench.toolbox.switchProfile']);
   });
 });

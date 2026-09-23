@@ -123,7 +123,7 @@ describe('the Toolbox owns every disposable it constructs', () => {
 
   it('finds the registrations at all — an empty scan would pass vacuously', () => {
     expect([...readFileSync(TOOLBOX, 'utf8').matchAll(/\bown(?:All)?\(/g)].length).toBeGreaterThan(15);
-    expect([...readFileSync(TOOLBOX_COMMANDS, 'utf8').matchAll(/\bregisterCommand\(/g)].length).toBeGreaterThan(3);
+    expect([...readFileSync(TOOLBOX_COMMANDS, 'utf8').matchAll(/\bregisterCommand\(/g)].length).toBeGreaterThan(0);
   });
 
   // Rival this catches: one disposable dropped from the Toolbox's teardown list.

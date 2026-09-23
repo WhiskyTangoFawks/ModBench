@@ -476,9 +476,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
-  ownAll(own, registerToolboxCommands({
-    instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask,
-  }));
+  ownAll(own, registerToolboxCommands({ instanceRoot, instance, updateProfileDescription, reporterFor }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
@@ -530,7 +528,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   // ADR-0015: the view's rows are the Instance's value. The provider holds no state and reads
   // no disk, so a landed recompute is the only thing that can change what it shows.
   const provider = new ToolboxProvider({
-    state: () => (mo2 ? { activeProfile: mo2.instance.value.activeProfile, deployed: mo2.instance.value.deployed } : undefined),
+    state: () => (mo2 ? { activeProfile: mo2.instance.value.activeProfile } : undefined),
   });
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   if (mo2) own(mo2.instance.subscribe(() => provider.refresh()));

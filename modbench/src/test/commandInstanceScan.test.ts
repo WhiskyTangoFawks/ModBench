@@ -6,8 +6,8 @@ import { present } from '../ports/present';
 // ADR-0015 invariant 2: commands write and forget. One reading the Instance makes the read model
 // an input to the write side, and a write's own effect comes back to it twice.
 
-// One directory per command box, as the zoom-out draws the Modbench core band.
-const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'deploy'];
+// One directory per command box the zoom-out draws in the Modbench core band and the code builds.
+const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'install'];
 
 // A type the value carries arrives as an argument, so naming one is not reading the model.
 const READ_MODEL_MODULE = join('instance', 'instance');
@@ -34,8 +34,8 @@ const commandModules = (): string[] =>
   });
 
 describe('commands never read the Instance', () => {
-  it('covers every command box the core band draws', () => {
-    expect(COMMAND_BOXES).toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'deploy']);
+  it('covers every command box the core band draws and the code builds', () => {
+    expect(COMMAND_BOXES).toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install']);
     expect(commandModules().length).toBeGreaterThan(COMMAND_BOXES.length);
   });
 

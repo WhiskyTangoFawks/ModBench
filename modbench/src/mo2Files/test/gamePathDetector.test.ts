@@ -5,14 +5,10 @@ vi.mock('node:fs/promises');
 
 import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
 
-// A fixture, not a platform lock (CLAUDE.md): the real facts come from gamePaths.ts and
-// loadOrderDestination.ts; this module takes them as data and names no game itself.
+// A fixture, not a platform lock (CLAUDE.md): the real facts come from gamePaths.ts; this
+// module takes them as data and names no game itself.
 const FO4_APP_ID = '377160';
-const FO4: GameAutodetect = {
-  steamAppId: FO4_APP_ID,
-  steamFolderName: 'Fallout 4',
-  loadOrderAppDataFolder: 'Fallout4',
-};
+const FO4: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
 
 const VDF_WITH_FO4 = `
 "libraryfolders"
@@ -48,16 +44,13 @@ describe('detectGamePaths (Linux)', () => {
     vi.resetAllMocks();
   });
 
-  it('returns correct paths when the library is found', async () => {
+  it('returns the Data folder under the library holding the app', async () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
     const result = await detectGamePaths('linux', FO4);
-    if (result === null) throw new Error('detectGamePaths found the library, so it should not return null');
 
-    expect(result.dataFolder).toBe('/mnt/games/steam/steamapps/common/Fallout 4/Data');
-    expect(result.pluginsTxt).toContain('Fallout4/Plugins.txt');
-    expect(result.pluginsTxt).toContain('/mnt/games/steam/steamapps/compatdata');
+    expect(result).toEqual({ dataFolder: '/mnt/games/steam/steamapps/common/Fallout 4/Data' });
   });
 
   it('returns null when the VDF cannot be read', async () => {
@@ -150,7 +143,7 @@ describe('detectWindowsGamePaths', () => {
     vi.resetAllMocks();
   });
 
-  it('maps a known reg query SteamPath and LOCALAPPDATA to GamePaths', async () => {
+  it('maps a known reg query SteamPath to the Data folder under it', async () => {
     vi.mocked(fs.access).mockResolvedValue(undefined);
     const runRegQuery = () =>
       Promise.resolve(
@@ -158,19 +151,16 @@ describe('detectWindowsGamePaths', () => {
           '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n',
       );
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4);
 
-    expect(result).toEqual({
-      dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data',
-      pluginsTxt: 'C:/Users/Wayne/AppData/Local/Fallout4/Plugins.txt',
-    });
+    expect(result).toEqual({ dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data' });
   });
 
   it('returns null when the reg query output has no SteamPath match', async () => {
     const runRegQuery = () =>
       Promise.resolve('ERROR: The system was unable to find the specified registry key or value.\r\n');
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4);
 
     expect(result).toBeNull();
   });
@@ -178,7 +168,7 @@ describe('detectWindowsGamePaths', () => {
   it('returns null when the registry query itself fails (no reg.exe, no Steam)', async () => {
     const runRegQuery = () => Promise.reject(new Error('ENOENT: reg'));
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
+    const result = await detectWindowsGamePaths(runRegQuery, FO4);
 
     expect(result).toBeNull();
   });

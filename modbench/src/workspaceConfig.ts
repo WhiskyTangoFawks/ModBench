@@ -6,15 +6,10 @@ import { mo2InstanceContext } from './mo2InstanceContext';
  *  context's folder nor to the composition root. */
 export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
-/** The three settings that override where the game is, read fresh on each resolve. Reading them
- *  is all this does: MO2 files decides what they mean. */
+/** The setting that overrides where the game is, read fresh on each resolve. Reading it is all
+ *  this does: MO2 files decides what it means. */
 export function gameDirectoryOverrides(): GameDirectoryOverrides {
-  const c = meditConfig();
-  return {
-    gameDirectory: c.get<string>('mods.gameDirectory'),
-    dataFolder: c.get<string>('game.dataFolderPath'),
-    pluginsTxt: c.get<string>('game.pluginsTxtPath'),
-  };
+  return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
 }
 
 /** The only place either MO2-instance context key is set; the two keys must always travel

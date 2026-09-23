@@ -1,7 +1,7 @@
 {
   "name": "modbench",
   "displayName": "Modbench",
-  "description": "Modbench: install, order, and deploy mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
+  "description": "Modbench: install and order mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
   "version": "0.0.1",
   "publisher": "whiskytangofawks",
   "license": "GPL-3.0-only",
@@ -32,16 +32,6 @@
           "default": 5172,
           "description": "Port the mEdit backend API listens on."
         },
-        "modbench.game.dataFolderPath": {
-          "type": "string",
-          "default": "",
-          "description": "Override: absolute path to the game's Data folder. Leave blank for auto-detect."
-        },
-        "modbench.game.pluginsTxtPath": {
-          "type": "string",
-          "default": "",
-          "description": "Override: absolute path to Plugins.txt. Leave blank for auto-detect."
-        },
         "modbench.scriptsPath": {
           "type": "string",
           "default": "",
@@ -51,7 +41,7 @@
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Game directory to deploy into (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
+          "description": "The game directory (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
         }
       }
     },
@@ -222,24 +212,6 @@
         "command": "modbench.modList.view.losingAtTop",
         "title": "Show Losing Mods at Top",
         "icon": "$(triangle-up)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.toolbox.deploy",
-        "title": "Deploy Mods",
-        "icon": "$(cloud-download)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.toolbox.purge",
-        "title": "Purge Deployed Mods",
-        "icon": "$(clear-all)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.toolbox.launch",
-        "title": "Launch…",
-        "icon": "$(play)",
         "category": "Modbench"
       },
       {
@@ -434,18 +406,6 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "modbench.toolbox.deploy",
-          "when": "modbench.workspaceIsMo2Instance"
-        },
-        {
-          "command": "modbench.toolbox.purge",
-          "when": "modbench.workspaceIsMo2Instance"
-        },
-        {
-          "command": "modbench.toolbox.launch",
-          "when": "modbench.workspaceIsMo2Instance"
-        },
-        {
           "command": "modbench.openHeader",
           "when": "false"
         },
@@ -575,21 +535,6 @@
           "command": "modbench.refresh",
           "when": "view == modbench.toolbox",
           "group": "navigation@1"
-        },
-        {
-          "command": "modbench.toolbox.launch",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
-          "group": "navigation@2"
-        },
-        {
-          "command": "modbench.toolbox.deploy",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
-          "group": "2_deployment"
-        },
-        {
-          "command": "modbench.toolbox.purge",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
-          "group": "2_deployment"
         },
         {
           "command": "modbench.pluginListTree.filter",

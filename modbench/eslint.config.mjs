@@ -141,7 +141,6 @@ export default tseslint.config(
                     './src/pluginsCommands/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
                     './src/install/tsconfig.json',
-                    './src/deploy/tsconfig.json',
                     './src/client/tsconfig.json',
                     './src/mods/tsconfig.json',
                     './src/downloads/tsconfig.json',

@@ -574,9 +574,9 @@ async function switchProfileOutsideModbench(root: string, profile: string): Prom
   await writeFile(path, setSelectedProfileInText(await readFile(path, 'utf8'), profile));
 }
 
-describe('Instance — downloads, profile, game directory and deploy state', () => {
-  it('carries downloads with status and hidden, the active profile, the resolved game directory and release, and deploy state, from one value', async () => {
-    const { root, instance } = await realInstance();
+describe('Instance — downloads, profile and game directory', () => {
+  it('carries downloads with status and hidden, the active profile, the resolved game directory and release, from one value', async () => {
+    const { instance } = await realInstance();
 
     await instance.refresh();
 
@@ -591,12 +591,17 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     expect(instance.value.gameRelease).toBe('Fallout 4');
     expect(instance.value.nexusSlug).toBe('fallout4');
     expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
-    expect(instance.value.deployed).toBe(false);
+  });
 
+  // The alpha leaves deployment with the mod manager, so a deploy manifest under mods/ is just
+  // another file there, and the value carries no deployed state to read out of it.
+  it('carries no deployed state, whether or not a deploy manifest sits under mods/', async () => {
+    const { root, instance } = await realInstance();
     await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));
+
     await instance.refresh();
 
-    expect(instance.value.deployed).toBe(true);
+    expect(instance.value).not.toHaveProperty('deployed');
   });
 
   // The fixture's sidecar claims `installed=true`, and only the Unofficial Patch mod's own
@@ -669,22 +674,6 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.value.unlistedFolders).toEqual([]);
-  });
-
-  // Same reasoning as the downloads case above: `deployed: false` is also the empty value's own
-  // default, so the sequence bump is what proves this recompute — not a caught failure — landed.
-  it('yields a value with deployed false, rather than a failure, when the manifest is absent', async () => {
-    const { root, instance } = await realInstance();
-    await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));
-    await instance.refresh();
-    expect(instance.value.deployed).toBe(true);
-    const before = instance.sequence;
-
-    await rm(join(root, 'mods', '.medit-manifest.json'), { force: true });
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.deployed).toBe(false);
   });
 
   // Same reasoning again: the empty value already has `gameDirectory: undefined`, so a prior

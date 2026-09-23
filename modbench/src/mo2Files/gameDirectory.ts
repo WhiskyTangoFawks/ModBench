@@ -4,7 +4,6 @@
 import { dirname, join } from 'node:path';
 import { readGameName, readGamePath } from '../mo2Codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
-import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { factsOf } from './files';
 import { present } from '../ports/present';
@@ -13,18 +12,12 @@ export interface GameDirectory {
   /** Folder containing the game executable and Data/. */
   root: string;
   dataFolder: string;
-  /** Where the running game itself reads its load order; undefined when none resolves. */
-  loadOrderFile?: string;
 }
 
 /** What the user set, read fresh on each resolve by whoever built the resolver. */
 export interface GameDirectoryOverrides {
   /** The game folder outright (`modbench.mods.gameDirectory`). */
   gameDirectory?: string;
-  /** `modbench.game.dataFolderPath`, honoured only alongside {@link pluginsTxt}. */
-  dataFolder?: string;
-  /** `modbench.game.pluginsTxtPath`, which alone decides the load-order target. */
-  pluginsTxt?: string;
 }
 
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
@@ -94,35 +87,14 @@ function autodetectFacts(iniText: string): GameAutodetect | undefined {
   }
   if (!release) return undefined;
   const paths = gamePathInfoForRelease(release);
-  const appDataFolder = loadOrderAppDataFolder(release);
-  if (!paths?.steamAppId || !paths.steamFolderName || !appDataFolder) return undefined;
-  return {
-    steamAppId: paths.steamAppId,
-    steamFolderName: paths.steamFolderName,
-    loadOrderAppDataFolder: appDataFolder,
-  };
+  if (!paths?.steamAppId || !paths.steamFolderName) return undefined;
+  return { steamAppId: paths.steamAppId, steamFolderName: paths.steamFolderName };
 }
 
 // A setting left at its empty default is not set: every branch below reads absence as undefined.
-const setOverrides = (o: GameDirectoryOverrides): GameDirectoryOverrides => ({
-  gameDirectory: set(o.gameDirectory),
-  dataFolder: set(o.dataFolder),
-  pluginsTxt: set(o.pluginsTxt),
-});
-
 function set(value: string | undefined): string | undefined {
   const trimmed = (value ?? '').trim();
   return trimmed === '' ? undefined : trimmed;
-}
-
-// The explicit `game.*` overrides win only when both are set, else Steam autodetection.
-function detectedPaths(
-  facts: GameAutodetect | undefined, overrides: GameDirectoryOverrides, detectors: GameDetectors,
-): Promise<GamePaths | null> {
-  if (overrides.dataFolder && overrides.pluginsTxt) {
-    return Promise.resolve({ dataFolder: overrides.dataFolder, pluginsTxt: overrides.pluginsTxt });
-  }
-  return facts ? detectors.paths(facts) : Promise.resolve(null);
 }
 
 // Only the ini's own read/parse is tolerated as "not found"; a translation failure must propagate.
@@ -146,20 +118,10 @@ export function gameDirectoryResolver(
   overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
 ): GameDirectoryResolver {
   return async (iniText: string): Promise<GameDirectory | undefined> => {
-    const overrides = setOverrides(overridesOf());
     const facts = autodetectFacts(iniText);
-    // At most one detection per resolve, and none at all when no branch below asks: a detection
-    // reads Steam's library file, and runs `reg query` on Windows.
-    let detection: Promise<GamePaths | null> | undefined;
-    const detected = (): Promise<GamePaths | null> => (detection ??= detectedPaths(facts, overrides, detectors));
-    // The game reads its load order where it reads it, whichever branch answers the root — so
-    // only the override spares the detection.
-    const loadOrderFile = async (): Promise<string | undefined> =>
-      overrides.pluginsTxt ?? (await detected())?.pluginsTxt;
-    const at = async (root: string): Promise<GameDirectory> =>
-      ({ root, dataFolder: join(root, 'Data'), loadOrderFile: await loadOrderFile() });
+    const at = (root: string): GameDirectory => ({ root, dataFolder: join(root, 'Data') });
 
-    const explicit = overrides.gameDirectory;
+    const explicit = set(overridesOf().gameDirectory);
     if (explicit !== undefined) {
       if (!(await hasDataFolder(explicit))) {
         throw new Error(`modbench.mods.gameDirectory has no Data/ subfolder: ${explicit}`);
@@ -170,10 +132,8 @@ export function gameDirectoryResolver(
     const fromIni = await iniGamePath(iniText, facts, detectors);
     if (fromIni && (await hasDataFolder(fromIni))) return at(fromIni);
 
-    const found = await detected();
-    if (found) {
-      return { root: dirname(found.dataFolder), dataFolder: found.dataFolder, loadOrderFile: await loadOrderFile() };
-    }
-    return undefined;
+    // Last, because a detection reads Steam's library file and runs `reg query` on Windows.
+    const found = facts ? await detectors.paths(facts) : null;
+    return found ? { root: dirname(found.dataFolder), dataFolder: found.dataFolder } : undefined;
   };
 }

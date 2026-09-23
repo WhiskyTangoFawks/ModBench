@@ -8,9 +8,6 @@ import type { Mod, Separator, ModlistEntry } from '../instance';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from '../fileConflictIndex';
 import { parseModlist } from '../../mo2Codecs/modlistText';
 import { computeModStatuses } from '../statusChecker';
-import { deployToGameData, type DeployLink } from '../../mo2Files/files';
-import { makeDeployerFixture } from '../../test/mo2/deployerFixture';
-import { present } from '../../ports/present';
 
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
 // chmod-based permission denial is silently bypassed when the runner is root.
@@ -280,7 +277,7 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion',
   it('excludes a root-level "source" directory, case-insensitively, with no sibling-plugin check needed', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
     // An orphaned tree for a plugin that doesn't even exist in this mod — a sibling-plugin
-    // guard would leave this deployable; the unconditional rule excludes the whole root folder.
+    // guard would leave this indexed; the unconditional rule excludes the whole root folder.
     await mkdir(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_'), { recursive: true });
     await writeFile(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_', '000800.json'), '{}');
     await mkdir(join(modARoot, 'SOURCE'), { recursive: true }); // a second mod could ship any casing
@@ -292,7 +289,7 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion',
   });
 
   // Papyrus ships its own scripts nested under "Scripts/Source/…", never at the mod root, so a
-  // nested directory of that name must still deploy.
+  // nested directory of that name must still be indexed.
   it('does NOT exclude a nested directory literally named "Source" — root-anchored, not any depth', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
     await mkdir(join(modARoot, 'Scripts', 'Source'), { recursive: true });
@@ -333,9 +330,9 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
   ];
 
-  // Badge and deploy consume the index's winner with no logic of their own, so asserting all
-  // three proves they agree rather than documenting the rest away.
-  it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index, badge, and deploy all agree', async () => {
+  // The badge consumes the index's winner with no logic of its own, so asserting both proves
+  // they agree rather than documenting the badge away.
+  it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index and badge agree', async () => {
     const entries = parseModlist(readFileSync(litrModlistPath, 'utf8'));
     const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
     const baseEntry = entries.find((e) => e.kind === 'mod' && e.name === baseName);
@@ -347,12 +344,10 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
 
     // 1. FileConflictIndex — the winner map itself.
     const index = await buildFileConflictIndex(entries, litrInstance, () => {});
-    const winnerPaths = new Map<string, string>();
     for (const relativePath of contested) {
       const entry = index.files.get(relativePath);
       expect(entry?.providers.sort()).toEqual([baseName, fixName].sort());
       expect(entry?.winnerMod).toBe(fixName);
-      winnerPaths.set(relativePath, present(entry, `the conflict index entry for "${relativePath}"`).winner);
     }
 
     // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index, against the real
@@ -370,26 +365,5 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
           ?.conflictLines.some((line) => foldPath(line) === foldPath(`${relativePath} → winner: ${fixName}`)),
       ).toBe(true);
     }
-
-    // Scratch temp dirs, so the live LitR instance is never written to; only the winner's
-    // source path is real.
-    const fx = await makeDeployerFixture();
-    try {
-      const links: DeployLink[] = [...winnerPaths].map(([relativePath, source]) => ({ relativePath, source }));
-      await deployToGameData(fx.instanceRoot, fx.gameDirectory, links);
-      for (const relativePath of contested) {
-        const winner = present(winnerPaths.get(relativePath), `the winner source path for "${relativePath}"`);
-        const target = join(fx.gameDirectory.dataFolder, relativePath);
-        const [srcStat, tgtStat] = await Promise.all([stat(winner), stat(target)]);
-        expect(tgtStat.ino).toBe(srcStat.ino); // same inode == a real hardlink to the winner, not a copy
-        expect(tgtStat.dev).toBe(srcStat.dev);
-      }
-    } finally {
-      await fx.cleanup();
-    }
   });
-
-  // This instance supplies no real vanilla-vs-mod loose-file pair: vanilla Data/ ships every
-  // asset inside .ba2 archives and shares no root-level name with any enabled mod.
-  it.todo('vanilla Data/ loose file loses to an enabled mod shipping the same file — no such real pair exists in this LitR instance; see deployer.test.ts for the synthetic-fixture proof of the invariant');
 });

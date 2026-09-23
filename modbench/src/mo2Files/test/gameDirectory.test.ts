@@ -149,7 +149,7 @@ describe('the game directory resolver', () => {
 
   it('errors (does not answer with the detected folder) when a C: ini path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' }),
+      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),
     };
 
@@ -158,15 +158,13 @@ describe('the game directory resolver', () => {
 
   it('falls back to Steam autodetection when the setting and the ini gamePath are both absent', async () => {
     const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' }),
+      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
 
     const resolved = await resolverWith({}, detectors)(iniOf());
 
-    expect(resolved).toEqual({
-      root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data', loadOrderFile: '/appdata/Plugins.txt',
-    });
+    expect(resolved).toEqual({ root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
   it('falls through a resolved-but-invalid ini gamePath (no Data/) to autodetect, rather than trusting it', async () => {
@@ -175,7 +173,7 @@ describe('the game directory resolver', () => {
     const staleGameRoot = join(dir, 'Stale Game Folder');
     await mkdir(staleGameRoot, { recursive: true }); // no Data/ underneath — a broken/moved install
     const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' }),
+      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
 
@@ -200,25 +198,9 @@ describe('the game directory resolver', () => {
     expect(asked).toBe(false);
   });
 
-  // The game reads its load order where it reads it, whichever branch answered the root: a user
-  // pointing Modbench at a stock folder still deploys plugins.txt to the game's own AppData.
-  it('carries the detected load-order file even when the explicit setting answers the root', async () => {
-    const gameRoot = await gameFolder();
-    const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' }),
-      winePrefix: noDetectPrefix,
-    };
-
-    const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOf());
-
-    expect(resolved).toEqual({
-      root: gameRoot, dataFolder: join(gameRoot, 'Data'), loadOrderFile: '/appdata/Plugins.txt',
-    });
-  });
-
   // Rival: detecting up front on every branch, which reads Steam's library file (and spawns
-  // `reg query` on Windows) on every recompute, even when nothing left to answer needs it.
-  it('asks Steam nothing when the setting answers the root and the override names the load order', async () => {
+  // `reg query` on Windows) on every recompute, even when the setting or the ini already answered.
+  it('asks Steam nothing when the setting answers the root', async () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
@@ -226,59 +208,23 @@ describe('the game directory resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith(
-      { gameDirectory: gameRoot, pluginsTxt: '/chosen/Plugins.txt' }, detectors)(iniOf());
+    const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOf());
 
-    expect(resolved).toEqual({
-      root: gameRoot, dataFolder: join(gameRoot, 'Data'), loadOrderFile: '/chosen/Plugins.txt',
-    });
+    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
   });
 
-  // Rival: a detection per branch that asks, which pays Steam's price twice for one answer.
-  it('asks Steam once per resolve, however many branches read the answer', async () => {
+  it('asks Steam nothing when the ini gamePath answers the root', async () => {
+    const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
-      paths: () => {
-        asked += 1;
-        return Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/appdata/Plugins.txt' });
-      },
+      paths: () => { asked += 1; return Promise.resolve(null); },
       winePrefix: noDetectPrefix,
     };
 
-    await resolverWith({}, detectors)(iniOf());
+    const resolved = await resolverWith({}, detectors)(iniOf(gameRoot));
 
-    expect(asked).toBe(1);
-  });
-
-  it('lets the pluginsTxtPath override name the load-order file on its own', async () => {
-    const gameRoot = await gameFolder();
-    const detectors: GameDetectors = {
-      paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data', pluginsTxt: '/detected/Plugins.txt' }),
-      winePrefix: noDetectPrefix,
-    };
-
-    const resolved = await resolverWith({ pluginsTxt: '/chosen/Plugins.txt' }, detectors)(iniOf(gameRoot));
-
-    expect(resolved?.loadOrderFile).toBe('/chosen/Plugins.txt');
-  });
-
-  // Rival: honouring `dataFolderPath` alone, which would point Data/ at one install and the
-  // load order at another.
-  it('honours the dataFolderPath override only alongside pluginsTxtPath', async () => {
-    let asked = false;
-    const detectors: GameDetectors = {
-      paths: () => { asked = true; return Promise.resolve(null); },
-      winePrefix: noDetectPrefix,
-    };
-
-    expect(await resolverWith({ dataFolder: '/override/Data' }, detectors)(iniOf())).toBeUndefined();
-    expect(asked).toBe(true);
-
-    const both = await resolverWith(
-      { dataFolder: '/override/Data', pluginsTxt: '/override/Plugins.txt' }, detectors)(iniOf());
-    expect(both).toEqual({
-      root: '/override', dataFolder: '/override/Data', loadOrderFile: '/override/Plugins.txt',
-    });
+    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+    expect(asked).toBe(0);
   });
 });
