@@ -52,8 +52,11 @@ function downloadTooltip(row: DownloadRow): vscode.MarkdownString {
  *  label, and a `.meta` name change would then silently drop the user's tree selection. */
 export class DownloadNode extends vscode.TreeItem {
   readonly kind = 'download' as const;
+  /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
+  readonly nexusModId: string | undefined;
   constructor(public readonly row: DownloadFile) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
+    this.nexusModId = row.modID;
     this.id = row.name;
     this.iconPath = downloadStatusIcon(row.status);
     this.description = downloadDescription(row);
@@ -120,7 +123,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   /** Additive, not an exclusive filter, matching MO2's own Show-hidden. The command handler,
-   *  not this, owns the `modbench.downloads.showHidden` context key. */
+   *  not this, owns the `modbench.downloadedFile.excludedShown` context key. */
   setShowHidden(show: boolean): void {
     this.showHidden = show;
     this.invalidate();

@@ -57,7 +57,7 @@ describe('the Toolbox gestures', () => {
   it('registers switch profile and no deploy, purge or run', () => {
     register();
 
-    expect([...handlers.keys()]).toEqual(['modbench.toolbox.switchProfile']);
+    expect([...handlers.keys()]).toEqual(['modbench.profile.switch']);
   });
 });
 
@@ -67,7 +67,7 @@ describe('Switch profile', () => {
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'ModOrganizer.ini is read-only' });
 
     const { reporter, updateProfileDescription, run } = register();
-    await run('modbench.toolbox.switchProfile');
+    await run('modbench.profile.switch');
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to switch profile.', detail: 'ModOrganizer.ini is read-only' },
@@ -80,7 +80,7 @@ describe('Switch profile', () => {
     switchProfile.mockResolvedValueOnce({ applied: true });
 
     const { reporter, updateProfileDescription, run } = register();
-    await run('modbench.toolbox.switchProfile');
+    await run('modbench.profile.switch');
 
     expect(updateProfileDescription).toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
@@ -91,7 +91,7 @@ describe('Switch profile', () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Default' });
 
     const { run } = register();
-    await run('modbench.toolbox.switchProfile');
+    await run('modbench.profile.switch');
 
     expect(switchProfile).not.toHaveBeenCalled();
   });
@@ -106,7 +106,7 @@ describe('Refresh', () => {
       instance: { refresh: () => { steps.push('Instance loader: read every file again'); return Promise.resolve(); } },
       reporter,
     });
-    return { reporter, steps, run: () => present(handlers.get('modbench.refresh'), 'the refresh handler')() };
+    return { reporter, steps, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
   }
 
   it('asks instance commands to refresh, then the Instance loader to read every file again', async () => {
@@ -133,6 +133,6 @@ describe('Refresh', () => {
   it('is registered and does nothing when there is no instance', async () => {
     registerRefreshCommand(undefined);
 
-    await expect(present(handlers.get('modbench.refresh'), 'the refresh handler')()).resolves.toBeUndefined();
+    await expect(present(handlers.get('modbench.instance.refresh'), 'the refresh handler')()).resolves.toBeUndefined();
   });
 });

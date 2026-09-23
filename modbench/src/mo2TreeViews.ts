@@ -48,7 +48,7 @@ export function createModListView(
   }));
   const modListFilter = own(registerNameFilter({
     view: modListView,
-    viewId: 'modbench.modList',
+    object: 'modbench.mod',
     placeholder: 'Filter mods…',
     setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
     // The pinned Overwrite row sits outside all filtering (it is a fixture over the folder, not
@@ -91,7 +91,7 @@ export function registerDownloadsView(
     new HiddenDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.hiddenNames()),
   ));
   own(registerNameFilter({
-    view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
+    view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
     setFilter: (text) => downloadsProvider.setFilter(text),
     hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
   }));

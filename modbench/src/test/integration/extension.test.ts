@@ -736,7 +736,7 @@ describe('Overwrite row', () => {
     const roots = await p.getChildren();
     const node = roots.find((n) => n.kind === 'overwrite');
     assert.ok(node, 'expected an Overwrite node to reveal');
-    await vscode.commands.executeCommand('modbench.modList.overwrite.reveal', node);
+    await vscode.commands.executeCommand('modbench.mod.openFolder', node);
   });
 
   it('drops the Overwrite row once overwrite/ is emptied', async () => {
@@ -1457,12 +1457,12 @@ describe('Refresh rebuilds the index, then resends the load order', () => {
   after(() => resetMockBackend());
 
   it('POSTs /index/rebuild before it PUTs /load-order', async () => {
-    await vscode.commands.executeCommand('modbench.refresh');
+    await vscode.commands.executeCommand('modbench.instance.refresh');
 
     const rebuildAt = requestLog.indexOf('POST /index/rebuild');
     const putAt = requestLog.indexOf('PUT /load-order');
-    assert.ok(rebuildAt >= 0, 'modbench.refresh must rebuild the index');
-    assert.ok(putAt >= 0, 'modbench.refresh must resend the load order after the rebuild');
+    assert.ok(rebuildAt >= 0, 'modbench.instance.refresh must rebuild the index');
+    assert.ok(putAt >= 0, 'modbench.instance.refresh must resend the load order after the rebuild');
     assert.ok(rebuildAt < putAt, 'the rebuild must run before the load order is resent');
     // The re-read that ends a refresh lands a value, and the landed value is put again; waiting
     // for it keeps that put out of the next test's log.
@@ -1473,7 +1473,7 @@ describe('Refresh rebuilds the index, then resends the load order', () => {
   it('sends no load order when the rebuild is refused (the index held elsewhere)', async () => {
     rebuildIndexShouldFail = true;
 
-    await vscode.commands.executeCommand('modbench.refresh');
+    await vscode.commands.executeCommand('modbench.instance.refresh');
 
     assert.ok(requestLog.some((l) => l === 'POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
     assert.ok(

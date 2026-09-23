@@ -161,11 +161,6 @@ async function deleteArchives(
   for (const name of names) await trashOneArchive(instanceRoot, name, reporter, () => Promise.resolve(true));
 }
 
-// The slug and the mod id both come from the value, which holds them already.
-async function visitOnNexus(nexusSlug: string, modID: string): Promise<void> {
-  await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${nexusSlug}/mods/${modID}`));
-}
-
 /** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
@@ -176,30 +171,40 @@ export function registerDownloadsSingleRowCommands(
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
       if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
-    // A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
-    vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {
-      const row = node?.row;
-      if (!row?.modID) return;
-      const modID = row.modID;
-      void runRowAction('Visit on Nexus', row.name, reporter, () => visitOnNexus(instance.value.nexusSlug, modID));
-    }),
-    // OS-open the archive in the system's associated application.
-    vscode.commands.registerCommand('modbench.downloads.openFile', (node?: DownloadNode) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode, supplied?: unknown) => {
       const row = node?.row;
       if (!row) return;
-      void runRowAction('Open File', row.name, reporter, async () => {
-        await vscode.env.openExternal(vscode.Uri.file(row.path));
-      });
-    }),
-    // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
-    vscode.commands.registerCommand('modbench.downloads.openMeta', (node?: DownloadNode) => {
-      const row = node?.row;
-      if (!row) return;
-      void runRowAction('Open Meta File', row.name, reporter, async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
-      });
+      const target = isOpenTarget(supplied) ? supplied : await askOpenTarget(row);
+      if (target === 'meta') {
+        await runRowAction('Open Meta File', row.name, reporter, async () => {
+          await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
+        });
+      } else if (target === 'file') {
+        await runRowAction('Open File', row.name, reporter, async () => {
+          await vscode.env.openExternal(vscode.Uri.file(row.path));
+        });
+      }
     }),
   ];
+}
+
+type OpenTarget = 'file' | 'meta';
+
+function isOpenTarget(value: unknown): value is OpenTarget {
+  return value === 'file' || value === 'meta';
+}
+
+async function askOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
+  return row.hasMeta ? pickOpenTarget(row) : 'file';
+}
+
+async function pickOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
+  const items: (vscode.QuickPickItem & { target: OpenTarget })[] = [
+    { label: row.name, description: 'the downloaded file', target: 'file' },
+    { label: `${row.name}.meta`, description: 'its .meta', target: 'meta' },
+  ];
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: `Open "${row.name}" or its .meta` });
+  return picked?.target;
 }
 
 // A host that supplies no selection array, and a single-row click, both fall back to the
@@ -215,18 +220,18 @@ export function registerDownloadsMultiRowCommands(
   instanceRoot: string, reporter: Reporter, ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.downloads.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       const names = selectionNames(clicked, selected);
       if (names.length > 0) void deleteArchives(instanceRoot, names, reporter, ask);
     }),
-    vscode.commands.registerCommand('modbench.downloads.hide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Hide', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
+        void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
       }
     }),
-    vscode.commands.registerCommand('modbench.downloads.unhide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Unhide', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
+        void runRowAction('Include', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
       }
     }),
   ];
@@ -251,7 +256,7 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
 /** A quick pick rather than column headers, which a tree does not have. Escape is a silent
  *  no-op, matching the profile picker. */
 export function registerDownloadsSortCommand(downloadsProvider: Pick<DownloadsProvider, 'setSort'>): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.downloads.sortBy', async () => {
+  return vscode.commands.registerCommand('modbench.downloadedFile.sort', async () => {
     const picked = await vscode.window.showQuickPick(SORT_OPTIONS, { placeHolder: 'Sort downloads by' });
     if (!picked) return;
     downloadsProvider.setSort(picked.column, picked.descending);
@@ -264,13 +269,13 @@ export function registerDownloadsHiddenToggleCommands(
   downloadsProvider: Pick<DownloadsProvider, 'setShowHidden'>,
 ): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.downloads.showHidden', () => {
+    vscode.commands.registerCommand('modbench.downloadedFile.showExcluded', () => {
       downloadsProvider.setShowHidden(true);
-      void vscode.commands.executeCommand('setContext', 'modbench.downloads.showHidden', true);
+      void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', true);
     }),
-    vscode.commands.registerCommand('modbench.downloads.hideHidden', () => {
+    vscode.commands.registerCommand('modbench.downloadedFile.hideExcluded', () => {
       downloadsProvider.setShowHidden(false);
-      void vscode.commands.executeCommand('setContext', 'modbench.downloads.showHidden', false);
+      void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', false);
     }),
   ];
 }

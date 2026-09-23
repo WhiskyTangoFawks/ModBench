@@ -28,7 +28,7 @@ import { syncMods } from './modlist/modlist';
 import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands } from './mods/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand } from './mods/modManagementCommands';
 import { createModListView, registerDownloadsView, registerNotMo2InstanceWelcome } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
@@ -161,7 +161,7 @@ function registerPluginsNameFilter(
   view: vscode.TreeView<PluginsTreeNode>, provider: PluginsTreeProvider,
 ): NameFilter {
   return registerNameFilter({
-    view, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…',
+    view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
   });
@@ -484,7 +484,9 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
-  ownAll(own, registerOverwriteView(instance, reporterFor('overwrite.reveal')));
+  own(registerOverwriteView(instance));
+  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
+  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
   own(registerModSync(instance, (profile, modFolders) => syncMods(instanceRoot, profile, modFolders), outputChannel));
   own(registerPluginSync(instance, runPluginSync, outputChannel));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {

@@ -192,7 +192,7 @@ describe('DownloadNode', () => {
 
   it('contextValue is the row\'s downloadContextValue', () => {
     const node = new DownloadNode(row({ hasMeta: true, modID: '1', hidden: true }));
-    expect(node.contextValue).toBe('download hasMeta hasModID hidden');
+    expect(node.contextValue).toBe('download hasModID hidden');
   });
 
   it('resourceUri is the path the value carries for the row', () => {

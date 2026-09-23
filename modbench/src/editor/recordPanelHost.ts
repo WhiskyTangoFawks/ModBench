@@ -118,11 +118,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
-    vscode.commands.registerCommand('modbench.showReferencedBy',
+    vscode.commands.registerCommand('modbench.record.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
     // xEdit parity (xeMainForm.pas's CopyInto). One command behind both a keybinding and a menu
     // entry: ADR-0018's "no action reachable two ways" bars redundant affordances, not this.
-    vscode.commands.registerCommand('modbench.referencedByTree.copy',
+    vscode.commands.registerCommand('modbench.record.copyValue',
       async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
         const nodes = allSelected?.length ? allSelected
           : referencedByTreeView.selection.length ? referencedByTreeView.selection

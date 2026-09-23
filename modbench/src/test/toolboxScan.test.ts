@@ -70,10 +70,12 @@ const DISPOSABLE_PRODUCERS = [
   'registerModSync',
   'registerNameFilter',
   'registerNotMo2InstanceWelcome',
+  'registerOpenFolderCommand',
   'registerOverwriteView',
   'registerPluginSync',
   'registerRefreshCommand',
   'registerSeparatorCommands',
+  'registerViewOnNexusCommand',
   'subscribe',
 ];
 

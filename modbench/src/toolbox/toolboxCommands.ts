@@ -18,7 +18,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const { instanceRoot, instance, updateProfileDescription, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
-    vscode.commands.registerCommand('modbench.toolbox.switchProfile', async () => {
+    vscode.commands.registerCommand('modbench.profile.switch', async () => {
       const { activeProfile: active, profiles } = instance.value;
       const picked = await vscode.window.showQuickPick(
         profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
@@ -47,7 +47,7 @@ export interface RefreshGestureDeps {
 // One gesture for all of Modbench, and only the safety net for a missed watcher event. Undefined
 // deps with no instance open: the title icon still shows, so the command exists and does nothing.
 export function registerRefreshCommand(deps: RefreshGestureDeps | undefined): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.refresh', async () => {
+  return vscode.commands.registerCommand('modbench.instance.refresh', async () => {
     if (!deps) return;
     const outcome = await deps.refresh();
     if (!outcome.applied) {

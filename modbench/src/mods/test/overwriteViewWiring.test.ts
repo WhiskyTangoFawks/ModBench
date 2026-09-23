@@ -23,7 +23,6 @@ import { ModListProvider, OverwriteNode } from '../ModListProvider';
 import { registerOverwriteView } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, InstanceView } from '../../instanceLoader/instance';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { OverwriteDecorationProvider } from '../OverwriteDecorationProvider';
@@ -52,7 +51,7 @@ async function overwriteRow(): Promise<OverwriteNode> {
 
 function registeredDecorator(): OverwriteDecorationProvider {
   registerFileDecorationProvider.mockClear();
-  registerOverwriteView(instance, recordingReporter());
+  registerOverwriteView(instance);
   const call = present(registerFileDecorationProvider.mock.calls[0], 'the registered decoration provider');
   return expectInstanceOf(call[0], OverwriteDecorationProvider);
 }

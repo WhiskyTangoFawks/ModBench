@@ -79,8 +79,10 @@ export class SeparatorNode extends vscode.TreeItem {
 /** A non-'ok' status overlays a badge onto the icon, description, and tooltip. */
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
+  readonly nexusModId: string | undefined;
   constructor(public readonly mod: Mod, status?: ModStatusResult) {
     super(mod.name, vscode.TreeItemCollapsibleState.None);
+    this.nexusModId = mod.nexusId;
     const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
       .filter((s): s is string => !!s)
       .join(' · ');
@@ -112,8 +114,8 @@ export class OverwriteNode extends vscode.TreeItem {
     // only carries the resourceUri. Let VS Code render the folder icon.
     this.tooltip = `${fileCount} file(s) swept from Data/ — reassign in the Explorer or clear.`;
     this.command = {
-      command: 'modbench.modList.overwrite.reveal',
-      title: 'Open in Explorer',
+      command: 'modbench.mod.openFolder',
+      title: 'Open Mod Folder',
       arguments: [this],
     };
   }

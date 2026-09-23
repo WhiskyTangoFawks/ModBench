@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, fakeUri } from '../../test/vscodeMock';
 
-const { registerCommand, showOpenDialog } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, showOpenDialog, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
+  executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
+  openExternal: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
-  commands: { registerCommand },
+  commands: { registerCommand, executeCommand },
   window: { showOpenDialog },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile },
+  env: { openExternal },
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
+  Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
 }));
 
 const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
@@ -30,10 +33,15 @@ vi.mock('../../modlist/modlist', () => ({
   moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
 }));
 
-import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from '../modManagementCommands';
-import { ModNode } from '../ModListProvider';
-import { scriptedDialog } from '../../test/surfacingDoubles';
+import {
+  registerModContextCommands, registerModInstallCommands, registerOpenFolderCommand, registerViewOnNexusCommand,
+  type ModInstallDeps,
+} from '../modManagementCommands';
+import { ModNode, OverwriteNode } from '../ModListProvider';
+import { DownloadNode } from '../../downloads/DownloadsProvider';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -149,7 +157,7 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
     const ask = scriptedDialog('Uninstall');
 
     registerModContextCommands('/instance', instance, runModAction, ask);
-    await invoke('modbench.modList.mod.uninstall', modNode);
+    await invoke('modbench.mod.uninstall', modNode);
 
     expect(ask.asked).toEqual([{
       message: 'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
@@ -163,8 +171,87 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
     uninstallMod.mockResolvedValue({ applied: true }); // so a lost guard would get all the way through
 
     registerModContextCommands('/instance', instance, runModAction, scriptedDialog(undefined));
-    await invoke('modbench.modList.mod.uninstall', modNode);
+    await invoke('modbench.mod.uninstall', modNode);
 
     expect(uninstallMod).not.toHaveBeenCalled();
+  });
+});
+
+describe('open folder: one command for a mod and for the Overwrite row', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = {
+    value: instanceValueFixture({
+      paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map([['My Mod', '/instance/mods/My Mod']]) },
+    }),
+  };
+  const revealed = (): (string | undefined)[] =>
+    executeCommand.mock.calls.filter((c) => c[0] === 'revealInExplorer').map((c) => c[1]?.fsPath);
+
+  it('reveals the clicked mod\'s own folder, as the value names it', async () => {
+    registerOpenFolderCommand(instance, recordingReporter());
+    await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod']);
+  });
+
+  it('reveals the overwrite folder from the Overwrite row', async () => {
+    registerOpenFolderCommand(instance, recordingReporter());
+    await invoke('modbench.mod.openFolder', new OverwriteNode(fakeUri('/instance/overwrite'), 3));
+
+    expect(revealed()).toEqual(['/instance/overwrite']);
+  });
+
+  it('reports a reveal that fails', async () => {
+    executeCommand.mockRejectedValueOnce(new Error('no explorer'));
+    const reporter = recordingReporter();
+
+    registerOpenFolderCommand(instance, reporter);
+    await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "My Mod".', detail: 'no explorer' },
+    ]);
+  });
+});
+
+describe('view on Nexus: one command for a mod and for a downloaded file', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ nexusSlug: 'skyrimspecialedition' }) };
+  const opened = (): string[] => openExternal.mock.calls.map((c) => String(c[0]));
+
+  it('opens the mod\'s Nexus page from a mod row', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter());
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/42']);
+  });
+
+  it('opens the mod\'s Nexus page from a downloaded file row', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter());
+    await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
+  });
+
+  it('reports a page that fails to open', async () => {
+    openExternal.mockRejectedValueOnce(new Error('no browser'));
+    const reporter = recordingReporter();
+
+    registerViewOnNexusCommand(instance, reporter);
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the Nexus page of mod 42.', detail: 'no browser' },
+    ]);
+  });
+
+  it('opens nothing for a row with no Nexus id', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter());
+    await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z')));
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
+
+    expect(openExternal).not.toHaveBeenCalled();
   });
 });
