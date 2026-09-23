@@ -3,9 +3,9 @@
 
 import { join, relative, sep } from 'node:path';
 import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
-import { modDir } from '../mo2Files/layout';
+import { modDir } from '../instanceAdapter/layout';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
-import { factsOf, listDir } from '../mo2Files/files';
+import { factsOf, listDir } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 

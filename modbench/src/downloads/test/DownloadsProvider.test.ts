@@ -18,7 +18,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
-import type { DownloadFile, InstanceValue } from '../../instance/instance';
+import type { DownloadFile, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 // The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.

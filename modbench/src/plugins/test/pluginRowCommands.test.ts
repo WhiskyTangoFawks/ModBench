@@ -35,7 +35,7 @@ import {
   registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
   registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
-import { originFolder } from '../../instance/loadOrderSnapshot';
+import { originFolder } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { PluginTreeProvider } from '../PluginTreeProvider';

@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 import type { PluginMetadata } from '../client';
 
-/** Whether a mod folder is tracked. Injected: MO2 files answers it, and this box holds no door
- *  onto the instance of its own (ADR-0007). */
+/** Whether a mod folder is tracked. Injected: the Instance adapter answers it, and this box holds
+ *  no door onto the instance of its own (ADR-0007). */
 export type IsTracked = (modFolder: string) => Promise<boolean>;
 
 function modFolderOf(plugin: Pick<PluginMetadata, 'path'>): string {

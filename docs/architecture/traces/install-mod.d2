@@ -11,45 +11,45 @@
 shape: sequence_diagram
 downloads: @../target-architecture.modbench_driving.downloads
 downloads.label: "Downloads · Mods"
-instance: @../target-architecture.modbench_driven.instance
-instance.label: Instance loader
+instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader.label: Instance loader
 install: @../target-architecture.modbench_core.install
 install.label: install
 codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
-mo2files: @../target-architecture.modbench_driven.mo2files
-mo2files.label: Instance adapter
+instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nmods/<name>/, meta.ini · downloads/<file>.meta"
 views: "every view" {class: driving}
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: "Mod watcher\nmEdit"
 
-instance -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
+instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target: a new mod, or a candidate pre-selected by file id, else by its recorded installation file. Always confirmed. Esc installs nothing"
 downloads -> install: "the source, and the target" {class: loadorder}
 install -> codecs: "meta.ini: the meta it knows" {class: loadorder}
 codecs -> install: bytes {class: loadorder}
 
 new mod: "a new mod" {
-  install -> mo2files: "stage, meta.ini first, then one rename into mods/" {class: loadorder}
+  install -> instanceadapter: "stage, meta.ini first, then one rename into mods/" {class: loadorder}
 }
 upgrade: "an upgrade" {
-  install -> mo2files: "staged tree in, old files out, .git kept" {class: loadorder}
+  install -> instanceadapter: "staged tree in, old files out, .git kept" {class: loadorder}
 }
 
 from download: "from a downloaded file" {
   install -> codecs: "the .meta: installed" {class: loadorder}
   codecs -> install: bytes {class: loadorder}
-  install -> mo2files: "put the .meta in downloads/" {class: loadorder}
+  install -> instanceadapter: "put the .meta in downloads/" {class: loadorder}
   install."a failed mark is a line in the Output, and the install still applied"
 }
 
-mo2files -> mo2: "the folder, the .meta, then forget" {class: loadorder}
+instanceadapter -> mo2: "the folder, the .meta, then forget" {class: loadorder}
 install -> downloads: applied or refusal {class: loadorder}
-mo2 -> instance: watch {class: signal}
-instance -> views: value {class: loadorder}
-instance."the folder has no line: update-load-order-file adopts it"
+mo2 -> instanceloader: watch {class: signal}
+instanceloader -> views: value {class: loadorder}
+instanceloader."the folder has no line: update-load-order-file adopts it"
 mo2 -> watcher: changed paths {class: signal}
 watcher."a tracked mod: decompile-plugin from here, the moved version pre-selecting the new baseline"
 

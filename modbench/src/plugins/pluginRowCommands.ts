@@ -5,7 +5,7 @@ import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider'
 import { resolveCompileTarget } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
-import type { OriginFolder } from '../instance/loadOrderSnapshot';
+import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked,
 } from './trackedRepositories';

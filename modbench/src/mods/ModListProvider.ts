@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_DIR_NAME, type Mod, type ModlistEntry, type Separator } from '../instance/instance';
+import { OVERWRITE_DIR_NAME, type Mod, type ModlistEntry, type Separator } from '../instanceLoader/instance';
 import { groupModlist, type ModlistTree } from './modlistTree';
-import type { ModStatus, ModStatusResult } from '../instance/statusChecker';
+import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
 import type { Reporter } from '../ports/reporter';
-import type { InstanceValue, InstanceView } from '../instance/instance';
+import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import {

@@ -6,7 +6,7 @@
   },
   "references": [
     { "path": "../mo2Codecs" },
-    { "path": "../mo2Files" },
+    { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],

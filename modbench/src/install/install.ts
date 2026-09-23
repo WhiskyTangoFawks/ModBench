@@ -8,8 +8,8 @@ import { markDownloadInstalled } from './downloadSidecar';
 import {
   MOD_META_FILE_NAME, parseMetaIni, setOwnedKeysInText, writeMetaIni, type InstalledFileId, type OwnedMetaKeys,
 } from '../mo2Codecs/metaIni';
-import { downloadFile, modsDir as modsDirOf } from '../mo2Files/layout';
-import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../mo2Files/files';
+import { downloadFile, modsDir as modsDirOf } from '../instanceAdapter/layout';
+import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';

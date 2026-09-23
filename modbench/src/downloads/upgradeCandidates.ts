@@ -1,7 +1,7 @@
 // Pure: which installed mods a download upgrades, and which one its own file id already
 // names. Filename is never consulted — meta.ini's mod id and file id are the only identity.
 
-import type { DownloadRow, InstanceValue, Mod } from '../instance/instance';
+import type { DownloadRow, InstanceValue, Mod } from '../instanceLoader/instance';
 
 export interface UpgradeCandidate {
   readonly modName: string;

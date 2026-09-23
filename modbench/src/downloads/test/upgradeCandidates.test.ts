@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { selectUpgradeCandidates } from '../upgradeCandidates';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
-import type { InstanceValue } from '../../instance/instance';
+import type { InstanceValue } from '../../instanceLoader/instance';
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
   kind: 'mod',

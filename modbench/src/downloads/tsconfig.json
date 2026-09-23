@@ -9,7 +9,7 @@
   },
   "references": [
     { "path": "../install" },
-    { "path": "../instance" },
+    { "path": "../instanceLoader" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],

@@ -1,7 +1,7 @@
 // How the Downloads tree presents the rows the Instance publishes. None of it touches a file, so
 // none of it belongs to the codec that parsed one.
 
-import type { DownloadRow } from '../instance/instance';
+import type { DownloadRow } from '../instanceLoader/instance';
 
 /** The columns MO2's own Downloads pane sorts by, each a field of the row itself. */
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';

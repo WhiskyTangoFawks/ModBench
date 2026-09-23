@@ -7,7 +7,7 @@ import {
 } from './downloadRows';
 import type {
   DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
-} from '../instance/instance';
+} from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import type { Reporter } from '../ports/reporter';

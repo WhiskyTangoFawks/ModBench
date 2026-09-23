@@ -1,8 +1,8 @@
 // Where a new plugin lands, read off the Instance's own value — no vscode import, no backend
 // call (Mod Management never calls it, CLAUDE.md), and no path joined here.
 
-import type { InstanceValue } from '../instance/instance';
-import { OVERWRITE_ORIGIN } from '../instance/loadOrderSnapshot';
+import type { InstanceValue } from '../instanceLoader/instance';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 export type PluginDestinationChoice =
   | { kind: 'overwrite' }

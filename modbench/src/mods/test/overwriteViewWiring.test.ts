@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
 import { ModListProvider, OverwriteNode } from '../ModListProvider';
 import { registerOverwriteView } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { InstanceValue, InstanceView } from '../../instance/instance';
+import type { InstanceValue, InstanceView } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { expectInstanceOf } from '../../test/expectInstanceOf';

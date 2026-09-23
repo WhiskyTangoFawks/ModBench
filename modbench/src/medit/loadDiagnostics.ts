@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { PluginDiagnosisReport } from '../client';
 // Type only, so nothing of Mod Management is linked in: the contract for "where this origin's
 // files live" belongs beside the rows that answer it.
-import type { OriginFolder } from '../instance/loadOrderSnapshot';
+import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
 
 /** Targets the plugin binary itself — these plugins are pre-Track, so there is no source-tree
  *  file to point at, and one scan answers for the whole load order. Warning severity: a

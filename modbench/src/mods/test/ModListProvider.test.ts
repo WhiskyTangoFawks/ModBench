@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mod, ModlistEntry, Separator } from '../../instance/instance';
+import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
 import type { Drop } from '../../mo2Codecs/dropIndex';
 
 // The entry names a splice counts its index among — the same read the command makes.
-import type { InstanceValue } from '../../instance/instance';
-import type { ModStatusResult } from '../../instance/statusChecker';
+import type { InstanceValue } from '../../instanceLoader/instance';
+import type { ModStatusResult } from '../../instanceLoader/statusChecker';
 import { present } from '../../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,

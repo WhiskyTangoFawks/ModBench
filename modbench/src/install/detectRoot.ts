@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { listDir } from '../mo2Files/files';
+import { listDir } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 
 /** Top-level folder names that mean "this level is already the mod's data root"

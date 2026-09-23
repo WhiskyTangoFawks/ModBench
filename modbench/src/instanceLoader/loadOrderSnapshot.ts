@@ -6,11 +6,11 @@ import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
-import { overwriteDir } from '../mo2Files/layout';
-import { isPluginFile } from '../mo2Files/pluginFile';
+import { overwriteDir } from '../instanceAdapter/layout';
+import { isPluginFile } from '../instanceAdapter/pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
-import { listDir } from '../mo2Files/files';
+import { listDir } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
