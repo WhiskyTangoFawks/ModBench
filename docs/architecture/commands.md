@@ -99,6 +99,11 @@ ticket names the fix).
   were and reports the failure
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)). A
   contract names any gesture that cannot promise this.
+- **A selection is one gesture, and each item lands on its own.** A gesture over several objects is
+  one command with the whole selection as its Argument, asked once. An item that cannot proceed
+  writes nothing and is refused, naming why; the others land. The result names both
+  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md),
+  invariant 4).
 - **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
   message.
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
@@ -222,8 +227,8 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | planned | - |
 | exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | planned | - |
 | check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | planned | - |
-| track | writes | Plugins: context menu (mod untracked); Editor: read-only banner (mod untracked) | `modbench.mod.track` | mod | preset: Edits or Everything | none | Put the mod's plugins under git. It fires `decompile plugin` with a new repository as the destination: it creates the repository, commits the baseline to `main` and checks out the edit branch. | debt #966, #967 | decompile-plugin |
-| rebase edit branch | writes | Plugins: context menu (mod tracked) | `modbench.mod.rebaseEditBranch` | tracked mod | - | none | Replay the edit branch onto `main`. | debt #967 | decompile-plugin |
+| track | writes | Plugins: context menu (mod untracked); Editor: read-only banner (mod untracked) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put the mod's plugins under git. It fires `decompile plugin` with a new repository as the destination: it creates the repository, commits the baseline to `main` and checks out the edit branch. | debt #966, #967 | decompile-plugin |
+| rebase edit branch | writes | Plugins: context menu (mod tracked) | `modbench.mod.rebaseEditBranch` | tracked mods | - | none | Replay the edit branch onto `main`. | debt #967 | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | debt #967 | none |
 | filter | reads | Mods: title icon, key (Ctrl+F) | `modbench.mod.filter`, `modbench.mod.clearFilter` | - | - | MO2 mod list | Narrow the mod list by name. | debt #967 | none |
 | open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in the native file tab, decorated by conflict status (planned; today the file explorer). The Overwrite row opens the overwrite folder. | debt #967 | none |
@@ -249,8 +254,8 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
 | move | writes | Plugins: drag, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | update-load-order-file |
 | create | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | - |
-| compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugin | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-plugin |
-| repair | writes | Plugins: context menu | - | plugin | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
+| compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugins | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-plugin |
+| repair | writes | Plugins: context menu | - | plugins | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | planned | - |
 | filter | reads | Plugins: title icon, key (Ctrl+F) | `modbench.plugin.filter`, `modbench.plugin.clearFilter` | - | - | MO2 plugin list; xEdit navigator | Narrow the plugin list by name. | debt #967 | none |
 | sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | planned | none |
@@ -273,7 +278,7 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 |---|---|---|---|---|---|---|---|---|---|
 | edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way (planned). | ? | edit-record |
 | add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | - | xEdit View grid | Add an element to an array field. Sorted arrays add too (planned). | debt #967 | edit-record |
-| remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
+| remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | elements | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-record |
 | delete | writes | Plugins: context menu, key (Delete); Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-record |
@@ -295,7 +300,7 @@ Offered on Downloads.
 | exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | debt #956, #967 | update-load-order-file |
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | update-load-order-file |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
-| pause / resume | writes | Downloads: context menu, key | - | downloaded file (a running download) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
+| pause / resume | writes | Downloads: context menu, key | - | downloaded files (running downloads) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
 | open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | target: the file, or its `.meta` (offered when a `.meta` exists) | MO2 Downloads | Open a downloaded file, or its `.meta` sidecar. | debt #967 | none |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | planned | - |
 | filter | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | none |

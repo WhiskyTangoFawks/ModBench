@@ -69,5 +69,6 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | A read behind the view failed | the error row above, and a line in the Output |
 | A gesture I started failed, or was refused | a notification saying why, and a line in the Output |
 | A gesture landed, but part of it failed, so a view would show something untrue | a notification naming the part that failed, and a line in the Output. The gesture is not reported as failed. |
+| A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
 
