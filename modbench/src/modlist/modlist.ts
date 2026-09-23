@@ -18,7 +18,7 @@ import {
 } from '../mo2Codecs/modlistText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../instanceAdapter/layout';
+import { downloadFile, downloadSidecarFile, modDir, modlistFile, modsDir } from '../instanceAdapter/layout';
 import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
@@ -153,14 +153,18 @@ export async function createEmptyMod(
 }
 
 export type ModSyncResult =
-  | { applied: true; wrote: boolean; added: string[]; dropped: string[] }
+  | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
 /** `modbench.mod.sync`: a disabled winning-end line for each folder with none, and each mod line
- *  whose folder is gone dropped, in one write. `modFolders` is the value's listing of `mods/`. */
+ *  whose folder is gone dropped, in one write. `modFolders` is undefined when there is no `mods/`
+ *  to list, and that is refused. */
 export async function syncMods(
-  instanceRoot: string, profile: string, modFolders: readonly string[],
+  instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
 ): Promise<ModSyncResult> {
+  if (modFolders === undefined) {
+    return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist, so modlist.txt is left as it is.` };
+  }
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, (text) => {
@@ -175,5 +179,5 @@ export async function syncMods(
     const withoutGone = dropped.reduce((out, name) => removeModFromText(out, name), text);
     return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);
   });
-  return outcome.applied ? { ...outcome, added, dropped } : outcome;
+  return outcome.applied ? { applied: true, added, dropped } : outcome;
 }

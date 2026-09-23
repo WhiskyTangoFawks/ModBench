@@ -67,8 +67,8 @@ export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
   /** Every directory under mods/, listed or not: what mod sync compares modlist.txt with, and
-   *  the new-empty-mod refusal's own input. */
-  readonly modFolders: readonly string[];
+   *  the new-empty-mod refusal's own input. Undefined when there is no mods/ to list. */
+  readonly modFolders: readonly string[] | undefined;
   /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
    *  one. */
   readonly profiles: readonly string[];
@@ -129,14 +129,14 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
   }
 }
 
-// A missing mods/ lists nothing rather than throwing: a workspace before its first install is
-// not a failed read. Any other listing failure is a real one and fails the recompute.
-async function readModFolderNames(instanceRoot: string): Promise<string[]> {
+// A missing mods/ is an answer, not a failed read: a workspace before its first install has
+// none. Any other listing failure is a real one and fails the recompute.
+async function readModFolderNames(instanceRoot: string): Promise<string[] | undefined> {
   try {
     const dirents = await listDir(modsDir(instanceRoot));
     return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   } catch (err) {
-    if (errnoCode(err) === 'ENOENT') return [];
+    if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
   }
 }

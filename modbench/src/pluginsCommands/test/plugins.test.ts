@@ -154,7 +154,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(join(dir, 'overwrite', 'FromCK.esp'), 'plugin');
 
     expect(await run()).toEqual({
-      applied: true, wrote: true, append: ['Alpha.esl', 'FromCK.esp', 'zeta.esp'], prune: [],
+      applied: true, wrote: true, added: ['Alpha.esl', 'FromCK.esp', 'zeta.esp'], dropped: [],
     });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\nAlpha.esl\r\nFromCK.esp\r\nzeta.esp\r\n');
   });
@@ -163,21 +163,21 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(join(dir, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n*DLCCoast.esm\r\n');
 
-    expect(await run()).toEqual({ applied: true, wrote: true, append: [], prune: ['Gone.esp'] });
+    expect(await run()).toEqual({ applied: true, wrote: true, added: [], dropped: ['Gone.esp'] });
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 
   it('never appends from Data: a Data-folder plugin with no line stays unlisted', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
 
-    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run()).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
   });
 
   it('a line differing only in case from the provided name is the same plugin: neither appended nor pruned', async () => {
     await writeFile(pluginsPath(), '# header\r\n*BASE.esp\r\n');
 
-    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run()).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await plugins()).toBe('# header\r\n*BASE.esp\r\n');
   });
 
@@ -194,7 +194,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
 
-    expect(await run(undefined, ['Fallout4.esm'])).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run(undefined, ['Fallout4.esm'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
   });
 
@@ -205,14 +205,14 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
 
     expect(await run(undefined, [])).toEqual({
-      applied: true, wrote: true, append: ['Fallout4.esm'], prune: [],
+      applied: true, wrote: true, added: ['Fallout4.esm'], dropped: [],
     });
   });
 
   it('an implicit master matches its plugins.txt line case-insensitively', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
 
-    expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
   });
 
   // A resolved folder nobody could read is not "nothing is there": appending against half an
@@ -228,7 +228,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   // Rival: refuse on unknown implicit masters too. That run wrote nothing either way, so the
   // earlier answer stands and the refusal never reaches the log.
   it('answers the unknown implicit masters first, even when the Data folder could not be read', async () => {
-    expect(await run(UNREADABLE, null)).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run(UNREADABLE, null)).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
   });
 
   // A game directory that never resolved is the other unknowable, and a milder one: pruning
@@ -237,7 +237,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
 
-    expect(await run(null)).toEqual({ applied: true, wrote: true, append: ['New.esp'], prune: [] });
+    expect(await run(null)).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\nNew.esp\r\n');
   });
 
@@ -249,7 +249,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     const old = new Date('2020-01-01T00:00:00Z');
     await utimes(pluginsPath(), old, old);
 
-    expect(await run(undefined, null)).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run(undefined, null)).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
     expect(await mtime()).toEqual(old);
     expect(logs.join('\n')).toContain('implicit masters are unknown');
@@ -259,7 +259,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     const old = new Date('2020-01-01T00:00:00Z');
     await utimes(pluginsPath(), old, old);
 
-    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run()).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await mtime()).toEqual(old);
   });
 });

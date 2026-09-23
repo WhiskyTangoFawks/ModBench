@@ -38,6 +38,7 @@ import {
   uninstallMod,
 } from '../modlist';
 import { parseModlist } from '../../mo2Codecs/modlistText';
+import { modsDir } from '../../instanceAdapter/layout';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
@@ -320,7 +321,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   it('adds a line for a folder with none and drops a line whose folder is gone, in one write', async () => {
     const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
 
-    expect(outcome).toEqual({ applied: true, wrote: true, added: ['Hand Extracted Mod'], dropped: ['[NODELETE] Radfall'] });
+    expect(outcome).toEqual({ applied: true, added: ['Hand Extracted Mod'], dropped: ['[NODELETE] Radfall'] });
     const names = (await readModlist()).map((e) => e.name);
     expect(names).toContain('Hand Extracted Mod');
     expect(names).not.toContain('[NODELETE] Radfall');
@@ -332,7 +333,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await sync([...MOD_FOLDERS, '[NODELETE] Radfall']);
     vi.mocked(writeFile).mockClear();
 
-    expect(await sync([...MOD_FOLDERS, '[NODELETE] Radfall'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
+    expect(await sync([...MOD_FOLDERS, '[NODELETE] Radfall'])).toEqual({ applied: true, added: [], dropped: [] });
     expect(writesToModlist()).toBe(0);
   });
 
@@ -368,6 +369,16 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     await rm(modlistPath());
 
     assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
+  });
+
+  // A mods/ that is not there cannot be listed, so which folders are gone is unknown.
+  // Rival: reading its absence as no folders, which drops every mod line in one write.
+  it('refuses, naming the folder, and writes nothing when there is no mods/ to list', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+
+    assertRefusal(await syncMods(dir, 'Default', undefined), modsDir(dir));
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
   });
 });
 

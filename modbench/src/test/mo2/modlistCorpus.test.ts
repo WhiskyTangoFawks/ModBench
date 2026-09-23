@@ -155,7 +155,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    expect(outcome).toEqual({ applied: true, wrote: true, added: ['DragIn Manual Extract'], dropped: ['[NODELETE] Radfall'] });
+    expect(outcome).toEqual({ applied: true, added: ['DragIn Manual Extract'], dropped: ['[NODELETE] Radfall'] });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
     expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');
   });

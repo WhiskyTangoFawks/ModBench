@@ -342,7 +342,6 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       );
     }
 
-    // 1. FileConflictIndex — the winner map itself.
     const index = await buildFileConflictIndex(entries, litrInstance, () => {});
     for (const relativePath of contested) {
       const entry = index.files.get(relativePath);
@@ -350,7 +349,6 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       expect(entry?.winnerMod).toBe(fixName);
     }
 
-    // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index.
     const statuses = computeModStatuses([fixEntry, baseEntry], index);
     expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
     // baseName's real count is 5: it also ships an .esl another enabled mod happens to ship,

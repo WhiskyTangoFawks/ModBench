@@ -45,7 +45,7 @@ describe('plugins.txt + profile corpus', () => {
 
     // The fixture ships this plugin on disk with no plugins.txt line; an unresolved game
     // directory makes Data-folder presence unknowable, so nothing is pruned.
-    expect(result).toEqual({ applied: true, wrote: true, append: ['NonAsciiRetexture - Addon.esl'], prune: [] });
+    expect(result).toEqual({ applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: [] });
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
     expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
   });

@@ -16,6 +16,7 @@ import { syncMods, type ModSyncResult } from '../modlist/modlist';
 import { installFromFolder } from '../install/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import { modsDir } from '../instanceAdapter/layout';
 import { present } from '../ports/present';
 
 const MOD = 'Freshly Installed Mod';
@@ -59,7 +60,7 @@ async function wiredInstance(): Promise<{
   instance: Instance;
   channel: ReturnType<typeof channelDouble>;
   syncs: Promise<ModSyncResult>[];
-  handed: (readonly string[])[];
+  handed: (readonly string[] | undefined)[];
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
@@ -72,7 +73,7 @@ async function wiredInstance(): Promise<{
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
   // What the trigger handed the command, so a test can hold it against the value's own field.
-  const handed: (readonly string[])[] = [];
+  const handed: (readonly string[] | undefined)[] = [];
   registerModSync(instance, (profile, modFolders) => {
     handed.push(modFolders);
     const run = syncMods(root, profile, modFolders);
@@ -123,6 +124,22 @@ describe('registerModSync — driven by the Instance value', () => {
     expect(await modlistText(root)).not.toContain('Harder VATS');
   });
 
+  // Rival: the value reading a missing mods/ as no folders, which empties modlist.txt.
+  it('leaves modlist.txt as it is, and says why in one Output line, when mods/ goes missing', async () => {
+    const { root, instance, channel, syncs } = await wiredInstance();
+    const settled = await modlistText(root);
+    const before = instance.sequence;
+    await rm(modsDir(root), { recursive: true, force: true });
+
+    watcherFor('mods/**').fireDelete(modsDir(root));
+    await pastSequence(instance, before);
+    await syncs[syncs.length - 1];
+
+    expect(await modlistText(root)).toBe(settled);
+    expect(channel.error).toHaveBeenCalledTimes(1);
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining(modsDir(root)));
+  });
+
   // The folders come off the value, so the command never lists mods/.
   // Rival: a trigger that lists the directory itself and hands that instead.
   it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
@@ -148,7 +165,7 @@ describe('registerModSync — driven by the Instance value', () => {
     await pastSequence(instance, before);
     const outcome = await syncs[syncs.length - 1];
 
-    expect(outcome).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
+    expect(outcome).toEqual({ applied: true, added: [], dropped: [] });
     expect(await modlistText(root)).toBe(settled);
     expect(channel.info).not.toHaveBeenCalled();
     expect(channel.error).not.toHaveBeenCalled();
@@ -185,7 +202,7 @@ function firedOnce(outcome: () => Promise<ModSyncResult>): { channel: ReturnType
 describe('registerModSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
     const { channel, run } = firedOnce(() => Promise.resolve<ModSyncResult>(
-      { applied: true, wrote: true, added: ['New Mod'], dropped: ['Gone Mod'] }));
+      { applied: true, added: ['New Mod'], dropped: ['Gone Mod'] }));
     await run();
 
     expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));

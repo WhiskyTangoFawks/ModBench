@@ -629,18 +629,19 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 
   // A workspace before its first install has no mods/ at all. The sequence bump is what proves
-  // the recompute landed rather than a swallowed failure, as the downloads case above.
-  it('yields a value with no mod folders, rather than a failure, when mods/ is absent', async () => {
+  // the recompute landed rather than a swallowed failure, as the downloads case above. Absent is
+  // not empty: mod sync would drop every line against an empty listing.
+  it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
-    expect(instance.value.modFolders.length).toBeGreaterThan(0);
+    expect(instance.value.modFolders?.length).toBeGreaterThan(0);
     const before = instance.sequence;
 
     await rm(join(root, 'mods'), { recursive: true, force: true });
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.modFolders).toEqual([]);
+    expect(instance.value.modFolders).toBeUndefined();
   });
 
   // Same reasoning again: the empty value already has `gameDirectory: undefined`, so a prior
@@ -838,7 +839,7 @@ describe('Instance — listing mods/', () => {
   });
 
   // The other half, on the same isolated tree: ENOENT alone is tolerated, and the value lands.
-  it('lands a value with no mod folders when mods/ is absent entirely', async () => {
+  it('lands a value whose mod folders are unknown when mods/ is absent entirely', async () => {
     const { root, instance } = await minimalInstance();
     await separatorOnly(root);
     await rm(join(root, 'mods'), { recursive: true, force: true });
@@ -846,7 +847,7 @@ describe('Instance — listing mods/', () => {
     await instance.refresh();
 
     expect(instance.sequence).toBe(1);
-    expect(instance.value.modFolders).toEqual([]);
+    expect(instance.value.modFolders).toBeUndefined();
   });
 });
 
@@ -866,7 +867,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     await instance.refresh();
 
-    expect([...instance.value.modFolders].sort()).toEqual(['Consumer', 'Unlisted Folder']);
+    expect([...present(instance.value.modFolders, 'the listed mods/ folders')].sort()).toEqual(['Consumer', 'Unlisted Folder']);
   });
 
   it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {

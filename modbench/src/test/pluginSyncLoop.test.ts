@@ -12,6 +12,7 @@ import { registerPluginSync } from '../pluginSyncTrigger';
 import { syncPlugins, setPluginEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -90,7 +91,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
     const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]), () => {});
     syncs.push(run);
     return run;
-  });
+  }, { error: () => {}, info: () => {} });
 
   const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
   return { root, instance, syncs, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
@@ -191,5 +192,64 @@ describe('a gesture writes the profile the Instance last landed', () => {
     expect(result).toEqual({ applied: true, wrote: true });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
     expect(await pluginsOf(PROFILE)).toBe('*Base.esp\r\n');
+  });
+});
+
+function firedOnce(outcome: () => Promise<PluginSyncResult>): {
+  channel: { error: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> };
+  run: () => Promise<unknown>;
+} {
+  let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
+  const instance = {
+    subscribe: (cb: (value: InstanceValue, seq: number) => void) => {
+      subscriber = cb;
+      return { dispose: () => { subscriber = undefined; } };
+    },
+  };
+  const channel = { error: vi.fn(), info: vi.fn() };
+  const calls: Promise<PluginSyncResult>[] = [];
+  registerPluginSync(instance, () => {
+    const run = outcome();
+    calls.push(run);
+    return run;
+  }, channel);
+  expect(() => subscriber?.(instanceValueFixture(), 1)).not.toThrow();
+  return { channel, run: () => present(calls[calls.length - 1], 'the sync the fire triggered').catch(() => undefined) };
+}
+
+describe('registerPluginSync — outcome handling', () => {
+  it('logs the lines it added and dropped, one Output line each way', async () => {
+    const { channel, run } = firedOnce(() => Promise.resolve<PluginSyncResult>(
+      { applied: true, wrote: true, added: ['New.esp'], dropped: ['Gone.esp'] }));
+    await run();
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New.esp'));
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('Gone.esp'));
+    expect(channel.error).not.toHaveBeenCalled();
+  });
+
+  it('logs nothing when the file already agrees', async () => {
+    const { channel, run } = firedOnce(() => Promise.resolve<PluginSyncResult>(
+      { applied: true, wrote: false, added: [], dropped: [] }));
+    await run();
+
+    expect(channel.info).not.toHaveBeenCalled();
+    expect(channel.error).not.toHaveBeenCalled();
+  });
+
+  it('logs the command\'s own refusal', async () => {
+    const { channel, run } = firedOnce(() => Promise.resolve<PluginSyncResult>(
+      { applied: false, refusal: 'plugins.txt is locked' }));
+    await run();
+
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('plugins.txt is locked'));
+  });
+
+  // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.
+  it('logs a thrown sync error the same way', async () => {
+    const { channel, run } = firedOnce(() => Promise.reject(new Error('disk unplugged')));
+    await run();
+
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
   });
 });

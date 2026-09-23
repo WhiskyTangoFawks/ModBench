@@ -434,24 +434,12 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginSync = async (
+  const runPluginSync = (
     profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
     folder: string | undefined, gameName: string,
-  ) => {
-    const result = await syncPlugins(
-      instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName),
-      (msg) => outputChannel.debug(msg));
-    if (!result.applied) {
-      outputChannel.error(`[modmanager] plugin sync failed: ${result.refusal}`);
-      return;
-    }
-    if (result.append.length > 0) {
-      outputChannel.info(`[modmanager] plugin sync added ${result.append.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${result.append.join(', ')}`);
-    }
-    if (result.prune.length > 0) {
-      outputChannel.info(`[modmanager] plugin sync dropped ${result.prune.length} plugins.txt line(s) with no plugin on disk: ${result.prune.join(', ')}`);
-    }
-  };
+  ) => syncPlugins(
+    instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName),
+    (msg) => outputChannel.debug(msg));
   const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot, dataFolder,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
@@ -498,7 +486,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
   ownAll(own, registerOverwriteView(instance, reporterFor('overwrite.reveal')));
   own(registerModSync(instance, (profile, modFolders) => syncMods(instanceRoot, profile, modFolders), outputChannel));
-  own(registerPluginSync(instance, runPluginSync));
+  own(registerPluginSync(instance, runPluginSync, outputChannel));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,

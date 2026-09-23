@@ -7,7 +7,7 @@ import { errorMessage } from './ports/errorMessage';
 // agrees with mods/, so the command writes nothing, which stops the loop.
 export function registerModSync(
   instance: Pick<Instance, 'subscribe'>,
-  sync: (profile: string, modFolders: readonly string[]) => Promise<ModSyncResult>,
+  sync: (profile: string, modFolders: readonly string[] | undefined) => Promise<ModSyncResult>,
   channel: { error(msg: string): void; info(msg: string): void },
 ): vscode.Disposable {
   return instance.subscribe((value) => {
