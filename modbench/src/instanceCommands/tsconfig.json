@@ -6,8 +6,11 @@
   },
   "references": [
     { "path": "../mo2Codecs" },
+    { "path": "../tables" },
+    { "path": "../ports" },
     { "path": "../instanceAdapter" },
-    { "path": "../ports" }
+    { "path": "../instanceLoader" },
+    { "path": "../client" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

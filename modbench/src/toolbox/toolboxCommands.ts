@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import type { Instance } from './instanceLoader/instance';
-import { switchProfile } from './instanceCommands/profile';
-import type { Reporter } from './ports/reporter';
+import type { Instance } from '../instanceLoader/instance';
+import { switchProfile } from '../instanceCommands/profile';
+import type { RefreshResult } from '../instanceCommands/loadOrder';
+import type { Reporter } from '../ports/reporter';
 
 export interface ToolboxCommandDeps {
   instanceRoot: string;
@@ -34,4 +35,25 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       // watches — its own recompute reaches the load order and the Toolbox's profile row.
     }),
   ];
+}
+
+export interface RefreshGestureDeps {
+  /** instance commands' refresh, bound by the root to the mEdit client and the current value. */
+  refresh: () => Promise<RefreshResult>;
+  instance: Pick<Instance, 'refresh'>;
+  reporter: Reporter;
+}
+
+// One gesture for all of Modbench, and only the safety net for a missed watcher event. Undefined
+// deps with no instance open: the title icon still shows, so the command exists and does nothing.
+export function registerRefreshCommand(deps: RefreshGestureDeps | undefined): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.refresh', async () => {
+    if (!deps) return;
+    const outcome = await deps.refresh();
+    if (!outcome.applied) {
+      deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
+      return;
+    }
+    await deps.instance.refresh();
+  });
 }

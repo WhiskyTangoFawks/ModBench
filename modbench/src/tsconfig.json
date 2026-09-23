@@ -3,7 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "../out/projects/root",
-    // The composition root: the activation file and the Toolbox compose every box onto the
+    // The composition root: the activation file and its wiring compose every box onto the
     // extension host, and reference every box by definition (target-architecture-references.d2).
     "types": ["node", "vscode"]
   },
@@ -19,6 +19,7 @@
     { "path": "./instanceCommands" },
     { "path": "./install" },
     { "path": "./client" },
+    { "path": "./toolbox" },
     { "path": "./mods" },
     { "path": "./downloads" },
     { "path": "./plugins" },

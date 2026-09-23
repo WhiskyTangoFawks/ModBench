@@ -36,9 +36,9 @@ export interface ExtensionSession {
 // ADR-0002: one progress indicator, in the view whose contents are loading — not a per-command
 // `ProgressLocation.Notification`. The message clears on every exit path, so no failure leaves
 // the view claiming a load that is not running.
-export function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<void>): Promise<void> {
+export function withPluginsViewProgress<T>(session: ExtensionSession, work: () => Promise<T>): Promise<T> {
   return Promise.resolve(vscode.window.withProgress(
     { location: { viewId: 'modbench.pluginListTree' } },
-    async () => { try { await work(); } finally { say(session, undefined); } },
+    async () => { try { return await work(); } finally { say(session, undefined); } },
   ));
 }

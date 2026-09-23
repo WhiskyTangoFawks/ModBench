@@ -52,8 +52,9 @@ board: each numbered milestone is an epic in priority order, its issues are the 
 ```
 modbench/          VS Code extension (TypeScript) + React webview for the compare grid, one
                    composite project per box of docs/architecture/
-  src/*.ts, src/medit/  the activation file and its wiring, Modbench's composition root: the
-                        Toolbox view today, mEdit's status bar, log and filter code lens
+  src/*.ts, src/medit/  the activation file and its wiring, Modbench's composition root:
+                        mEdit's status bar, log and filter code lens
+  src/toolbox/       Toolbox view — the instance's profile row, switch profile and refresh
   src/mods/          Mods view — the modlist tree and every mod gesture, never calling the
                      backend
   src/plugins/       Plugins view — the one tree, rows from the instance value and records from

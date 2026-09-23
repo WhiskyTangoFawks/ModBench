@@ -1464,6 +1464,10 @@ describe('Refresh rebuilds the index, then resends the load order', () => {
     assert.ok(rebuildAt >= 0, 'modbench.refresh must rebuild the index');
     assert.ok(putAt >= 0, 'modbench.refresh must resend the load order after the rebuild');
     assert.ok(rebuildAt < putAt, 'the rebuild must run before the load order is resent');
+    // The re-read that ends a refresh lands a value, and the landed value is put again; waiting
+    // for it keeps that put out of the next test's log.
+    await waitFor('the re-read\'s own load order put', () =>
+      requestLog.filter((l) => l === 'PUT /load-order').length >= 2);
   });
 
   it('sends no load order when the rebuild is refused (the index held elsewhere)', async () => {
