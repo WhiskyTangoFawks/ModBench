@@ -35,6 +35,10 @@ Gestures Modbench does differently.
 | 9 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
 | 10 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
 | 11 | Change FormID | Renumber changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
+| 12 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
+| 13 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
+| 14 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
+| 15 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
 
 ## Omissions by object
 

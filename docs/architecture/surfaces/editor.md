@@ -10,7 +10,7 @@ conflict, tracked mod.
 
 The Editor surface has three more files:
 
-- [editor-fields_draft.md](editor-fields_draft.md): how each field reads and edits, type by type.
+- [editor-fields.md](editor-fields.md): how each field reads and edits, type by type.
 - [editor-conflicts_draft.md](editor-conflicts_draft.md): the colours of a record order conflict.
 - [editor-referenced-by_draft.md](editor-referenced-by_draft.md): the Referenced By view.
 
@@ -74,7 +74,7 @@ As a user, I want:
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
 | `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | old spec |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007, invariant 1 |
-| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that only the EditorID and the record header's flags can be edited | xEdit; [editor-fields_draft.md](editor-fields_draft.md) |
+| `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that only the EditorID and the record header's flags can be edited | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed,
@@ -96,7 +96,7 @@ As a user, I want:
 6. Each row and each cell coloured by the record order conflict it shows.
    *[editor-conflicts_draft.md](editor-conflicts_draft.md)*
 7. What each cell reads, and how it edits, as its field's type says.
-   *[editor-fields_draft.md](editor-fields_draft.md)*
+   *[editor-fields.md](editor-fields.md)*
 
 ## The focused cell
 
@@ -118,7 +118,7 @@ As a user, I want:
 5. Ctrl+C to copy the focused cell's value in any column; Ctrl+X to copy it and then clear it, and
    Ctrl+V to paste over it, in a column that can be edited. The value is the cell's, never text on
    the screen, so it is the same whatever the cell draws.
-   *xEdit; [editor-fields_draft.md](editor-fields_draft.md)*
+   *xEdit; [editor-fields.md](editor-fields.md)*
 6. Delete to remove the focused element, and Alt+Up or Alt+Down to move it one step, as VS Code
    moves a line, each as the array's kind allows. Delete on a field that is not an element clears
    it, as xEdit's Clear does. Add has no key, since VS Code has none for it. *VS Code; catalog
