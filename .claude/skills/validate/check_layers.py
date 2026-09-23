@@ -156,13 +156,10 @@ def parse_trace_actors(path: Path):
     return actors
 
 
-def _wildcard_resolves(band, other_id, ref_pairs, store_pairs, boxes_by_band):
-    other2 = top2(other_id)
-    for box in boxes_by_band.get(band, ()):
-        pair = frozenset((box, other2))
-        if pair in ref_pairs or pair in store_pairs:
-            return True
-    return False
+def _members(band, boxes_by_band):
+    """A wildcard stands for the boxes of its band that reach by drawn arrows; a composition
+    root reaches everything by definition, so as a member it would let the set pass anything."""
+    return [('real', box) for box in sorted(boxes_by_band.get(band, ())) if box not in COMPOSITION_ROOTS]
 
 
 def message_allowed(src, dst, msg_class, ref_pairs, store_pairs, boxes_by_band):
@@ -173,12 +170,12 @@ def message_allowed(src, dst, msg_class, ref_pairs, store_pairs, boxes_by_band):
     src_kind, src_val = src
     dst_kind, dst_val = dst
 
-    if src_kind == 'wildcard' and dst_kind == 'wildcard':
-        return False
     if src_kind == 'wildcard':
-        return _wildcard_resolves(src_val, dst_val, ref_pairs, store_pairs, boxes_by_band)
+        return any(message_allowed(m, dst, msg_class, ref_pairs, store_pairs, boxes_by_band)
+                   for m in _members(src_val, boxes_by_band))
     if dst_kind == 'wildcard':
-        return _wildcard_resolves(dst_val, src_val, ref_pairs, store_pairs, boxes_by_band)
+        return any(message_allowed(src, m, msg_class, ref_pairs, store_pairs, boxes_by_band)
+                   for m in _members(dst_val, boxes_by_band))
 
     src_id, dst_id = src_val, dst_val
     src_parent, dst_parent = parent_of(src_id), parent_of(dst_id)

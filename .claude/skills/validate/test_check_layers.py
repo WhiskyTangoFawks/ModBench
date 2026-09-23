@@ -258,6 +258,73 @@ class TraceMessagesAgainstReferenceView(unittest.TestCase):
             self.assertEqual(len(failures), 1)
             self.assertIn("a -> views", failures[0])
 
+    def test_wildcard_core_actor_reaches_a_kernel_box_of_its_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = (
+                "...@../styles\nshape: sequence_diagram\n"
+                + '\ncmds: "every commands box" {class: core}\n'
+                + self.actor_block("codec", "fx_kernel.codec")
+                + "\ncmds -> codec: the lines {class: loadorder}\n"
+                + "codec -> cmds: bytes {class: loadorder}\n"
+            )
+            root = make_fixture(
+                pathlib.Path(tmp),
+                "fx_core.commands -> fx_driven.files {class: ref}\n",
+                {"one": trace},
+            )
+            self.assertEqual(cl.run(root), [])
+
+    def test_two_wildcard_actors_pass_when_a_drawn_arrow_joins_a_member_of_each(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = (
+                "...@../styles\nshape: sequence_diagram\n"
+                + 'surfaces: "every view" {class: driving}\n'
+                + 'cmds: "every commands box" {class: core}\n'
+                + "surfaces -> cmds: the gesture {class: loadorder}\n"
+                + "cmds -> surfaces: applied or refusal {class: loadorder}\n"
+            )
+            root = make_fixture(
+                pathlib.Path(tmp),
+                "fx_driving.mods -> fx_core.modcommands {class: ref}\n",
+                {"one": trace},
+            )
+            self.assertEqual(cl.run(root), [])
+
+    def test_two_wildcard_actors_with_no_arrow_between_their_members_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = (
+                "...@../styles\nshape: sequence_diagram\n"
+                + 'surfaces: "every view" {class: driving}\n'
+                + 'cmds: "every commands box" {class: core}\n'
+                + "surfaces -> cmds: the gesture {class: loadorder}\n"
+            )
+            root = make_fixture(
+                pathlib.Path(tmp),
+                "fx_driving.mods -> fx_driven.files {class: ref}\n"
+                "fx_core.modcommands -> fx_driven.files {class: ref}\n",
+                {"one": trace},
+            )
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn("surfaces -> cmds", failures[0])
+
+    def test_a_composition_root_in_a_wildcard_does_not_let_it_reach_everything(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = (
+                "...@../styles\nshape: sequence_diagram\n"
+                + 'views: "every view" {class: driving}\n'
+                + self.actor_block("a", "fx_driven.a")
+                + "\nviews -> a: a stray call {class: edit}\n"
+            )
+            root = make_fixture(
+                pathlib.Path(tmp),
+                "medit_driving.http -> fx_core.b {class: ref}\n",
+                {"one": trace},
+            )
+            failures = cl.run(root)
+            self.assertEqual(len(failures), 1)
+            self.assertIn("views -> a", failures[0])
+
 
 class RealRepoDiagrams(unittest.TestCase):
     def test_the_committed_diagrams_pass_the_checker(self):
