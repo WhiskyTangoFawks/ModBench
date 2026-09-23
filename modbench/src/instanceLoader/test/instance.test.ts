@@ -628,9 +628,8 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.downloads).toEqual([]);
   });
 
-  // A workspace before its first install has no mods/ at all. The sequence bump is what proves
-  // the recompute landed rather than a swallowed failure, as the downloads case above. Absent is
-  // not empty: mod sync would drop every line against an empty listing.
+  // A workspace before its first install has no mods/, and the sequence bump proves the
+  // recompute landed. Absent is not empty: mod sync would drop every line against an empty list.
   it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
