@@ -17,7 +17,7 @@ public sealed class GameNamespaceScanTests
     private static readonly string[] ScannedRoots =
     ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
 
     // The codec and the Plugin adapter, the two boxes the game assemblies live in.
     private static readonly string[] ExemptFolders =

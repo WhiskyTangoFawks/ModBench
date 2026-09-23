@@ -2,7 +2,7 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests.Edits;
 

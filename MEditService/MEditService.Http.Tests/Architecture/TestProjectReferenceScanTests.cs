@@ -23,7 +23,7 @@ public sealed class TestProjectReferenceScanTests
         ["MEditService.Commands"] = "medit_core.commands",
         ["MEditService.Queries"] = "medit_core.queries",
         ["MEditService.Index"] = "medit_driven.index",
-        ["MEditService.SourceRepo"] = "medit_driven.sourcerepo",
+        ["MEditService.SourceAdapter"] = "medit_driven.sourceadapter",
         [PluginAdapter] = "medit_driven.pluginadapter",
         [LoadOrder] = "medit_kernel.loadorder",
         ["MEditService.Codec"] = "medit_kernel.codec",

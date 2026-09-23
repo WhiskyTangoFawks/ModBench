@@ -22,8 +22,8 @@ indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
 codec.label: Codec + schema
-sourcerepo: @../target-architecture.medit_driven.sourcerepo
-sourcerepo.label: Source adapter
+sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter.label: Source adapter
 pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
 store: @../target-architecture.medit_driven.index.store
@@ -40,7 +40,7 @@ commands -> loadorder: load order snapshot {class: query}
 http -> indexer: "reconcile: validate by hash" {class: signal}
 loadorder -> indexer: winners {class: query}
 codec -> indexer: schema {class: query}
-sourcerepo -> indexer: documents (tracked) {class: query}
+sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
 indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}

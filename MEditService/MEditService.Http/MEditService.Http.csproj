@@ -35,7 +35,7 @@
     <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
     <!-- The composition root references every box below it by definition (ADR-0014). -->
-    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
   </ItemGroup>

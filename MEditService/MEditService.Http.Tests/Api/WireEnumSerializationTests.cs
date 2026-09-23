@@ -3,7 +3,7 @@ using MEditService.Http.Endpoints;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Ports;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

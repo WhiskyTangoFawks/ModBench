@@ -1,7 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;

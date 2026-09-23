@@ -16,7 +16,7 @@ cd MEditService && bash ../.claude/skills/mutation-test/stryker/run.sh --box <Bo
 ```
 
 `<Box>` is one of `Codec Commands Http Index LoadOrder PluginAdapter Ports Queries
-SourceRepo Watcher` — the ten production projects. `run.sh` prints its scope, then the
+SourceAdapter Watcher` — the ten production projects. `run.sh` prints its scope, then the
 report path, then the parsed survivors. Raw Stryker output goes to a log file and never
 reaches agent context.
 

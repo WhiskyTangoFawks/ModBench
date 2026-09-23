@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
 

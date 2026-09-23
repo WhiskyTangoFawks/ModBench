@@ -2,7 +2,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
 
