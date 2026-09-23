@@ -9,7 +9,7 @@ import {
 } from './downloads/DownloadsPanel';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './downloads/HiddenDownloadDecorationProvider';
-import type { Instance, InstanceView } from './instance/instance';
+import type { Instance, InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';

@@ -19,8 +19,8 @@ pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nplugins.txt · mods/ · overwrite/"
-instance: @../target-architecture.modbench_driven.instance
-instance.label: Instance loader
+instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
 
@@ -34,9 +34,9 @@ plugin."the same file, in the picked mod's folder or in overwrite/"
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
-mo2 -> instance: watch {class: signal}
-instance."a plugin on disk with no plugins.txt line"
-instance -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
+mo2 -> instanceloader: watch {class: signal}
+instanceloader."a plugin on disk with no plugins.txt line"
+instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 
 refused: "refused, before any write" {
   commands -> http: "the file exists · no load order held" {class: edit}

@@ -4,7 +4,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUr
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
 
 import { publishLoadDiagnoses } from '../loadDiagnostics';
-import type { OriginFolder } from '../../instance/loadOrderSnapshot';
+import type { OriginFolder } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 

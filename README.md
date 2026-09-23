@@ -71,8 +71,8 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/mo2Codecs/, src/wire/, src/tables/, src/ports/
                      the kernel — the MO2 file codecs, the generated API types and webview
                      protocol, the per-release tables, and the report / ask / trash port
-  src/instance/      the Instance loader — the instance value, built only by watching
-  src/mo2Files/      the Instance adapter — the one reader and writer of the instance
+  src/instanceLoader/   the Instance loader — the instance value, built only by watching
+  src/instanceAdapter/  the Instance adapter — the one reader and writer of the instance
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
                    per box of docs/architecture/
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via

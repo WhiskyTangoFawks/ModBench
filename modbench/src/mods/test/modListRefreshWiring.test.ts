@@ -19,7 +19,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { Instance } from '../../instance/instance';
+import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, ModNode } from '../ModListProvider';
 
 async function setup() {

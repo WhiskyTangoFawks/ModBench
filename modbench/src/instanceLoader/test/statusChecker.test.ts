@@ -104,7 +104,7 @@ describe('computeModStatuses', () => {
 });
 
 describe('computeModStatuses — non-ENOENT existence-check failures propagate', () => {
-  // mo2Files.exists's own contract: only ENOENT reads as absent, any other failure propagates.
+  // instanceAdapter.exists's own contract: only ENOENT reads as absent, any other failure propagates.
   // A permission-denied mod folder (real: a restrictively-mounted or externally-managed
   // mods/ subtree) must reject, not silently degrade to missingMod like ENOENT does.
   it('rejects rather than degrading to missingMod on a non-ENOENT existence-check error', async () => {

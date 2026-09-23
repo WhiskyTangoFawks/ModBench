@@ -192,9 +192,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
 
     it('an mEdit-client import planted in the Instance file itself is caught, at its real nested depth', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'instance'), { recursive: true });
-        writeFileSync(join(root, 'instance', 'instance.ts'), "import { EditingController } from '../medit/EditingController';\n");
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('instance', 'instance.ts')]);
+        mkdirSync(join(root, 'instanceLoader'), { recursive: true });
+        writeFileSync(join(root, 'instanceLoader', 'instance.ts'), "import { EditingController } from '../medit/EditingController';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('instanceLoader', 'instance.ts')]);
       });
     });
 

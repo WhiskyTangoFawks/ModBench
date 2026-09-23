@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../client';
-import type { InstanceValue, InstanceView, PluginEntry } from '../instance/instance';
+import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';

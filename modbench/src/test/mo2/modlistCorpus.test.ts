@@ -16,7 +16,7 @@ import {
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
 } from './corpusFixture';
-import type { Mod, Separator } from '../../instance/instance';
+import type { Mod, Separator } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;

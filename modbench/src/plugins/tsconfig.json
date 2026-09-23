@@ -9,7 +9,7 @@
   },
   "references": [
     { "path": "../client" },
-    { "path": "../instance" },
+    { "path": "../instanceLoader" },
     { "path": "../pluginsCommands" },
     { "path": "../ports" }
   ],

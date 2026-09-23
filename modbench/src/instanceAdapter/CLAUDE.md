@@ -1,4 +1,4 @@
-# mo2Files
+# instanceAdapter
 
 Instance adapter. A repository, the one box that reads or writes the instance: the mod manager's
 configuration, the load order, the mods and the downloads. MO2 is one implementation of it, and the

@@ -1,12 +1,12 @@
 // Every write to a profile's plugins.txt. Commands return applied-or-refusal, never throw
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
-import { foldPath } from '../instance/fileConflictIndex';
-import type { DataFolderPlugins } from '../instance/loadOrderSnapshot';
-import { pluginsFile } from '../mo2Files/layout';
+import { foldPath } from '../instanceLoader/fileConflictIndex';
+import type { DataFolderPlugins } from '../instanceLoader/loadOrderSnapshot';
+import { pluginsFile } from '../instanceAdapter/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
-import { putIfChanged } from '../mo2Files/files';
+import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { GameDirectoryOverrides } from './mo2Files/gameDirectory';
+import type { GameDirectoryOverrides } from './instanceAdapter/gameDirectory';
 import { mo2InstanceContext } from './mo2InstanceContext';
 
 /** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither

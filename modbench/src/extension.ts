@@ -20,12 +20,12 @@ import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
 import { GAME_DIRECTORY_SECTION } from './gameDirectorySetting';
-import { isTracked } from './mo2Files/files';
+import { isTracked } from './instanceAdapter/files';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
-import { originFolder, type OriginFolder } from './instance/loadOrderSnapshot';
+import { originFolder, type OriginFolder } from './instanceLoader/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 import { errorMessage } from './ports/errorMessage';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { downloadContextValue, filterHiddenRows, sortDownloadRows } from '../downloadRows';
-import type { DownloadRow } from '../../instance/instance';
+import type { DownloadRow } from '../../instanceLoader/instance';
 
 const row = (name: string, mtimeMs: number, hidden = false): DownloadRow => ({
   name,

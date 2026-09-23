@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import type { DownloadEntry } from '../mo2Codecs/downloads';
 import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
-import { downloadsDir } from '../mo2Files/layout';
-import { factsOf, get, listDir } from '../mo2Files/files';
+import { downloadsDir } from '../instanceAdapter/layout';
+import { factsOf, get, listDir } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.

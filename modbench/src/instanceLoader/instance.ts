@@ -26,11 +26,11 @@ import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
   downloadFile, downloadSidecarFile, downloadsDir, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
   pluginsFile, profilesDir, settingsFile,
-} from '../mo2Files/layout';
-import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirectory';
+} from '../instanceAdapter/layout';
+import type { GameDirectory, GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
-import { get, listDir } from '../mo2Files/files';
+import { get, listDir } from '../instanceAdapter/files';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that

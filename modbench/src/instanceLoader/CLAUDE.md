@@ -1,4 +1,4 @@
-# instance
+# instanceLoader
 
 Instance loader. Owns the instance value, which carries which game the instance is for: it builds
 the value from disk and nothing else, and rebuilds the whole value on every change. It hides every

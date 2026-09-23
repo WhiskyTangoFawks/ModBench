@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { firstReadOf } from '../instanceFirstRead';
-import type { InstanceSubscriber, ReadFailureListener } from '../../instance/instance';
+import type { InstanceSubscriber, ReadFailureListener } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 // ADR-0013: the one path from a landed recompute to a PUT — no gesture, command or view calls

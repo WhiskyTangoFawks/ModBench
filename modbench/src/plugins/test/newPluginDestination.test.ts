@@ -9,7 +9,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance } from '../../instance/instance';
+import { Instance } from '../../instanceLoader/instance';
 import { resolvePluginDestination, type PluginDestinationChoice } from '../pluginDestination';
 import { appendPlugin } from '../../pluginsCommands/plugins';
 import { present } from '../../ports/present';

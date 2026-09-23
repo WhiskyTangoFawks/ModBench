@@ -1,4 +1,4 @@
-// MO2 files: the one reader and writer of the instance (target-architecture.d2's `mo2files`
+// MO2 files: the one reader and writer of the instance (target-architecture.d2's `instanceadapter`
 // box). A command splices a file's text through its own codec and puts the result through here.
 
 import { existsSync, type Dirent } from 'node:fs';

@@ -11,13 +11,13 @@ const SRC = join(__dirname, '..', '..');
 // instance.ts owns every watcher; each watcher module calls the factory one level down
 // (createDebouncedFsWatcher or vscode.workspace.createFileSystemWatcher) to define its own.
 const ALLOWED = new Set([
-  join('instance', 'instance.ts'),
-  join('instance', 'fsWatcher.ts'),
-  join('instance', 'modsWatcher.ts'),
-  join('instance', 'modlistWatcher.ts'),
-  join('instance', 'pluginsTxtWatcher.ts'),
-  join('instance', 'overwriteWatcher.ts'),
-  join('instance', 'downloadsWatcher.ts'),
+  join('instanceLoader', 'instance.ts'),
+  join('instanceLoader', 'fsWatcher.ts'),
+  join('instanceLoader', 'modsWatcher.ts'),
+  join('instanceLoader', 'modlistWatcher.ts'),
+  join('instanceLoader', 'pluginsTxtWatcher.ts'),
+  join('instanceLoader', 'overwriteWatcher.ts'),
+  join('instanceLoader', 'downloadsWatcher.ts'),
 ]);
 
 const WATCHER_FACTORY = /^create\w*Watcher$/;

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
-import type { Instance } from '../instance/instance';
-import { OVERWRITE_ORIGIN } from '../instance/loadOrderSnapshot';
+import type { Instance } from '../instanceLoader/instance';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
 import { appendPlugin } from '../pluginsCommands/plugins';

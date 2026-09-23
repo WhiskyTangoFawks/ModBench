@@ -9,13 +9,13 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVs
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from '../instance/instance';
+import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { registerModAdoption, type ModAdoptionOutcome } from '../modAdoptionTrigger';
 import { adoptMods } from '../modlist/modlist';
 import { installFromFolder } from '../install/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
-import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
+import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 import { present } from '../ports/present';
 
 const MOD = 'Freshly Installed Mod';

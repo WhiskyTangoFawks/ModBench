@@ -2,9 +2,9 @@
 // refusal. It writes ModOrganizer.ini and forgets — the Instance's watcher over that file is
 // how the switch comes back.
 
-import { settingsFile } from '../mo2Files/layout';
+import { settingsFile } from '../instanceAdapter/layout';
 import { readSelectedProfile, setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
-import { putIfChanged } from '../mo2Files/files';
+import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
 
 /** `wrote` is false when the profile was already selected: no byte changes, so the

@@ -7,7 +7,7 @@ import { present } from '../../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
-import type { GameDirectoryResolver } from '../../mo2Files/gameDirectory';
+import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:

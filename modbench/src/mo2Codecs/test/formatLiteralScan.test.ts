@@ -21,9 +21,9 @@ const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'g
 // MO2's layout: the names of the directories and files the extension touches, each against its
 // one speller. A directory is MO2 files'; a file's own name is its codec's.
 const LAYOUT_OWNERS: Record<string, string> = {
-  profiles: join('mo2Files', 'layout.ts'),
-  mods: join('mo2Files', 'layout.ts'),
-  downloads: join('mo2Files', 'layout.ts'),
+  profiles: join('instanceAdapter', 'layout.ts'),
+  mods: join('instanceAdapter', 'layout.ts'),
+  downloads: join('instanceAdapter', 'layout.ts'),
   overwrite: join('mo2Codecs', 'modlistText.ts'),
   'modlist.txt': join('mo2Codecs', 'modlistText.ts'),
   'plugins.txt': join('mo2Codecs', 'pluginsText.ts'),
@@ -284,17 +284,17 @@ describe('mo2 layout names', () => {
   });
 
   it('leaves test files to spell their own fixtures', () => {
-    expect(isTestFile(join('src', 'instance', 'test', 'instance.test.ts'))).toBe(true);
+    expect(isTestFile(join('src', 'instanceLoader', 'test', 'instance.test.ts'))).toBe(true);
     expect(isTestFile(join('src', 'test', 'mo2', 'corpusFixture.ts'))).toBe(true);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.test.tsx'))).toBe(true);
-    expect(isTestFile(join('src', 'instance', 'instance.ts'))).toBe(false);
+    expect(isTestFile(join('src', 'instanceLoader', 'instance.ts'))).toBe(false);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.tsx'))).toBe(false);
   });
 
   // Rival: a codec's own file name spelled in MO2 files' layout as well, which is how one name
   // gets two spellers without either scan noticing.
   it('MO2 files spells the directory names and no file name of a codec’s', () => {
-    const path = join(EXTENSION_SRC, 'mo2Files', 'layout.ts');
+    const path = join(EXTENSION_SRC, 'instanceAdapter', 'layout.ts');
     expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads']);
   });
 });

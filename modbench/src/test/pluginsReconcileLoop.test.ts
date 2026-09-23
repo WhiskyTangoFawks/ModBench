@@ -3,11 +3,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
-import type { GameDirectoryResolver } from '../mo2Files/gameDirectory';
+import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from '../instance/instance';
+import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { registerPluginsReconcile } from '../pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';

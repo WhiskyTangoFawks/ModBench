@@ -17,8 +17,8 @@ import {
 } from '../mo2Codecs/modlistText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../mo2Files/layout';
-import { ensureDir, exists, put, putIfChanged, remove } from '../mo2Files/files';
+import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../instanceAdapter/layout';
+import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
 

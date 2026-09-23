@@ -8,7 +8,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
-    { "path": "../instance" },
+    { "path": "../instanceLoader" },
     { "path": "../install" },
     { "path": "../modlist" },
     { "path": "../ports" }

@@ -10,7 +10,7 @@ import { present } from '../ports/present';
 const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'install'];
 
 // A type the value carries arrives as an argument, so naming one is not reading the model.
-const READ_MODEL_MODULE = join('instance', 'instance');
+const READ_MODEL_MODULE = join('instanceLoader', 'instance');
 // `Instance` alone is prose a comment may use; these two are only ever the type.
 const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];
 
@@ -50,14 +50,14 @@ describe('commands never read the Instance', () => {
 
   // Rival this catches: a command handed the Instance's value instead of walking disk itself.
   it('flags a module that imports the read model, by module and by name alike', () => {
-    expect(readModelIn("import type { InstanceValue } from '../instance/instance';\n"))
-      .toEqual([join('..', 'instance', 'instance'), 'InstanceValue']);
+    expect(readModelIn("import type { InstanceValue } from '../instanceLoader/instance';\n"))
+      .toEqual([join('..', 'instanceLoader', 'instance'), 'InstanceValue']);
   });
 
   // Rival: a rule so broad that every module of the Instance's box reads as the read model —
   // a command IS handed the winners, as an argument whose type it has to name.
   it('leaves a type the value carries alone, taken from the box beside the read model', () => {
-    expect(readModelIn("import type { FileWinners } from '../instance/fileConflictIndex';\n")).toEqual([]);
+    expect(readModelIn("import type { FileWinners } from '../instanceLoader/fileConflictIndex';\n")).toEqual([]);
   });
 });
 

@@ -14,17 +14,17 @@ const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
 // The driven column, each with the reference list target-architecture-references.d2 draws for it:
 // the arrows that leave the box, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  mo2Files: ['mo2Codecs', 'ports', 'tables'],
-  instance: ['mo2Codecs', 'mo2Files', 'ports', 'tables'],
+  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
+  instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
 };
 
 // The core column, same rule. An arrow the diagram draws that the code has no use for is left
 // out here and reported, never referenced to make the picture symmetric.
 const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['mo2Codecs', 'mo2Files', 'ports'],
-  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
-  instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
-  install: ['mo2Codecs', 'mo2Files', 'ports'],
+  modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
+  instanceCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  install: ['mo2Codecs', 'instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
 
@@ -32,9 +32,9 @@ const CORE_BOXES: Record<string, string[]> = {
 // The driving band: each view reads a value and fires a command, with the reference list
 // target-architecture-references.d2 draws for it.
 const VIEW_BOXES: Record<string, string[]> = {
-  mods: ['install', 'instance', 'modlist', 'ports'],
-  downloads: ['install', 'instance', 'ports'],
-  plugins: ['client', 'instance', 'pluginsCommands', 'ports'],
+  mods: ['install', 'instanceLoader', 'modlist', 'ports'],
+  downloads: ['install', 'instanceLoader', 'ports'],
+  plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
   editor: ['client', 'ports', 'wire'],
 };
 
@@ -112,14 +112,14 @@ describe('one composite project per box', () => {
 
   // MO2 files holds the one file system door, so the same rule binds it: a VS Code type here
   // would put the extension host behind that door.
-  it('mo2Files sees the Node types and no others', () => {
-    expect(parsed(boxProject('mo2Files')).options.types).toEqual(['node']);
+  it('instanceAdapter sees the Node types and no others', () => {
+    expect(parsed(boxProject('instanceAdapter')).options.types).toEqual(['node']);
   });
 
   // The Instance owns every MO2-side watcher, and a watcher is VS Code's — the one driven box
   // that sees the extension host.
-  it('instance sees the Node and VS Code types and no others', () => {
-    expect(parsed(boxProject('instance')).options.types).toEqual(['node', 'vscode']);
+  it('instanceLoader sees the Node and VS Code types and no others', () => {
+    expect(parsed(boxProject('instanceLoader')).options.types).toEqual(['node', 'vscode']);
   });
 
   // A command writes through MO2 files and forgets, and the client is the one seam a tool

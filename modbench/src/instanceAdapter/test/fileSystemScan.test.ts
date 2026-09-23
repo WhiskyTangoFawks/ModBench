@@ -9,8 +9,8 @@ import ts from 'typescript';
 import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
-const BOX = join('mo2Files') + sep;
-const ADAPTER_PATH = join(SRC, 'mo2Files', 'files.ts');
+const BOX = join('instanceAdapter') + sep;
+const ADAPTER_PATH = join(SRC, 'instanceAdapter', 'files.ts');
 
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
@@ -96,7 +96,7 @@ describe('no file outside MO2 files imports the file system to read the instance
   it('reaches the commands, the views and the Instance box, not only one folder', () => {
     const scanned = productionFiles(SRC).map((p) => relative(SRC, p));
     expect(scanned).toContain(join('modlist', 'modlist.ts'));
-    expect(scanned).toContain(join('instance', 'instance.ts'));
+    expect(scanned).toContain(join('instanceLoader', 'instance.ts'));
     expect(scanned).toContain(join('plugins', 'PluginsTreeProvider.ts'));
   });
 
