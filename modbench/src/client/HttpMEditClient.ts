@@ -625,7 +625,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   /** The plugins this install loads with no plugins.txt line, in load order. `undefined` on any
-   *  failure: "unknown" and "none" are different answers, and the reconcile writes on one. */
+   *  failure: "unknown" and "none" are different answers, and plugin sync writes on one. */
   async implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined> {
     let result;
     try {

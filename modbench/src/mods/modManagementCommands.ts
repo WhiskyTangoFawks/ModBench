@@ -220,7 +220,7 @@ export function registerCreateEmptyModCommand(
     if (!name) return;
     await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
       const profile = instance.value.activeProfile;
-      applyOrThrow(await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders));
+      applyOrThrow(await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders ?? []));
     });
   });
 }

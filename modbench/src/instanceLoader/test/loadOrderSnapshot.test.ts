@@ -258,7 +258,7 @@ describe('originFolder', () => {
   });
 });
 
-// What the plugins reconcile is handed instead of walking mods/ a second time: the Mod override
+// What plugin sync is handed instead of walking mods/ a second time: the Mod override
 // order's own answer, already resolved on the value.
 describe('providedPluginsOf', () => {
   const row = (

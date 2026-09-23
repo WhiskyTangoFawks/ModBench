@@ -78,7 +78,7 @@ describe('commands never walk the instance', () => {
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: the plugins reconcile rebuilding the index and re-reading overwrite/
+  // Rival this catches: plugin sync rebuilding the index and re-reading overwrite/
   // instead of taking the value's winners as an argument.
   it('flags a module that builds the index or reads overwrite/ itself', () => {
     const planted = "const index = await buildFileConflictIndex(entries, root, log);\nawait readdir(overwriteDir(root));\n";

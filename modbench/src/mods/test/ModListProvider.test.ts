@@ -167,10 +167,10 @@ describe('ModListProvider', () => {
     expect(labels).toEqual(['Aardvark', 'Zed']);
   });
 
-  // Adoption is the gesture that adds a mod, so a folder the value carries as unlisted has no
-  // row until its modlist line exists. Rival: a tree that renders both fields.
-  it('renders no row for a folder the value carries as unlisted', async () => {
-    const value = { ...valueOf([mod('Listed')]), unlistedFolders: ['Dropped In'] } as InstanceValue;
+  // Mod sync is what adds a line, so a folder with no line has no row until the line exists.
+  // Rival: a tree that renders the value's folders rather than its lines.
+  it('renders no row for a folder in mods/ with no modlist line', async () => {
+    const value = { ...valueOf([mod('Listed')]), modFolders: ['Listed', 'Dropped In'] } as InstanceValue;
     const provider = makeProvider([], { instance: new FakeInstance(value) });
 
     const labels = (await provider.getChildren()).map((n) => n.label);
@@ -861,20 +861,6 @@ describe('ModListProvider', () => {
       expect(modA.iconPath).toEqual({ id: 'warning' });
       expect(modA.description).toContain('7 conflicts');
       expect(modA.tooltip).toContain('nonexistent/path.dds');
-    });
-
-    it('carries a missing-mod status through unchanged', async () => {
-      const statuses = new Map<string, ModStatusResult>([
-        ['ModA', { status: { kind: 'missingMod' }, conflictLines: [] }],
-      ]);
-      const provider = makeProvider([mod('ModA')], {
-        instance: new FakeInstance(valueOf([mod('ModA')], { modStatuses: statuses })),
-      });
-      const roots = await provider.getChildren();
-      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode), "the sole ModNode");
-
-      expect(modA.iconPath).toEqual({ id: 'error' });
-      expect(modA.tooltip).toContain('Missing mod');
     });
   });
 

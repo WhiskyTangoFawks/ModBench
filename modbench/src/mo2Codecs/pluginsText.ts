@@ -89,7 +89,7 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
   });
 }
 
-/** Enabled for the New Plugin gesture, disabled for the reconcile. Throws if the
+/** Enabled for the New Plugin gesture, disabled for plugin sync. Throws if the
  *  name is already present. */
 export function appendPluginInText(text: string, pluginName: string, enabled = true): string {
   return withBomPreserved(text, (bomless) => {

@@ -2,7 +2,7 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
 import { switchProfile } from '../../instanceCommands/profile';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
@@ -36,16 +36,16 @@ describe('plugins.txt + profile corpus', () => {
     expect(await pluginOrder(dir)).toContain('Tracked Patch Mod.esp');
   });
 
-  it('reconcilePlugins converges the fixture on disk, touching only plugins.txt', async () => {
+  it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await reconcilePlugins(
+    const result = await syncPlugins(
       dir, PROFILE, await providedPluginsIn(dir), { kind: 'unresolved' }, () => Promise.resolve([]), () => {});
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
     // The fixture ships this plugin on disk with no plugins.txt line; an unresolved game
     // directory makes Data-folder presence unknowable, so nothing is pruned.
-    expect(result).toEqual({ applied: true, wrote: true, append: ['NonAsciiRetexture - Addon.esl'], prune: [] });
+    expect(result).toEqual({ applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: [] });
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
     expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
   });

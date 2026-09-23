@@ -20,10 +20,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     if (fsState.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, fsState.delayMs));
     return result;
   });
-  return { ...actual, readFile };
+  const writeFile = vi.fn(actual.writeFile);
+  return { ...actual, readFile, writeFile };
 });
 
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -31,12 +32,13 @@ import {
   moveModToSeparator,
   renameSeparator,
   reorderMod,
-  adoptMods,
   reorderSeparatorBlock,
   setModEnabled,
+  syncMods,
   uninstallMod,
 } from '../modlist';
 import { parseModlist } from '../../mo2Codecs/modlistText';
+import { modsDir } from '../../instanceAdapter/layout';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
@@ -300,63 +302,83 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 });
 
-describe('adoptMods — the unlisted folders it is handed get a modlist.txt line', () => {
+describe('syncMods — modlist.txt brought into line with the folders in mods/ it is handed', () => {
   let dir: string;
   const modlistPath = () => join(dir, 'profiles', 'Default', 'modlist.txt');
   const readModlist = async () => parseModlist(await readFile(modlistPath(), 'utf8'));
-  const adopt = (folders: string[]) => adoptMods(dir, 'Default', folders);
+  const writesToModlist = () => vi.mocked(writeFile).mock.calls.filter(([path]) => path === modlistPath()).length;
+  const sync = (folders: readonly string[]) => syncMods(dir, 'Default', folders);
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'modlist-adopt-'));
+    dir = await mkdtemp(join(tmpdir(), 'modlist-sync-'));
     await cp(fixture, dir, { recursive: true });
+    vi.mocked(writeFile).mockClear();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('adds a disabled winning-end line for the folder it is handed, preserving every registered line', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
+  // The fixture lists "[NODELETE] Radfall", whose folder is not among MOD_FOLDERS.
+  // Rival: two splices, one per direction, which writes the file twice.
+  it('adds a line for a folder with none and drops a line whose folder is gone, in one write', async () => {
+    const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
 
-    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: ['Hand Extracted Mod'] });
-
-    const entries = await readModlist();
-    expect(entries.at(0)).toMatchObject({ kind: 'mod', name: 'Hand Extracted Mod', enabled: false });
-    expect(await readFile(modlistPath(), 'utf8')).toContain(before.split('\r\n').slice(1).join('\r\n'));
+    expect(outcome).toEqual({ applied: true, added: ['Hand Extracted Mod'], dropped: ['[NODELETE] Radfall'] });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toContain('Hand Extracted Mod');
+    expect(names).not.toContain('[NODELETE] Radfall');
+    expect(writesToModlist()).toBe(1);
   });
 
-  it('writes a batch ascending top-to-bottom, winning-most first', async () => {
-    expect(await adopt(['Zeta Mod', 'Alpha Mod'])).toEqual({ applied: true, added: ['Alpha Mod', 'Zeta Mod'] });
-    expect((await readModlist()).slice(0, 2).map((e) => e.name)).toEqual(['Alpha Mod', 'Zeta Mod']);
+  // Rival: a splice that always puts the bytes back, which fires the watcher and loops forever.
+  it('writes nothing when every folder has a line and every mod line has a folder', async () => {
+    await sync([...MOD_FOLDERS, '[NODELETE] Radfall']);
+    vi.mocked(writeFile).mockClear();
+
+    expect(await sync([...MOD_FOLDERS, '[NODELETE] Radfall'])).toEqual({ applied: true, added: [], dropped: [] });
+    expect(writesToModlist()).toBe(0);
   });
 
-  // The value is a generation old by the time a write lands, so two landed values can hand the
-  // same folder over twice. The line the file already carries is the one that stands.
-  it('never writes a second line for a folder the file already lists', async () => {
-    await adopt(['Hand Extracted Mod']);
-    const afterFirst = await readFile(modlistPath(), 'utf8');
+  // The fixture's "Radfall - All-In-One Survival Overhaul" separator has no folder, and its
+  // `*DLC: Automatron` line names none. Rival: dropping every line with no folder, not only a mod's.
+  it('drops only mod lines: every other line stays, a separator and an unmanaged line included', async () => {
+    const before = (await readFile(modlistPath(), 'utf8')).split('\r\n');
 
-    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: [] });
-    expect(await readFile(modlistPath(), 'utf8')).toBe(afterFirst);
+    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['[NODELETE] Radfall'] });
+
+    const after = (await readFile(modlistPath(), 'utf8')).split('\r\n');
+    expect(before.filter((line) => !after.includes(line))).toEqual(['+[NODELETE] Radfall']);
   });
 
-  it('handed nothing, writes nothing at all', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
+  it('writes a batch of added lines ascending top-to-bottom, winning-most first', async () => {
+    const outcome = await sync([...MOD_FOLDERS, 'Zeta Mod', 'Alpha Mod']);
 
-    expect(await adopt([])).toEqual({ applied: true, added: [] });
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(outcome).toMatchObject({ applied: true, added: ['Alpha Mod', 'Zeta Mod'] });
+    expect((await readModlist()).slice(0, 2)).toEqual([
+      { kind: 'mod', name: 'Alpha Mod', enabled: false },
+      { kind: 'mod', name: 'Zeta Mod', enabled: false },
+    ]);
   });
 
-  // The folders arrive from the Instance value, so the command has no reason to look at mods/
-  // and must not fail when it cannot.
-  it('adopts what it is handed with no mods/ directory on disk at all', async () => {
+  // The folders arrive from the Instance value, so the command never looks at mods/ itself.
+  it('syncs against the folders it is handed with no mods/ directory on disk at all', async () => {
     await rm(join(dir, 'mods'), { recursive: true, force: true });
 
-    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: ['Hand Extracted Mod'] });
-    expect((await readModlist()).map((e) => e.name)).toContain('Hand Extracted Mod');
+    expect(await sync([...MOD_FOLDERS, 'Hand Extracted Mod'])).toMatchObject({ applied: true, added: ['Hand Extracted Mod'] });
   });
 
   it('refuses when modlist.txt cannot be read, rather than throwing', async () => {
     await rm(modlistPath());
 
-    assertRefusal(await adopt(['Hand Extracted Mod']), 'ENOENT');
+    assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
+  });
+
+  // A mods/ that is not there cannot be listed, so which folders are gone is unknown.
+  // Rival: reading its absence as no folders, which drops every mod line in one write.
+  it('refuses, naming the folder, and writes nothing when there is no mods/ to list', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+
+    assertRefusal(await syncMods(dir, 'Default', undefined), modsDir(dir));
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
   });
 });
 

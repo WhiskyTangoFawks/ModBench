@@ -304,8 +304,8 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
       return;
     }
-    // Answered from the game directory alone, with no load order held — the Plugins rows and the
-    // plugins.txt reconcile both ask it before any PUT (ADR-0016).
+    // Answered from the game directory alone, with no load order held — the Plugins rows and
+    // plugin sync both ask it before any PUT (ADR-0016).
     if (url.startsWith('/implicit-masters')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockImplicitMasters));
@@ -904,7 +904,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    // Every line these tests write names a plugin the plugins reconcile would otherwise prune.
+    // Every line these tests write names a plugin that plugin sync would otherwise drop.
     // An unparseable Data/ stub is presence without being an implicit master.
     for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await setGameDirectory(gameDir);

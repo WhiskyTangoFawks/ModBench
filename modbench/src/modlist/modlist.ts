@@ -14,10 +14,11 @@ import {
   renameSeparatorInText,
   separatorBlockNames,
   setEnabledInText,
+  unlistedModNames,
 } from '../mo2Codecs/modlistText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../instanceAdapter/layout';
+import { downloadFile, downloadSidecarFile, modDir, modlistFile, modsDir } from '../instanceAdapter/layout';
 import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
@@ -151,21 +152,32 @@ export async function createEmptyMod(
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
 }
 
-/** The value's unlisted folders get a line each, disabled, at the winning end, in one write.
- *  Which folders need one is the value's answer, never a command's. */
-export async function adoptMods(
-  instanceRoot: string, profile: string, folderNames: readonly string[],
-): Promise<{ applied: true; added: string[] } | { applied: false; refusal: string }> {
+export type ModSyncResult =
+  | { applied: true; added: string[]; dropped: string[] }
+  | { applied: false; refusal: string };
+
+/** `modbench.mod.sync`: a disabled winning-end line for each folder with none, and each mod line
+ *  whose folder is gone dropped, in one write. `modFolders` is undefined when there is no `mods/`
+ *  to list, and that is refused. */
+export async function syncMods(
+  instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
+): Promise<ModSyncResult> {
+  if (modFolders === undefined) {
+    return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist, so modlist.txt is left as it is.` };
+  }
   let added: string[] = [];
+  let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, (text) => {
-    // Read off the text about to be spliced, inside the write lock: two landed values can hand
-    // the same folder over before the first write comes back, and only this refuses the second
-    // line.
-    const listed = new Set(parseModlist(text).filter((e) => e.kind !== 'separator').map((e) => e.name));
-    added = [...folderNames].filter((name) => !listed.has(name)).sort((a, b) => a.localeCompare(b));
+    // Read inside the write lock: two values can hand over the same folders before the first
+    // write comes back, and only the text about to be spliced says what is still to do.
+    const entries = parseModlist(text);
+    const folders = new Set(modFolders);
+    added = unlistedModNames([...modFolders], entries);
+    dropped = entries.filter((e) => e.kind === 'mod' && !folders.has(e.name)).map((e) => e.name);
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so
     // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
-    return [...added].reverse().reduce(insertModAtWinningEnd, text);
+    const withoutGone = dropped.reduce((out, name) => removeModFromText(out, name), text);
+    return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);
   });
-  return outcome.applied ? { applied: true, added } : outcome;
+  return outcome.applied ? { applied: true, added, dropped } : outcome;
 }

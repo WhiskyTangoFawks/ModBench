@@ -20,7 +20,7 @@ import { scanDownloads } from './downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../mo2Codecs/downloads';
 import { SETTINGS_FILE_NAME, readGameName, readSelectedProfile } from '../mo2Codecs/modOrganizerIni';
 import { nexusSlugForGame } from '../tables/gamePaths';
-import { parseModlist, unlistedModNames } from '../mo2Codecs/modlistText';
+import { parseModlist } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
@@ -66,12 +66,9 @@ export interface InstancePaths {
 export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
-  /** Every directory under mods/ the active profile's modlist.txt has no line for, sorted.
-   *  Disjoint from `mods` and rendered by no tree: it is what adoption is handed, so that no
-   *  command walks the instance itself. */
-  readonly unlistedFolders: readonly string[];
-  /** Every directory under mods/, listed or not: the new-empty-mod refusal's own input. */
-  readonly modFolders: readonly string[];
+  /** Every directory under mods/, listed or not: what mod sync compares modlist.txt with, and
+   *  the new-empty-mod refusal's own input. Undefined when there is no mods/ to list. */
+  readonly modFolders: readonly string[] | undefined;
   /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
    *  one. */
   readonly profiles: readonly string[];
@@ -96,8 +93,7 @@ export interface InstanceValue {
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
-  /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
-   *  badges (ADR-0015). */
+  /** Each mod's conflict/override status, keyed by mod name — the Mods tree's badges (ADR-0015). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
   readonly overwriteFileCount: number;
@@ -133,14 +129,14 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
   }
 }
 
-// A missing mods/ lists nothing rather than throwing: a workspace before its first install is
-// not a failed read. Any other listing failure is a real one and fails the recompute.
-async function readModFolderNames(instanceRoot: string): Promise<string[]> {
+// A missing mods/ is an answer, not a failed read: a workspace before its first install has
+// none. Any other listing failure is a real one and fails the recompute.
+async function readModFolderNames(instanceRoot: string): Promise<string[] | undefined> {
   try {
     const dirents = await listDir(modsDir(instanceRoot));
     return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   } catch (err) {
-    if (errnoCode(err) === 'ENOENT') return [];
+    if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
   }
 }
@@ -175,7 +171,6 @@ const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePat
 
 const emptyValue = (instanceRoot: string): InstanceValue => ({
   mods: [],
-  unlistedFolders: [],
   modFolders: [],
   profiles: [],
   files: new FileConflictLookup(),
@@ -358,28 +353,24 @@ export class Instance implements vscode.Disposable {
     ]);
     const { gameDirectory, dataFolderPlugins } = game;
     const gameName = readGameName(iniText);
-    // Both derive from the same index generation, so they run concurrently.
-    const [plugins, modStatuses] = await Promise.all([
-      // An unresolved game directory loses only the Data-folder copies' paths: every
-      // plugins.txt line still gets a row, existence/slot/enabled coming from the line
-      // itself (see `LoadOrderPluginLine`), not from the game directory.
-      buildLoadOrderRows(
-        // The modlist is read once per recompute and handed on, so the snapshot cannot see a
-        // different generation of it than the file index did.
-        {
-          readModlist: () => Promise.resolve(entries),
-          readPluginOrder: () => Promise.resolve(pluginLines.map((p) => p.name)),
-          readEnabledPlugins: () => Promise.resolve(pluginLines.filter((p) => p.enabled).map((p) => p.name)),
-        },
-        instanceRoot,
-        gameDirectory?.dataFolder,
-        () => Promise.resolve(index),
-      ),
-      computeModStatuses(entries, instanceRoot, index),
-    ]);
+    // An unresolved game directory loses only the Data-folder copies' paths: every
+    // plugins.txt line still gets a row, existence/slot/enabled coming from the line
+    // itself (see `LoadOrderPluginLine`), not from the game directory.
+    const plugins = await buildLoadOrderRows(
+      // The modlist is read once per recompute and handed on, so the snapshot cannot see a
+      // different generation of it than the file index did.
+      {
+        readModlist: () => Promise.resolve(entries),
+        readPluginOrder: () => Promise.resolve(pluginLines.map((p) => p.name)),
+        readEnabledPlugins: () => Promise.resolve(pluginLines.filter((p) => p.enabled).map((p) => p.name)),
+      },
+      instanceRoot,
+      gameDirectory?.dataFolder,
+      () => Promise.resolve(index),
+    );
+    const modStatuses = computeModStatuses(entries, index);
     return {
       mods: entries,
-      unlistedFolders: unlistedModNames(modFolderNames, entries),
       modFolders: modFolderNames,
       profiles,
       files: index.files,
