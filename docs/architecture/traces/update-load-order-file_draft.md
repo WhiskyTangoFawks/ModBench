@@ -130,7 +130,8 @@ The trigger is a plugin on disk with no line in `plugins.txt`, or a line that no
 3. A line that nothing provides removed. Provided means a plugin at the root of an enabled mod, in
    `overwrite/`, or the game folder's copy. *ADR-0003; ADR-0013*
 4. When mEdit cannot answer, or a folder cannot be listed, nothing added and nothing removed, and the
-   reason inline and in the Output. *A failed gesture writes nothing; ADR-0019, the background tier*
+   reason in the Plugins view's message line and in the Output. *A failed gesture writes nothing;
+   ADR-0019, the background tier; [plugins.md](../surfaces/plugins.md), Reporting*
 5. No prompt and no notification when it works. The new rows are the result. *ADR-0019*
 
 ## profile switch

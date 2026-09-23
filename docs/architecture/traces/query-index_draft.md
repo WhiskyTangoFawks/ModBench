@@ -32,7 +32,8 @@ As a user, I want:
 
 1. The record tree narrowed to the FormKeys a SQL query returns. *catalog Meaning*
 2. A query from an input box, or from a document. *catalog Options*
-3. The filter to stay until I clear it, with its term in the view description. *One filter*
+3. The filter to stay until I clear it, with its source in the view description. mEdit keeps the
+   source with the filter. *One filter; [plugins.md](../surfaces/plugins.md), The view*
 4. A plugin with no record left under the filter hidden while it is active. The record filter is its
    own filter, beside the name filter. *ruling; [plugins.md](../surfaces/plugins.md)*
 

@@ -21,7 +21,8 @@ absence
 ([ADR-0002](../../adr/0002-mod-management-and-editing-are-one-tool.md), invariant 2).
 
 The view's description shows the name filter's term and the record filter's source while each is
-active: `"arm" · records: armor.sql`.
+active: `"arm" · records: armor.sql`. mEdit keeps the source with the filter, so the description
+names it after a reload too. *ruling*
 
 ## The tree
 
@@ -29,7 +30,9 @@ As a user, I want:
 
 1. One row for each line of the active profile's `plugins.txt`, in its order, first loaded at the
    top. *MO2*
-2. The plugins the game loads with no line first, above every line, locked. *MO2*
+2. The plugins the game loads with no line at the losing end, before every line, locked, once mEdit
+   says which they are. Until it does, a line that names one is an ordinary row. *MO2; ADR-0016,
+   invariant 1; ruling*
 3. A losing copy of a plugin, one the game does not load because another mod's copy of the same name
    wins, not to be a row. It stays indexed, and viewing it is deferred. *ADR-0012, invariant 5*
 4. Every plugin row to expand at any time. Expanding decides what it shows: its records, "Still
@@ -40,7 +43,8 @@ As a user, I want:
 6. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
    record's child group into the record: a worldspace holds its persistent cell and its blocks, a
    block its sub-blocks, a sub-block its cells, a cell its persistent and temporary placed
-   references, a quest its dialog topics, and a dialog topic its responses. *xEdit*
+   references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
+   responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
 7. A row with nothing beneath it to show no expander, and an empty group of placed references not to
    be a row. *xEdit*
 8. Beneath a group, the records in FormID order. *xEdit*
@@ -67,14 +71,15 @@ A plugin's statuses, the first in this order sets the icon, and the tooltip list
 | Status | When | Icon | Words |
 |---|---|---|---|
 | Failed to load | mEdit could not load it | `$(error)` red | failed to load |
-| Master issues | a master it lists is missing or cannot be loaded, once the load order is indexed | `$(error)` red | N master issues |
+| Master issues | a master it lists is missing or cannot be loaded, once the load order is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 A master issue never disables the plugin or cascades to its dependants: the check box stays as I set
 it (ADR-0012, invariant 4). Before the load order is indexed, a plugin has no master verdict, so no
-badge means not yet asked. A malformed plugin's reasons are also in the Problems panel, on the
-plugin file. *ADR-0019*
+badge means not yet asked. A later reload of the load order keeps the last statuses, and the rows
+the record filter hides, until the new ones land. A malformed plugin's reasons are also in the
+Problems panel, on the plugin file. *ADR-0019; ruling*
 
 ### A plugin the game loads with no line
 
@@ -106,8 +111,9 @@ It cannot be dragged. A `plugins.txt` line that names one is not a second row.
 | Badge | `M` modified and `A` added, in git's colours, while its plugin source has working-tree changes | ADR-0007; VS Code's source control badges |
 | Identity | the row's kind, the plugin's file name and the FormKey | |
 
-A block, a sub-block and a cell without a name take xEdit's labels: "Block x, y", "Sub-Block x, y",
-and the cell's grid position. A placed reference without an EditorID takes its base record's. *xEdit*
+A block and a sub-block take xEdit's labels, "Block x, y" and "Sub-Block x, y". An exterior cell
+without an EditorID takes its grid position. A placed reference without an EditorID takes its base
+record's. *xEdit*
 
 ### Rows that stand in for records
 
@@ -121,8 +127,9 @@ and the cell's grid position. A placed reference without an EditorID takes its b
 As a user, I want:
 
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows to
-   winning at the top. It never changes which plugin wins, and the groups and records beneath keep
-   their order. *common, A view, story 7; MO2's priority sort*
+   winning at the top. It never changes which plugin wins: the locked plugins stay at the losing
+   end, at the bottom when winning is at the top, and the groups and records beneath keep their
+   order. *common, A view, story 7; MO2's priority sort; ruling*
 2. The name filter to match plugin rows. *common, The name filter*
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
    becomes a clear icon while it is active, and the view's description names its source, never its
@@ -159,22 +166,27 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Plugin menu | reveal · enable or disable · create record… · track… · compile · compile from `main`… · rebase edit branch · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record |
-| Record menu | open to the side · copy… · renumber… · copy value · delete |
+| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · renumber… · copy value · delete |
 | Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. Ctrl+F: filter. |
 
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
-   Argument in the catalog says: enable or disable, delete, copy and open take the selection.
-   *catalog Argument*
-2. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
-3. A click on a record to open it in the record panel, and a click on a plugin row to open its
+   Argument in the catalog says: enable or disable, compile, delete, copy, renumber and open take
+   the selection. Several records open as a comparison. *catalog Argument; commands.md, A selection
+   is one gesture*
+2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
+   identity*
+3. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
+4. A click on a record to open it in the record panel, and a click on a plugin row to open its
    header, which is a record. *catalog `open`*
-4. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
+5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
-5. `track` and `rebase edit branch` to act on the plugin's mod, and each offered only where the
+6. `track` and `rebase edit branch` to act on the plugin's mod, and each offered only where the
    catalog's condition holds: track on an untracked mod's plugin, rebase and compile on a tracked,
    editable plugin. *catalog Where*
+7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
+   and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
 
 ## Drag and drop
 
@@ -182,9 +194,12 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads
-   with no line, next to those plugins; below the last row, at the bottom of the view, as shown.
-3. A drop that would put a master below a plugin that depends on it, or a blueprint plugin before
-   another, refused, naming the plugin and the master. *update-load-order-file, plugin move, story 2*
+   with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view,
+   as shown.
+3. A drop that would put a master below a plugin that depends on it, or a blueprint plugin before a
+   plugin that is not one, refused, naming the plugin and the master. While mEdit cannot say which
+   masters a plugin has, the drop lands, and the master status flags it once mEdit answers.
+   *update-load-order-file, plugin move, story 2; ADR-0012, invariant 4; ruling*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
 5. Records, groups and the locked rows not to drag, and nothing from outside the view to drop here.
@@ -250,8 +265,9 @@ that it is active and clears it. *catalog `filter`: input box, or a document*
 
 ### Other dialogs
 
-The external-change dialog is `decompile plugin`'s, in its contract. The offer to rebuild a binary
-after an interrupted compile is the compile contract's question 4.
+The external-change dialog is `decompile plugin`'s, in its contract. There is no offer to rebuild a
+binary after an interrupted compile: the compile contract's question 6 cuts it, and tracking again is
+the recovery (ADR-0007).
 
 ## Reporting
 
@@ -261,7 +277,9 @@ By [common.md](common.md#reporting). As a user, I want:
 2. When a load order leaves plugins unloaded, one notification naming them, beside each row's
    status: my picture of what is loaded would otherwise be wrong. *ADR-0019, invariant 1*
 3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
-   the result, with a line in the Output. *update-load-order-file, import plugin, story 5*
+   the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
+   the reason in the view's message line and the Output. *update-load-order-file, import plugin,
+   stories 4 and 5; ruling*
 4. Every message to name a gesture that exists and a view by its name.
 
 ## Deferred
