@@ -30,7 +30,7 @@ import {
 import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
-import { exists, get, listDir, manifestFile } from '../mo2Files/files';
+import { get, listDir } from '../mo2Files/files';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -96,8 +96,6 @@ export interface InstanceValue {
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
-  /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
-  readonly deployed: boolean;
   /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
    *  badges (ADR-0015). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
@@ -189,7 +187,6 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   nexusSlug: '',
   gameDirectory: undefined,
   dataFolderPlugins: { kind: 'unresolved' },
-  deployed: false,
   modStatuses: new Map(),
   overwriteFileCount: 0,
   paths: pathsOf(instanceRoot, []),
@@ -346,11 +343,10 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
+    const [index, pluginLines, downloadEntries, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
-      exists(manifestFile(instanceRoot)),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
       readProfileNames(instanceRoot),
@@ -401,7 +397,6 @@ export class Instance implements vscode.Disposable {
       nexusSlug: nexusSlugForGame(gameName),
       gameDirectory,
       dataFolderPlugins,
-      deployed,
       modStatuses,
       overwriteFileCount,
       paths: pathsOf(instanceRoot, entries.filter((e) => e.kind === 'mod').map((e) => e.name)),

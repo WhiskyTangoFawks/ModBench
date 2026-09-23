@@ -59,7 +59,7 @@ export interface InstallOptions {
    *  here re-reads the ini. */
   gameName: string;
   /** Rename primitive; defaults to fs.rename. Injectable so the cross-volume refusal is
-   *  testable without a real second volume, the seam `PurgeOptions.renameFn` already opens. */
+   *  testable without a real second volume. */
   renameFn?: (from: string, to: string) => Promise<void>;
   /** Extraction runner; defaults to spawning a system 7-Zip. */
   run?: Runner;

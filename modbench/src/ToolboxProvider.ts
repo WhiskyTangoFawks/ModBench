@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
  *  as a tree, reading the one read model. */
 export interface ToolboxState {
   activeProfile: string;
-  deployed: boolean;
 }
 
 /** Home for actions scoped to the workspace, not one tree: VS Code's container-level `…` is an
@@ -14,18 +13,6 @@ export interface ToolboxDeps {
    *  container's first view and must never be a hole — but the commands its rows activate do
    *  not exist, so it renders no rows. */
   state: () => ToolboxState | undefined;
-}
-
-// No command once deployed: Purge is destructive and belongs in overflow behind a modal confirm.
-function deploymentRow(deployed: boolean): vscode.TreeItem {
-  const row = new vscode.TreeItem('Deployment');
-  row.description = deployed ? 'deployed' : 'not deployed';
-  row.iconPath = new vscode.ThemeIcon(deployed ? 'check' : 'circle-outline');
-  if (!deployed) {
-    row.tooltip = 'Deploy';
-    row.command = { command: 'modbench.toolbox.deploy', title: 'Deploy' };
-  }
-  return row;
 }
 
 // An unread instance names no profile yet, which reads as the same em-dash an unreadable one
@@ -57,6 +44,6 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     const state = element ? undefined : this.deps.state();
     if (!state) return [];
-    return [profileRow(state.activeProfile), deploymentRow(state.deployed)];
+    return [profileRow(state.activeProfile)];
   }
 }

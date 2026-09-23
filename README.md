@@ -65,7 +65,7 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/instanceCommands/  instance commands — switch profile, put load order, refresh
   src/downloadsCommands/ downloads commands — a download's .meta (drawn, not built yet)
   src/install/       install — a new mod, or an upgrade over one
-  src/deploy/        deploy commands — hardlinks into the game's Data folder
+  src/deploy/        deploy commands — hardlinks into the game's Data folder (drawn, not built yet)
   src/client/        the mEdit client — one port over the backend's commands, queries,
                      notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0014)
   src/mo2Codecs/, src/wire/, src/tables/, src/ports/

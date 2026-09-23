@@ -1,6 +1,5 @@
-// Table 1 of 2: every per-game fact needed to find an install and speak to Nexus, keyed by
-// Mutagen's GameRelease. Table 2 (loadOrderDestination.ts) is where the running game itself
-// reads its load order.
+// Every per-game fact needed to find an install and speak to Nexus, keyed by Mutagen's
+// GameRelease.
 
 export interface GamePathInfo {
   /** MO2's own spelling, as `ModOrganizer.ini`'s `gameName=` writes it. */

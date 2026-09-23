@@ -28,7 +28,6 @@ const CORE_BOXES: Record<string, string[]> = {
   pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
   instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
   install: ['mo2Codecs', 'mo2Files', 'ports'],
-  deploy: ['instance', 'mo2Files', 'ports'],
   client: ['ports', 'wire'],
 };
 
@@ -198,9 +197,9 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(Object.keys(DRIVEN_BOXES)).toEqual(['mo2Files', 'instance']);
   });
 
-  it('names the six boxes the core band draws', () => {
+  it('names the five boxes the core band draws and the code builds', () => {
     expect(Object.keys(CORE_BOXES))
-      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'deploy', 'client']);
+      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'client']);
   });
 
   it('names the four views the driving band draws, less the Toolbox', () => {
@@ -276,7 +275,9 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../mo2Files/layout', join(boxRoot('instance'), 'p.ts'), 'instance')).toBe(true);
     expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
     expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
-    expect(isAllowedDrivenSpecifier('../instance/fileConflictIndex', join(boxRoot('deploy'), 'p.ts'), 'deploy')).toBe(true);
+    expect(isAllowedDrivenSpecifier(
+      '../instance/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
+    )).toBe(true);
     expect(isAllowedDrivenSpecifier('../instance/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });

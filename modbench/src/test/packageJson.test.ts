@@ -4,13 +4,14 @@ import * as path from 'path';
 import { present } from '../ports/present';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
-// throws rather than handing back an unproven shape (mo2Files.ts's parseManifest, same posture).
+// throws rather than handing back an unproven shape.
 interface ViewsWelcomeEntry { view: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; }
 interface ViewsContainerEntry { id: string; }
+interface SettingEntry { description?: string; }
 
 interface PackageManifest {
   activationEvents: string[];
@@ -21,6 +22,7 @@ interface PackageManifest {
     menus: Record<string, MenuEntry[]>;
     commands: CommandEntry[];
     keybindings: KeybindingEntry[];
+    configuration: { properties: Record<string, SettingEntry> };
   };
 }
 
@@ -35,6 +37,9 @@ function isOptionalString(value: unknown): value is string | undefined {
 }
 function isArrayOf<T>(value: unknown, isElement: (v: unknown) => v is T): value is T[] {
   return Array.isArray(value) && value.every(isElement);
+}
+function isRecordOf<T>(value: unknown, isElement: (v: unknown) => v is T): value is Record<string, T> {
+  return isRecord(value) && Object.values(value).every(isElement);
 }
 function isRecordOfArrays<T>(value: unknown, isElement: (v: unknown) => v is T): value is Record<string, T[]> {
   return isRecord(value) && Object.values(value).every((v) => isArrayOf(v, isElement));
@@ -58,6 +63,9 @@ function isKeybindingEntry(v: unknown): v is KeybindingEntry {
 function isViewsContainerEntry(v: unknown): v is ViewsContainerEntry {
   return isRecord(v) && isString(v.id);
 }
+function isSettingEntry(v: unknown): v is SettingEntry {
+  return isRecord(v) && isOptionalString(v.description);
+}
 
 function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
@@ -65,7 +73,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
-  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings } = contributes;
+  const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
     throw new Error('Expected contributes.viewsWelcome to be an array of { view, when? }.');
   }
@@ -84,9 +92,16 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isArrayOf(keybindings, isKeybindingEntry)) {
     throw new Error('Expected contributes.keybindings to be an array of { command, key, when }.');
   }
+  if (!isRecord(configuration) || !isRecordOf(configuration.properties, isSettingEntry)) {
+    throw new Error('Expected contributes.configuration.properties to be a map of { description? }.');
+  }
+  const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
-    contributes: { viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings },
+    contributes: {
+      viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
+      configuration: { properties },
+    },
   };
 }
 
@@ -370,22 +385,11 @@ describe('package.json title-bar rubric', () => {
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter((v): v is string => v !== undefined));
 
   // Rule 1 — docs/specs/containers.md.
-  const WORKSPACE_ACTIONS = [
-    'modbench.toolbox.switchProfile',
-    'modbench.toolbox.deploy',
-    'modbench.toolbox.purge',
-  ];
+  const WORKSPACE_ACTIONS = ['modbench.toolbox.switchProfile'];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
     const views = viewsOf(titleMenus().filter((e) => e.command === command));
     expect([...views].filter((v) => v !== 'modbench.toolbox')).toEqual([]);
-  });
-
-  // Rule 4 — docs/specs/containers.md.
-  it.each(['modbench.toolbox.deploy', 'modbench.toolbox.purge'])('%s stays in overflow, never a navigation icon', (command) => {
-    const entries = titleMenus().filter((e) => e.command === command);
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries.every((e) => !(e.group ?? '').startsWith('navigation'))).toBe(true);
   });
 
   // Rule 2 — docs/specs/containers.md.
@@ -400,15 +404,6 @@ describe('package.json title-bar rubric', () => {
     }
   });
 
-  // The Toolbox registers with no MO2 instance, but the commands these three activate do not —
-  // without this gate they are icons that throw "command not found" on a non-MO2 folder.
-  it.each(['modbench.toolbox.launch', 'modbench.toolbox.deploy', 'modbench.toolbox.purge'])(
-    '%s is withheld until the workspace is an MO2 instance', (command) => {
-      const entries = titleMenus().filter((e) => e.command === command);
-      expect(entries.length).toBeGreaterThan(0);
-      expect(entries.every((e) => e.when.includes('modbench.workspaceIsMo2Instance'))).toBe(true);
-    });
-
   // Rule 7 — docs/specs/containers.md.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebarIds = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
@@ -418,26 +413,29 @@ describe('package.json title-bar rubric', () => {
   });
 });
 
-// mEdit is an option on the Plugins view, so its affordance lives on that tree, not the Toolbox.
-// Placement is overflow, not a navigation icon: rule 2's ceiling test already measures this tree
-// at its four-icon maximum.
-describe('package.json Deploy/Purge/Launch gating', () => {
-  it('gates Deploy/Purge/Launch Game in the command palette the same as the title bar, closing the Ctrl+Shift+P hole', () => {
-    const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
-    expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
+describe('package.json offers no deploy, purge or run in the alpha', () => {
+  const DEPLOYMENT_VERBS = ['deploy', 'purge', 'run', 'launch'];
+  const isDeploymentCommand = (id: string): boolean =>
+    DEPLOYMENT_VERBS.includes(id.split('.').at(-1)?.toLowerCase() ?? '');
+  const menuCommands = (): string[] => Object.values(pkg.contributes.menus).flat().map((e) => e.command);
 
-    // modbench.toolbox.launch runs a contributed task, never a hardcoded game exe. Same
-    // MO2-instance-only gate as Deploy/Purge — there is no separate standalone mode.
-    for (const command of ['modbench.toolbox.deploy', 'modbench.toolbox.purge', 'modbench.toolbox.launch']) {
-      const entry = present(palette.find((e) => e.command === command), `a commandPalette entry for ${command}`);
-      // Same gate as the view/title button for this command, so palette and title bar can never diverge.
-      const titleBarMenus = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']");
-      const titleBarEntry = present(
-        titleBarMenus.find((e) => e.command === command),
-        `a view/title entry for ${command}`,
-      );
-      expect(titleBarEntry.when).toContain(entry.when);
-    }
+  it('contributes no deploy, purge or run command', () => {
+    expect(pkg.contributes.commands.map((c) => c.command).filter(isDeploymentCommand)).toEqual([]);
+  });
+
+  it('places no deploy, purge or run command in any menu', () => {
+    expect(menuCommands().filter(isDeploymentCommand)).toEqual([]);
+  });
+
+  it('binds no key to deploy, purge or run', () => {
+    expect(pkg.contributes.keybindings.map((k) => k.command).filter(isDeploymentCommand)).toEqual([]);
+  });
+
+  it('contributes no setting that speaks of deploying or of where the game reads its load order', () => {
+    const offering = Object.entries(pkg.contributes.configuration.properties)
+      .filter(([key, setting]) => /deploy|purge|plugins\.?txt/i.test(`${key} ${setting.description ?? ''}`))
+      .map(([key]) => key);
+    expect(offering).toEqual([]);
   });
 });
 
