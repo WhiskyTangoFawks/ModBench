@@ -845,24 +845,24 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return GetReferences(connection, targetFormKey);
         }
 
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
+        public IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
         {
             var types = tableNames.ToList();
             if (types.Count == 0 || !owner._filterActive)
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                return new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
 
             using var connection = owner.OpenRead();
 
             var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
 
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT plugin FROM {records}{where}";
+            cmd.CommandText = $"SELECT DISTINCT plugin, origin FROM {records}{where}";
             AddParams(cmd, paramValues);
             using var reader = cmd.ExecuteReader();
 
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
             while (reader.Read())
-                result.Add(reader.GetString(0));
+                result.Add(new PluginCopyKey(reader.GetString(0), reader.GetString(1)));
             return result;
         }
 

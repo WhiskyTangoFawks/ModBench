@@ -174,7 +174,7 @@ public class RegistrationScopingTests
         Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
         Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
         fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'");
-        Assert.Contains(AlphaKey.Name, reads.GetPluginsWithMatchingRecords(["npc_"]));
+        Assert.Contains(AlphaKey, reads.GetPluginsWithMatchingRecords(["npc_"]));
         Assert.Contains(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
         fx.Index.ClearFilter();
 

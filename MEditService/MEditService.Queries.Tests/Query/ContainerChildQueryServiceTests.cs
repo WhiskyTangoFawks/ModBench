@@ -43,7 +43,7 @@ public class ContainerChildQueryServiceTests
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
+        public IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginCopyKey>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);

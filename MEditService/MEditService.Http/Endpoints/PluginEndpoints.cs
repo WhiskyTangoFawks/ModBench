@@ -28,7 +28,7 @@ public static class PluginEndpoints
             {
                 return Results.Ok(svc.GetLoadOrderDiagnoses());
             }
-            catch (InvalidOperationException ex)
+            catch (NoLoadOrderException ex)
             {
                 logger.LogError(ex, "No loadOrder for GetPluginDiagnoses");
                 return Results.Problem(ex.Message, statusCode: 503);

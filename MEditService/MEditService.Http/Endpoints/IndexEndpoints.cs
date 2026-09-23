@@ -124,7 +124,7 @@ public static class IndexEndpoints
             index.SetFilter(req.Sql);
             return Results.Ok(new FilterResponse(req.Sql));
         }
-        catch (InvalidOperationException ex)
+        catch (NoLoadOrderException ex)
         {
             logger.LogError(ex, "No load order when setting filter");
             return WriteEndpointMapping.NoLoadOrder(ex);
@@ -150,7 +150,7 @@ public static class IndexEndpoints
             index.ClearFilter();
             return Results.NoContent();
         }
-        catch (InvalidOperationException ex)
+        catch (NoLoadOrderException ex)
         {
             logger.LogError(ex, "No load order when clearing filter");
             return WriteEndpointMapping.NoLoadOrder(ex);

@@ -746,7 +746,7 @@ public sealed class RecordQueryServiceTests
     // --- No-load order guard clauses ---
 
     [Fact]
-    public void GetPlugins_NoLoadOrder_ThrowsInvalidOperationException()
+    public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
@@ -754,7 +754,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetRecords_NoLoadOrder_ThrowsInvalidOperationException()
+    public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
         var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
@@ -769,8 +769,9 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
+        var copy = Assert.Single(_svc.GetPlugins(), p => p.Copy.Name == PluginName).Copy.Key;
         _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        _reads.MatchingPlugins = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { PluginName };
+        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer) { copy };
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
@@ -783,7 +784,7 @@ public sealed class RecordQueryServiceTests
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
-        _reads.MatchingPlugins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);

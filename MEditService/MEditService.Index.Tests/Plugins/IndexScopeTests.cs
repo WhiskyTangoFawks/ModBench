@@ -101,7 +101,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // --- SetFilter / ClearFilter ---
 
     [Fact]
-    public void SetFilter_NoLoadOrder_ThrowsInvalidOperationException()
+    public void SetFilter_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
@@ -110,7 +110,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void ClearFilter_NoLoadOrder_ThrowsInvalidOperationException()
+    public void ClearFilter_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);

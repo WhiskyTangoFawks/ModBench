@@ -95,8 +95,6 @@ public sealed class RenumberRecordHandlerTests
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
     }
 
-    // The auto-allocator's own exhaustion must be a typed refusal here too, not
-    // an InvalidOperationException the endpoint's load order-missing catch would misreport.
     [Fact]
     public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {

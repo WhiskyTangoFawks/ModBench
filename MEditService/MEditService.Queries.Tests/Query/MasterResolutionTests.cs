@@ -47,6 +47,21 @@ public class MasterResolutionTests
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
+    // ADR-0012 invariant 1: a filename is not an identity — each copy answers for its own masters.
+    [Fact]
+    public void GetPlugins_TwoCopiesOfOneName_EachCarriesItsOwnMasterIssues()
+    {
+        var missingAMaster = (new PluginCopyKey("Patch.esp", "WinningMod"),
+            new PluginContent(IsLight: false, IsMaster: false, ["Ghost.esm"], RecordCount: 0));
+        var complete = (new PluginCopyKey("Patch.esp", "LosingMod"),
+            new PluginContent(IsLight: false, IsMaster: false, [], RecordCount: 0));
+
+        var rows = GetPlugins([missingAMaster, complete]);
+
+        Assert.Equal("Ghost.esm", Assert.Single(rows.Single(r => r.Copy.Origin == "WinningMod").MasterIssues).MasterName);
+        Assert.Empty(rows.Single(r => r.Copy.Origin == "LosingMod").MasterIssues);
+    }
+
     [Fact]
     public void Classify_MasterInFailedSet_ReturnsUnloadable()
     {

@@ -13,7 +13,7 @@ internal sealed record FakeRow(PluginCopyKey Plugin, int LoadOrderIndex, bool Is
 internal sealed class FakeReads(
     IReadOnlyDictionary<PluginCopyKey, PluginContent> openedCopies, IReadOnlyList<FakeRow> rows) : IRecordReads
 {
-    public IReadOnlySet<string> MatchingPlugins { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlySet<PluginCopyKey> MatchingPlugins { get; set; } = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
 
     public IReadOnlyDictionary<string, IReadOnlyList<ReferenceResult>> ReferencedBy { get; set; } =
         new Dictionary<string, IReadOnlyList<ReferenceResult>>(StringComparer.Ordinal);
@@ -64,7 +64,7 @@ internal sealed class FakeReads(
     public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) =>
         ReferencedBy.GetValueOrDefault(targetFormKey, []);
 
-    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) => MatchingPlugins;
+    public IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) => MatchingPlugins;
 
     public IReadOnlySet<string> GetPluginsWithParseFailures() =>
         rows.Where(r => r.Document.ParseDiagnosis != null).Select(r => ColumnKey.Of(r.Plugin.Name, r.Plugin.Origin))

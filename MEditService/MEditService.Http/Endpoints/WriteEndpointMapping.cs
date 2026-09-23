@@ -80,7 +80,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>The load order went away underneath the request — a "not right now", never a bad
     /// request.</summary>
-    internal static IResult NoLoadOrder(InvalidOperationException ex) => Results.Problem(ex.Message, statusCode: 503);
+    internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never
@@ -97,7 +97,7 @@ internal static class WriteEndpointMapping
         Func<RecordEditResult, IResult> onApplied,
         Func<Exception, IResult> onWriteFailure,
         Func<ArgumentException, IResult>? onMalformedFormKey,
-        Func<InvalidOperationException, IResult> onNoLoadOrder)
+        Func<NoLoadOrderException, IResult> onNoLoadOrder)
     {
         logReceived?.Invoke();
 
@@ -117,7 +117,7 @@ internal static class WriteEndpointMapping
         {
             return onMalformedFormKey(ex);
         }
-        catch (InvalidOperationException ex)
+        catch (NoLoadOrderException ex)
         {
             return onNoLoadOrder(ex);
         }

@@ -21,15 +21,15 @@ public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 // so there is nothing to propagate.
 internal static class MasterResolution
 {
-    /// <summary>Per-plugin master issues, keyed by plugin name; a plugin with every master
-    /// resolved has no entry (never an empty list).</summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
+    /// <summary>Per-copy master issues; a copy with every master resolved has no entry (never an
+    /// empty list). A master is named by filename, so any copy of that name resolves it.</summary>
+    public static IReadOnlyDictionary<PluginCopyKey, IReadOnlyList<MasterIssue>> Classify(
         IReadOnlyDictionary<PluginCopyKey, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
     {
         var loaded = opened.Keys.Select(k => k.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var failed = failures.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var result = new Dictionary<string, IReadOnlyList<MasterIssue>>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<PluginCopyKey, IReadOnlyList<MasterIssue>>(PluginCopyKey.Comparer);
         foreach (var (key, content) in opened)
         {
             var issues = new List<MasterIssue>();
@@ -39,7 +39,7 @@ internal static class MasterResolution
                 var kind = failed.Contains(master) ? MasterIssueKind.Unloadable : MasterIssueKind.DirectlyMissing;
                 issues.Add(new MasterIssue(master, kind));
             }
-            if (issues.Count > 0) result[key.Name] = issues;
+            if (issues.Count > 0) result[key] = issues;
         }
         return result;
     }

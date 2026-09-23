@@ -28,14 +28,14 @@ public sealed class RecordQueryService(
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
         // reports no issues rather than inventing a third state.
         var status = _index.Status;
-        IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
+        IReadOnlyDictionary<PluginCopyKey, IReadOnlyList<MasterIssue>> masterIssues =
             status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(opened, status.Failures)
-                : new Dictionary<string, IReadOnlyList<MasterIssue>>();
+                : new Dictionary<PluginCopyKey, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedCopies();
         PluginRow ToRow(RegisteredCopy copy, bool hasMatchingRecords) =>
-            new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Name) ?? [], hasMatchingRecords,
+            new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Key) ?? [], hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)), tracked.Contains(copy.Key));
 
         if (_index.FilterSql is null)
@@ -45,7 +45,7 @@ public sealed class RecordQueryService(
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller decides expandability from, not row presence.
         var matchingPlugins = reads.GetPluginsWithMatchingRecords(RequireSchemas().Keys);
-        return [.. rows.Select(c => ToRow(c, matchingPlugins.Contains(c.Name)))];
+        return [.. rows.Select(c => ToRow(c, matchingPlugins.Contains(c.Key)))];
     }
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/

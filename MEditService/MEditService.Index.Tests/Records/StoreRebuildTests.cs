@@ -121,7 +121,7 @@ public sealed class StoreRebuildTests : IDisposable
                 {
                     if (_index.RequireReads().GetDocuments(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
-                catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+                catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or NoLoadOrderException)
                 {
                     // The scope closed under the read: the answer the reader gets is "no store", not a crash.
                 }

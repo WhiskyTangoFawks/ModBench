@@ -2,6 +2,7 @@ using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Query;
 
@@ -124,7 +125,29 @@ public class FilterTests(TestPluginFixture fixture)
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
         var plugins = reads.GetPluginsWithMatchingRecords(["NPC_"]);
-        Assert.Contains(TestPluginFixture.PluginName, plugins);
+        Assert.Contains(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), plugins);
+    }
+
+    // ADR-0012 invariant 1: a filename is not an identity — a match in one copy is not a match in
+    // another copy of the same name.
+    [Fact]
+    public void GetPluginsWithMatchingRecords_TwoCopiesOfOneName_AnswersTheCopyThatMatches()
+    {
+        using var copies = new PluginFixtureBuilder("filter-two-copies")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("InBoth"), origin: "ModA")
+            .WithPlugin("Shared.esp", mod =>
+            {
+                mod.Npcs.AddNew("InBoth");
+                mod.Npcs.AddNew("OnlyInModB");
+            }, origin: "ModB")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(copies);
+
+        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'");
+
+        Assert.Equal(
+            [new PluginCopyKey("Shared.esp", "ModB")],
+            index.RequireReads().GetPluginsWithMatchingRecords(["npc_"]));
     }
 
     [Fact]
