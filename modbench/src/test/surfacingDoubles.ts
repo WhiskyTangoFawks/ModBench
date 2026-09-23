@@ -1,44 +1,39 @@
 import { expect } from 'vitest';
 import type { AskQuestion } from '../ports/dialog';
-import type { Reporter, Severity } from '../ports/reporter';
+import { reportSelectionOutcome, type Reporter, type Severity } from '../ports/reporter';
 import { present } from '../ports/present';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string }
 
-export interface RecordedSelectionOutcome { message: string; outcome: SelectionOutcome<string> }
+export interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
 
 export interface RecordingReporter extends Reporter {
   readonly reports: RecordedReport[];
   readonly landings: string[];
   readonly dialogFailures: RecordedReport[];
-  readonly selectionOutcomes: RecordedSelectionOutcome[];
+  readonly selectionOutcomeCalls: RecordedSelectionOutcomeCall[];
 }
 
 /** ADR-0019's reporter seam, second adapter: a test injects this where production injects
- *  `makeReporter`, and asserts on what the user was told instead of showing it. A selection's
- *  outcome is recorded by item name. */
+ *  `makeReporter`, and asserts on what the user was told instead of showing it. */
 export function recordingReporter(): RecordingReporter {
   const reports: RecordedReport[] = [];
   const landings: string[] = [];
   const dialogFailures: RecordedReport[] = [];
-  const selectionOutcomes: RecordedSelectionOutcome[] = [];
+  const selectionOutcomeCalls: RecordedSelectionOutcomeCall[] = [];
+  const report: Reporter['report'] = (severity, message, detail) => { reports.push({ severity, message, detail }); };
   return {
     reports,
     landings,
     dialogFailures,
-    selectionOutcomes,
-    report: (severity, message, detail) => { reports.push({ severity, message, detail }); },
+    selectionOutcomeCalls,
+    report,
     landed: (message) => { landings.push(message); },
     insideDialog: (severity, message, detail) => { dialogFailures.push({ severity, message, detail }); },
     selectionOutcome: (message, outcome, nameOf) => {
-      selectionOutcomes.push({
-        message,
-        outcome: {
-          landed: outcome.landed.map(nameOf),
-          refused: outcome.refused.map((r) => ({ item: nameOf(r.item), reason: r.reason })),
-        },
-      });
+      selectionOutcomeCalls.push({ message, outcome });
+      reportSelectionOutcome(report, message, outcome, nameOf);
     },
   };
 }

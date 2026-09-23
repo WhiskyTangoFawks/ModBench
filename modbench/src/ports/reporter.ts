@@ -20,3 +20,11 @@ export interface Reporter {
    *  items that landed, so a fully landed outcome says nothing. */
   selectionOutcome: <T>(message: string, outcome: SelectionOutcome<T>, nameOf: (item: T) => string) => void;
 }
+
+// Shared by every Reporter, so a test double surfaces a selection's outcome as production does.
+export function reportSelectionOutcome<T>(
+  report: Reporter['report'], message: string, outcome: SelectionOutcome<T>, nameOf: (item: T) => string,
+): void {
+  if (outcome.refused.length === 0) return;
+  report('error', message, outcome.refused.map((r) => `"${nameOf(r.item)}" (${r.reason})`).join(', '));
+}
