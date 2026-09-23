@@ -16,7 +16,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 16 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 3 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 5 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -74,6 +74,8 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Move overwrite content into a mod | Overwrite row: Move content to Mod... | Manual file management |
 | Clear overwrite | Overwrite row: Clear Overwrite..., Delete | Manual file management |
 | Edit the priority cell | Mod list: F2 | VS Code provides it |
+| Move one step with Ctrl+Up or Ctrl+Down (keys follow VS Code, not the template) | Mod list: Ctrl + Up, Ctrl + Down | Maintainer ruling |
+| Drop an archive, a folder or another mod's files onto the mod list (nothing drops into Mods from outside) | Mod list: drag and drop | Maintainer ruling |
 | Restrict reordering to the priority sort | Mod list: drop refused otherwise | VS Code provides it |
 | Open, rename, delete or add a folder in the overwrite files | Overwrite dialog | Manual file management |
 | Edit the version, Nexus id or notes cell | Mod list: inline edit | VS Code provides it |

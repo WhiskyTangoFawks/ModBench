@@ -1,4 +1,4 @@
-# One instance file updated. Fourteen commands draw this shape, so the two actors that differ are
+# One instance file updated. Fifteen commands draw this shape, so the two actors that differ are
 # declared here as sets and the contract's table says which command uses which. A command
 # splices through the pure codec and puts through the Instance adapter; the write is forgotten and the
 # watch closes the loop, so a change from MO2 takes the same path. A system command is handed
@@ -30,7 +30,7 @@ cmds -> client: "which plugins load with no line?" {class: query}
 client -> cmds: the set, or unreachable {class: query}
 cmds -> codecs: "the lines to flip, move, add or drop" {class: loadorder}
 codecs -> cmds: bytes {class: loadorder}
-cmds -> mo2files: "put the file · the folder to make or remove" {class: loadorder}
+cmds -> mo2files: "put the file · the folder to make, rename or remove" {class: loadorder}
 uninstall: "an uninstall, from a downloaded file" {
   cmds -> codecs: "the download's .meta: uninstalled" {class: loadorder}
   codecs -> cmds: bytes {class: loadorder}

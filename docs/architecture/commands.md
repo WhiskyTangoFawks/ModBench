@@ -155,7 +155,7 @@ first. The file for that template lists the gesture with its reason.
 | Surface | xEdit template | MO2 template | What it shows |
 |---|---|---|---|
 | Toolbox | main menu | toolbar, run box, profile combo | to write |
-| Mods | - | mod list | to write |
+| Mods | - | mod list | [mods.md](surfaces/mods.md) |
 | Plugins | navigator | plugin list | to write |
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
 | Editor | View grid, Referenced By | - | to write |
@@ -214,10 +214,10 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 |---|---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Mods: check box, key, context menu | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
 | move | writes | Mods: drag, key, context menu | `modbench.mod.move` | mods or separators | target: a separator (built); top, bottom, priority N, first or last conflict (planned) | MO2 mod list | Move mods in mod order. | debt #956, #967 | update-load-order-file |
-| uninstall | writes | Mods: context menu | `modbench.mod.uninstall` | mods | - | MO2 mod list | Remove a mod folder and its line. | debt #967 | update-load-order-file |
+| uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | debt #967 | update-load-order-file |
 | rename | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | planned | - |
-| create empty mod | writes | Mods: context menu | `modbench.mod.createEmpty` | - | position (planned) | MO2 mod list | Create an empty mod folder and its line. | debt #967 | update-load-order-file |
-| install | writes | Mods: context menu; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | position (planned); target mod, for an upgrade; reinstall from the recorded archive (planned); installer: quick, manual or FOMOD (planned) | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | debt #959, #967 | install-mod |
+| create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | position (planned) | MO2 mod list | Create an empty mod folder and its line. | debt #967 | update-load-order-file |
+| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | position (planned); target mod, for an upgrade; reinstall from the recorded archive (planned); installer: quick, manual or FOMOD (planned) | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | debt #959, #967 | install-mod |
 | open details | reads | Mods: context menu, double click; Plugins: context menu, double click | - | mod, separator, or a plugin's origin mod | tab | MO2 mod list; MO2 plugin list | Open the mod details view. Its conflicts tab lists the conflicting mods and opens each one. | planned | - |
 | highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | planned | - |
 | exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | planned | - |
@@ -237,8 +237,8 @@ Offered on Mods. A separator is a row in mod order.
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
 | add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: below (built); above, inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | update-load-order-file |
-| rename | writes | Mods: context menu | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | update-load-order-file |
-| delete | writes | Mods: context menu | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | update-load-order-file |
+| rename | writes | Mods: context menu, key (F2) | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | update-load-order-file |
+| delete | writes | Mods: context menu, key (Delete) | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | update-load-order-file |
 
 ## Plugin
 
@@ -312,5 +312,6 @@ Each is a command for the same reason a gesture is: one handler, and one identit
 |---|---|---|---|---|---|---|---|---|
 | The load order changed: a `modlist.txt` or `plugins.txt` edit, or a change from another tool | writes | `modbench.instance.putLoadOrder` | load order snapshot | - | none | Hand mEdit the whole load order snapshot whenever it changes. The architecture calls it a PUT. | built | index-load-order |
 | A folder in `mods/` has no `modlist.txt` line | writes | `modbench.mod.import` | folder | - | MO2 refresh | Add a line to `modlist.txt` for a folder already in `mods/`. Code name: adopt. | debt #956 | update-load-order-file |
+| A `modlist.txt` line names a mod whose folder is gone from `mods/` | writes | `modbench.mod.prune` | mod line | - | MO2 refresh | Remove the line of a mod whose folder was deleted outside Modbench, in the active profile's `modlist.txt`. The reverse of `import mod`. | planned | update-load-order-file |
 | A plugin on disk has no `plugins.txt` line | writes | `modbench.plugin.import` | plugin | - | none | Add a line to `plugins.txt` for a plugin on disk that lacks one. Code name: reconcile. | debt #956 | update-load-order-file |
 | The watcher settles a tracked mod that changed: a moved `meta.ini` version means a new release, otherwise an edit in another tool | writes | `modbench.plugin.decompile` | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The gesture `track mod` calls the same command with a new repository as the destination. | debt #966 | decompile-plugin |

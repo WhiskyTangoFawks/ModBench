@@ -1,6 +1,6 @@
 # update-load-order-file: contract (draft)
 
-Diagram: [update-load-order-file.d2](update-load-order-file.d2). Fourteen commands draw one shape: a
+Diagram: [update-load-order-file.d2](update-load-order-file.d2). Fifteen commands draw one shape: a
 driving box calls a Core box, the codec splices, the Instance adapter puts the bytes, and the watch closes the
 loop. The two actors that differ are drawn as sets, and the table below says which command uses which. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
@@ -17,10 +17,11 @@ diagram. **Ruling** means the maintainer decided it and nothing else states it.
 | Command | Core box | Writes |
 |---|---|---|
 | mod `enable` / `disable`, `move` | modlist commands | `modlist.txt` |
-| separator `add`, `rename`, `delete` | modlist commands | `modlist.txt` |
+| separator `add`, `rename`, `delete` | modlist commands | `modlist.txt`, and the separator's folder |
 | mod `uninstall` | modlist commands | `modlist.txt`, the mod folder, and the downloaded file's `.meta` |
 | mod `create empty mod` | modlist commands | `modlist.txt`, and an empty mod folder |
 | `import mod` | modlist commands | `modlist.txt` |
+| `prune mod` | modlist commands | `modlist.txt` |
 | plugin `enable` / `disable`, `move` | plugins commands | `plugins.txt` |
 | `import plugin` | plugins commands | `plugins.txt` |
 | profile `switch` | instance commands | `ModOrganizer.ini` |
@@ -66,10 +67,15 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 2. A separator renamed. *catalog Meaning*
 3. A deleted separator to leave its mods in place. They join the separator above, or become ungrouped
    when it was the first. *catalog Meaning*
+4. A separator to be MO2's: a folder, `mods/<name>_separator/`, beside its line. Add makes the folder,
+   rename renames it, and delete removes it, so MO2 keeps the separator. *ADR-0017, invariant 1; MO2*
+5. A name another separator has refused, naming it: "A separator with this name already exists".
+   *MO2*
 
 ## mod uninstall
 
-1. The mod's folder and its line removed. *catalog Meaning*
+1. The mod's folder moved to the system trash, and its line removed. *catalog Meaning; MO2's recycle
+   bin*
 2. To be asked first. *Confirm what destroys*
 3. The downloaded file it was installed from marked uninstalled in its `.meta`, so MO2's Downloads
    tab agrees. A failure there does not fail the uninstall; it is a line in the Output. *ADR-0017,
@@ -86,6 +92,14 @@ The trigger is a folder in `mods/` with no line in `modlist.txt`.
 
 1. A line added for that folder. *catalog Meaning*
 2. The same path for a folder dropped by hand and for one MO2 made. *ADR-0015, invariant 2*
+
+## prune mod
+
+The trigger is a line in the active profile's `modlist.txt` whose folder is gone from `mods/`.
+
+1. That line removed, so the mod leaves the list. *ruling; MO2's refresh*
+2. The same path for a folder deleted by hand, by MO2 or by any other tool. *ADR-0015, invariant 2*
+3. No prompt and no notification when it works. The row going is the result. *ADR-0019*
 
 ## plugin enable / disable
 
@@ -149,21 +163,20 @@ Two seams, one per side of the driving boundary.
 
 1. **Separator delete.** It removes a line, and no mod is lost. Should it ask first? I applied Confirm
    what destroys and did not write a confirmation story.
-2. **A separator name that exists.** What does add or rename do? No principle decides it.
-3. **Where a mod lands in a separator.** The old spec says the end of that section. Accept?
-4. **Mod order and ends.** ADR-0017 says the top of `modlist.txt` is the winning end. The old spec says
+2. **Where a mod lands in a separator.** The old spec says the end of that section. Accept?
+3. **Mod order and ends.** ADR-0017 says the top of `modlist.txt` is the winning end. The old spec says
    an installed mod lands "at the bottom". I did not use it.
-5. **Removing a `plugins.txt` line.** `import plugin` removes a line that nothing provides. That
+4. **Removing a `plugins.txt` line.** `import plugin` removes a line that nothing provides. That
    destroys data, and it is a system command, so nobody can be asked. Does Confirm what destroys reach
    system commands, or is a line nothing provides not a destruction?
-6. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
+5. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
    list of suffixes it skips. I could not confirm what consumes that setting, so I left it out.
-7. **Order among several new plugins.** Not specified anywhere. No test may assert one.
-8. **An unresolved game folder.** The old spec appends and never removes. Shared story 5 and the
+6. **Order among several new plugins.** Not specified anywhere. No test may assert one.
+7. **An unresolved game folder.** The old spec appends and never removes. Shared story 5 and the
    principle refuse the whole run instead. Agree?
-9. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
+8. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
    guard-rail, and the badge reports the fallout. `mo2.md` has no row for it. Add one?
-10. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
+9. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
     diagrams draw no check.
-11. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
+10. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
     `plugins.txt` line for `import plugin` to remove. Is that intended?

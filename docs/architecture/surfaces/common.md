@@ -20,6 +20,8 @@ As a user, I want:
    default, so an unmarked row reads as the ordinary case.
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a
    setting.
+5. Keys to do what the same keys do in VS Code's Explorer: Space toggles a check box, Delete
+   destroys, F2 renames, Ctrl+C copies. A template's own keys are not adopted. *ruling*
 
 ## The name filter
 
