@@ -101,12 +101,12 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 ## Menus and keys
 
 The catalog decides which gestures this view offers and on what condition. This is where each sits.
-The row menus follow VS Code's groups: open, change, create, copy, then destroy.
+The row menus follow VS Code's groups: open, change, create, source control, copy, then destroy.
 
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator · create empty mod · install… · copy value · uninstall |
+| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator · create empty mod · install… · track (holds an untracked plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. Ctrl+F: filter. |

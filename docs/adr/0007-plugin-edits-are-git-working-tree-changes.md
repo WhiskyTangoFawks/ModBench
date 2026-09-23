@@ -13,11 +13,13 @@ the binary from it.
    the editor, with signposting that names the Track command. That friction is deliberate: the
    blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
-2. **Tracked is the presence of `.git` in the mod folder, and Track is a manual gesture.** No
-   registry, no hidden gitdirs, no automatic repo creation. Track serializes every record of the
-   mod's plugins, verifies the round-trip gate over the tree it wrote, commits the pristine state
-   to `main`, and checks out an edit branch. A repo destroyed outside Modbench reads as untracked
-   the next time anyone looks.
+2. **A plugin is tracked when its plugin source is in a git repository in its mod's folder, and
+   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track
+   on a mod tracks every plugin it holds; Track on a plugin tracks that plugin alone, creating the
+   mod's repository if it has none. Either serializes every record of the plugins it tracks,
+   verifies the round-trip gate over the tree it wrote, commits the pristine state to `main`, and
+   checks out an edit branch. A repo destroyed outside Modbench reads as untracked the next time
+   anyone looks.
 3. **The source is complete, and a tracked plugin loads from it.** Ingest deserializes the
    working tree as Effective and `HEAD` as Head and never consults the binary for content; an
    untracked plugin keeps the binary ingest and yields the same document shape, so the read model

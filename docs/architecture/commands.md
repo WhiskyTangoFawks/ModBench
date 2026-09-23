@@ -117,7 +117,8 @@ ticket names the fix).
   stops or reloads it.
 - **One filter.** Every list has the same name filter. It stays until cleared, its term shows in the
   view description, and the same slot clears it.
-- **Stay in the panel.** No gesture on the record panel moves the user out of it.
+- **Stay in the panel.** No click on the record panel moves the user out of it. A gesture that
+  opens another tab is on the right-click menu.
 
 ## Chrome
 
@@ -163,7 +164,7 @@ first. The file for that template lists the gesture with its reason.
 | Mods | - | mod list | [mods.md](surfaces/mods.md) |
 | Plugins | navigator | plugin list | [plugins.md](surfaces/plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
-| Editor | View grid, Referenced By | - | to write |
+| Editor | View grid, Referenced By | - | [editor.md](surfaces/editor.md) |
 
 The xEdit Messages tab is not a surface. Failures go to the Problems panel (ADR-0019).
 
@@ -227,7 +228,7 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | planned | - |
 | exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | planned | - |
 | check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | planned | - |
-| track | writes | Plugins: context menu (mod untracked); Editor: read-only banner (mod untracked) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put the mod's plugins under git. It fires `decompile plugin` with a new repository as the destination: it creates the repository, commits the baseline to `main` and checks out the edit branch. | debt #966, #967 | decompile-plugin |
+| track | writes | Mods: context menu (mod holds an untracked plugin) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put every untracked plugin the mod holds under git, as `track` on each plugin does. | debt #966, #967 | decompile-plugin |
 | rebase edit branch | writes | Plugins: context menu (mod tracked) | `modbench.mod.rebaseEditBranch` | tracked mods | - | none | Replay the edit branch onto `main`. | debt #967 | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | debt #967 | none |
 | filter | reads | Mods: title icon, key (Ctrl+F) | `modbench.mod.filter`, `modbench.mod.clearFilter` | - | - | MO2 mod list | Narrow the mod list by name. | debt #967 | none |
@@ -247,13 +248,14 @@ Offered on Mods. A separator is a row in mod order.
 
 ## Plugin
 
-Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offers the reduced mod set: open the origin folder and the origin's information. Tracking gates every edit. An untracked plugin is read-only in the Editor, which names Track, so `track mod` is offered where the user meets that refusal.
+Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offers the reduced mod set: open the origin folder and the origin's information. Tracking gates every edit. An untracked plugin is read-only in the Editor, whose column names Track, so `track` is offered where the user meets that refusal.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
 | move | writes | Plugins: drag, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | update-load-order-file |
 | create | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | create-plugin |
+| track | writes | Plugins: context menu (plugin untracked); Editor: context menu (column of an untracked plugin) | `modbench.plugin.track` | plugins | preset: Edits or Everything | none | Put each plugin under git, in its mod's repository. It fires `decompile plugin` with the repository as the destination: it creates the repository if the mod has none, commits the baseline to `main` and checks out the edit branch. The mod's other plugins stay as they are. | debt #966, #967 | decompile-plugin |
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugins | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-plugin |
 | repair | writes | Plugins: context menu | - | plugins | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | planned | - |
@@ -281,10 +283,10 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | elements | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-record |
-| delete | writes | Plugins: context menu, key (Delete); Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-record |
+| delete | writes | Plugins: context menu, key (Delete); Editor: context menu, key (Delete, on Referenced By) | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-record |
 | renumber | writes | Plugins: context menu | `modbench.record.renumber` | records, or a plugin | start id, for a plugin (planned) | xEdit navigator | Change a record's FormKey. Updating the records that reference it is a script. | built | - |
 | copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride (planned); destination plugins; deep, for containers (planned) | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | debt #962, #967 | edit-record |
-| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open as a comparison. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | debt #963, #967 | query-index |
+| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open as a comparison. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | debt #963, #967 | query-index |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, field path | - | xEdit View grid | Open a field value in an editor tab. | debt #967 | none |
 | filter | reads | Plugins: title icon, code action (on a `.sql` file) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | debt #964, #967 | query-index |
 | show referenced by | reads | Editor: automatic | `modbench.record.showReferencedBy` | active record | - | xEdit Referenced By tab | The Referenced By list follows the active record and shows the records that reference it. It has no menu entry; the command only focuses the view. | debt #967 | query-index |
@@ -322,4 +324,4 @@ disagreement needs.
 | The load order changed: a `modlist.txt` or `plugins.txt` edit, or a change from another tool | writes | `modbench.instance.putLoadOrder` | load order snapshot | - | none | Hand mEdit the whole load order snapshot whenever it changes. The architecture calls it a PUT. | built | index-load-order |
 | The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | instance value | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. Code name: adopt, which only adds. | debt #979 | update-load-order-file |
 | The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. Code name: reconcile. | debt #979 | update-load-order-file |
-| The watcher settles a tracked mod that changed: a moved `meta.ini` version means a new release, otherwise an edit in another tool | writes | `modbench.plugin.decompile` | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The gesture `track mod` calls the same command with a new repository as the destination. | debt #966 | decompile-plugin |
+| The watcher settles a tracked mod that changed: a moved `meta.ini` version means a new release, otherwise an edit in another tool | writes | `modbench.plugin.decompile` | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The two `track` gestures call the same command with the mod's repository as the destination. | debt #966 | decompile-plugin |

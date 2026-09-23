@@ -82,18 +82,11 @@ The panel re-reading is tested in [index-load-order_draft.md](index-load-order_d
    discriminator, a read-only member. Each is a refusal under Refuse, do not repair. An edit that sets
    the value it already has does nothing, under Doing nothing is not an error. Accept the list as the
    test cases?
-2. **Sorted arrays.** The catalog says a sorted array can be added to and removed from (planned), and
-   cannot be moved. The old spec says keyed arrays add and remove but do not move, and arrays sorted by
-   their own value do nothing. Which is right?
-3. **Partial Form.** The old spec makes every field of a Partial Form override read-only except
-   EditorID. I have not written it. Accept?
-4. **Untracked refusal wording.** The old spec names Track, and for a plugin with no mod folder says
+2. **Untracked refusal wording.** The old spec names Track, and for a plugin with no mod folder says
    "author a patch plugin". Accept?
-5. **The next free FormID.** The old spec gives a new record the next free FormID, safe against both
+3. **The next free FormID.** The old spec gives a new record the next free FormID, safe against both
    refs. No source in the catalog. Accept?
-6. **Copy destinations.** The old spec lists only mutable plugins, and for an override copy leaves out
+4. **Copy destinations.** The old spec lists only mutable plugins, and for an override copy leaves out
    any plugin that already holds the record. Accept?
-7. **Copy to `new`.** The old spec keeps the source EditorID and takes the next free FormID. The
+5. **Copy to `new`.** The old spec keeps the source EditorID and takes the next free FormID. The
    catalog notes a contradiction between two tickets about prompting for an EditorID.
-8. **Editor gestures.** The old spec defines click, F2, drag, paste, cut and the keys. They are a
-    surface document, not a contract. Where should they live?

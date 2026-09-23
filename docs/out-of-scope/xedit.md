@@ -13,9 +13,9 @@ What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [th
 | An ADR decides it | A decision covers the gesture. Masters are derived ([ADR-0008](../adr/0008-masters-are-derived-from-content.md)). Edits are git changes ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). The index is always current ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md), [ADR-0012](../adr/0012-every-plugin-copy-is-indexed.md)). Filtering is user-written SQL. | 10 | Compare to another plugin file; Add masters; Sort masters |
 | Platform | The gesture relies on something Modbench lacks, such as dragging from a tree into a webview. | 1 | Drag a record onto a reference field |
 | Game-specific | It serves one or two games, or one engine. Modbench generalizes across Bethesda games. | 6 | Set the game-link mode (Pluggy); Create SEQ file (Skyrim); Set VWD on all REFRs with a VWD mesh (Oblivion) |
-| Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 18 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
+| Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 19 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
 | Metadata chrome | The feature annotates or organizes a list inside xEdit's UI. Separators already organize Modbench's lists, and nothing in Modbench consumes it. | 3 | Create a ModGroup; Edit or delete a ModGroup, update CRCs; Create a ModGroup from columns |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 3 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 7 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
 | Dead in xEdit | xEdit documents or ships it, and no working handler exists. | 3 | Temporary and Persistent nav items; Element detail form; Bookmarks (Ctrl+1 to 5, Alt+1 to 5), F5, Ctrl+F3, Alt+F3, Ctrl+W |
 
 ## Divergences
@@ -35,6 +35,10 @@ Gestures Modbench does differently.
 | 9 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
 | 10 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
 | 11 | Change FormID | Renumber changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
+| 12 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
+| 13 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
+| 14 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
+| 15 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
 
 ## Omissions by object
 
@@ -103,6 +107,11 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Copy idle animations (games up to FNV) | Navigator | Game-specific |
 | Spreadsheet tabs: WEAP, ARMO, AMMO | Spreadsheet tabs (Oblivion, Skyrim only) | Game-specific |
 | Apply a script over the selection | Navigator, Referenced By: Apply Script... | Scripts, tasks or the agent |
+| Choose the next or previous member of a union (the Kind dropdown chooses it) | View grid: Next Member, Previous Member | Maintainer ruling |
+| Reset a structure to its defaults | View grid: Reset structure | Scripts, tasks or the agent |
+| Copy a field's path or full path (nothing in Modbench takes a path) | View grid: Clipboard > Copy path, Copy full path | Maintainer ruling |
+| Choose a column-width mode (a column fits, and its edge drags) | View grid: Column widths | Maintainer ruling |
+| Jump to the record in the navigator (Plugins shows it, and Go Back returns) | View header: Jump to | Maintainer ruling |
 
 ### No object
 

@@ -31,6 +31,13 @@ which follows Vortex ([ADR-0020](0020-vortex-is-the-reference-for-deployment.md)
    defaulting a view there would compete with chat for screen space. Views stay user-relocatable
    through VS Code's own Move View, so a user who wants MO2's literal side-by-side layout can
    build it. Modbench never assumes that choice, and nothing reserves or locks the bar.
+5. **MO2 decides what, VS Code decides how.** Where MO2 has an answer for what the mod list, the
+   plugin list and the downloads show, what a gesture does and what it is called, Modbench adopts
+   it. How the user reaches a gesture (keys, navigation, menus and selection) follows VS Code. A
+   departure from MO2's what needs a platform limitation or a maintainer ruling, and is on
+   [the register](../out-of-scope/mo2.md). Nicer, cleaner or more modern is not a reason. An MO2
+   gesture that VS Code already provides, or that only repeats another, is an omission on the
+   register.
 
 ## Permitted divergences
 

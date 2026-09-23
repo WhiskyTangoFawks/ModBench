@@ -1,6 +1,6 @@
 # Decompile plugin. It reads a plugin's bytes into documents, all of them, once, and puts them
 # at a destination: a new repository, main, or the working tree. Two things fire it. The gesture
-# track mod asks for a new repository. The system trigger is the watcher settling a tracked mod
+# track asks for a new repository. The system trigger is the watcher settling a tracked mod
 # that changed: one classification per mod, against git and never the event list, and meta.ini
 # is a tell that pre-selects the default, never a trigger. A moved version means a new release,
 # so the destination is main; no meta change means an edit in another tool, so it is the working
@@ -45,7 +45,7 @@ the trigger: "the system trigger: which destination" {
   plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc defers, and every write to the mod is refused until it is answered"
 }
 
-plugins -> client: "decompile plugin: to a new repository (track mod) · to main · to the working tree" {class: edit}
+plugins -> client: "decompile plugin: to a new repository (track) · to main · to the working tree" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
@@ -60,8 +60,8 @@ to main: "the destination is main" {
   sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
 }
 
-commands -> http: applied or refusal {class: edit}
-http -> client: applied or refusal {class: edit}
+commands -> http: "applied or refusal, per item" {class: edit}
+http -> client: "applied or refusal, per item" {class: edit}
 client -> plugins: the outcome {class: edit}
 plugins."clean: silent · refused: the paths, pointing at rebase edit branch · conflict: the native merge editor"
 source -> watcher: source changed {class: signal}

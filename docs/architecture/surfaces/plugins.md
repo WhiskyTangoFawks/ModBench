@@ -6,8 +6,8 @@ over two templates: its plugin rows follow MO2's plugin list
 them follow xEdit's navigator
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs,
 [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its
-gestures are in [commands.md](../commands.md) under Plugin and Record, with `track` and `rebase
-edit branch` under Mod; what each one writes is in its trace. What every view shares is in
+gestures are in [commands.md](../commands.md) under Plugin and Record, with `rebase edit branch`
+under Mod; what each one writes is in its trace. What every view shares is in
 [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
@@ -35,22 +35,24 @@ As a user, I want:
    invariant 1; ruling*
 3. A losing copy of a plugin, one the game does not load because another mod's copy of the same name
    wins, not to be a row. It stays indexed, and viewing it is deferred. *ADR-0012, invariant 5*
-4. Every plugin row to expand at any time. Expanding decides what it shows: its records, "Still
-   indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
+4. Every enabled plugin row to expand at any time. Expanding decides what it shows: its records,
+   "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
    invariant 1*
-5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
+5. A disabled plugin to show no expander, because the game does not load its records. Viewing them
+   is deferred, as for a losing copy. *ruling; ADR-0013, invariant 3*
+6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
-6. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
+7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
    record's child group into the record: a worldspace holds its persistent cell and its blocks, a
    block its sub-blocks, a sub-block its cells, a cell its persistent and temporary placed
    references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
    responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
-7. A row with nothing beneath it to show no expander, and an empty group of placed references not to
+8. A row with nothing beneath it to show no expander, and an empty group of placed references not to
    be a row. *xEdit*
-8. Beneath a group, the records in FormID order. *xEdit*
-9. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what is
-   on screen.
-10. Every row collapsed each time the extension activates, so the view opens clean. *ruling, as
+9. Beneath a group, the records in FormID order. *xEdit*
+10. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
+    is on screen.
+11. Every row collapsed each time the extension activates, so the view opens clean. *ruling, as
     in Mods*
 
 ## A row
@@ -178,13 +180,13 @@ As a user, I want:
 2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
    identity*
 3. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
-4. A click on a record to open it in the record panel, and a click on a plugin row to open its
-   header, which is a record. *catalog `open`*
+4. A click on a record to open it in the record panel, and a click on an enabled plugin row to open
+   its header, which is a record. A click on a disabled plugin row only selects it. *catalog `open`*
 5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
-6. `track` and `rebase edit branch` to act on the plugin's mod, and each offered only where the
-   catalog's condition holds: track on an untracked mod's plugin, rebase and compile on a tracked,
-   editable plugin. *catalog Where*
+6. `track` to act on the plugin, and `rebase edit branch` on the plugin's mod, each offered only
+   where the catalog's condition holds: track on an untracked plugin, rebase and compile on a
+   tracked, editable plugin. *catalog Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
    and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
 
@@ -294,6 +296,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
 | `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
 | Editing a plugin's header | the catalog's planned `edit field` |
+| A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
 ## Test seam
 

@@ -36,9 +36,9 @@ and [ADR-0006](docs/adr/0006-the-plugin-is-the-source-of-truth.md).
 |---|---|---|
 | **Mods** — install from archive or folder, separators, drag-order, enable | [mods.md](docs/architecture/surfaces/mods.md) | Implemented; spec rewritten, code catching up |
 | **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
-| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
+| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
 | **Version control** — Track, edit branch, compile, native SCM integration, external-change handling | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
-| **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
+| **Referenced By** — what points at a record | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented |
 | **Toolbox** — the instance at a glance: its game and active profile, switch profile, refresh | [toolbox.md](docs/architecture/surfaces/toolbox.md) | Implemented; spec rewritten, code catching up |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
