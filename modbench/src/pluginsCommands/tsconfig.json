@@ -5,9 +5,9 @@
     "outDir": "../../out/projects/pluginsCommands"
   },
   "references": [
-    { "path": "../instance" },
+    { "path": "../instanceLoader" },
     { "path": "../mo2Codecs" },
-    { "path": "../mo2Files" },
+    { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],

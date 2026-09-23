@@ -2,7 +2,7 @@
 // written after the mods it heads, and wraps the entries preceding it. vscode-free, so
 // unit-testable.
 
-import type { Mod, ModlistEntry, Separator } from '../instance/instance';
+import type { Mod, ModlistEntry, Separator } from '../instanceLoader/instance';
 
 export interface ModlistGroup {
   separator: Separator;

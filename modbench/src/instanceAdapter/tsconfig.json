@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../out/projects/mo2Files"
+    "outDir": "../../out/projects/instanceAdapter"
   },
   "references": [
     { "path": "../mo2Codecs" },

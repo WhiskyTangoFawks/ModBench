@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { Instance } from './instance/instance';
+import type { Instance } from './instanceLoader/instance';
 import { errorMessage } from './ports/errorMessage';
 
 export type ModAdoptionOutcome =

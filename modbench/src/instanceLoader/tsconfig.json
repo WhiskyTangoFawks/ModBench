@@ -2,14 +2,14 @@
   "extends": "../../tsconfig.box.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../out/projects/instance",
+    "outDir": "../../out/projects/instanceLoader",
     // The one box below the views that sees the extension host: a watcher is VS Code's, and the
     // Instance owns every MO2-side watcher (ADR-0015 invariant 7).
     "types": ["node", "vscode"]
   },
   "references": [
     { "path": "../mo2Codecs" },
-    { "path": "../mo2Files" },
+    { "path": "../instanceAdapter" },
     { "path": "../ports" },
     { "path": "../tables" }
   ],

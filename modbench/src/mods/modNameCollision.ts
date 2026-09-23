@@ -1,4 +1,4 @@
-import type { Instance } from '../instance/instance';
+import type { Instance } from '../instanceLoader/instance';
 import { modNameCollisionRefusal } from '../install/install';
 
 export function collidingModName(instance: Pick<Instance, 'value'>, name: string): string | undefined {

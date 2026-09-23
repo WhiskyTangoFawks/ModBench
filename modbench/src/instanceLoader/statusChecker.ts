@@ -2,10 +2,10 @@
 // folders. Pure over ModlistEntry[] + instanceRoot + a precomputed FileConflictIndex; no vscode
 // import, and no plugin file is opened — master facts are the backend's (ADR-0016).
 
-import { modDir } from '../mo2Files/layout';
+import { modDir } from '../instanceAdapter/layout';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import type { FileConflictIndex } from './fileConflictIndex';
-import { exists } from '../mo2Files/files';
+import { exists } from '../instanceAdapter/files';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -50,7 +50,7 @@ async function computeEntryStatus(
   return { status: classifyStatus(conflicts, overrides), conflictLines };
 }
 
-// A missing mod folder answers false; any other read failure propagates (mo2Files.exists).
+// A missing mod folder answers false; any other read failure propagates (instanceAdapter.exists).
 function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
   return exists(modDir(instanceRoot, modName));
 }

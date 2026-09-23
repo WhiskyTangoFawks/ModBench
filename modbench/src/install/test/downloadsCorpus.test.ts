@@ -9,7 +9,7 @@ import {
   markDownloadInstalled,
   unhideDownload,
 } from '../downloadSidecar';
-import { scanDownloads } from '../../instance/downloadsScan';
+import { scanDownloads } from '../../instanceLoader/downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../../mo2Codecs/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../../test/mo2/corpusFixture';
 

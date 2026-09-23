@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Instance } from './instance/instance';
+import type { Instance } from './instanceLoader/instance';
 import { switchProfile } from './instanceCommands/profile';
 import type { Reporter } from './ports/reporter';
 

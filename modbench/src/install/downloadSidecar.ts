@@ -2,8 +2,8 @@
 // (ADR-0015 invariant 2). Each writes and returns — the downloads watcher is how it comes back.
 
 import { setHiddenInText, setInstalledInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile } from '../mo2Files/layout';
-import { exists, put } from '../mo2Files/files';
+import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';
+import { exists, put } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
 
 /** Every verb here writes unconditionally — a splice of the sidecar, or a trash — so `applied`

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
 import { providedPluginsIn } from '../../test/mo2/corpusFixture';
-import { isPluginFile } from '../../mo2Files/pluginFile';
-import type { DataFolderPlugins } from '../../instance/loadOrderSnapshot';
+import { isPluginFile } from '../../instanceAdapter/pluginFile';
+import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 
 const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';

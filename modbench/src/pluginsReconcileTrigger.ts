@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
-import type { Instance } from './instance/instance';
-import { providedPluginsOf, type DataFolderPlugins } from './instance/loadOrderSnapshot';
+import type { Instance } from './instanceLoader/instance';
+import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 
 // Termination: a write re-enters through this subscription, since the Instance watches
 // plugins.txt and its value runs the reconcile. The next run changes nothing, writes nothing,

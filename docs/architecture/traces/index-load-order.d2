@@ -6,8 +6,8 @@
 # Governed by ADR-0009, ADR-0012, ADR-0013 and ADR-0015. Contract: index-load-order.md.
 ...@../styles
 shape: sequence_diagram
-instance: @../target-architecture.modbench_driven.instance
-instance.label: Instance loader
+instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader.label: Instance loader
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
 client: @../target-architecture.modbench_core.client
@@ -32,7 +32,7 @@ port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
-instance -> instancecommands: "put load order: the snapshot as an argument" {class: loadorder}
+instanceloader -> instancecommands: "put load order: the snapshot as an argument" {class: loadorder}
 instancecommands -> client: load order snapshot {class: loadorder}
 client -> http: load order snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}

@@ -18,16 +18,16 @@ const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
 // The driven column, each with the boxes target-architecture-references.d2 lets it reach: the
 // arrows that leave it, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  mo2Files: ['mo2Codecs', 'ports', 'tables'],
-  instance: ['mo2Codecs', 'mo2Files', 'ports', 'tables'],
+  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
+  instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
 };
 
 // The core column, read off the same picture.
 const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['mo2Codecs', 'mo2Files', 'ports'],
-  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files', 'ports'],
-  instanceCommands: ['mo2Codecs', 'mo2Files', 'ports'],
-  install: ['mo2Codecs', 'mo2Files', 'ports'],
+  modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
+  instanceCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  install: ['mo2Codecs', 'instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
 
@@ -35,9 +35,9 @@ const CORE_BOXES: Record<string, string[]> = {
 // The driving band: each view reads a value and fires a command, with the reference list
 // target-architecture-references.d2 draws for it.
 const VIEW_BOXES: Record<string, string[]> = {
-  mods: ['install', 'instance', 'modlist', 'ports'],
-  downloads: ['install', 'instance', 'ports'],
-  plugins: ['client', 'instance', 'pluginsCommands', 'ports'],
+  mods: ['install', 'instanceLoader', 'modlist', 'ports'],
+  downloads: ['install', 'instanceLoader', 'ports'],
+  plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
   editor: ['client', 'ports', 'wire'],
 };
 
@@ -103,10 +103,11 @@ function offenders(): Record<string, string[]> {
 const PACKAGE_IMPORTERS = new Set(['client']);
 
 // A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
-// including the file system — MO2 files is the one door onto the instance, and it is one of these.
+// including the file system — the Instance adapter is the one door onto the instance, and it is
+// one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box === 'instance' || box in VIEW_BOXES;
+  if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
@@ -194,7 +195,7 @@ describe('a kernel box references nothing', () => {
 
 describe('a driven or core box reaches only the boxes the diagram draws an arrow to', () => {
   it('names the two boxes the driven band draws', () => {
-    expect(Object.keys(DRIVEN_BOXES)).toEqual(['mo2Files', 'instance']);
+    expect(Object.keys(DRIVEN_BOXES)).toEqual(['instanceAdapter', 'instanceLoader']);
   });
 
   it('names the five boxes the core band draws and the code builds', () => {
@@ -220,16 +221,16 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   // Rival: the Instance reaching up into a view or a command, which is what makes the read model
   // an input to the write side.
   it('flags an import of a box no arrow reaches', () => {
-    const planted = join(boxRoot('instance'), 'planted.ts');
-    expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instance')).toBe(false);
-    expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instance')).toBe(false);
+    const planted = join(boxRoot('instanceLoader'), 'planted.ts');
+    expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instanceLoader')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
   });
 
-  // Rival: MO2 files taking a VS Code type, which puts the extension host behind the one door
-  // onto the instance. The Instance owns the watchers, so vscode is its alone.
-  it('allows vscode in the Instance and refuses it in MO2 files', () => {
-    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instance'), 'planted.ts'), 'instance')).toBe(true);
-    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('mo2Files'), 'planted.ts'), 'mo2Files')).toBe(false);
+  // Rival: the Instance adapter taking a VS Code type, which puts the extension host behind the
+  // one door onto the instance. The Instance owns the watchers, so vscode is its alone.
+  it('allows vscode in the Instance and refuses it in the Instance adapter', () => {
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
   });
 
   // Rival: the client taking a VS Code type for a callback, which is what would make a tool
@@ -272,12 +273,12 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   });
 
   it('allows the boxes each one does reference', () => {
-    expect(isAllowedDrivenSpecifier('../mo2Files/layout', join(boxRoot('instance'), 'p.ts'), 'instance')).toBe(true);
-    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
-    expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
+    expect(isAllowedDrivenSpecifier('../instanceAdapter/layout', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
+    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
+    expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
     expect(isAllowedDrivenSpecifier(
-      '../instance/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
+      '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
     )).toBe(true);
-    expect(isAllowedDrivenSpecifier('../instance/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });

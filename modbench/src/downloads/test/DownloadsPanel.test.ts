@@ -45,7 +45,7 @@ import {
 } from '../DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
-import type { Instance, InstanceValue } from '../../instance/instance';
+import type { Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';

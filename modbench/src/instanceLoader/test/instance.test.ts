@@ -7,7 +7,7 @@ import { present } from '../../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
-import type { GameDirectoryResolver } from '../../mo2Files/gameDirectory';
+import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
@@ -31,7 +31,7 @@ afterEach(async () => {
 
 const DATA_FOLDER = '/game/Data';
 
-// MO2 files' own answer is doubled: where the game is is its question, not the Instance's.
+// The Instance adapter's own answer is doubled: where the game is is its question, not the Instance's.
 const resolvesDataFolder: GameDirectoryResolver = () =>
   Promise.resolve({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
 

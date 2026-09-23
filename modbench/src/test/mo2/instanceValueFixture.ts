@@ -1,5 +1,5 @@
-import { FileConflictLookup } from '../../instance/fileConflictIndex';
-import type { InstanceValue } from '../../instance/instance';
+import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
+import type { InstanceValue } from '../../instanceLoader/instance';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
  *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */

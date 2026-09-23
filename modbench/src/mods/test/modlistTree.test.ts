@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Mod, ModlistEntry, Separator } from '../../instance/instance';
+import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
 import { groupModlist } from '../modlistTree';
 import { present } from '../../ports/present';
 

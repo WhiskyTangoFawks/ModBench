@@ -8,15 +8,15 @@ import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOr
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
-import { Instance, loadOrderSnapshotOf } from './instance/instance';
-import { gameDirectoryResolver } from './mo2Files/gameDirectory';
-import { isMo2Instance } from './mo2Files/files';
+import { Instance, loadOrderSnapshotOf } from './instanceLoader/instance';
+import { gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
-import { originFolder, type DataFolderPlugins } from './instance/loadOrderSnapshot';
+import { originFolder, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
@@ -386,7 +386,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   setMo2InstanceContext(true);
   const modListReporter = reporterFor('modList');
   // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
-  // resolver MO2 files answers "where is the game" with.
+  // resolver the Instance adapter answers "where is the game" with.
   const instance = own(new Instance({
     instanceRoot, log, resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));

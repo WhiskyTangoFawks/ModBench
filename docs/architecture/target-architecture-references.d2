@@ -37,10 +37,10 @@ medit_drivers.panel -> modbench_kernel.wire {class: ref}
 
 # Modbench: views (a view's kernel reads are drawn)
 modbench_drivers.user -> modbench_driving {class: outside}
-modbench_driving.toolbox -> modbench_driven.instance {class: ref}
-modbench_driving.mods -> modbench_driven.instance {class: ref}
-modbench_driving.plugins -> modbench_driven.instance {class: ref}
-modbench_driving.downloads -> modbench_driven.instance {class: ref}
+modbench_driving.toolbox -> modbench_driven.instanceloader {class: ref}
+modbench_driving.mods -> modbench_driven.instanceloader {class: ref}
+modbench_driving.plugins -> modbench_driven.instanceloader {class: ref}
+modbench_driving.downloads -> modbench_driven.instanceloader {class: ref}
 modbench_driving.editor -> modbench_core.client {class: ref}
 modbench_driving.plugins -> modbench_core.client {class: ref}
 modbench_driving.mods -> modbench_core.modlist {class: ref}
@@ -58,25 +58,25 @@ modbench_driving.downloads -> modbench_kernel.ports {class: ref}
 modbench_driving.editor -> modbench_kernel.ports {class: ref}
 modbench_driving.editor -> modbench_kernel.wire {class: ref}
 # Modbench: core (the kernel by the band's rule, not drawn; the instance value arrives as an argument)
-modbench_core.modlist -> modbench_driven.instance {class: ref}
-modbench_core.pluginscommands -> modbench_driven.instance {class: ref}
-modbench_core.deploy -> modbench_driven.instance {class: ref}
+modbench_core.modlist -> modbench_driven.instanceloader {class: ref}
+modbench_core.pluginscommands -> modbench_driven.instanceloader {class: ref}
+modbench_core.deploy -> modbench_driven.instanceloader {class: ref}
 modbench_core.pluginscommands -> modbench_core.client {class: ref}
-modbench_core.instancecommands -> modbench_driven.instance {class: ref}
+modbench_core.instancecommands -> modbench_driven.instanceloader {class: ref}
 modbench_core.instancecommands -> modbench_core.client {class: ref}
-modbench_core.modlist -> modbench_driven.mo2files {class: ref}
-modbench_core.pluginscommands -> modbench_driven.mo2files {class: ref}
-modbench_core.instancecommands -> modbench_driven.mo2files {class: ref}
-modbench_core.downloadscommands -> modbench_driven.mo2files {class: ref}
-modbench_core.install -> modbench_driven.mo2files {class: ref}
-modbench_core.deploy -> modbench_driven.mo2files {class: ref}
+modbench_core.modlist -> modbench_driven.instanceadapter {class: ref}
+modbench_core.pluginscommands -> modbench_driven.instanceadapter {class: ref}
+modbench_core.instancecommands -> modbench_driven.instanceadapter {class: ref}
+modbench_core.downloadscommands -> modbench_driven.instanceadapter {class: ref}
+modbench_core.install -> modbench_driven.instanceadapter {class: ref}
+modbench_core.deploy -> modbench_driven.instanceadapter {class: ref}
 modbench_core.deploy -> modbench_data.gamedata {class: store}
 # Modbench: driven adapters (the kernel by the band's rule, not drawn)
-modbench_driven.instance -> modbench_driven.mo2files {class: ref}
-modbench_driven.instance -> modbench_data.mo2 {class: store}
-modbench_driven.instance -> modbench_data.gamedata {class: store}
-modbench_driven.mo2files -> modbench_data.mo2 {class: store}
-modbench_driven.mo2files -> modbench_data.gamedata {class: store}
+modbench_driven.instanceloader -> modbench_driven.instanceadapter {class: ref}
+modbench_driven.instanceloader -> modbench_data.mo2 {class: store}
+modbench_driven.instanceloader -> modbench_data.gamedata {class: store}
+modbench_driven.instanceadapter -> modbench_data.mo2 {class: store}
+modbench_driven.instanceadapter -> modbench_data.gamedata {class: store}
 # other tools
 medit_data.tools -> medit_data.plugin {class: outside}
 modbench_data.tools -> modbench_data.mo2 {class: outside}
