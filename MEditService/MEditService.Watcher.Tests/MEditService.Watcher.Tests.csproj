@@ -35,7 +35,7 @@
     <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
-    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
   </ItemGroup>

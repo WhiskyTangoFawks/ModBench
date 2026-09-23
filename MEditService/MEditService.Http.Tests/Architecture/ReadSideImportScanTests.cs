@@ -20,7 +20,7 @@ public sealed class ReadSideImportScanTests
         "MEditService.Commands",
         "MEditService.Index",
         "MEditService.PluginAdapter",
-        "MEditService.SourceRepo",
+        "MEditService.SourceAdapter",
     ];
 
     [Fact]

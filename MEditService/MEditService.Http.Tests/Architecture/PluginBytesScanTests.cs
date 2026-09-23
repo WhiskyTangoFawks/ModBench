@@ -10,7 +10,7 @@ public sealed class PluginBytesScanTests
     private static readonly string[] ProductionRoots =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
 
     private const string AdapterRoot = "MEditService.PluginAdapter";
 

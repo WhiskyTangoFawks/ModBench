@@ -85,7 +85,7 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
   MEditService.Codec/         the kernel: record text to document and back, and the schema
   MEditService.Ports/         the kernel: the notification port and its payloads
   MEditService.Index/         DuckDB as an index over per-record JSON documents
-  MEditService.SourceRepo/    the per-record source tree and its git layer
+  MEditService.SourceAdapter/ the per-record source tree and its git layer
   MEditService.PluginAdapter/ Mutagen for plugin I/O
 ```
 

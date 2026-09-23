@@ -26,7 +26,7 @@ public sealed class WriteSideIndexScanTests
     [
         "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
         "MEditService.PluginAdapter", "MEditService.Ports", "MEditService.Queries",
-        "MEditService.SourceRepo",
+        "MEditService.SourceAdapter",
     ];
 
     // Not write side: Records is the Index module itself and Queries is the read side, both of which

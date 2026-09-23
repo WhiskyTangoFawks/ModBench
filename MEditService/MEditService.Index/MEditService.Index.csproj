@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <!-- Drawn: the record index reads the adapter beside it (ADR-0015). -->
-    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <!-- Drawn: the record index reads the adapter beside it (ADR-0015). -->
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->

@@ -10,8 +10,8 @@ http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
-sourcerepo: @../target-architecture.medit_driven.sourcerepo
-sourcerepo.label: Source adapter
+sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
@@ -25,16 +25,16 @@ port.label: Ports
 editor -> client: "edit: one path" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
-source -> sourcerepo: documents {class: edit}
-sourcerepo -> commands: current document {class: edit}
-commands -> sourcerepo: new document {class: edit}
-sourcerepo -> source: documents {class: edit}
+source -> sourceadapter: documents {class: edit}
+sourceadapter -> commands: current document {class: edit}
+commands -> sourceadapter: new document {class: edit}
+sourceadapter -> source: documents {class: edit}
 commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
 source -> watcher: source changed {class: signal}
 watcher -> indexer: "source changed: refresh keys" {class: signal}
-sourcerepo -> indexer: documents (tracked) {class: query}
+sourceadapter -> indexer: documents (tracked) {class: query}
 indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}

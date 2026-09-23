@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;

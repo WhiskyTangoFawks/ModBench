@@ -5,7 +5,7 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.SourceRepo;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Index;

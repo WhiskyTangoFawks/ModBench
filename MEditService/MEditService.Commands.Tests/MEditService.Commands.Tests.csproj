@@ -33,7 +33,7 @@
     <!-- One test project per box: the drawn list plus the kernel, mirroring
          MEditService.Commands's own ProjectReference list. -->
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
-    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.SourceAdapter\MEditService.SourceAdapter.csproj" />
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />

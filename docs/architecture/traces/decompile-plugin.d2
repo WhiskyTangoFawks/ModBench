@@ -27,8 +27,8 @@ port.label: Ports
 plugin: @../target-architecture.medit_data.plugin
 pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
-sourcerepo: @../target-architecture.medit_driven.sourcerepo
-sourcerepo.label: Source adapter
+sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
@@ -51,13 +51,13 @@ http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
 commands."round-trip gate over the tree it wrote"
-commands -> sourcerepo: all documents {class: track}
+commands -> sourceadapter: all documents {class: track}
 commands -> port: track progress, per plugin {class: push}
-sourcerepo -> source: documents {class: track}
+sourceadapter -> source: documents {class: track}
 
 to main: "the destination is main" {
-  sourcerepo."commit the baseline by plumbing, trailers from meta.ini, then rebase the edit branch"
-  sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
+  sourceadapter."commit the baseline by plumbing, trailers from meta.ini, then rebase the edit branch"
+  sourceadapter -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
 }
 
 commands -> http: "applied or refusal, per item" {class: edit}
@@ -66,7 +66,7 @@ client -> plugins: the outcome {class: edit}
 plugins."clean: silent · refused: the paths, pointing at rebase edit branch · conflict: the native merge editor"
 source -> watcher: source changed {class: signal}
 watcher -> indexer: source changed {class: signal}
-sourcerepo -> indexer: documents (tracked) {class: query}
+sourceadapter -> indexer: documents (tracked) {class: query}
 
 refused: "refused, nothing written" {
   commands -> http: "a dropped subrecord, naming it · a missing strings file · git not on the PATH · a record already changed, naming the records" {class: edit}
