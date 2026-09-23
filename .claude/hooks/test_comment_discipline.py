@@ -58,16 +58,23 @@ class ValeRules(unittest.TestCase):
         self.assertIn("Repo.History", alerts)
         self.assertNotIn("Repo.Date", alerts)
 
-    def test_our_ticket_numbers_in_a_code_comment(self):
-        for text in (f"// see {TICKET}\n", f"// fixed ({TICKET})\n", f"// two fixes, {TICKET} among them\n"):
-            with self.subTest(text=text):
-                self.assertIn("Repo.Ticket", vale(text, ".ts"))
+    def test_a_ticket_number_in_a_typescript_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"// see {TICKET}\nconst a = 1;\n", ".ts"))
 
-    def test_a_ticket_number_in_prose_or_a_string_literal_is_allowed(self):
+    def test_a_ticket_number_in_a_csharp_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"// fixed ({TICKET})\nint a;\n", ".cs"))
+
+    def test_a_ticket_number_in_a_python_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"# two fixes, {TICKET} among them\na = 1\n", ".py"))
+
+    def test_a_ticket_number_in_markdown_prose_is_allowed(self):
         self.assertNotIn("Repo.Ticket", vale(f"See {TICKET} and debt #956, {TICKET}.\n", ".md"))
-        for config in (".vale.ini", ".vale-raw.ini"):
-            with self.subTest(config=config):
-                self.assertNotIn("Repo.Ticket", vale(f"x = 'issue {TICKET}'\n", ".ts", config=config))
+
+    def test_a_ticket_number_in_a_string_literal_is_allowed(self):
+        self.assertNotIn("Repo.Ticket", vale(f"x = 'issue {TICKET}'\n", ".ts"))
+
+    def test_the_raw_pass_carries_no_ticket_rule(self):
+        self.assertNotIn("Repo.Ticket", vale(f"x = 'issue {TICKET}'\n", ".ts", config=".vale-raw.ini"))
 
     def test_a_filed_debt_citation_is_the_one_ticket_number_allowed(self):
         self.assertNotIn("Repo.Ticket", vale(f"// synthetic fixtures are debt {TICKET}\n", ".ts"))

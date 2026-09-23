@@ -157,8 +157,8 @@ def parse_trace_actors(path: Path):
 
 
 def _members(band, boxes_by_band):
-    """A wildcard stands for the boxes of its band that reach by drawn arrows; a composition
-    root reaches everything by definition, so as a member it would let the set pass anything."""
+    """Every box of the band but the composition roots: a composition root reaches everything by
+    definition, so as a member it would let the set pass anything."""
     return [('real', box) for box in sorted(boxes_by_band.get(band, ())) if box not in COMPOSITION_ROOTS]
 
 
