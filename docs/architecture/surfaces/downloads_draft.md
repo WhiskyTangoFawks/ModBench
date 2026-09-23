@@ -20,9 +20,11 @@ Several rows can be selected at once (mo2.md, divergence 7).
 As a user, I want:
 
 1. One row for each file directly in the instance's downloads folder: the folder MO2's
-   configuration names, `downloads/` unless I moved it. *MO2*
-2. Only the archives an installer can take to be rows. A subfolder, a readme or any other file in
-   the folder is not. *MO2 lists files by the installers' extensions, never folders*
+   configuration names, resolved as MO2 resolves it, `%BASE_DIR%` included, even when it lies
+   outside the instance. `downloads/` unless I moved it. *MO2*
+2. Only the files install can take to be rows, by the one list of extensions install owns. A
+   subfolder, a readme or any other file in the folder is not. *MO2 lists files by the installers'
+   extensions, never folders*
 3. A file's `.meta` sidecar never to be a row. It is the data behind its file's row. *MO2*
 4. A file with no `.meta` to be an ordinary row, Downloaded, with none of its fields. *MO2*
 5. A `.meta` whose file is gone to show nothing, and to stay on disk. MO2 deletes it on refresh;
@@ -43,7 +45,7 @@ The status is read from the files, first match wins:
 
 | The files say | Status |
 |---|---|
-| a mod's `meta.ini` names this file as its installation file | Installed |
+| the `meta.ini` of any mod in `mods/`, in any profile, names this file as its installation file | Installed |
 | the `.meta` says `installed=true` or `uninstalled=true` | Uninstalled |
 | neither, or no `.meta` | Downloaded |
 
@@ -59,7 +61,7 @@ A Nexus mod ID or file ID of `0` is no ID. *MO2*
 As a user, I want:
 
 1. The newest file first, by file time, until I choose otherwise. *mo2.md, divergence 6*
-2. To sort by name, status, size or file time, in either direction, from a pick in the title bar's
+2. To sort by name (the label), status, size or file time, in either direction, from a pick in the title bar's
    overflow. The pick marks the current sort. *catalog `sort`; Chrome*
 3. Rows that tie to keep their order, in both directions, because status has three values and ties
    are common.
@@ -106,8 +108,8 @@ As a user, I want:
 
 As a user, I want:
 
-1. One confirmation for the whole selection, naming the file when there is one and the count when
-   there are several, and saying the files go to the trash. *Confirm what destroys; MO2*
+1. One confirmation for the whole selection, naming the file by its file name when there is one and
+   the count when there are several, and saying the files go to the trash. *Confirm what destroys; MO2*
 2. The installed mod to be untouched, and the confirmation to say so. *MO2*
 
 ### The install target
@@ -124,8 +126,8 @@ want:
 3. An upgrade only when I choose it, even when one item is pre-selected. *diagram: always confirmed*
 4. The mod whose installed files record this file's ID named "File ID match", listed first and
    pre-selected. With no such mod, the mod whose `meta.ini` records this file as its installation
-   file named "Installed from this file", listed first and pre-selected. Never a guess from the
-   file's name. *diagram*
+   file named "Installed from this file", listed first and pre-selected. With neither, "Install as a
+   new mod…" is pre-selected. Never a guess from the file's name. *diagram*
 5. Esc to install nothing. *Esc changes nothing*
 6. A new mod to go on to the name prompt, and an upgrade not to. *install-mod contract*
 
@@ -133,9 +135,9 @@ want:
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. An install that landed, and then failed to write the `.meta` flag, reported as installed, with a
-   line in the Output. The row still shows Installed, and a gesture reported as failed is one I
-   would retry. *common, Reporting*
+1. An install that landed, and then failed to write the `.meta` flag, not reported as failed: the
+   row still shows Installed, and the failed mark is a line in the Output. A gesture reported as
+   failed is one I would retry. *common, Reporting*
 2. A delete that moved the file to the trash and then failed on its `.meta` reported as done, with a
    line in the Output naming the `.meta` left behind. The row is gone and a lone `.meta` shows
    nothing, so no view is untrue. *common, Reporting; Which files are rows, story 5*

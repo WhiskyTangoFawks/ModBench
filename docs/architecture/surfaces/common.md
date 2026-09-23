@@ -43,7 +43,8 @@ As a user, I want:
 1. Before the first read lands, no rows and no empty message, so "not read yet" never reads as
    "nothing here".
 2. When the first read fails, one error row in place of the list: `$(error)`, "Failed to load:"
-   and the reason, the reason again in its tooltip, and one line in the Output. No notification;
+   and the reason, the reason again in its tooltip, and one line in the Output for the failed read, however many
+   views show it. No notification;
    this is the background tier. The next good read replaces it with rows. *ADR-0019, invariant 2*
 3. An empty list to render its own message. No view hides itself. *commands.md, Where surfaces
    live*
