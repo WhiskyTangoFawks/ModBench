@@ -3,7 +3,7 @@
 A cell in the record panel is one plugin's value for one field. This file says what a cell reads,
 what its editor is, and what copy, cut and paste do, type by type. How a cell is focused, opened and
 dragged is in [editor.md](editor.md); its colours are in
-[editor-conflicts_draft.md](editor-conflicts_draft.md). The field's type, its default and what it may
+[editor-conflicts.md](editor-conflicts.md). The field's type, its default and what it may
 hold come from the record type's schema, and the panel adds no rule of its own
 ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md), invariants 2 and 6). What a value
 reads as is xEdit's answer, and reading changes neither the value an edit writes nor the value copy

@@ -296,6 +296,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
 | `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
 | Editing a plugin's header | the catalog's planned `edit field` |
+| A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
 ## Test seam
 

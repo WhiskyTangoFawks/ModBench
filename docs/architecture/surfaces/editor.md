@@ -11,7 +11,7 @@ conflict, tracked mod.
 The Editor surface has three more files:
 
 - [editor-fields.md](editor-fields.md): how each field reads and edits, type by type.
-- [editor-conflicts_draft.md](editor-conflicts_draft.md): the colours of a record order conflict.
+- [editor-conflicts.md](editor-conflicts.md): the colours of a record order conflict.
 - [editor-referenced-by_draft.md](editor-referenced-by_draft.md): the Referenced By view.
 
 The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it.
@@ -66,7 +66,7 @@ As a user, I want:
 |---|---|---|
 | Label | `[XX] File name`: the plugin's load order index and file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
 | Status | the column's status, from the table below | old spec |
-| Colour | the column's worst cell colour | [editor-conflicts_draft.md](editor-conflicts_draft.md) |
+| Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |
 
 | Status | When | The tooltip says | Source |
@@ -94,7 +94,7 @@ As a user, I want:
 4. Every row expanded when the record opens, as xEdit opens it. *xEdit*
 5. To expand and collapse a row by double clicking its label, or from the keys below. *xEdit*
 6. Each row and each cell coloured by the record order conflict it shows.
-   *[editor-conflicts_draft.md](editor-conflicts_draft.md)*
+   *[editor-conflicts.md](editor-conflicts.md)*
 7. What each cell reads, and how it edits, as its field's type says.
    *[editor-fields.md](editor-fields.md)*
 

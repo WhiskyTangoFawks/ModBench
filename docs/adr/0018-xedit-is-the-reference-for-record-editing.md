@@ -22,7 +22,7 @@ user arrives fluent in it. [The xEdit UX audit](../research/xedit-ux-audit.md) a
    acts on the focused cell's model value and double click edits; the compare grid as one tree
    with a slot per plugin at every depth, sorted arrays aligned by key, a complex field edited as
    one value; and the two-axis record order conflict model, ConflictAll per record and per node, ConflictThis
-   per plugin. [The record-editor spec](../specs/medit-record-editor.md) states each surface.
+   per plugin. [The Editor surface spec](../architecture/surfaces/editor.md) states each surface.
 4. **Cite xEdit's definitions; rule the composition yourself.** The TES5Edit clone under
    `references/` carries definitions whose consuming machinery is absent from the clone. A
    definition is a fact about the format. Absent machinery never means it is meaningless, and a
