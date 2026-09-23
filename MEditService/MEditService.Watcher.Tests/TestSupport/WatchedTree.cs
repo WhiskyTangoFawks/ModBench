@@ -104,19 +104,54 @@ internal sealed class WatchedTree : IDisposable
     /// bytes classify as nothing changed.</summary>
     internal static void Track(string modFolder, params string[] plugins)
     {
-        var gitDir = Path.Combine(modFolder, ".git");
-        GitProbe.Run(gitDir, modFolder, "init", "-q", "-b", "main");
-        GitProbe.Run(gitDir, modFolder, "config", "user.email", "watch@example.invalid");
-        GitProbe.Run(gitDir, modFolder, "config", "user.name", "Watch Fixture");
-        GitProbe.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
+        var gitDir = InitRepository(modFolder);
         foreach (var plugin in plugins) Directory.CreateDirectory(SourceRepository.RootIn(modFolder, plugin));
-        GitProbe.Run(gitDir, modFolder, "add", "-A");
-        GitProbe.Run(gitDir, modFolder, "commit", "-q", "--allow-empty", "-m", "tracked");
-        foreach (var plugin in plugins)
-        {
-            var path = PluginPath(modFolder, plugin);
-            if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(modFolder, plugin, "HEAD", ContentHashOf(path));
-        }
+        CommitEverything(gitDir, modFolder);
+        foreach (var plugin in plugins) ParkBinary(modFolder, modFolder, plugin);
+    }
+
+    /// <summary>Track's repository as one file event: initialised, committed over the mod folder
+    /// and parked aside, then moved in whole, so the git writes behind it reach no watch.</summary>
+    internal void MoveInRepository(string modFolder, string plugin)
+    {
+        var aside = Directory.CreateDirectory(StagedPath()).FullName;
+        var gitDir = InitRepository(aside);
+        CommitEverything(gitDir, modFolder);
+        ParkBinary(aside, modFolder, plugin);
+        Directory.Move(gitDir, Path.Combine(modFolder, ".git"));
+    }
+
+    /// <summary>A plugin's source root as one file event: the folder every root shares, built aside
+    /// and moved in whole. A recursive watch reports it only once everything under it is
+    /// watched.</summary>
+    internal void MoveInSourceRoot(string modFolder, string plugin)
+    {
+        var aside = Directory.CreateDirectory(StagedPath()).FullName;
+        Directory.CreateDirectory(SourceRepository.RootIn(aside, plugin));
+        var shared = Directory.GetDirectories(aside).Single();
+        Directory.Move(shared, Path.Combine(modFolder, Path.GetFileName(shared)));
+    }
+
+    private static string InitRepository(string workTree)
+    {
+        var gitDir = Path.Combine(workTree, ".git");
+        GitProbe.Run(gitDir, workTree, "init", "-q", "-b", "main");
+        GitProbe.Run(gitDir, workTree, "config", "user.email", "watch@example.invalid");
+        GitProbe.Run(gitDir, workTree, "config", "user.name", "Watch Fixture");
+        GitProbe.Run(gitDir, workTree, "config", "commit.gpgsign", "false");
+        return gitDir;
+    }
+
+    private static void CommitEverything(string gitDir, string workTree)
+    {
+        GitProbe.Run(gitDir, workTree, "add", "-A");
+        GitProbe.Run(gitDir, workTree, "commit", "-q", "--allow-empty", "-m", "tracked");
+    }
+
+    private static void ParkBinary(string repositoryFolder, string modFolder, string plugin)
+    {
+        var path = PluginPath(modFolder, plugin);
+        if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(repositoryFolder, plugin, "HEAD", ContentHashOf(path));
     }
 
     /// <summary>Drops a copy from the load order this tree applies, for a reconcile whose plugin
@@ -183,10 +218,12 @@ internal sealed class WatchedTree : IDisposable
     // observes is then countable, and no window closes holding half a write.
     private void MoveIn(string path, byte[] bytes)
     {
-        var staged = Path.Combine(_staging, Guid.NewGuid().ToString("n"));
+        var staged = StagedPath();
         File.WriteAllBytes(staged, bytes);
         File.Move(staged, path, overwrite: true);
     }
+
+    private string StagedPath() => Path.Combine(_staging, Guid.NewGuid().ToString("n"));
 
     /// <summary>Performs the writes and returns once the watcher's own watches have observed every
     /// one of them: each write here raises exactly one file event.</summary>
