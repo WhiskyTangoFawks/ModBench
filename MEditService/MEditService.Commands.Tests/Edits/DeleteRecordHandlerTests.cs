@@ -1,7 +1,9 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -9,15 +11,80 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class DeleteRecordHandlerTests
 {
     [Fact]
-    public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
+    public void DeleteRecords_LandsEachRecordOnItsOwn_AndRefusesTheOneThatCannotWithItsReason()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var header = new RecordAt(mod.Plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName)));
+        var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
+        var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
+
+        var result = mod.DeleteHandler.DeleteRecords([npc, header, otherNpc]);
+
+        Assert.Equal([npc, otherNpc], result.Applied);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(header, refused.Record);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, refused.Refusal);
+        Assert.False(string.IsNullOrWhiteSpace(refused.Message));
+        Assert.False(result.AllApplied);
+        Assert.Null(mod.Document(mod.Npc.ToString()));
+        Assert.Null(mod.Document(mod.OtherNpc.ToString()));
+        Assert.NotNull(mod.Document(header.FormKey));
+    }
+
+    [Fact]
+    public void DeleteRecords_NamingOneRecordTwice_DeletesItOnce_AndRefusesNothing()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
+        var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
+
+        var npcSpelledOtherwise = new RecordAt(
+            new PluginCopyKey(mod.Plugin.Name.ToUpperInvariant(), mod.Plugin.Origin.ToLowerInvariant()),
+            mod.Npc.ToString().ToLowerInvariant());
+
+        var result = mod.DeleteHandler.DeleteRecords([npc, otherNpc, npc, npcSpelledOtherwise]);
+
+        Assert.Equal([npc, otherNpc], result.Applied);
+        Assert.Empty(result.Refused);
+    }
+
+    // Another tool renamed the NPC's document and left a copy under a second name: the tree is
+    // ambiguous about which one to remove, and the records either side of it still land.
+    [Fact]
+    public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var computed = mod.NpcSourceFile;
+        string Renamed(string editorId) => Path.Combine(
+            Path.GetDirectoryName(computed).Require(),
+            Path.GetFileName(computed).Replace(SourceEditFixture.NpcEditorId, editorId, StringComparison.Ordinal));
+        var npcFile = Renamed("RenamedByAnotherTool");
+        File.Move(computed, npcFile);
+        File.Copy(npcFile, Renamed("CopiedByAnotherTool"));
+        var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
+        var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
+        var keyword = new RecordAt(mod.Plugin, mod.Keyword.ToString());
+
+        var result = mod.DeleteHandler.DeleteRecords([otherNpc, npc, keyword]);
+
+        Assert.Equal([otherNpc, keyword], result.Applied);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(npc, refused.Record);
+        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
+        Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(npcFile), "the refused record's document must survive");
+    }
+
+    [Fact]
+    public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, headerFormKey);
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, headerFormKey)]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, refused.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
         Assert.True(
             Directory.Exists(Path.Combine(mod.ModFolder, "source", mod.ActualPluginName)),
@@ -26,13 +93,13 @@ public sealed class DeleteRecordHandlerTests
     }
 
     [Fact]
-    public void DeleteRecord_RemovesTheSourceFile_GoneFromTheTree_StillAtHead()
+    public void DeleteRecords_RemovesTheSourceFile_GoneFromTheTree_StillAtHead()
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         Assert.False(File.Exists(mod.NpcSourceFile));
         Assert.Null(mod.Document(mod.Npc.ToString()));
         // Still served by the last commit until a compile: a working-tree deletion is not a compile.
@@ -41,7 +108,7 @@ public sealed class DeleteRecordHandlerTests
     }
 
     [Fact]
-    public void DeleteRecord_OnANeverCommittedRecord_LeavesNothingAtEitherRef()
+    public void DeleteRecords_OnANeverCommittedRecord_LeavesNothingAtEitherRef()
     {
         using var mod = SourceEditFixture.Tracked();
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew");
@@ -49,56 +116,56 @@ public sealed class DeleteRecordHandlerTests
         Assert.NotNull(created.NewFormKey);
         var newFormKey = created.NewFormKey;
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, newFormKey);
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, newFormKey)]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         Assert.Null(mod.Document(newFormKey));
         Assert.Null(mod.CommittedDocument(newFormKey, "npc_", "BrandNew"));
     }
 
     [Fact]
-    public void DeleteRecord_LeavesOtherRecordsUntouched()
+    public void DeleteRecords_LeavesOtherRecordsUntouched()
     {
         using var mod = SourceEditFixture.Tracked();
 
-        mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
         Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
     }
 
     [Fact]
-    public void DeleteRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
+    public void DeleteRecords_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Modbench: Track…", result.Message, StringComparison.Ordinal);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal);
+        Assert.Contains("Modbench: Track…", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void DeleteRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
+    public void DeleteRecords_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = SourceEditFixture.Tracked();
         mod.RaiseExternalChange();
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, refused.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile)); // refused before the first door — nothing written
     }
 
     [Fact]
-    public void DeleteRecord_Refuses_ForAnUnknownFormKey()
+    public void DeleteRecords_Refuses_ForAnUnknownFormKey()
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, "FFFFFF:Fixture.esp");
+        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, "FFFFFF:Fixture.esp")]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
     }
 }

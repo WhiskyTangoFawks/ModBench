@@ -182,24 +182,50 @@ describe('HttpMEditClient — the ESL contradiction detail', () => {
   });
 });
 
-describe('HttpMEditClient — the not-OK response text', () => {
-  it('resolves a WriteRefused carrying the identity and the server text on a non-ok response', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, 'Not Found')));
+describe('HttpMEditClient — deleting records answers per record', () => {
+  const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const untracked = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+
+  it('sends the whole selection as one call and reads what was applied as landed, each refusal with its message', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [kept, gone],
+      refused: [{ record: untracked, refusal: 'PluginNotTracked', message: 'Other.esp is not tracked.' }],
+    })));
     const client = makeClient(fetch);
 
-    const result = await client.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const outcome = await client.deleteRecords([kept, untracked, gone]);
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 000801:MyPatch.esp — Not Found' });
+    expect(outcome).toEqual({
+      landed: [kept, gone],
+      refused: [{ item: untracked, reason: 'Other.esp is not tracked.' }],
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/delete$/);
+    expect(await request?.json()).toEqual({ records: [kept, untracked, gone] });
+  });
+
+  it('resolves a WriteRefused carrying the count and the server text on a non-ok response', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request')));
+    const client = makeClient(fetch);
+
+    const result = await client.deleteRecords([kept, gone]);
+
+    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 2 records — Bad Request' });
   });
 
   it('resolves a WriteRefused the same way for a thrown request', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
-    const result = await client.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await client.deleteRecords([kept]);
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 000801:MyPatch.esp — socket hang up' });
+    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 1 record — socket hang up' });
   });
+});
+
+describe('HttpMEditClient — the not-OK response text', () => {
 
   it('editRecord leaves an ordinary typed refusal exactly as the backend worded it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {

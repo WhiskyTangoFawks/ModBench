@@ -1,7 +1,7 @@
 export type {
   MEditClient, WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
   NotificationKind, NotificationEvent, BackendStatus, CrashRepairOffer, CrashRepairReason, RecordEditOutcome, RecordPage, CellPage,
-  PluginRecordTypeCount, PluginCreatedResponse, TrackResponse, RecordCreateResponse, RecordDeleteResponse,
+  PluginRecordTypeCount, PluginCreatedResponse, TrackResponse, RecordCreateResponse, RecordAddress,
   RecordRenumberResponse, RecordCopyAsOverrideResponse, RecordCopyAsNewRecordResponse, ReferenceResult,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,

@@ -57,9 +57,19 @@ public record RecordCreateRequest(string Origin, string RecordType, string? Edit
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 
-public record RecordDeleteRequest(string Plugin, string Origin);
+/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1):
+/// one filename can be in two mods, each holding the record.</summary>
+public record RecordAddress(string FormKey, string Plugin, string Origin);
 
-public record RecordDeleteResponse(bool Applied, string FormKey);
+/// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming
+/// the way out.</summary>
+public record RecordAddressRefusal(RecordAddress Record, RecordEditRefusal Refusal, string Message);
+
+public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
+
+/// <summary>Applied or refusal, per record (ADR-0019 invariant 4): a refusal is an item of the
+/// answer, never the status of the call.</summary>
+public record RecordDeleteResponse(IReadOnlyList<RecordAddress> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
 /// <summary><see cref="NewFormKey"/> null means auto-allocate; non-null is xEdit's typed-FormID
 /// renumber path.</summary>

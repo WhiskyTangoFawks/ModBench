@@ -19,7 +19,7 @@ public sealed class WriteRouteHandlerTests
     private static readonly (string Method, string Pattern, Type Handler)[] Routes =
     [
         ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
-        ("POST", "/records/{formKey}/delete", typeof(DeleteRecordHandler)),
+        ("POST", "/records/delete", typeof(DeleteRecordHandler)),
         ("POST", "/records/{formKey}/renumber", typeof(RenumberRecordHandler)),
         ("POST", "/records/{formKey}/copy-as-override", typeof(CopyRecordAsOverrideHandler)),
         ("POST", "/records/{formKey}/copy-as-new-record", typeof(CopyRecordAsNewRecordHandler)),
