@@ -12,11 +12,12 @@ import {
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
-  type RecordCreateResponse, type RecordDeleteResponse, type RecordEditOutcome, type RecordPage,
+  type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
-  type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused,
+  type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 // No convention in ADR-0019 or docs/specs/plugins.md anchors this: 30s is an ordinary
 // HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
@@ -291,14 +292,19 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** The source file goes away and the null-Body mechanism takes it from there: gone at
-   *  Effective, still served at Head until compiled. This method never asks for confirmation. */
-  async deleteRecord(formKey: string, plugin: string, origin: string): Promise<RecordDeleteResponse | WriteRefused | undefined> {
-    return this.mutate<RecordDeleteResponse>({
-      op: `deleteRecord(${formKey})`,
-      failMsg: `mEdit: Could not delete ${formKey}`,
-      post: () => this.apiClient.POST('/records/{formKey}/delete', { params: { path: { formKey } }, body: { plugin, origin } }),
+  async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
+    const counted = records.length === 1 ? '1 record' : `${records.length} records`;
+    const answer = await this.mutate({
+      op: `deleteRecords(${counted})`,
+      failMsg: `mEdit: Could not delete ${counted}`,
+      post: () => this.apiClient.POST('/records/delete', { body: { records: [...records] } }),
     });
+    if (answer === undefined) return { refused: true, message: `mEdit: Could not delete ${counted} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied,
+      refused: answer.refused.map((r) => ({ item: r.record, reason: r.message })),
+    };
   }
 
   /** A delete+create pair plus the cross-plugin reference cascade; an override is refused

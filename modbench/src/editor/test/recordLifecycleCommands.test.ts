@@ -4,10 +4,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
 // The three message APIs are absent, so a reintroduced direct call throws.
 const { handlers, registerCommand, showInputBox, showQuickPick } = vi.hoisted(() => {
-  const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
+  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
@@ -163,58 +163,151 @@ describe('registerRecordLifecycleCommands', () => {
     });
   });
 
-  describe('modbench.record.delete — a tree node and a plain identity record the same call', () => {
+  describe('modbench.record.delete', () => {
+    const deleteRecords = (...args: unknown[]) =>
+      present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(...args);
+
+    const FIRST = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+    const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+    const UNTRACKED = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+    const SECOND_NODE = { kind: 'record', origin: 'ModA', record: { formKey: SECOND.formKey, plugin: SECOND.plugin, editorId: 'SecondNpc' } };
+    const UNTRACKED_NODE = { kind: 'record', origin: 'ModB', record: { formKey: UNTRACKED.formKey, plugin: UNTRACKED.plugin, editorId: null } };
+    const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args);
+
     it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY]])(
-      'records deleteRecord from %s', async (_label, arg) => {
+      'sends the clicked record alone from %s when no selection comes with it', async (_label, arg) => {
         const client = new InMemoryMEditClient();
-        client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
+        client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
         invoke(client, 'Remove');
 
-        await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(arg);
+        await deleteRecords(arg);
 
-        expect(client.calls.filter(c => c.method === 'deleteRecord').map(c => c.args)).toEqual([
-          ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA'],
-        ]);
+        expect(deleteCalls(client)).toEqual([[[FIRST]]]);
       });
-  });
 
-  it('asks the removal confirmation through the injected dialog, naming the record xEdit names', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
-    const { ask } = invoke(client, 'Remove');
+    it('sends the whole selection as one call', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [FIRST, UNTRACKED, SECOND], refused: [] });
+      invoke(client, 'Remove');
 
-    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")({ ...RECORD_NODE, record: { ...RECORD_NODE.record, editorId: 'MyNpc' } });
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
 
-    expect(ask.asked).toEqual([{
-      message: 'Are you sure you want to permanently remove MyNpc [000801:MyPatch.esp]?',
-      detail: undefined,
-      buttons: ['Remove'],
-    }]);
-  });
+      expect(deleteCalls(client)).toEqual([[[FIRST, UNTRACKED, SECOND]]]);
+    });
 
-  // The rival: deleting whatever the dialog answered would make the native cancel delete the record.
-  it('deletes nothing when the confirmation is cancelled', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
-    const { treeSync } = invoke(client, undefined);
+    it('asks once, listing every selected record with its plugin and origin', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [FIRST, UNTRACKED, SECOND], refused: [] });
+      const { ask } = invoke(client, 'Remove');
 
-    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(RECORD_NODE);
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
 
-    expect(client.calls.filter(c => c.method === 'deleteRecord')).toEqual([]);
-    expect(treeSync.refresh).not.toHaveBeenCalled();
-  });
+      expect(ask.asked).toEqual([{
+        message: 'Are you sure you want to permanently remove 3 records?',
+        detail: '000801:MyPatch.esp in MyPatch.esp (ModA)\n'
+          + '000900:Other.esp in Other.esp (ModB)\n'
+          + 'SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)',
+        buttons: ['Remove'],
+      }]);
+    });
 
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a delete', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('deleteRecord', { refused: true, message: 'mEdit: Could not delete 000801:MyPatch.esp — boom' });
-    const { treeSync, reporter } = invoke(client, 'Remove');
+    it('names a lone record in the question itself, as xEdit does', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [SECOND], refused: [] });
+      const { ask } = invoke(client, 'Remove');
 
-    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(RECORD_NODE);
+      await deleteRecords(SECOND_NODE);
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not delete 000801:MyPatch.esp — boom', detail: undefined },
-    ]);
-    expect(treeSync.refresh).not.toHaveBeenCalled();
+      expect(ask.asked).toEqual([{
+        message: 'Are you sure you want to permanently remove SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)?',
+        detail: undefined,
+        buttons: ['Remove'],
+      }]);
+    });
+
+    // The rival: deleting whatever the dialog answered would make the native cancel delete the selection.
+    it('deletes nothing and says nothing when the confirmation is cancelled', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
+      const { treeSync, reporter } = invoke(client, undefined);
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(deleteCalls(client)).toEqual([]);
+      expect(treeSync.refresh).not.toHaveBeenCalled();
+      expect(reporter.reports).toEqual([]);
+    });
+
+    it('reports a partial answer once, naming the refused record and why, and refreshes for the ones that landed', async () => {
+      const client = new InMemoryMEditClient();
+      const outcome = {
+        landed: [FIRST, SECOND],
+        refused: [{ item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' }],
+      };
+      client.setCommandResult('deleteRecords', outcome);
+      const { treeSync, reporter } = invoke(client, 'Remove');
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
+
+      expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not remove 1 of 3 records.', outcome }]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'Could not remove 1 of 3 records.',
+        detail: '"000900:Other.esp in Other.esp (ModB)" (Other.esp is not tracked, so it is read-only.)',
+      }]);
+      expect(treeSync.refresh).toHaveBeenCalledOnce();
+    });
+
+    it('says nothing when every record landed', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
+      const { treeSync, reporter } = invoke(client, 'Remove');
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(reporter.reports).toEqual([]);
+      expect(reporter.landings).toEqual([]);
+      expect(treeSync.refresh).toHaveBeenCalledOnce();
+    });
+
+    it('refreshes nothing when every record was refused', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [], refused: [{ item: UNTRACKED, reason: 'not tracked' }] });
+      const { treeSync } = invoke(client, 'Remove');
+
+      await deleteRecords(UNTRACKED_NODE);
+
+      expect(treeSync.refresh).not.toHaveBeenCalled();
+    });
+
+    it('reports the ready-to-show message at error and refreshes nothing when the call itself fails', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { refused: true, message: 'mEdit: Could not delete 2 records — boom' });
+      const { treeSync, reporter } = invoke(client, 'Remove');
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(reporter.reports).toEqual([
+        { severity: 'error', message: 'mEdit: Could not delete 2 records — boom', detail: undefined },
+      ]);
+      expect(treeSync.refresh).not.toHaveBeenCalled();
+    });
+
+    it('refuses a record whose mod cannot be resolved, and still sends the rest', async () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getPlugins', []);
+      client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
+      const { reporter } = invoke(client, 'Remove');
+
+      await deleteRecords(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+
+      expect(deleteCalls(client)).toEqual([[[FIRST]]]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'Could not remove 1 of 2 records.',
+        detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to)',
+      }]);
+    });
   });
 
   describe('modbench.record.renumber — a tree node and a plain identity record the same call', () => {
@@ -274,6 +367,41 @@ describe('registerRecordLifecycleCommands', () => {
     await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
     expect(client.calls.filter(c => c.method === 'renumberRecord')).toEqual([]);
+  });
+
+  // Inside a dialog: the input box still opens, unfilled, so the failure is an Output line and never
+  // a toast over the box the user is answering.
+  it('writes a failed FormKey suggestion to the Output only, and still asks for the FormID', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('peekNextFreeFormKey', new Error('backend down'));
+    client.setQueryAnswer('getReferences', []);
+    client.setCommandResult('renumberRecord', { applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
+    const { reporter } = invoke(client);
+    showInputBox.mockResolvedValue('000900:MyPatch.esp');
+
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
+
+    expect(reporter.dialogFailures).toEqual([
+      { severity: 'warning', message: 'Could not fetch a suggested FormKey.', detail: 'backend down' },
+    ]);
+    expect(reporter.reports).toEqual([]);
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: undefined }));
+  });
+
+  it('writes a failed reference count to the Output only, and still asks to confirm', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
+    client.setQueryFailure('getReferences', new Error('backend down'));
+    const { reporter, ask } = invoke(client, undefined);
+    showInputBox.mockResolvedValue('000900:MyPatch.esp');
+
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
+
+    expect(reporter.dialogFailures).toEqual([
+      { severity: 'warning', message: 'Could not count the references for the confirmation.', detail: 'backend down' },
+    ]);
+    expect(reporter.reports).toEqual([]);
+    assertAskedOnce(ask, { messageContains: 'Its references could not be counted', buttons: ['Change FormID'] });
   });
 
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a renumber', async () => {

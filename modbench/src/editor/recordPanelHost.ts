@@ -30,7 +30,7 @@ export interface EditorCommandDeps {
   treeSync: RecordTreeSync;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecord' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
+    | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
     | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences'>;
   // The Referenced By view itself — needed for its Copy command's selection
   // fallback (`.selection`). The provider is not threaded here: nothing in this file retargets

@@ -9,7 +9,7 @@ type QueryMethod =
   | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecord' | 'renumberRecord'
+  | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords' | 'renumberRecord'
   | 'copyRecordAsOverride' | 'copyRecordAsNewRecord' | 'compile' | 'absorbUpstreamUpdate'
   | 'keepAsMyEdit' | 'rebaseOntoMain' | 'continueRebase' | 'editRecord' | 'putLoadOrder';
 
@@ -194,8 +194,8 @@ export class InMemoryMEditClient implements MEditClient {
   createRecord(...args: Parameters<MEditClient['createRecord']>): ReturnType<MEditClient['createRecord']> {
     return this.command('createRecord', args);
   }
-  deleteRecord(...args: Parameters<MEditClient['deleteRecord']>): ReturnType<MEditClient['deleteRecord']> {
-    return this.command('deleteRecord', args);
+  deleteRecords(...args: Parameters<MEditClient['deleteRecords']>): ReturnType<MEditClient['deleteRecords']> {
+    return this.command('deleteRecords', args);
   }
   renumberRecord(...args: Parameters<MEditClient['renumberRecord']>): ReturnType<MEditClient['renumberRecord']> {
     return this.command('renumberRecord', args);

@@ -73,6 +73,55 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task DeletingThreeRecords_WhereOneIsInAnUntrackedPlugin_DeletesTwo_AndAnswersPerRecord()
+    {
+        using var fx = new PluginFixtureBuilder("trace-delete-three-records")
+            .WithPlugin(Plugin, mod => { mod.Npcs.AddNew(Npc); mod.Npcs.AddNew("SecondEditableNpc"); }, origin: Origin)
+            .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        var tracked = await NpcFormKeys(Plugin);
+        var untracked = await Client.FirstFormKey(OtherPlugin);
+        var before = await Client.Sequence();
+
+        var response = await Client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[]
+            {
+                new { formKey = tracked[0], plugin = Plugin, origin = Origin },
+                new { formKey = untracked, plugin = OtherPlugin, origin = OtherOrigin },
+                new { formKey = tracked[1], plugin = Plugin, origin = Origin },
+            },
+        });
+
+        response.EnsureSuccessStatusCode();
+        var answer = await Body(response);
+        Assert.Equal(
+            [(tracked[0], Plugin, Origin), (tracked[1], Plugin, Origin)],
+            answer.GetProperty("applied").EnumerateArray().Select(Addressed).ToArray());
+        var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray().ToArray());
+        Assert.Equal((untracked, OtherPlugin, OtherOrigin), Addressed(refused.GetProperty("record")));
+        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
+        Assert.Contains("Track", refused.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
+
+        await Client.SequenceReaches(before + 1);
+        var remaining = await NpcFormKeys(Plugin);
+        var untouched = await NpcFormKeys(OtherPlugin);
+        Assert.Empty(remaining);
+        Assert.Equal([untracked], untouched);
+    }
+
+    private async Task<string[]> NpcFormKeys(string plugin) =>
+        [.. (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type=npc_"))
+            .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require())];
+
+    private static (string FormKey, string Plugin, string Origin) Addressed(JsonElement record) => (
+        record.GetProperty("formKey").GetString().Require(),
+        record.GetProperty("plugin").GetString().Require(),
+        record.GetProperty("origin").GetString().Require());
+
+    [Fact]
     public async Task EditingAnUntrackedPlugin_IsRefusedWithATypedRefusal()
     {
         using var fx = await Loaded();

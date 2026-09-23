@@ -10,6 +10,7 @@ import {
   type UnansweredExternalChange, type PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `editRecord` is handed. Re-exported because a caller of the one write path names this
  *  type, and the client is the seam it reaches the backend through (ADR-0007). */
@@ -107,7 +108,9 @@ export type CellPage = components['schemas']['CellSummaryPagedResult'];
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type TrackResponse = components['schemas']['TrackResponse'];
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
-export type RecordDeleteResponse = components['schemas']['RecordDeleteResponse'];
+/** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
+ *  filename can be in two mods, each holding the record. */
+export type RecordAddress = components['schemas']['RecordAddress'];
 export type RecordRenumberResponse = components['schemas']['RecordRenumberResponse'];
 export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];
 export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
@@ -130,7 +133,9 @@ export interface MEditClient {
     plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
     onEslContradiction?: (message: string) => Promise<boolean>,
   ): Promise<RecordCreateResponse | WriteRefused | undefined>;
-  deleteRecord(formKey: string, plugin: string, origin: string): Promise<RecordDeleteResponse | WriteRefused | undefined>;
+  // The whole selection is one call; each record lands or is refused on its own (ADR-0019
+  // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
+  deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
   renumberRecord(
     formKey: string, plugin: string, origin: string, newFormKey?: string,
   ): Promise<RecordRenumberResponse | WriteRefused | undefined>;

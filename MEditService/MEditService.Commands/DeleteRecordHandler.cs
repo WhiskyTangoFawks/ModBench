@@ -18,8 +18,62 @@ public sealed class DeleteRecordHandler
     internal DeleteRecordHandler(WriteTargets targets, ILogger<DeleteRecordHandler> logger) =>
         (_targets, _logger) = (targets, logger);
 
-    /// <summary>Every record shape resolves through the unit holding it.</summary>
-    public RecordEditResult DeleteRecord(PluginCopyKey plugin, string formKey)
+    /// <summary>Each record is deleted or refused on its own, so one refusal leaves the rest of the
+    /// selection to land. Every record shape resolves through the unit holding it.</summary>
+    public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
+    {
+        var applied = new List<RecordAt>();
+        var refused = new List<RecordRefused>();
+        var seen = new HashSet<RecordAt>(SameRecord.Instance);
+        foreach (var record in records)
+        {
+            // A record named twice is deleted once: its second delete would find nothing and be
+            // reported as refused, for a record that is gone.
+            if (!seen.Add(record)) continue;
+            var result = DeleteOrRefuseTheWriteFailure(record);
+            if (result.Applied) applied.Add(record);
+            else refused.Add(new RecordRefused(record, result.Refusal, result.Message));
+        }
+        return new PerRecordResult(applied, refused);
+    }
+
+    // A tree another tool changed, or a file system that refused the write, is this record's answer,
+    // not the batch's: an exception here would hide the records already deleted before it.
+    private RecordEditResult DeleteOrRefuseTheWriteFailure(RecordAt record)
+    {
+        try
+        {
+            return Delete(record.Plugin, record.FormKey);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not delete the source file for {FormKey} in {Plugin} ({Origin})",
+                record.FormKey, record.Plugin.Name, record.Plugin.Origin);
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceWriteFailed,
+                $"Could not delete the source file for {record.FormKey}: {ex.Message}");
+        }
+    }
+
+    // The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.
+    private sealed class SameRecord : IEqualityComparer<RecordAt>
+    {
+        internal static readonly SameRecord Instance = new();
+
+        public bool Equals(RecordAt x, RecordAt y) =>
+            PluginCopyKey.Comparer.Equals(x.Plugin, y.Plugin)
+            && string.Equals(x.FormKey, y.FormKey, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode(RecordAt record) => HashCode.Combine(
+            PluginCopyKey.Comparer.GetHashCode(record.Plugin),
+            StringComparer.OrdinalIgnoreCase.GetHashCode(record.FormKey));
+    }
+
+    private RecordEditResult Delete(PluginCopyKey plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (_, identity, unit, repository) = target;
