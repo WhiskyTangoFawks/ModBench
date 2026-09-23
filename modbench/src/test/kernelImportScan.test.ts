@@ -103,7 +103,8 @@ function offenders(): Record<string, string[]> {
 const PACKAGE_IMPORTERS = new Set(['client']);
 
 // A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
-// including the file system — MO2 files is the one door onto the instance, and it is one of these.
+// including the file system — the Instance adapter is the one door onto the instance, and it is
+// one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
   if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES;
@@ -225,9 +226,9 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
   });
 
-  // Rival: MO2 files taking a VS Code type, which puts the extension host behind the one door
-  // onto the instance. The Instance owns the watchers, so vscode is its alone.
-  it('allows vscode in the Instance and refuses it in MO2 files', () => {
+  // Rival: the Instance adapter taking a VS Code type, which puts the extension host behind the
+  // one door onto the instance. The Instance owns the watchers, so vscode is its alone.
+  it('allows vscode in the Instance and refuses it in the Instance adapter', () => {
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(true);
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
   });

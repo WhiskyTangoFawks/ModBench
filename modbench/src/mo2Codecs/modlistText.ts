@@ -9,7 +9,7 @@ import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLines
 export const MODLIST_FILE_NAME = 'modlist.txt';
 
 /** The reserved origin (ADR-0012): MO2's own overwrite folder, the one name under `mods/`'s
- *  sibling set a modlist line may never take. MO2 files joins it to the instance root. */
+ *  sibling set a modlist line may never take. The Instance adapter joins it to the instance root. */
 export const OVERWRITE_DIR_NAME = 'overwrite';
 
 export interface Mod {

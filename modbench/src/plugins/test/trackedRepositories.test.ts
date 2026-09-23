@@ -27,7 +27,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
 // ── trackedModFoldersOf ────────────────────────────────────────────────────
 
 describe('trackedModFoldersOf', () => {
-  // MO2 files answers "is this tracked", so the real answer is what this composes with.
+  // The Instance adapter answers "is this tracked", so the real answer is what this composes with.
   it('finds a tracked mod folder — one whose folder contains .git — via a real filesystem check', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-tracked-'));
     const trackedFolder = path.join(root, 'TrackedMod');

@@ -31,7 +31,7 @@ afterEach(async () => {
 
 const DATA_FOLDER = '/game/Data';
 
-// MO2 files' own answer is doubled: where the game is is its question, not the Instance's.
+// The Instance adapter's own answer is doubled: where the game is is its question, not the Instance's.
 const resolvesDataFolder: GameDirectoryResolver = () =>
   Promise.resolve({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
 

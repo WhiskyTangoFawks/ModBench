@@ -1,5 +1,6 @@
-// target-architecture.d2: MO2 files is the one reader and writer of the instance. Every other
-// module asks it, and the three files below open the extension's own storage, never the instance.
+// target-architecture.d2: the Instance adapter is the one reader and writer of the instance. Every
+// other module asks it, and the three files below open the extension's own storage, never the
+// instance.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -88,7 +89,7 @@ function queueNamesExportedBy(path: string): string[] {
   return exportedNames(readFileSync(path, 'utf8'), path).filter((name) => QUEUE_NAMES.has(name));
 }
 
-describe('no file outside MO2 files imports the file system to read the instance', () => {
+describe('no file outside the Instance adapter imports the file system to read the instance', () => {
   it('covers the whole extension source tree', () => {
     expect(productionFiles(SRC).length).toBeGreaterThan(100);
   });
@@ -105,7 +106,8 @@ describe('no file outside MO2 files imports the file system to read the instance
   });
 
   // Rival: a command, a view or a derivation reaching back into node:fs/promises rather than
-  // asking MO2 files. Planted in a real file under a real root, so the walk is exercised too.
+  // asking the Instance adapter. Planted in a real file under a real root, so the walk is
+  // exercised too.
   it('the walk itself catches a node:fs/promises import planted outside the box', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-fs-import-scan-'));
     try {

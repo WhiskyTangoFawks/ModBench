@@ -110,8 +110,8 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  // MO2 files holds the one file system door, so the same rule binds it: a VS Code type here
-  // would put the extension host behind that door.
+  // The Instance adapter holds the one file system door, so the same rule binds it: a VS Code
+  // type here would put the extension host behind that door.
   it('instanceAdapter sees the Node types and no others', () => {
     expect(parsed(boxProject('instanceAdapter')).options.types).toEqual(['node']);
   });
@@ -122,8 +122,8 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject('instanceLoader')).options.types).toEqual(['node', 'vscode']);
   });
 
-  // A command writes through MO2 files and forgets, and the client is the one seam a tool
-  // handler could call without an extension host: neither holds a host type.
+  // A command writes through the Instance adapter and forgets, and the client is the one seam a
+  // tool handler could call without an extension host: neither holds a host type.
   it.each(Object.keys(CORE_BOXES))('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });

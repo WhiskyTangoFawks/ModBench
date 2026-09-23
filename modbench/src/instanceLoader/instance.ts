@@ -51,9 +51,9 @@ export interface DownloadFile extends DownloadRow {
   readonly sidecarPath: string;
 }
 
-/** The instance paths a view renders or opens: MO2 files owns every path function, and a view
- *  reads the answer here. Filled from the instance directory alone, so they stand at sequence 0.
- */
+/** The instance paths a view renders or opens: the Instance adapter owns every path function, and
+ *  a view reads the answer here. Filled from the instance directory alone, so they stand at
+ *  sequence 0. */
 export interface InstancePaths {
   readonly overwriteDir: string;
   readonly downloadsDir: string;
@@ -117,8 +117,8 @@ export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' |
 
 export interface InstanceOptions {
   instanceRoot: string;
-  /** Where the game is, answered by MO2 files for the ini text this recompute read. The only
-   *  input besides the instance directory itself. */
+  /** Where the game is, answered by the Instance adapter for the ini text this recompute read.
+   *  The only input besides the instance directory itself. */
   resolveGameDirectory: GameDirectoryResolver;
   log: (msg: string) => void;
 }

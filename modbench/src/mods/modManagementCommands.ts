@@ -119,8 +119,8 @@ export function registerModContextCommands(
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        // The value's own folder for this row, never a path joined here: MO2 files owns every
-        // path function, and the value carries its answer.
+        // The value's own folder for this row, never a path joined here: the Instance adapter
+        // owns every path function, and the value carries its answer.
         const folder = instance.value.paths.modDirs.get(node.mod.name);
         if (folder === undefined) return;
         await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));

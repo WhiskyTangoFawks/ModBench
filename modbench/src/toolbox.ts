@@ -386,7 +386,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   setMo2InstanceContext(true);
   const modListReporter = reporterFor('modList');
   // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
-  // resolver MO2 files answers "where is the game" with.
+  // resolver the Instance adapter answers "where is the game" with.
   const instance = own(new Instance({
     instanceRoot, log, resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));

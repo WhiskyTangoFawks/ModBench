@@ -4,8 +4,8 @@
 import { listRelativeFiles } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 
-/** Returns 0 when the folder is absent. Reuses MO2 files' walk so the two traversals cannot
- *  diverge. */
+/** Returns 0 when the folder is absent. Reuses the Instance adapter's walk so the two traversals
+ *  cannot diverge. */
 export async function countOverwriteFiles(dir: string): Promise<number> {
   try {
     return (await listRelativeFiles(dir)).length;

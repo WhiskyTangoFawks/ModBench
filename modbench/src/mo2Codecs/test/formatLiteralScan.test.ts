@@ -19,7 +19,7 @@ const SELF = 'formatLiteralScan.test.ts';
 const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath', 'installed', 'uninstalled', 'removed'];
 
 // MO2's layout: the names of the directories and files the extension touches, each against its
-// one speller. A directory is MO2 files'; a file's own name is its codec's.
+// one speller. A directory is the Instance adapter's; a file's own name is its codec's.
 const LAYOUT_OWNERS: Record<string, string> = {
   profiles: join('instanceAdapter', 'layout.ts'),
   mods: join('instanceAdapter', 'layout.ts'),
@@ -291,9 +291,9 @@ describe('mo2 layout names', () => {
     expect(isTestFile(join('webview', 'src', 'RecordPanel.tsx'))).toBe(false);
   });
 
-  // Rival: a codec's own file name spelled in MO2 files' layout as well, which is how one name
-  // gets two spellers without either scan noticing.
-  it('MO2 files spells the directory names and no file name of a codec’s', () => {
+  // Rival: a codec's own file name spelled in the Instance adapter's layout as well, which is how
+  // one name gets two spellers without either scan noticing.
+  it('the Instance adapter spells the directory names and no file name of a codec’s', () => {
     const path = join(EXTENSION_SRC, 'instanceAdapter', 'layout.ts');
     expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads']);
   });
