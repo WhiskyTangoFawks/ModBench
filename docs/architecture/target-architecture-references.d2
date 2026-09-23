@@ -62,6 +62,7 @@ modbench_core.instancecommands -> modbench_driven.mo2files {class: ref}
 modbench_core.downloadscommands -> modbench_driven.mo2files {class: ref}
 modbench_core.install -> modbench_driven.mo2files {class: ref}
 modbench_core.deploy -> modbench_driven.mo2files {class: ref}
+modbench_core.deploy -> modbench_data.gamedata {class: store}
 # Modbench: driven adapters (the kernel by the band's rule, not drawn)
 modbench_driven.instance -> modbench_driven.mo2files {class: ref}
 modbench_driven.instance -> modbench_data.mo2 {class: store}

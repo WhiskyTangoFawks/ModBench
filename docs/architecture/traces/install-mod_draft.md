@@ -27,7 +27,7 @@ As a user, I want:
 5. The new or changed folder to reach every view through the watch. *A write is forgotten; ADR-0015,
    invariant 2*
 6. The download's `.meta` to record that it is installed, so its row shows Installed. *the Downloads
-   surface, [downloads.md](../surfaces/downloads.md)*
+   surface, [downloads_draft.md](../surfaces/downloads_draft.md)*
 
 ## install: a new mod
 
@@ -41,7 +41,7 @@ As a user, I want:
 ## install: over an installed mod
 
 1. To pick the target from the installed mods that share the download's Nexus mod ID, or to install a
-   new mod. *catalog Meaning; the pick is in [downloads.md](../surfaces/downloads.md)*
+   new mod. *catalog Meaning; the pick is in [downloads_draft.md](../surfaces/downloads_draft.md)*
 2. The target confirmed every time, pre-selected by file ID and never by file name. *diagram header*
 3. The folder's contents replaced in place, with its `.git` kept, and the folder never renamed, so its
    identity, its repository and its watchers survive. *diagram*

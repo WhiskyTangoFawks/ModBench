@@ -100,3 +100,10 @@ install specification is still open. This is what exists today for an upgrade.
 
 Drag to install is not planned. MO2's "info incomplete" icon and a density option are not built. A
 status-bar count of downloads in progress, and a progress bar, wait for the Nexus download work.
+
+## Collected, not yet placed
+
+Found in the CLAUDE.md review, stated nowhere else. To be placed when this spec is written.
+
+- A failure to write the download's `.meta` after an install must not read as "install failed".
+  The install landed, and a user told it failed retries it.

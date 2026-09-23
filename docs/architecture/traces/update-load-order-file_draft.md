@@ -123,13 +123,13 @@ The trigger is a plugin on disk with no line in `plugins.txt`, or a line that no
 
 1. A download's `.meta` marked hidden, or the mark cleared. *catalog Meaning*
 2. A selection that mixes excluded and included rows to take the clicked row's direction.
-   *[downloads.md](../surfaces/downloads.md)*
+   *[downloads_draft.md](../surfaces/downloads_draft.md)*
 
 ## downloaded file delete
 
-1. The file and its `.meta` moved to the system trash, the `.meta` first. *[downloads.md](../surfaces/downloads.md)*
+1. The file and its `.meta` moved to the system trash, the `.meta` first. *[downloads_draft.md](../surfaces/downloads_draft.md)*
 2. To be asked first, once for the whole selection. *Confirm what destroys*
-3. The mod it installed left in place. *[downloads.md](../surfaces/downloads.md)*
+3. The mod it installed left in place. *[downloads_draft.md](../surfaces/downloads_draft.md)*
 
 ## Test seam
 

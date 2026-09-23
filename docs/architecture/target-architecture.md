@@ -73,8 +73,9 @@ for its absence; a disconnect is an error the views surface.
 
 Change flows up only through watchers and the notification port. mEdit watches one folder per
 mod, and the Source adapter names the paths inside it, so layout has one owner; on the
-Modbench side the Instance adapter is that owner, the one box that reads or writes the instance and Game
-Data/. A command splices through the pure codec and puts through the Instance adapter. No command reads the
+Modbench side the Instance adapter is that owner, the one box that reads or writes the instance: the mod
+manager's configuration, the load order, and which game it is for. Game Data/ is not a system of record but
+a projection, and deploy alone writes it. A command splices through the pure codec and puts through the Instance adapter. No command reads the
 Instance loader; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
 the first-deploy consent.
@@ -130,5 +131,7 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.
   A new flow is a new trace and, if its payload is a new kind, a new class in the styles file.
+- A box's `CLAUDE.md` opens with its purpose in plain words, consistent with its caption. A new box
+  gets one, and a caption edit rereads it.
 - Render before committing and look at the picture. A change that makes a diagram false changes
   the diagram in the same change, and the ADR it cites with it.

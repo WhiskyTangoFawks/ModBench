@@ -153,7 +153,7 @@ first. The file for that template lists the gesture with its reason.
 | Toolbox | main menu | toolbar, run box, profile combo | to write |
 | Mods | - | mod list | to write |
 | Plugins | navigator | plugin list | to write |
-| Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
+| Downloads | - | Downloads tab | [downloads_draft.md](surfaces/downloads_draft.md) |
 | Editor | View grid, Referenced By | - | to write |
 
 The xEdit Messages tab is not a surface. Failures go to the Problems panel (ADR-0019).
