@@ -78,9 +78,7 @@ export function registerDownloadsView(
   ask: AskQuestion,
   install: DownloadInstallDeps,
 ): DownloadsProvider {
-  const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instance, reporter,
-  }));
+  const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,

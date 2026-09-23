@@ -103,9 +103,9 @@ export interface InstanceValue {
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
 
-/** Hears each recompute that failed, with the read's own reason. The value and sequence are
+/** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
-export type ReadFailureListener = (reason: string) => void;
+export type ReadFailureListener = () => void;
 
 /** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
  *  channels they move on. */
@@ -117,6 +117,8 @@ export interface InstanceOptions {
    *  The only input besides the instance directory itself. */
   resolveGameDirectory: GameDirectoryResolver;
   log: (msg: string) => void;
+  /** The failed read's one Output line, written at error level however many views show it. */
+  logReadFailure: (line: string) => void;
 }
 
 // A mod with no meta.ini has no metadata; a present-but-unreadable one is a real failure.
@@ -249,7 +251,7 @@ export class Instance implements vscode.Disposable {
     };
   }
 
-  /** Called with each failed recompute's reason. A separate channel from `subscribe`, so a
+  /** Called on each failed recompute. A separate channel from `subscribe`, so a
    *  landed-value subscriber (the load-order PUT above all) never runs on a failure. */
   onReadFailure(listener: ReadFailureListener): vscode.Disposable {
     this.failureListeners.push(listener);
@@ -293,9 +295,9 @@ export class Instance implements vscode.Disposable {
       next = await this.read();
     } catch (err) {
       const failure = errorMessage(err);
-      this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${failure}`);
+      this.options.logReadFailure(`[instance] Failed to read the MO2 instance: ${failure}`);
       this.failure = failure;
-      this.notify(this.failureListeners, (listener) => listener(failure));
+      this.notify(this.failureListeners, (listener) => listener());
       return;
     }
     this.current = next;

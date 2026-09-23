@@ -162,7 +162,7 @@ export class ModListProvider
     this.instanceRoot = options.instanceRoot;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
-    this.firstRead = firstReadOf(options.instance, options.reporter);
+    this.firstRead = firstReadOf(options.instance);
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
       this.invalidate();

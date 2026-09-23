@@ -68,6 +68,7 @@ async function wiredInstance(): Promise<{
     instanceRoot: root,
     resolveGameDirectory: resolvesDataFolder,
     log: () => {},
+    logReadFailure: () => {},
   });
   instances.push(instance);
   const channel = channelDouble();

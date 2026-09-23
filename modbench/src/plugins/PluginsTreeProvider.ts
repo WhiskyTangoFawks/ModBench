@@ -252,7 +252,7 @@ export class PluginsTreeProvider
     this.client = options.client;
     this.publishDiagnoses = options.publishDiagnoses;
     this.instanceValue = options.instance.value;
-    this.firstRead = firstReadOf(options.instance, options.reporter);
+    this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
       this.instanceValue = value;
       this.invalidate();

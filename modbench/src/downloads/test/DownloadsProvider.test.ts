@@ -6,16 +6,18 @@ import { join } from 'node:path';
 import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
 } from '../../test/vscodeMock';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
+  ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile },
 }));
 
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../errorNode';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
+import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
 import type { DownloadFile, InstanceValue } from '../../instanceLoader/instance';
@@ -60,7 +62,7 @@ class FakeInstance {
   sequence: number;
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: ((reason: string) => void)[] = [];
+  private failureListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -77,14 +79,14 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
-  onReadFailure(listener: (reason: string) => void) {
+  onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
   }
-  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {
     this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener(reason);
+    for (const listener of [...this.failureListeners]) listener();
   }
 }
 
@@ -98,10 +100,10 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 // would see an empty/ENOENT result instead of the fixture rows below.
 const makeProvider = (
   downloads: DownloadFile[],
-  extra: Partial<{ instance: FakeInstance; reporter: DownloadsProviderOptions['reporter'] }> = {},
+  extra: Partial<{ instance: FakeInstance }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instance, reporter: extra.reporter };
+  const options: DownloadsProviderOptions = { instance };
   return new DownloadsProvider(options);
 };
 
@@ -337,50 +339,40 @@ describe('invalidate', () => {
 // ── DownloadsProvider — the Instance is the only way in ────────────────────
 
 describe('DownloadsProvider — reacts to the Instance, never scans on its own', () => {
-  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
-  // empty downloads/ lands at sequence 1. getChildren() must await the first landed value
-  // rather than claim "no downloads" for the former.
-  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const provider = makeProvider([], { instance });
+  // The empty value before the first read is "not read yet", never "no downloads": a render asked
+  // for before the read, and awaited after it, shows the rows that read lands.
+  it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
+    await withUnreadCorpusInstance(async (instance) => {
+      const provider = new DownloadsProvider({ instance });
 
-    let settled = false;
-    const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
-    // A macrotask boundary: a subscribe-that-never-resolves rival would still pass a bare
-    // `await Promise.resolve()`.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
+      const pending = provider.getChildren();
+      await instance.refresh();
 
-    instance.publish(valueOf([row({ name: 'a.zip' })]));
-    const rows = await pending;
-
-    expect(settled).toBe(true);
-    expect(rowNames(rows)).toEqual(['a.zip']);
+      expect(rowNames(await pending)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
+      provider.dispose();
+    });
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
-  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+  // that threw spinning forever (ADR-0019).
+  it('settles a failed first read on the one error row naming the reason, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reporter = recordingReporter();
-    const provider = makeProvider([], { instance, reporter });
+    const provider = makeProvider([], { instance });
 
     const pending = provider.getChildren();
     instance.fail('ENOENT: no such file or directory, open modlist.txt');
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(present(rows[0], 'the sole rendered row').label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
-    ]);
+    const error = expectInstanceOf(rows[0], ErrorNode);
+    expect(error.label).toBe('Failed to load: ENOENT: no such file or directory, open modlist.txt');
+    expect(error.tooltip).toBe('ENOENT: no such file or directory, open modlist.txt');
+    expect(error.iconPath).toEqual(new ThemeIcon('error'));
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
     const after = await within(provider.getChildren(), 500);
 
     expect(rowNames(after)).toEqual(['a.zip']);
-    expect(reporter.reports).toHaveLength(1);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {

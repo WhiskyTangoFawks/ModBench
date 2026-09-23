@@ -10,7 +10,6 @@ import type {
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
-import type { Reporter } from '../ports/reporter';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
 // file-icon theme never takes over; a colour is affordable because every row is an archive.
@@ -73,7 +72,6 @@ export interface DownloadsProviderOptions {
   /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
    *  (ADR-0015). */
   instance: InstanceView;
-  reporter?: Reporter;
 }
 
 /** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
@@ -101,7 +99,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   constructor(options: DownloadsProviderOptions) {
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
-    this.firstRead = firstReadOf(options.instance, options.reporter);
+    this.firstRead = firstReadOf(options.instance);
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
       this.invalidate();

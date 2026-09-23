@@ -10,11 +10,13 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
 } from '../../test/vscodeMock';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import type {
   setModEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
 } from '../../modlist/modlist';
 
 vi.mock('vscode', () => ({
+  ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
@@ -40,6 +42,7 @@ vi.mock('../../modlist/modlist', () => ({
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { Reporter } from '../../ports/reporter';
@@ -84,7 +87,7 @@ class FakeInstance {
   sequence: number;
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private failureListeners: ((reason: string) => void)[] = [];
+  private failureListeners: (() => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -101,14 +104,14 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
-  onReadFailure(listener: (reason: string) => void) {
+  onReadFailure(listener: () => void) {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
   }
-  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {
     this.readFailure = reason;
-    for (const listener of [...this.failureListeners]) listener(reason);
+    for (const listener of [...this.failureListeners]) listener();
   }
 }
 
@@ -259,29 +262,25 @@ describe('ModListProvider', () => {
     expect(second.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label)).toEqual(['B', 'A']);
   });
 
-  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real empty
-  // modlist lands at sequence 1. getChildren() must not render before the Instance's first value.
-  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const provider = makeProvider([], { instance });
+  // The empty value before the first read is "not read yet", never "no mods": a render asked for
+  // before the read, and awaited after it, shows the rows that read lands.
+  it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
+    await withUnreadCorpusInstance(async (instance, root) => {
+      const provider = new ModListProvider({ instance, instanceRoot: root });
 
-    let settled = false;
-    const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
-    // A macrotask boundary, not a microtask one — a single `await Promise.resolve()` would pass
-    // whether or not getChildren() actually waits on the Instance.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(settled).toBe(false);
+      const pending = provider.getChildren();
+      await instance.refresh();
+      const rendered = (await pending).map((n) => n.label);
 
-    instance.publish(valueOf([mod('A')]));
-    const rows = await pending;
-
-    expect(settled).toBe(true);
-    expect(rows.some((n) => n instanceof ModNode)).toBe(true);
+      expect(rendered.length).toBeGreaterThan(1);
+      expect(rendered).toEqual((await provider.getChildren()).map((n) => n.label));
+      provider.dispose();
+    });
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
-  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+  // that threw spinning forever (ADR-0019).
+  it('settles a failed first read on the one error row naming the reason, raises nothing, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const reporter = recordingReporter();
     const provider = makeProvider([], { instance, reporter });
@@ -291,18 +290,18 @@ describe('ModListProvider', () => {
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(present(rows[0], 'the sole row').label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
-    ]);
+    const error = expectInstanceOf(rows[0], ErrorNode);
+    expect(error.label).toBe('Failed to load: EACCES: permission denied, open modlist.txt');
+    expect(error.tooltip).toBe('EACCES: permission denied, open modlist.txt');
+    expect(error.iconPath).toEqual(new ThemeIcon('error'));
+    expect(reporter.reports).toEqual([]);
 
     instance.publish(valueOf([mod('A')]));
     const after = await within(provider.getChildren(), 500);
 
     expect(after.some((n) => n instanceof ModNode)).toBe(true);
     expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
-    expect(reporter.reports).toHaveLength(1);
+    expect(reporter.reports).toEqual([]);
   });
 
   it('renders a genuinely empty modlist immediately when the first landed value already carries none', async () => {
