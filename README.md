@@ -133,9 +133,7 @@ The repo is set up to be worked on by people and coding agents alike:
 
 - [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the module
   files under `modbench/` and `MEditService/` carry each side's own.
-- [docs/specs/](docs/specs/) — one living spec per UI surface, present tense; a spec that lags the
-  product is a bug.
-- [docs/architecture/](docs/architecture/) — the target architecture: the zoom-out, the reference view, one trace per gesture, and how to read them.
+- [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per gesture.
 - [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do
   register; [docs/research/xedit-ux-audit.md](docs/research/xedit-ux-audit.md) — required reading
   before touching any record-editing interaction.

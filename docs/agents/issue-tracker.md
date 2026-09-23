@@ -8,8 +8,8 @@ Three kinds of open issue, nothing else:
 
 - **PRD** (`prd` label) — one full spec per feature, minted only by the maintainer's
   grill → `/to-spec` pipeline. Always assigned to a release milestone. Future tense;
-  spent when its slices ship — on ship, fold the outcome into the surface spec
-  (`docs/specs/<surface>.md`), which always states current behavior.
+  spent when its slices ship. The surface specs and traces it changes are written
+  before its slices are built, never updated afterwards to match them.
 - **Implementation ticket** — a slice of a PRD, minted by `/to-tickets` run against
   that PRD; carries a Parent reference to it and native blocked-by edges. No
   parentless implementation tickets.

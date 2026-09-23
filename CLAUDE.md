@@ -33,5 +33,10 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ## Rules that matter
 - Generalize across Bethesda games. Each bounded context's scan holds the game-name literals and namespaces; what no scan can hold is a design that assumes one game's shape, so an FO4-concrete path or fixture is a fixture choice and never a platform lock.
 - Generalize across mod managers. The game owns the format of `plugins.txt`. The mod manager owns the rest. MO2 is one implementation behind the Instance adapter. A scan holds the names. No scan can catch a design that assumes MO2's shape.
+- A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012 invariant 1). Keyed on the filename alone, two copies of one file collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
 - Never assume exclusive ownership of a file on disk (ADR-0003). Detection is gated; recovery is not — anything that holds disk-derived state must recover when a file changed without Modbench's knowledge.
+- The specification is the source and the code follows it: `docs/architecture/` (the diagrams,
+  surfaces, traces and `commands.md`) and the ADRs say what the code must be, and code that
+  disagrees with them is the defect. Never edit a spec to match the code; a spec that looks wrong
+  stops and asks the maintainer.
 - The target architecture in `docs/architecture/` and every reference list, csproj `ProjectReference` and tsconfig `references`, are the maintainer's. An implementation that needs a module, an arrow, a payload or a public type not drawn there stops and asks; it never adds one.
