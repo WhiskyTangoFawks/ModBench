@@ -37,8 +37,8 @@ As a user, I want:
 
 ## Open Questions
 
-1. **Confirm what destroys.** Compile overwrites the binary. Whether a normal compile asks is decided in
-   the ticket "One compile command: working tree or main by option".
+1. **Confirm what destroys.** Answered: compile does not ask. A tracked plugin's source is the truth
+   and the plugin a projection of it, so compile destroys nothing (plugins.md, Compile story 1).
 2. **No target.** The old spec opens a list of every loaded plugin when the palette gives no target.
    Should it list only tracked and editable plugins?
 3. **Strings.** A localized plugin with a missing strings file is refused, naming the file. The old spec

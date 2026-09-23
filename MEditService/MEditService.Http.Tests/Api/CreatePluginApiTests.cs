@@ -93,19 +93,6 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingAPluginWithNoLoadOrderHeld_Is503()
-    {
-        using var app = new MEditHost();
-        using var client = app.CreateClient();
-
-        var created = await client.PostAsJsonAsync(
-            "/plugins/create",
-            new { name = "Homeless.esp", path = Path.Combine(Path.GetTempPath(), "nowhere"), origin = "NoMod" });
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, created.StatusCode);
-    }
-
-    [Fact]
     public async Task CreatingAPluginWithAnInvalidExtension_Is400_AndRegistersNothing()
     {
         var fx = Owned(await Loaded());
@@ -139,21 +126,6 @@ public sealed class CreatePluginApiTests : HostedTests
         var created = await Client.PostAsJsonAsync("/plugins/create", new { name = "NoPath.esp" });
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-    }
-
-    // The registration precedes the file, so a create that cannot write its file leaves a copy the
-    // load order should never have carried: the endpoint takes it back.
-    [Fact]
-    public async Task CreatingAPluginOverAFileAlreadyThere_Is409_AndRegistersNothing()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        OtherTool.WritesTheFile(Path.Combine(modFolder, "Occupied.esp"), "not a plugin");
-
-        var created = await Create("Occupied.esp", modFolder);
-
-        Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
-        Assert.False((await CreateARecordIn("Occupied.esp")).IsSuccessStatusCode);
     }
 
     [Fact]

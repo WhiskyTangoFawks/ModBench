@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Http.Tests.Traces;
 
 /// <summary>create-plugin: mEdit writes the new plugin into the mod the user picked and answers
-/// applied or refusal; the load order learns of it through the watch, never from this reply.</summary>
+/// applied or refusal.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class CreatePluginTraceTests : HostedTests
 {
@@ -42,7 +42,7 @@ public sealed class CreatePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingAPluginOverAFileAlreadyThere_IsRefused()
+    public async Task CreatingAPluginOverAFileAlreadyThere_IsRefused_AndRegistersNothing()
     {
         var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
@@ -51,6 +51,10 @@ public sealed class CreatePluginTraceTests : HostedTests
         var created = await Create(Client, "Occupied.esp", modFolder);
 
         Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
+        Assert.False((await Client.PostAsJsonAsync(
+            "/plugins/Occupied.esp/records",
+            new { origin = Origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null }))
+            .IsSuccessStatusCode);
     }
 
     [Fact]
