@@ -71,7 +71,8 @@ public sealed class WatchArmingTests
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName);
         await tree.ApplyLoadOrder();
-        WatchedTree.Track(modFolder, PluginName);
+        await tree.Observes(() => tree.MoveInRepository(modFolder, PluginName));
+        await tree.Observes(() => tree.MoveInSourceRoot(modFolder, PluginName));
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
 
         tree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
@@ -90,7 +91,7 @@ public sealed class WatchArmingTests
         Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName));
         await tree.ApplyLoadOrder();
 
-        WatchedTree.Track(modFolder, PluginName);
+        await tree.Observes(() => tree.MoveInRepository(modFolder, PluginName));
         Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count > 0));
 
         tree.WriteRecord(modFolder, PluginName, "000800:Tracked.esp");
@@ -109,9 +110,8 @@ public sealed class WatchArmingTests
         await tree.ApplyLoadOrder();
 
         // The source root appearing while the mod is still untracked: a batch opens and closes with
-        // nothing to project from. A fresh directory has no bytes to move in; creation is already
-        // one event.
-        await tree.Observes(() => Directory.CreateDirectory(SourceRepository.RootIn(modFolder, PluginName)));
+        // nothing to project from.
+        await tree.Observes(() => tree.MoveInSourceRoot(modFolder, PluginName));
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Of("validate"));
 
