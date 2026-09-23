@@ -58,23 +58,33 @@ class ValeRules(unittest.TestCase):
         self.assertIn("Repo.History", alerts)
         self.assertNotIn("Repo.Date", alerts)
 
-    def test_our_ticket_numbers_anywhere_in_text(self):
-        for text in (f"// see {TICKET}\n", f"// fixed ({TICKET})\n", f"x = 'issue {TICKET}'\n",
-                     f"// two fixes, {TICKET} among them\n"):
-            with self.subTest(text=text):
-                self.assertIn("Repo.Ticket", vale(text, ".ts", config=".vale-raw.ini"))
-        self.assertIn("Repo.Ticket", vale(f"See {TICKET}.\n", ".md"))
+    def test_a_ticket_number_in_a_typescript_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"// see {TICKET}\nconst a = 1;\n", ".ts"))
+
+    def test_a_ticket_number_in_a_csharp_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"// fixed ({TICKET})\nint a;\n", ".cs"))
+
+    def test_a_ticket_number_in_a_python_comment(self):
+        self.assertIn("Repo.Ticket", vale(f"# two fixes, {TICKET} among them\na = 1\n", ".py"))
+
+    def test_a_ticket_number_in_markdown_prose_is_allowed(self):
+        self.assertNotIn("Repo.Ticket", vale(f"See {TICKET} and debt #956, {TICKET}.\n", ".md"))
+
+    def test_a_ticket_number_in_a_string_literal_is_allowed(self):
+        self.assertNotIn("Repo.Ticket", vale(f"x = 'issue {TICKET}'\n", ".ts"))
+
+    def test_the_raw_pass_carries_no_ticket_rule(self):
+        self.assertNotIn("Repo.Ticket", vale(f"x = 'issue {TICKET}'\n", ".ts", config=".vale-raw.ini"))
 
     def test_a_filed_debt_citation_is_the_one_ticket_number_allowed(self):
-        self.assertNotIn("Repo.Ticket", vale(f"// synthetic fixtures are debt {TICKET}\n", ".ts", config=".vale-raw.ini"))
-        self.assertNotIn("Repo.Ticket", vale(f"Replacing these is debt {TICKET}.\n", ".md"))
+        self.assertNotIn("Repo.Ticket", vale(f"// synthetic fixtures are debt {TICKET}\n", ".ts"))
 
     def test_external_trackers_hex_colours_and_enumerations_are_not_tickets(self):
         n = "#" "688"
         for text in (f"Mutagen {n}", f"Mutagen-{n}", f"Mutagen-Modding/Mutagen{n}", f"upstream {n}/{n}",
                      f"VS Code {n}", "color: '#123456'", "var(--x, #123)", "divergence #2, AC #4"):
             with self.subTest(text=text):
-                self.assertNotIn("Repo.Ticket", vale(f"// {text}\n", ".ts", config=".vale-raw.ini"))
+                self.assertNotIn("Repo.Ticket", vale(f"// {text}\n", ".ts"))
 
     def test_filler_gets_a_quick_fix(self):
         self.assertIn("Repo.Filler", vale("// in order to load the plugin\n", ".ts"))
@@ -117,10 +127,14 @@ class WriteHook(unittest.TestCase):
         run = hook("esbuild.mjs", f'const s = "{HISTORY} held";\n')
         self.assertEqual(run.returncode, 2, run.stderr)
 
-    def test_refuses_a_ticket_number_in_a_config_file(self):
-        run = hook("a.yml", f"# from {TICKET}\nkey: 1\n")
+    def test_refuses_a_ticket_number_in_a_code_comment(self):
+        run = hook("a.ts", f"// from {TICKET}\nexport const a = 1;\n")
         self.assertEqual(run.returncode, 2, run.stderr)
         self.assertIn("commit message", run.stderr)
+
+    def test_accepts_a_ticket_number_in_a_document(self):
+        run = hook("a.md", f"The command catalog review is {TICKET}.\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
 
     def test_a_warning_does_not_block_the_write(self):
         run = hook("a.ts", "// sorted in order to match the file\nexport const a = 1;\n")

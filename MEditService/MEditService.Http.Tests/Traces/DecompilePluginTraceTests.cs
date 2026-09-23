@@ -10,17 +10,17 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>track-a-plugin: Track reads the plugin's bytes into documents once, reports its
-/// progress per plugin, and arms the watch that carries a later hand edit back into the
-/// answers.</summary>
+/// <summary>decompile-plugin to a new repository, fired by track mod: documents from the bytes,
+/// progress per plugin, and the watch carrying a hand edit into the answers. The destinations
+/// main and the working tree are debt #966.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class TrackAPluginTraceTests : HostedTests
+public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
     private const string Origin = "TrackedMod";
     private const string Npc = "TrackedNpc";
 
-    private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-track-a-plugin")
+    private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
         .BuildScattered();
 
