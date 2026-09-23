@@ -108,8 +108,8 @@ export type CellPage = components['schemas']['CellSummaryPagedResult'];
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type TrackResponse = components['schemas']['TrackResponse'];
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
-/** One record in one plugin copy (ADR-0012 invariant 1): what a gesture over a selection names
- *  each of its records by. */
+/** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
+ *  filename can be in two mods, each holding the record. */
 export type RecordAddress = components['schemas']['RecordAddress'];
 export type RecordRenumberResponse = components['schemas']['RecordRenumberResponse'];
 export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];

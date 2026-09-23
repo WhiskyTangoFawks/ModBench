@@ -86,8 +86,6 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Delete-record — each record's source file goes away and the null-Body working-tree
-        // mechanism takes it from there. Same refusals as EditRecord above, answered per record.
         app.MapPost("/records/delete", (RecordDeleteRequest request, DeleteRecordHandler edits) =>
             DeleteRecord(request, edits, logger))
         .WithName("DeleteRecord")

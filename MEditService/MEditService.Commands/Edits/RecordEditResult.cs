@@ -60,6 +60,10 @@ public enum RecordEditRefusal
     /// message is the file system's own words, and the way out is outside Modbench.</summary>
     SourceWriteFailed,
 
+    /// <summary>Two documents in the tree claim one FormKey, most likely left by another tool or an
+    /// interrupted rename; which to change is the user's call, so the way out is resolving it by hand.</summary>
+    AmbiguousSourceUnit,
+
     /// <summary>A light plugin's slot addresses local IDs only up to 0xFFF; native space is not exhausted,
     /// so the way out differs from <see cref="FormKeySpaceExhausted"/>.</summary>
     LightPluginFormIdOutOfRange,

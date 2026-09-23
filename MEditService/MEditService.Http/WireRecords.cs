@@ -57,8 +57,8 @@ public record RecordCreateRequest(string Origin, string RecordType, string? Edit
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 
-/// <summary>One record in one plugin copy: a selection names each of its records by both
-/// (ADR-0012 invariant 1).</summary>
+/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1):
+/// one filename can be in two mods, each holding the record.</summary>
 public record RecordAddress(string FormKey, string Plugin, string Origin);
 
 /// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming

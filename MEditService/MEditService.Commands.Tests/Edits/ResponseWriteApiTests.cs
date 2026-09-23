@@ -69,9 +69,9 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public async Task DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
     {
-        var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Response.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         var after = File.ReadAllText(TopicFile);
         Assert.DoesNotContain($"\"{ContainerModFixture.ResponseEditorId}\"", after, StringComparison.Ordinal);
         Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", after, StringComparison.Ordinal);

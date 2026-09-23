@@ -265,11 +265,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
             withoutTheRef.TrimEnd().TrimEnd('}')
             + $",\n  \"NotAChild\": {{ \"FormKey\": \"{_fixture.TemporaryRef}\" }}\n}}");
 
-        var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        Assert.Contains("no record's document carries it", result.Message, StringComparison.Ordinal);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
+        Assert.Contains("no record's document carries it", refused.Message, StringComparison.Ordinal);
     }
 
     // ---- the fifth guarded slot ----

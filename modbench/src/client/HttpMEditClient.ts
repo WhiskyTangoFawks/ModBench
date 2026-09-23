@@ -292,9 +292,6 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Each record's source file goes away and the null-Body mechanism takes it from there: gone at
-   *  Effective, still served at Head until compiled. The wire's `applied` is the outcome's
-   *  `landed`. This method never asks for confirmation. */
   async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({

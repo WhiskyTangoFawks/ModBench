@@ -102,9 +102,9 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void DeletingACell_Succeeds()
     {
-        var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Cell.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
     }
 

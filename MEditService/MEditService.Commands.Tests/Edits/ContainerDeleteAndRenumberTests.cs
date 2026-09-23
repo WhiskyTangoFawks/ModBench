@@ -34,9 +34,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory.");
         Assert.True(Directory.Exists(directory));
 
-        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.EmbedCell.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         Assert.False(Directory.Exists(directory));
 
         // The container itself, and every embedded child — all four of EmbedCell's slots.
@@ -56,9 +56,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void DeletingAWorldspace_CascadesTwoLevelsDeep_ThroughItsEmbeddedTopCellToTheTopCellsOwnRef()
     {
-        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Worldspace.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         Assert.Null(_fixture.Document(_fixture.Worldspace.ToString()));
         Assert.Null(_fixture.Document(_fixture.TopCell.ToString()));
         Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
@@ -73,9 +73,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, before, StringComparison.Ordinal);
 
-        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         var after = File.ReadAllText(file);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, after, StringComparison.Ordinal);
         // Untouched siblings in the same document.
@@ -101,9 +101,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         var file = _fixture.SourceFileContaining(ContainerModPlugin.WorldspaceEditorId);
         Assert.Contains(ContainerModPlugin.TopCellEditorId, File.ReadAllText(file), StringComparison.Ordinal);
 
-        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.TopCell.ToString());
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.TopCell.ToString())]);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         var after = File.ReadAllText(file);
         Assert.DoesNotContain(ContainerModPlugin.TopCellEditorId, after, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModPlugin.TopCellRefEditorId, after, StringComparison.Ordinal);
@@ -210,8 +210,8 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         var deletes = DeleteHandler();
         foreach (var topic in new[] { _fixture.DialogTopic, _fixture.DialogTopic2, _fixture.DialogTopic3 })
         {
-            var deleted = deletes.DeleteRecord(_fixture.Plugin, topic.ToString());
-            Assert.True(deleted.Applied, deleted.Message);
+            var deleted = deletes.DeleteRecords([new RecordAt(_fixture.Plugin, topic.ToString())]);
+            Assert.Empty(deleted.Refused);
         }
 
         // The codec writes nothing for an emptied list, so the slot itself is gone from the document.

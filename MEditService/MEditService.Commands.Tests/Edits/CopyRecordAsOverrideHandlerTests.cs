@@ -107,7 +107,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
         Assert.True(mod.CopyAsOverrideHandler.CopyRecordAsOverride(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin).Applied);
         mod.CommitDestination();
-        Assert.True(mod.DeleteHandler.DeleteRecord(mod.DestinationPlugin, mod.SourceNpc.ToString()).Applied);
+        Assert.Empty(mod.DeleteHandler.DeleteRecords([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
 
         var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
