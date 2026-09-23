@@ -23,10 +23,10 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource } from './pluginsCommands/plugins';
-import { adoptMods } from './modlist/modlist';
-import { registerModAdoption } from './modAdoptionTrigger';
-import { registerPluginsReconcile } from './pluginsReconcileTrigger';
+import { syncPlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource } from './pluginsCommands/plugins';
+import { syncMods } from './modlist/modlist';
+import { registerModSync } from './modSyncTrigger';
+import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands } from './mods/modManagementCommands';
 import { createModListView, registerDownloadsView, registerNotMo2InstanceWelcome } from './mo2TreeViews';
@@ -41,7 +41,7 @@ import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
-// The port members every gesture, the reconcile and the launch in this file call — narrowed off
+// The port members every gesture, plugin sync and the launch in this file call — narrowed off
 // `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
   'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
@@ -434,22 +434,22 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginsReconcile = async (
+  const runPluginSync = async (
     profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
     folder: string | undefined, gameName: string,
   ) => {
-    const result = await reconcilePlugins(
+    const result = await syncPlugins(
       instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName),
       (msg) => outputChannel.debug(msg));
     if (!result.applied) {
-      outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);
+      outputChannel.error(`[modmanager] plugin sync failed: ${result.refusal}`);
       return;
     }
     if (result.append.length > 0) {
-      outputChannel.info(`[modmanager] Plugins reconcile appended ${result.append.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${result.append.join(', ')}`);
+      outputChannel.info(`[modmanager] plugin sync added ${result.append.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${result.append.join(', ')}`);
     }
     if (result.prune.length > 0) {
-      outputChannel.info(`[modmanager] Plugins reconcile pruned ${result.prune.length} plugins.txt line(s) with no plugin on disk: ${result.prune.join(', ')}`);
+      outputChannel.info(`[modmanager] plugin sync dropped ${result.prune.length} plugins.txt line(s) with no plugin on disk: ${result.prune.join(', ')}`);
     }
   };
   const pluginsTree = registerPluginListView({
@@ -497,10 +497,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
   ownAll(own, registerOverwriteView(instance, reporterFor('overwrite.reveal')));
-  own(registerModAdoption(
-    instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
-    () => modListProvider.invalidate(), outputChannel));
-  own(registerPluginsReconcile(instance, runPluginsReconcile));
+  own(registerModSync(instance, (profile, modFolders) => syncMods(instanceRoot, profile, modFolders), outputChannel));
+  own(registerPluginSync(instance, runPluginSync));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,

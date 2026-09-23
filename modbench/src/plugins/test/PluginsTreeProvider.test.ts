@@ -382,7 +382,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 
   // A plugin file an enabled mod provides with no plugins.txt line (`slot: null`) is the
-  // plugins reconcile's business, never merged in here.
+  // plugin sync's business, never merged in here.
   it('an unlisted plugin copy (slot: null) gets no row', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0 }),

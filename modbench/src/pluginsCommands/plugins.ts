@@ -19,7 +19,7 @@ async function modifyPlugins(
   instanceRoot: string, profile: string, edit: (text: string) => string,
 ): Promise<PluginsCommandResult> {
   try {
-    // Unchanged text is not written: for `reconcilePlugins` that is the difference between a
+    // Unchanged text is not written: for `syncPlugins` that is the difference between a
     // loop that settles and one that does not.
     const { wrote } = await putIfChanged(pluginsFile(instanceRoot, profile), edit);
     return { applied: true, wrote };
@@ -69,7 +69,7 @@ interface PluginLinesDelta {
   prune: string[];
 }
 
-export type PluginsReconcileResult =
+export type PluginSyncResult =
   | { applied: true; wrote: boolean; append: string[]; prune: string[] }
   | { applied: false; refusal: string };
 
@@ -96,13 +96,13 @@ function pluginLinesDelta(
  *  here would mean parsing plugin headers (ADR-0016). */
 export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
 
-/** plugins.txt is the inventory the Plugins tree reads, so when disk disagrees the file is
- *  updated (docs/specs/plugins.md). `provided` is the value's winners and `inData` its
- *  Data-folder presence, both handed in — this walks nothing. */
-export async function reconcilePlugins(
+/** `modbench.plugin.sync`: plugins.txt is the inventory the Plugins tree reads, so when disk
+ *  disagrees the file is updated. `provided` is the value's winners and `inData` its Data-folder
+ *  presence, both handed in — this walks nothing. */
+export async function syncPlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
-): Promise<PluginsReconcileResult> {
+): Promise<PluginSyncResult> {
   let appendable: ReadonlyMap<string, string>;
   try {
     const implicit = await implicitMasters();

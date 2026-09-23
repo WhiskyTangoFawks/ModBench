@@ -44,8 +44,6 @@ function statusIconId(status?: ModStatusResult): string {
     case 'conflicts':
     case 'overrides':
       return 'warning';
-    case 'missingMod':
-      return 'error';
     case 'ok':
     case undefined:
       return 'package';
@@ -56,7 +54,6 @@ function statusLabel(status: ModStatus): string {
   switch (status.kind) {
     case 'conflicts': return `⚠ ${status.count} conflicts`;
     case 'overrides': return `⚠ Overrides ${status.count}`;
-    case 'missingMod': return '✗ Missing mod';
     case 'ok': return '';
   }
 }

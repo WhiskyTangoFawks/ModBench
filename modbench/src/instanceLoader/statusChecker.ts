@@ -1,17 +1,14 @@
-// Turns a FileConflictIndex into per-mod status badges: conflict/override counts and missing mod
-// folders. Pure over ModlistEntry[] + instanceRoot + a precomputed FileConflictIndex; no vscode
-// import, and no plugin file is opened — master facts are the backend's (ADR-0016).
+// Turns a FileConflictIndex into per-mod status badges: conflict and override counts. Pure over
+// ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
+// opened — master facts are the backend's (ADR-0016).
 
-import { modDir } from '../instanceAdapter/layout';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import type { FileConflictIndex } from './fileConflictIndex';
-import { exists } from '../instanceAdapter/files';
 
 export type ModStatus =
   | { kind: 'ok' }
   | { kind: 'conflicts'; count: number }
-  | { kind: 'overrides'; count: number }
-  | { kind: 'missingMod' };
+  | { kind: 'overrides'; count: number };
 
 export interface ModStatusResult {
   status: ModStatus;
@@ -21,38 +18,17 @@ export interface ModStatusResult {
 
 type ModFile = { relativePath: string; absolutePath: string };
 
-export async function computeModStatuses(
-  entries: ModlistEntry[],
-  instanceRoot: string,
-  index: FileConflictIndex,
-): Promise<Map<string, ModStatusResult>> {
+export function computeModStatuses(entries: ModlistEntry[], index: FileConflictIndex): Map<string, ModStatusResult> {
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
-  // Each entry's own stat is independent, so run them concurrently — a mod count in the hundreds
-  // made the old sequential loop the dominant cost of a recompute.
-  const named = await Promise.all(
-    mods.map(async (entry): Promise<[string, ModStatusResult]> => [entry.name, await computeEntryStatus(entry, instanceRoot, index)]),
-  );
-  return new Map(named);
+  return new Map(mods.map((entry): [string, ModStatusResult] => [entry.name, computeEntryStatus(entry, index)]));
 }
 
-async function computeEntryStatus(
-  entry: ModlistEntry,
-  instanceRoot: string,
-  index: FileConflictIndex,
-): Promise<ModStatusResult> {
-  if (!(await modFolderExists(instanceRoot, entry.name))) {
-    return { status: { kind: 'missingMod' }, conflictLines: [] };
-  }
+function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModStatusResult {
   if (!entry.enabled) return { status: { kind: 'ok' }, conflictLines: [] };
 
   const modFiles = index.filesByMod.get(entry.name) ?? [];
   const { conflictLines, conflicts, overrides } = countConflicts(modFiles, index, entry.name);
   return { status: classifyStatus(conflicts, overrides), conflictLines };
-}
-
-// A missing mod folder answers false; any other read failure propagates (instanceAdapter.exists).
-function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
-  return exists(modDir(instanceRoot, modName));
 }
 
 // A contested file this mod wins is an override; one it loses is a conflict.

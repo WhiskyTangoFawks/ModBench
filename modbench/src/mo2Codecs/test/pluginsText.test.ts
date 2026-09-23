@@ -155,7 +155,7 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
     expect(appendPluginInText('', 'Only.esp')).toBe('*Only.esp\n');
   });
 
-  // The reconcile appends a disk-discovered plugin disabled: discovery is not user
+  // Plugin sync appends a disk-discovered plugin disabled: discovery is not user
   // intent to enable.
   it('appends a disabled entry line (no marker) when asked to', () => {
     const input = '*A.esp\r\nB.esp\r\n';

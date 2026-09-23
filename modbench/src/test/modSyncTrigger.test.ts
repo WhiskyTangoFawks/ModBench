@@ -1,5 +1,5 @@
-// The installer writes no modlist line; a landed Instance value is what runs the adoption that
-// puts one there — the same signal the plugins reconcile runs off (pluginsReconcileTrigger.ts).
+// The installer writes no modlist line and a hand-deleted folder leaves its line behind; a landed
+// Instance value is what runs the mod sync that settles both.
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -11,8 +11,8 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { registerModAdoption, type ModAdoptionOutcome } from '../modAdoptionTrigger';
-import { adoptMods } from '../modlist/modlist';
+import { registerModSync } from '../modSyncTrigger';
+import { syncMods, type ModSyncResult } from '../modlist/modlist';
 import { installFromFolder } from '../install/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
@@ -52,12 +52,13 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
 
 const modlistText = (root: string): Promise<string> => readFile(join(root, DEFAULT_MODLIST), 'utf8');
 
+const channelDouble = () => ({ error: vi.fn(), info: vi.fn() });
+
 async function wiredInstance(): Promise<{
   root: string;
   instance: Instance;
-  invalidate: ReturnType<typeof vi.fn>;
-  channel: { error: ReturnType<typeof vi.fn> };
-  adoptions: Promise<ModAdoptionOutcome>[];
+  channel: ReturnType<typeof channelDouble>;
+  syncs: Promise<ModSyncResult>[];
   handed: (readonly string[])[];
 }> {
   const root = await cloneCorpusFixture();
@@ -68,31 +69,30 @@ async function wiredInstance(): Promise<{
     log: () => {},
   });
   instances.push(instance);
-  const invalidate = vi.fn();
-  const channel = { error: vi.fn() };
-  const adoptions: Promise<ModAdoptionOutcome>[] = [];
+  const channel = channelDouble();
+  const syncs: Promise<ModSyncResult>[] = [];
   // What the trigger handed the command, so a test can hold it against the value's own field.
   const handed: (readonly string[])[] = [];
-  registerModAdoption(instance, (profile, unlistedFolders) => {
-    handed.push(unlistedFolders);
-    const run = adoptMods(root, profile, unlistedFolders);
-    adoptions.push(run);
+  registerModSync(instance, (profile, modFolders) => {
+    handed.push(modFolders);
+    const run = syncMods(root, profile, modFolders);
+    syncs.push(run);
     return run;
-  }, invalidate, channel);
-  // The fixture ships "DragIn Manual Extract" unlisted; settle it before a test takes its own
-  // baseline sequence, or the fixture's own mismatch reads as that test's effect.
+  }, channel);
+  // The fixture ships "DragIn Manual Extract" unlisted and "[NODELETE] Radfall" folderless;
+  // settle both before a test takes its own baseline, or the fixture's mismatch reads as the
+  // test's effect.
   await instance.refresh();
-  await adoptions[adoptions.length - 1];
-  invalidate.mockClear();
-  return { root, instance, invalidate, channel, adoptions, handed };
+  await syncs[syncs.length - 1];
+  channel.info.mockClear();
+  return { root, instance, channel, syncs, handed };
 }
 
-describe('registerModAdoption — driven by the Instance value', () => {
-  // Rival this catches: dropping the adoption trigger, or keying it off a watcher of its own
-  // again instead of the landed value. Nothing else writes the line, so the install stays
-  // unlisted forever.
-  it('registers the folder an install dropped in, off the Instance value alone', async () => {
-    const { root, instance, invalidate, adoptions } = await wiredInstance();
+describe('registerModSync — driven by the Instance value', () => {
+  // Rival: dropping the sync trigger, or keying it off a watcher of its own instead of the landed
+  // value. Nothing else writes the line, so the install stays unlisted forever.
+  it('adds a line for the folder an install dropped in, off the Instance value alone', async () => {
+    const { root, instance, syncs } = await wiredInstance();
     const before = instance.sequence;
     const sourceFolder = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
     try {
@@ -103,18 +103,29 @@ describe('registerModAdoption — driven by the Instance value', () => {
 
       watcherFor('mods/**').fireCreate(join(root, 'mods', MOD, 'Installed.esp'));
       await pastSequence(instance, before);
-      await adoptions[adoptions.length - 1];
+      await syncs[syncs.length - 1];
 
       expect(await modlistText(root)).toContain(MOD);
-      expect(invalidate).toHaveBeenCalled();
     } finally {
       await rm(sourceFolder, { recursive: true, force: true });
     }
   });
 
+  it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
+    const { root, instance, syncs } = await wiredInstance();
+    const before = instance.sequence;
+    await rm(join(root, 'mods', 'Harder VATS'), { recursive: true, force: true });
+
+    watcherFor('mods/**').fireDelete(join(root, 'mods', 'Harder VATS'));
+    await pastSequence(instance, before);
+    await syncs[syncs.length - 1];
+
+    expect(await modlistText(root)).not.toContain('Harder VATS');
+  });
+
   // The folders come off the value, so the command never lists mods/.
-  // Rival this catches: a trigger that lists the directory itself and hands that instead.
-  it('hands the command the value\'s own unlisted folders, not a listing of its own', async () => {
+  // Rival: a trigger that lists the directory itself and hands that instead.
+  it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
     const { root, instance, handed } = await wiredInstance();
     const before = instance.sequence;
     await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
@@ -122,28 +133,29 @@ describe('registerModAdoption — driven by the Instance value', () => {
     watcherFor('mods/**').fireCreate(join(root, 'mods', 'Hand Extracted Mod'));
     const value = await pastSequence(instance, before);
 
-    expect(handed[handed.length - 1]).toBe(value.unlistedFolders);
-    expect(value.unlistedFolders).toEqual(['Hand Extracted Mod']);
+    expect(handed[handed.length - 1]).toBe(value.modFolders);
+    expect(value.modFolders).toContain('Hand Extracted Mod');
   });
 
-  // Rival this catches: invalidating on every landed value regardless of outcome, which would
-  // storm the Mods tree on every unrelated recompute (a plugins.txt edit included).
-  it('a further landed value once disk and modlist.txt agree changes nothing', async () => {
-    const { root, instance, invalidate, adoptions } = await wiredInstance();
+  // Rival: a sync that writes on every landed value, which a plugins.txt edit would turn into a
+  // modlist.txt write and a loop.
+  it('a further landed value once disk and modlist.txt agree writes nothing and logs nothing', async () => {
+    const { root, instance, channel, syncs } = await wiredInstance();
     const settled = await modlistText(root);
     const before = instance.sequence;
 
     watcherFor('profiles/*/plugins.txt').fireChange();
     await pastSequence(instance, before);
-    await adoptions[adoptions.length - 1];
+    const outcome = await syncs[syncs.length - 1];
 
+    expect(outcome).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await modlistText(root)).toBe(settled);
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(channel.info).not.toHaveBeenCalled();
+    expect(channel.error).not.toHaveBeenCalled();
   });
 });
 
-// Only `activeProfile` and `unlistedFolders` are read; the rest is unused filler cast through.
-const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', unlistedFolders: [] });
+const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', modFolders: [] });
 
 function fakeInstance(): { subscribe: Instance['subscribe']; fire: () => void } {
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
@@ -157,40 +169,42 @@ function fakeInstance(): { subscribe: Instance['subscribe']; fire: () => void } 
   };
 }
 
-describe('registerModAdoption — outcome handling', () => {
-  it('logs the command\'s own refusal instead of throwing out of the subscription', async () => {
-    const instance = fakeInstance();
-    const channel = { error: vi.fn() };
-    const invalidate = vi.fn();
-    const calls: Promise<ModAdoptionOutcome>[] = [];
-    registerModAdoption(instance, () => {
-      const run = Promise.resolve<ModAdoptionOutcome>({ applied: false, refusal: 'modlist.txt is locked' });
-      calls.push(run);
-      return run;
-    }, invalidate, channel);
+function firedOnce(outcome: () => Promise<ModSyncResult>): { channel: ReturnType<typeof channelDouble>; run: () => Promise<unknown> } {
+  const instance = fakeInstance();
+  const channel = channelDouble();
+  const calls: Promise<ModSyncResult>[] = [];
+  registerModSync(instance, () => {
+    const run = outcome();
+    calls.push(run);
+    return run;
+  }, channel);
+  expect(() => instance.fire()).not.toThrow();
+  return { channel, run: () => present(calls[calls.length - 1], 'the sync the fire triggered').catch(() => undefined) };
+}
 
-    expect(() => instance.fire()).not.toThrow();
-    await calls[calls.length - 1];
+describe('registerModSync — outcome handling', () => {
+  it('logs the lines it added and dropped, one Output line each way', async () => {
+    const { channel, run } = firedOnce(() => Promise.resolve<ModSyncResult>(
+      { applied: true, wrote: true, added: ['New Mod'], dropped: ['Gone Mod'] }));
+    await run();
 
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('modlist.txt is locked'));
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('Gone Mod'));
+    expect(channel.error).not.toHaveBeenCalled();
   });
 
-  it('logs a thrown adoption error the same way', async () => {
-    const instance = fakeInstance();
-    const channel = { error: vi.fn() };
-    const invalidate = vi.fn();
-    const calls: Promise<ModAdoptionOutcome>[] = [];
-    registerModAdoption(instance, () => {
-      const run = Promise.reject(new Error('disk unplugged'));
-      calls.push(run);
-      return run;
-    }, invalidate, channel);
+  it('logs the command\'s own refusal instead of throwing out of the subscription', async () => {
+    const { channel, run } = firedOnce(() => Promise.resolve<ModSyncResult>(
+      { applied: false, refusal: 'modlist.txt is locked' }));
+    await run();
 
-    expect(() => instance.fire()).not.toThrow();
-    await present(calls[calls.length - 1], 'the adoption run the fire triggered').catch(() => undefined);
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('modlist.txt is locked'));
+  });
+
+  it('logs a thrown sync error the same way', async () => {
+    const { channel, run } = firedOnce(() => Promise.reject(new Error('disk unplugged')));
+    await run();
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
-    expect(invalidate).not.toHaveBeenCalled();
   });
 });

@@ -3,9 +3,9 @@ import type { Instance } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 
 // Termination: a write re-enters through this subscription, since the Instance watches
-// plugins.txt and its value runs the reconcile. The next run changes nothing, writes nothing,
-// and the loop stops; a reconcile that wrote unconditionally would never end it.
-export function registerPluginsReconcile(
+// plugins.txt and its value runs plugin sync. The next run changes nothing, writes nothing,
+// and the loop stops; a sync that wrote unconditionally would never end it.
+export function registerPluginSync(
   instance: Pick<Instance, 'subscribe'>,
   run: (
     profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,

@@ -350,9 +350,8 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       expect(entry?.winnerMod).toBe(fixName);
     }
 
-    // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index, against the real
-    // instance (read-only: modFolderExists stat calls, never a write).
-    const statuses = await computeModStatuses([fixEntry, baseEntry], litrInstance, index);
+    // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index.
+    const statuses = computeModStatuses([fixEntry, baseEntry], index);
     expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
     // baseName's real count is 5: it also ships an .esl another enabled mod happens to ship,
     // a separate real collision that is part of its honest badge.

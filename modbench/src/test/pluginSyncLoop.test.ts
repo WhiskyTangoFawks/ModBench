@@ -8,8 +8,8 @@ import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import { registerPluginsReconcile } from '../pluginsReconcileTrigger';
-import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from '../pluginsCommands/plugins';
+import { registerPluginSync } from '../pluginSyncTrigger';
+import { syncPlugins, setPluginEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 
@@ -56,7 +56,7 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
 async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   root: string;
   instance: Instance;
-  reconciles: Promise<PluginsReconcileResult>[];
+  syncs: Promise<PluginSyncResult>[];
   games: string[];
   plugins: () => Promise<string>;
   pluginsOf: (profile: string) => Promise<string>;
@@ -70,7 +70,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'ModOrganizer.ini'), INI.replace('Fallout 4', gameName));
   await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-  // Both profiles start already matching disk, so the reconcile never writes either of them and
+  // Both profiles start already matching disk, so the sync never writes either of them and
   // a changed file can only be the gesture's own.
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
@@ -81,33 +81,33 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const instance = new Instance({ instanceRoot: root, resolveGameDirectory, log: () => {} });
   instances.push(instance);
 
-  const reconciles: Promise<PluginsReconcileResult>[] = [];
+  const syncs: Promise<PluginSyncResult>[] = [];
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
   const games: string[] = [];
-  registerPluginsReconcile(instance, (profile, provided, inData, _dataFolder, gameName) => {
+  registerPluginSync(instance, (profile, provided, inData, _dataFolder, gameName) => {
     games.push(gameName);
-    const run = reconcilePlugins(root, profile, provided, inData, () => Promise.resolve([]), () => {});
-    reconciles.push(run);
+    const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]), () => {});
+    syncs.push(run);
     return run;
   });
 
   const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
-  return { root, instance, reconciles, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
+  return { root, instance, syncs, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
 }
 
 // Drives the loop the way the platform does: a plugins.txt write comes back as the watcher event
-// that recomputes the Instance, which runs the reconcile again.
+// that recomputes the Instance, which runs the sync again.
 async function driveToQuiescence(
-  instance: Instance, reconciles: Promise<PluginsReconcileResult>[], maxRounds: number,
+  instance: Instance, syncs: Promise<PluginSyncResult>[], maxRounds: number,
 ): Promise<{ writes: number; quiescent: boolean }> {
   let writes = 0;
   for (let round = 0; round < maxRounds; round++) {
     const landed = await pastSequenceWithin(instance, instance.sequence, 5000);
     if (landed === TIMED_OUT) return { writes, quiescent: true }; // no recompute left to run
     const result = present(
-      await reconciles[reconciles.length - 1],
-      'the most recently issued reconcile result',
+      await syncs[syncs.length - 1],
+      'the most recently issued sync result',
     );
     if (!(result.applied && result.wrote)) return { writes, quiescent: true };
     writes++;
@@ -116,15 +116,15 @@ async function driveToQuiescence(
   return { writes, quiescent: false };
 }
 
-describe('the plugins reconcile and the Instance close a loop that settles', () => {
+describe('plugin sync and the Instance close a loop that settles', () => {
   it('a burst of mod-folder changes settles after exactly one plugins.txt write', async () => {
-    const { root, instance, reconciles, plugins } = await wiredInstance();
+    const { root, instance, syncs, plugins } = await wiredInstance();
 
     await writeFile(join(root, 'mods', 'Provider', 'New.esp'), 'plugin');
     const mods = watcherFor('mods/**');
     for (let i = 0; i < 5; i++) mods.fireChange();
 
-    const { writes, quiescent } = await driveToQuiescence(instance, reconciles, 8);
+    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
 
     expect(writes).toBe(1);
     expect(quiescent).toBe(true);
@@ -132,12 +132,12 @@ describe('the plugins reconcile and the Instance close a loop that settles', () 
   });
 
   it('a burst that leaves plugins.txt already matching disk writes nothing at all', async () => {
-    const { instance, reconciles, plugins } = await wiredInstance();
+    const { instance, syncs, plugins } = await wiredInstance();
 
     const mods = watcherFor('mods/**');
     for (let i = 0; i < 5; i++) mods.fireChange();
 
-    const { writes, quiescent } = await driveToQuiescence(instance, reconciles, 8);
+    const { writes, quiescent } = await driveToQuiescence(instance, syncs, 8);
 
     expect(writes).toBe(0);
     expect(quiescent).toBe(true);
@@ -147,12 +147,12 @@ describe('the plugins reconcile and the Instance close a loop that settles', () 
   // Rival: hand the run no Data-folder presence. Nothing is then prunable, so the dead line
   // below stays and the DLC line survives for the wrong reason.
   it('prunes against the Data-folder presence the value carries, keeping what Data provides', async () => {
-    const { root, instance, reconciles, plugins } = await wiredInstance();
+    const { root, instance, syncs, plugins } = await wiredInstance();
     await writeFile(join(root, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
     await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n*DLCCoast.esm\r\n*Gone.esp\r\n');
 
     watcherFor('profiles/*/plugins.txt').fireChange();
-    const { quiescent } = await driveToQuiescence(instance, reconciles, 8);
+    const { quiescent } = await driveToQuiescence(instance, syncs, 8);
 
     expect(quiescent).toBe(true);
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
@@ -162,10 +162,10 @@ describe('the plugins reconcile and the Instance close a loop that settles', () 
   // handed a hardcoded one would ask the backend about another install.
   it('hands each run the game the Instance read, not an assumed one', async () => {
     // Deliberately not Fallout 4: a run that hardcoded the fixture's usual game would pass.
-    const { instance, reconciles, games } = await wiredInstance('Skyrim Special Edition');
+    const { instance, syncs, games } = await wiredInstance('Skyrim Special Edition');
 
     watcherFor('mods/**').fireChange();
-    await driveToQuiescence(instance, reconciles, 8);
+    await driveToQuiescence(instance, syncs, 8);
 
     expect(games.length).toBeGreaterThan(0);
     expect([...new Set(games)]).toEqual(['Skyrim Special Edition']);

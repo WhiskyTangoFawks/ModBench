@@ -337,7 +337,7 @@ describe('HttpMEditClient — implicitMasters', () => {
   });
 
   // The rival this guards: degrading to [] on a refusal would read as "no implicit masters" —
-  // indistinguishable from a genuine empty answer, and the reconcile writes on the difference.
+  // indistinguishable from a genuine empty answer, and plugin sync writes on the difference.
   it('answers undefined, never an empty list, when the backend refuses', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'Game directory not found' })));
     const client = makeClient(fetch);

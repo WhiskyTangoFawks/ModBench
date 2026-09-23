@@ -6,7 +6,6 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
   return {
     mods: [],
-    unlistedFolders: [],
     modFolders: [],
     profiles: ['Default'],
     files: new FileConflictLookup(),

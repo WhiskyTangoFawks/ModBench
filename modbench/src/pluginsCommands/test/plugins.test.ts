@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginEnabled } from '../plugins';
 import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../instanceAdapter/pluginFile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
@@ -95,7 +95,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 });
 
-describe('reconcilePlugins — plugins.txt converges on what disk provides', () => {
+describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   let dir: string;
   const pluginsPath = () => join(dir, 'profiles', PROFILE, 'plugins.txt');
   const plugins = () => readFile(pluginsPath(), 'utf8');
@@ -111,7 +111,7 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
   };
 
   // The Instance's `dataFolderPlugins` field, doubled: presence at the Data folder's root,
-  // case-folded, which is the argument the reconcile takes.
+  // case-folded, which is the argument the sync takes.
   const inDataOnDisk = async (): Promise<DataFolderPlugins> => {
     const dirents = await readdir(dataFolder(), { withFileTypes: true });
     const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase());
@@ -123,14 +123,14 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
   const run = async (
     inData?: DataFolderPlugins | null,
     implicit: readonly string[] | null = [],
-  ) => reconcilePlugins(
+  ) => syncPlugins(
     dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()),
     inData === null ? { kind: 'unresolved' } : (inData ?? await inDataOnDisk()),
     () => Promise.resolve(implicit ?? undefined), (m) => logs.push(m));
 
   beforeEach(async () => {
     logs.length = 0;
-    dir = await mkdtemp(join(tmpdir(), 'plugins-reconcile-'));
+    dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
     await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
     await mkdir(join(dir, 'mods', 'Dormant'), { recursive: true });
     await mkdir(join(dir, 'profiles', PROFILE), { recursive: true });
