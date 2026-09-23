@@ -34,17 +34,12 @@ public sealed class TraceTestClassScanTests
             + string.Join("\n", missing));
     }
 
-    // decompile-plugin is the rename of track-a-plugin (commit eb63f559); the class follows the
-    // rename in debt #966, the ticket that merges track, absorb and keep into one command.
-    private const string DeferredRenameClass = "TrackAPluginTraceTests";
-
     [Fact]
     public void EveryTraceSuffixedClass_NamesATraceFile()
     {
         var solution = ArchitectureTests.SolutionDirectory();
         var traceStems = TraceFileStems(solution);
         var orphans = TraceSuffixedClasses(solution)
-            .Where(name => !string.Equals(name, DeferredRenameClass, StringComparison.Ordinal))
             .Where(name => !traceStems.Contains(TraceStemFor(name)))
             .Order(StringComparer.Ordinal)
             .ToList();
