@@ -12,7 +12,7 @@ The Editor surface has three more files:
 
 - [editor-fields.md](editor-fields.md): how each field reads and edits, type by type.
 - [editor-conflicts.md](editor-conflicts.md): the colours of a record order conflict.
-- [editor-referenced-by_draft.md](editor-referenced-by_draft.md): the Referenced By view.
+- [editor-referenced-by.md](editor-referenced-by.md): the Referenced By view.
 
 The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it.
 Its Reporting table does.

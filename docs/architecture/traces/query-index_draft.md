@@ -50,18 +50,3 @@ As a user, I want:
 
 - **The driving box:** what each surface asks for, and what it draws from the answer.
 - **The queries box:** given a question and the Store's rows, the answer, or the failure.
-
-## Open Questions
-
-1. **Grouping.** The old spec groups Referenced By by the referencing record, so overrides in several
-   plugins show once, with a count of plugins. Accept?
-2. **A reference counts only members in use.** The old spec skips idle condition parameters, because they
-   would invent a referrer. ADR-0005 has no such line. Add to the ADR, or accept as a rule here?
-3. **Empty and error text.** The old spec has three texts: no active record, no references, failed
-   fetch. I did not copy the wording. Do you want exact text?
-4. **The title count.** The old spec shows `Referenced By (N)` with N as groups, and no count when unknown.
-   Accept?
-5. **Excluded record types.** Some signatures are not indexed, so their references do not show.
-   Ledger row, or a story?
-6. **Referenced By actions.** The old spec offers Open, Open to the Side and Copy on a group, and defers
-   the rest. Accept?
