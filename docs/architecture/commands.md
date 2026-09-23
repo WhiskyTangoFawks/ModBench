@@ -312,12 +312,14 @@ Offered on Downloads.
 
 Commands Modbench runs itself. No user starts them and no surface owns them, so they have no
 gesture and sit outside the object tables. The first column is the trigger that fires each one.
-Each is a command for the same reason a gesture is: one handler, and one identity.
+Each is a command for the same reason a gesture is: one handler, and one identity. A system command
+keeps one file in line with what is on disk. Its trigger is the instance value disagreeing with the
+disk, it takes the value as its Argument, and it writes the file once, in every direction the
+disagreement needs.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|
 | The load order changed: a `modlist.txt` or `plugins.txt` edit, or a change from another tool | writes | `modbench.instance.putLoadOrder` | load order snapshot | - | none | Hand mEdit the whole load order snapshot whenever it changes. The architecture calls it a PUT. | built | index-load-order |
-| A folder in `mods/` has no `modlist.txt` line | writes | `modbench.mod.import` | folder | - | MO2 refresh | Add a line to `modlist.txt` for a folder already in `mods/`. Code name: adopt. | debt #956 | update-load-order-file |
-| A `modlist.txt` line names a mod whose folder is gone from `mods/` | writes | `modbench.mod.prune` | mod line | - | MO2 refresh | Remove the line of a mod whose folder was deleted outside Modbench, in the active profile's `modlist.txt`. The reverse of `import mod`. | planned | update-load-order-file |
-| A plugin on disk has no `plugins.txt` line | writes | `modbench.plugin.import` | plugin | - | none | Add a line to `plugins.txt` for a plugin on disk that lacks one. Code name: reconcile. | debt #956 | update-load-order-file |
+| The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | instance value | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. Code name: adopt, which only adds. | debt #979 | update-load-order-file |
+| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. Code name: reconcile. | debt #979 | update-load-order-file |
 | The watcher settles a tracked mod that changed: a moved `meta.ini` version means a new release, otherwise an edit in another tool | writes | `modbench.plugin.decompile` | plugins of a tracked mod | destination: `main` when the `meta.ini` version moved (a new release), else the working tree (an edit in another tool); whether it asks first is open | none | The watcher classifies an external change and calls `decompile plugin`, which reads the plugin's bytes back into plugin source. The gesture `track mod` calls the same command with a new repository as the destination. | debt #966 | decompile-plugin |

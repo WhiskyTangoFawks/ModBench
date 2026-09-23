@@ -39,8 +39,8 @@ medit_core: "MEDIT · Core — the write side and the read side; each references
 }
 modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, import and prune mod lines\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
-  pluginscommands: "plugins commands\ninterface: enable, disable, move, import plugin\nhides: the splice of plugins.txt" {class: core}
+  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, sync mod lines\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
+  pluginscommands: "plugins commands\ninterface: enable, disable, move, sync plugin lines\nhides: the splice of plugins.txt" {class: core}
   instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex, then put load order\nhides: the splice of ModOrganizer.ini" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: the splice of a download's .meta" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git; the installed mark\non the downloaded file" {class: core}

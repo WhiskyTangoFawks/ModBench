@@ -278,7 +278,7 @@ By [common.md](common.md#reporting). As a user, I want:
    status: my picture of what is loaded would otherwise be wrong. *ADR-0019, invariant 1*
 3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
    the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
-   the reason in the view's message line and the Output. *update-load-order-file, import plugin,
+   the reason in the view's message line and the Output. *update-load-order-file, plugin sync,
    stories 4 and 5; ruling*
 4. Every message to name a gesture that exists and a view by its name.
 

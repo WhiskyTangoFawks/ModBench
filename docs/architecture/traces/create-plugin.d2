@@ -1,7 +1,7 @@
 # Create a plugin, blue. mEdit writes the new plugin file into the mod the user picked and forgets
 # it. The plugin is untracked: Track is a manual gesture. Create writes no plugins.txt line and
-# registers nothing in the load order; the watch finds a plugin on disk with no line, and import
-# plugin adds it at the end, disabled, as MO2 does. The rest is update-load-order-file's, then
+# registers nothing in the load order; the watch finds a plugin on disk with no line, and plugin
+# sync adds it at the end, disabled, as MO2 does. The rest is update-load-order-file's, then
 # index-load-order's. Governed by ADR-0003, ADR-0007, ADR-0013, ADR-0015 and ADR-0017. Contract:
 # create-plugin_draft.md.
 ...@../styles
@@ -36,7 +36,7 @@ http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
 mo2 -> instance: watch {class: signal}
 instance."a plugin on disk with no plugins.txt line"
-instance -> pluginscommands: "import plugin: update-load-order-file" {class: loadorder}
+instance -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 
 refused: "refused, before any write" {
   commands -> http: "the file exists · no load order held" {class: edit}

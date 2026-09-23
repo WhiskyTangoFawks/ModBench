@@ -76,7 +76,7 @@ mod, and the Source adapter names the paths inside it, so layout has one owner; 
 Modbench side the Instance adapter is that owner, the one box that reads or writes the instance: the mod
 manager's configuration, the load order, and which game it is for. Game Data/ is not a system of record but
 a projection, and deploy alone writes it. A command splices through the pure codec and puts through the Instance adapter. No command reads the
-Instance loader; a value a command needs, the folders to import and the mod lines to prune, the plugin lines to add and drop, or the winners
+Instance loader; a value a command needs, the mod lines and plugin lines to sync, or the winners
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox offers the gesture and
 keeps the first-deploy consent.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
