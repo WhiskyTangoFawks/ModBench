@@ -48,11 +48,11 @@ A box is a project. Its reference list is the arrows that leave it in the refere
 a Core box or a driven adapter, every box of its column's kernel by the band's rule; a driving
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
-Every arrow points down or into the kernel, with four same-band references the captions name: the
+Every arrow points down or into the kernel, with five same-band references the captions name: the
 record index reads the two adapters beside it, Ports reads Load order state, the Instance loader reads the Instance
-adapter, and plugins commands ask the mEdit client which plugins load implicitly. A composition root,
-the HTTP endpoints on mEdit, the activation file and Toolbox on Modbench, references every box below
-it by definition.
+adapter, plugins commands ask the mEdit client which plugins load implicitly, and instance commands
+hand the mEdit client the load order and ask it to rebuild. A composition root, the HTTP endpoints
+on mEdit and the activation file on Modbench, references every box below it by definition.
 A reference the reference view does not draw is a compile error and a question for the
 maintainer, never a line an agent adds.
 
@@ -76,9 +76,9 @@ mod, and the Source adapter names the paths inside it, so layout has one owner; 
 Modbench side the Instance adapter is that owner, the one box that reads or writes the instance: the mod
 manager's configuration, the load order, and which game it is for. Game Data/ is not a system of record but
 a projection, and deploy alone writes it. A command splices through the pure codec and puts through the Instance adapter. No command reads the
-Instance loader; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
-to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
-the first-deploy consent.
+Instance loader; a value a command needs, the mod lines and plugin lines to sync, or the winners
+to deploy, arrives as an argument. Deploy and purge are commands; Toolbox offers the gesture and
+keeps the first-deploy consent.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
 keeps the last value on a parse failure. It validates on activation and on refresh, through the
 same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
@@ -125,8 +125,8 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   actor.
 - A trace message runs between two boxes the reference view joins, or through a port, where one
   end implements it and the other references Ports, or across the wire, or inside one box, or
-  between two boxes a composition root wires, as Toolbox hands the instance value to the mEdit
-  client. Any other message is a reference the maintainer has not drawn. The one exception is a trace
+  between two boxes a composition root wires, as the HTTP endpoints hand a request to a Commands
+  handler. Any other message is a reference the maintainer has not drawn. The one exception is a trace
   that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.

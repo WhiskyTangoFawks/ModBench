@@ -10,7 +10,7 @@ with an installed mod as the target, through the same boxes. Catalog row: `insta
 Each story cites its source. **Install is under a specification workup**, so this file holds only what
 the catalog, the diagrams and the principles settle. The rest is in the Open Questions.
 
-The `modlist.txt` line is not written here. The folder appears, and `import plugin` and `import mod`
+The `modlist.txt` line is not written here. The folder appears, and `mod sync` and `plugin sync`
 pick it up. Their stories are in
 [update-load-order-file_draft.md](update-load-order-file_draft.md).
 

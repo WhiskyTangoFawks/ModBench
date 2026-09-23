@@ -20,10 +20,9 @@ diagram. **Ruling** means the maintainer decided it and nothing else states it.
 | separator `add`, `rename`, `delete` | modlist commands | `modlist.txt`, and the separator's folder |
 | mod `uninstall` | modlist commands | `modlist.txt`, the mod folder, and the downloaded file's `.meta` |
 | mod `create empty mod` | modlist commands | `modlist.txt`, and an empty mod folder |
-| `import mod` | modlist commands | `modlist.txt` |
-| `prune mod` | modlist commands | `modlist.txt` |
+| `mod sync` | modlist commands | `modlist.txt` |
 | plugin `enable` / `disable`, `move` | plugins commands | `plugins.txt` |
-| `import plugin` | plugins commands | `plugins.txt` |
+| `plugin sync` | plugins commands | `plugins.txt` |
 | profile `switch` | instance commands | `ModOrganizer.ini` |
 | downloaded file `exclude` / `include`, `delete` | downloads commands | a download's `.meta`, and the file |
 
@@ -78,7 +77,7 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 
 1. The mod's folder moved to the system trash, then its line removed. A failed trash changes nothing
    and says why. A line left after the trash is a line whose folder is gone, which the next watch
-   hands to `prune mod`. *catalog Meaning; MO2's recycle bin; ADR-0015, invariant 2*
+   hands to `mod sync`. *catalog Meaning; MO2's recycle bin; ADR-0015, invariant 2*
 2. To be asked first. *Confirm what destroys*
 3. The downloaded file it was installed from marked uninstalled in its `.meta`, so MO2's Downloads
    tab agrees. A failure there does not fail the uninstall; it is a line in the Output. *ADR-0017,
@@ -89,20 +88,17 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 1. An empty mod folder and its line created, with no `meta.ini`. *catalog Meaning*
 2. A prompt for the name. *The surface supplies the Argument, a picker supplies the Options*
 
-## import mod
+## mod sync
 
-The trigger is a folder in `mods/` with no line in `modlist.txt`.
+The trigger is the active profile's `modlist.txt` disagreeing with `mods/`: a folder with no line, or
+a line whose folder is gone. Both directions land in one write.
 
-1. A line added for that folder. *catalog Meaning*
-2. The same path for a folder dropped by hand and for one MO2 made. *ADR-0015, invariant 2*
-
-## prune mod
-
-The trigger is a line in the active profile's `modlist.txt` whose folder is gone from `mods/`.
-
-1. That line removed, so the mod leaves the list. *ruling; MO2's refresh*
-2. The same path for a folder deleted by hand, by MO2 or by any other tool. *ADR-0015, invariant 2*
-3. No prompt and no notification when it works. The row going is the result. *ADR-0019*
+1. A line added for each folder in `mods/` that has none. *catalog Meaning*
+2. Each line whose folder is gone from `mods/` removed, so the mod leaves the list. *ruling; MO2's
+   refresh*
+3. The same path for a folder added or removed by hand, by MO2 or by any other tool. *ADR-0015,
+   invariant 2*
+4. No prompt and no notification when it works. The rows are the result. *ADR-0019*
 
 ## plugin enable / disable
 
@@ -119,9 +115,10 @@ The trigger is a line in the active profile's `modlist.txt` whose folder is gone
    repair*
 3. A drop that is not a valid place refused, and nothing moved. *Refuse, do not repair*
 
-## import plugin
+## plugin sync
 
-The trigger is a plugin on disk with no line in `plugins.txt`, or a line that nothing provides.
+The trigger is `plugins.txt` disagreeing with the plugins provided: a plugin on disk with no line, or
+a line that nothing provides. Both directions land in one write.
 
 1. A plugin found on disk with no line added at the end, disabled. *ADR-0017; MO2's plugin list adds a
    plugin it has not seen as not enabled, at the end*
@@ -170,7 +167,7 @@ Two seams, one per side of the driving boundary.
 2. **Where a mod lands in a separator.** The old spec says the end of that section. Accept?
 3. **Mod order and ends.** ADR-0017 says the top of `modlist.txt` is the winning end. The old spec says
    an installed mod lands "at the bottom". I did not use it.
-4. **Removing a `plugins.txt` line.** `import plugin` removes a line that nothing provides. That
+4. **Removing a `plugins.txt` line.** `plugin sync` removes a line that nothing provides. That
    destroys data, and it is a system command, so nobody can be asked. Does Confirm what destroys reach
    system commands, or is a line nothing provides not a destruction?
 5. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
@@ -183,4 +180,4 @@ Two seams, one per side of the driving boundary.
 9. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
     diagrams draw no check.
 10. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
-    `plugins.txt` line for `import plugin` to remove. Is that intended?
+    `plugins.txt` line for `plugin sync` to remove. Is that intended?

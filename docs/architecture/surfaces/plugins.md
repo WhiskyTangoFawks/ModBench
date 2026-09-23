@@ -226,8 +226,8 @@ and the phase. *catalog `track`; decompile-plugin contract, story 2*
 
 As a user, I want:
 
-1. `compile` to build from the working tree. Whether it asks first is the compile contract's
-   question 1.
+1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
+   truth and the plugin a projection of it, so compile destroys nothing. *ruling*
 2. `compile from main…` to confirm first, saying my edit branch and working tree stay as they are.
    *catalog `compile`, source Option; compile-plugin contract, story 13*
 3. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
@@ -280,7 +280,7 @@ By [common.md](common.md#reporting). As a user, I want:
    status: my picture of what is loaded would otherwise be wrong. *ADR-0019, invariant 1*
 3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
    the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
-   the reason in the view's message line and the Output. *update-load-order-file, import plugin,
+   the reason in the view's message line and the Output. *update-load-order-file, plugin sync,
    stories 4 and 5; ruling*
 4. Every message to name a gesture that exists and a view by its name.
 

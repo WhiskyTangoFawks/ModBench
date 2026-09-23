@@ -21,7 +21,7 @@ treats a plugin the way an IDE treats a program:
 - **Edit** in the compare grid (or from a script, or from an agent) and the change lands as an
   ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it,
   discard it, commit it, branch it, rebase it.
-- **Save & Compile** writes the binary from the source when you say so. The compiler refuses what 
+- **Compile** writes the binary from the source when you say so. The compiler refuses what 
   it can't emit and reports the rest as Problems.
 - **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
   everything else see. Modbench never assumes exclusive ownership of any file — external changes
@@ -34,15 +34,15 @@ and [ADR-0006](docs/adr/0006-the-plugin-is-the-source-of-truth.md).
 
 | Surface | Spec | State |
 |---|---|---|
-| **Mods** — install from archive, separators, drag-order, enable, deploy (hardlinks), purge, profiles | [mods.md](docs/specs/mods.md) | Implemented |
-| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
-| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
-| **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
-| **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
-| **Toolbox** — the view of the instance and the composition root | [containers.md](docs/specs/containers.md) | Implemented |
-| **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
+| **Mods** — install from archive or folder, separators, drag-order, enable | [mods.md](docs/architecture/surfaces/mods.md) | Implemented; spec rewritten, code catching up |
+| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
+| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
+| **Version control** — Track, edit branch, compile, native SCM integration, external-change handling | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
+| **Referenced By** — what points at a record | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented |
+| **Toolbox** — the instance at a glance: its game and active profile, switch profile, refresh | [toolbox.md](docs/architecture/surfaces/toolbox.md) | Implemented; spec rewritten, code catching up |
+| **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
-| **Downloads** — Nexus download queue and tree (`nxm://` handler still pending) | [downloads.md](docs/specs/downloads.md) | Implemented |
+| **Downloads** — the downloads folder as a tree: install, exclude, delete (`nxm://` downloading not built) | [downloads.md](docs/architecture/surfaces/downloads.md) | Implemented; spec rewritten, code catching up |
 
 What's next is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones)
 board: each numbered milestone is an epic in priority order, its issues are the slices.
@@ -50,16 +50,29 @@ board: each numbered milestone is an epic in priority order, its issues are the 
 ## Architecture at a glance
 
 ```
-modbench/          VS Code extension (TypeScript) + React webview for the compare grid
+modbench/          VS Code extension (TypeScript) + React webview for the compare grid, one
+                   composite project per box of docs/architecture/
+  src/*.ts, src/medit/  the activation file and its wiring, Modbench's composition root: the
+                        Toolbox view today, mEdit's status bar, log and filter code lens
   src/mods/          Mods view — the modlist tree and every mod gesture, never calling the
                      backend
+  src/plugins/       Plugins view — the one tree, rows from the instance value and records from
+                     the mEdit client, and every plugin gesture (ADR-0017)
   src/downloads/     Downloads view — the downloads/ tree, its row actions and the upgrade pick
-  src/plugins/       Plugins view — the one tree, rows from the Instance and records from the
-                     mEdit client, and every plugin gesture (ADR-0017)
-  src/editor/        Editor view — the record panel, its message router, the active record and
-                     Referenced By; imports the mEdit client and nothing from the MO2 side
-  src/medit/         The mEdit client — one port over the backend's commands, queries,
+  src/editor/        Editor view — the record panel's host, the active record and Referenced By
+  src/modlist/       modlist commands — the splice of modlist.txt
+  src/pluginsCommands/   plugins commands — the splice of plugins.txt
+  src/instanceCommands/  instance commands — switch profile, put load order, refresh
+  src/downloadsCommands/ downloads commands — a download's .meta (drawn, not built yet)
+  src/install/       install — a new mod, or an upgrade over one
+  src/deploy/        deploy commands — hardlinks into the game's Data folder
+  src/client/        the mEdit client — one port over the backend's commands, queries,
                      notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0014)
+  src/mo2Codecs/, src/wire/, src/tables/, src/ports/
+                     the kernel — the MO2 file codecs, the generated API types and webview
+                     protocol, the per-release tables, and the report / ask / trash port
+  src/instance/      the Instance loader — the instance value, built only by watching
+  src/mo2Files/      the Instance adapter — the one reader and writer of the instance
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
                    per box of docs/architecture/
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
@@ -85,7 +98,7 @@ The UX rules are borrowed, not invented: Mod Management follows MO2, record edit
 ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every
 interaction uses the native VS Code surface that already does the job
 ([ADR-0017](docs/adr/0017-mo2-is-the-reference-for-mod-management.md)). Decisions live in
-[docs/adr/](docs/adr/); a decision that was reversed keeps its number, and the story is in the
+[docs/adr/](docs/adr/); a decision that was reversed is deleted, and the story is in the
 *Alternatives rejected* section of whatever replaced it.
 
 ## Getting started

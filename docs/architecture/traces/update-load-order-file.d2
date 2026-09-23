@@ -21,8 +21,6 @@ mo2files.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nmodlist.txt · plugins.txt · ModOrganizer.ini · mods/ · downloads/"
 views: "every view" {class: driving}
-toolbox: @../target-architecture.modbench_driving.toolbox
-toolbox.label: Toolbox
 
 surfaces -> cmds: "the gesture, with its argument" {class: loadorder}
 instance -> cmds: "a system command: the value as an argument" {class: loadorder}
@@ -38,12 +36,12 @@ uninstall: "an uninstall, from a downloaded file" {
   cmds."a failed mark is a line in the Output, and the uninstall still applied"
 }
 mo2files -> mo2: bytes, then forget {class: loadorder}
-cmds -> surfaces: applied or refusal {class: loadorder}
+cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
 mo2 -> instance: watch {class: signal}
 instance."recompute whole, next sequence"
 instance -> views: value {class: loadorder}
-instance -> toolbox: "load order snapshot, on change and on connect" {class: loadorder}
-toolbox."the rest is index-load-order"
+instance -> cmds: "put load order: the snapshot, on change and on connect" {class: loadorder}
+cmds."the rest is index-load-order"
 
 refused: "refused, before any write" {
   cmds -> surfaces: "the object has gone · the target is not a valid place · mEdit cannot answer" {class: loadorder}
