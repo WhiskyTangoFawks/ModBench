@@ -593,8 +593,6 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
-  // The alpha leaves deployment with the mod manager, so a deploy manifest under mods/ is just
-  // another file there, and the value carries no deployed state to read out of it.
   it('carries no deployed state, whether or not a deploy manifest sits under mods/', async () => {
     const { root, instance } = await realInstance();
     await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));

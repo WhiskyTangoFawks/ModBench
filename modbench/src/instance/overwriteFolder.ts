@@ -1,4 +1,5 @@
-// The overwrite/ folder holds runtime outputs — files with no owning mod. No vscode import: the reveal and watch wiring live in vscode-aware modules.
+// The overwrite/ folder holds runtime outputs — files with no owning mod. No vscode import:
+// the reveal and watch wiring live in vscode-aware modules.
 
 import { listRelativeFiles } from '../mo2Files/files';
 import { errnoCode } from '../ports/errno';

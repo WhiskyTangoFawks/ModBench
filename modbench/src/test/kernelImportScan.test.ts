@@ -275,7 +275,9 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../mo2Files/layout', join(boxRoot('instance'), 'p.ts'), 'instance')).toBe(true);
     expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
     expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('mo2Files'), 'p.ts'), 'mo2Files')).toBe(true);
-    expect(isAllowedDrivenSpecifier('../instance/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands')).toBe(true);
+    expect(isAllowedDrivenSpecifier(
+      '../instance/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
+    )).toBe(true);
     expect(isAllowedDrivenSpecifier('../instance/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
   });
 });

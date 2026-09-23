@@ -4,7 +4,7 @@ import * as path from 'path';
 import { present } from '../ports/present';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
-// throws rather than handing back an unproven shape (mo2Files.ts's parseManifest, same posture).
+// throws rather than handing back an unproven shape.
 interface ViewsWelcomeEntry { view: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
