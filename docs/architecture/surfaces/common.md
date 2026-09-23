@@ -23,6 +23,10 @@ As a user, I want:
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a
    check box, Delete destroys, F2 renames, Ctrl+C copies. A template's own keys are not adopted.
    *ruling*
+6. Every tree to let me select several rows, and a gesture to act on the whole selection unless it
+   only makes sense for one row, which its Argument in the catalog says. *ruling*
+7. Every list to reverse its order from its title bar. The direction never changes what the order
+   means, such as which item wins. *ruling; CONTEXT.md, Sort direction*
 
 ## The name filter
 

@@ -33,6 +33,8 @@ As a user, I want:
 1. The record tree narrowed to the FormKeys a SQL query returns. *catalog Meaning*
 2. A query from an input box, or from a document. *catalog Options*
 3. The filter to stay until I clear it, with its term in the view description. *One filter*
+4. A plugin with no record left under the filter hidden while it is active. The record filter is its
+   own filter, beside the name filter. *ruling; [plugins.md](../surfaces/plugins.md)*
 
 ## open
 
@@ -58,14 +60,11 @@ As a user, I want:
    fetch. I did not copy the wording. Do you want exact text?
 4. **The title count.** The old spec shows `Referenced By (N)` with N as groups, and no count when unknown.
    Accept?
-5. **Two filters.** The old spec has a name filter and a record filter that compose, and a record filter
-   that hides plugins with no match. One filter says every list has the same name filter. Is the record
-   filter a second kind?
-6. **Partial results.** The old spec shows a banner when a record opens before the conflict sweep has
+5. **Partial results.** The old spec shows a banner when a record opens before the conflict sweep has
    finished. Accept?
-7. **Excluded record types.** Some signatures are not indexed, so their references do not show.
+6. **Excluded record types.** Some signatures are not indexed, so their references do not show.
    Ledger row, or a story?
-8. **Open on a reference.** The catalog puts "Go to Record" in the context menu only. No story
+7. **Open on a reference.** The catalog puts "Go to Record" in the context menu only. No story
    needed?
-9. **Referenced By actions.** The old spec offers Open, Open to the Side and Copy on a group, and defers
+8. **Referenced By actions.** The old spec offers Open, Open to the Side and Copy on a group, and defers
    the rest. Accept?

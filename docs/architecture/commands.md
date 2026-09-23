@@ -156,7 +156,7 @@ first. The file for that template lists the gesture with its reason.
 |---|---|---|---|
 | Toolbox | main menu | toolbar, run box, profile combo | to write |
 | Mods | - | mod list | [mods.md](surfaces/mods.md) |
-| Plugins | navigator | plugin list | to write |
+| Plugins | navigator | plugin list | [plugins.md](surfaces/plugins.md) |
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
 | Editor | View grid, Referenced By | - | to write |
 
@@ -247,12 +247,13 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
-| move | writes | Plugins: drag, key, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | update-load-order-file |
+| move | writes | Plugins: drag, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | update-load-order-file |
 | create | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | - |
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugin | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-plugin |
 | repair | writes | Plugins: context menu | - | plugin | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | planned | - |
 | filter | reads | Plugins: title icon, key (Ctrl+F) | `modbench.plugin.filter`, `modbench.plugin.clearFilter` | - | - | MO2 plugin list; xEdit navigator | Narrow the plugin list by name. | debt #967 | none |
+| sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | planned | none |
 | reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | debt #967 | none |
 | highlight origin | reads | Plugins: automatic; Mods: automatic | - | plugins, or mods | - | MO2 plugin list | Selecting a plugin marks its origin mod and its masters. Selecting a mod marks the plugins it provides. | planned | - |
 | add sort rule | writes | Plugins: context menu | - | - | rule | none | Add a plugin sorting rule. A hard rule is red and a soft rule is yellow. | planned | - |
@@ -275,8 +276,8 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-record |
-| delete | writes | Plugins: context menu; Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-record |
-| renumber | writes | Plugins: context menu | `modbench.record.renumber` | records, or a plugin | start id, for a plugin (planned) | xEdit navigator | Change a record's FormKey and every reference to it. | built | - |
+| delete | writes | Plugins: context menu, key (Delete); Editor: context menu | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | built | edit-record |
+| renumber | writes | Plugins: context menu | `modbench.record.renumber` | records, or a plugin | start id, for a plugin (planned) | xEdit navigator | Change a record's FormKey. Updating the records that reference it is a script. | built | - |
 | copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride (planned); destination plugins; deep, for containers (planned) | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | debt #962, #967 | edit-record |
 | open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open as a comparison. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | debt #963, #967 | query-index |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, field path | - | xEdit View grid | Open a field value in an editor tab. | debt #967 | none |
