@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
@@ -10,6 +10,12 @@ import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameDirectoryResolver } from '../../mo2Files/gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
+// Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
+// chmod-based permission denial is silently bypassed when the runner is root.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readdir: vi.fn(actual.readdir) };
+});
 
 import { Instance, loadOrderSnapshotOf, type InstanceValue } from '../instance';
 import type { LoadOrderPlugin } from '../loadOrderSnapshot';
@@ -424,6 +430,31 @@ describe('Instance — a value that survives a bad read', () => {
     await rm(join(root, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
     await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini')); // present but unreadable (EISDIR)
     await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(before);
+    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+  });
+
+  it('keeps the value when a folder inside overwrite/ is unreadable — never silently a smaller count', async () => {
+    const { root, instance, logs } = await realInstance();
+    const nested = join(root, 'overwrite', 'SKSE');
+    await mkdir(nested, { recursive: true });
+    await writeFile(join(nested, 'skse.log'), '');
+    await instance.refresh();
+    const value = instance.value;
+    const before = instance.sequence;
+
+    const { readdir: actualReaddir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    vi.mocked(readdir).mockImplementation(async (path, ...rest) => {
+      if (String(path) === nested) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      return actualReaddir(path, ...rest);
+    });
+    try {
+      await instance.refresh();
+    } finally {
+      vi.mocked(readdir).mockImplementation(actualReaddir);
+    }
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
