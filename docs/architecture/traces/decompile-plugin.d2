@@ -69,5 +69,7 @@ watcher -> indexer: source changed {class: signal}
 sourcerepo -> indexer: documents (tracked) {class: query}
 
 refused: "refused, nothing written" {
-  commands -> plugins: "a dropped subrecord, naming it · a missing strings file · git not on the PATH · a record already changed, naming the records" {class: edit}
+  commands -> http: "a dropped subrecord, naming it · a missing strings file · git not on the PATH · a record already changed, naming the records" {class: edit}
+  http -> client: the refusal {class: edit}
+  client -> plugins: the refusal {class: edit}
 }
