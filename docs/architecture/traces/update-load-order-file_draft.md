@@ -73,7 +73,7 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 2. To be asked first. *Confirm what destroys*
 3. The downloaded file it was installed from marked uninstalled in its `.meta`, so MO2's Downloads
    tab agrees. A failure there does not fail the uninstall; it is a line in the Output. *ADR-0017,
-   invariant 1; [downloads_draft.md](../surfaces/downloads_draft.md)*
+   invariant 1; [downloads.md](../surfaces/downloads.md)*
 
 ## mod create empty mod
 
@@ -126,15 +126,15 @@ The trigger is a plugin on disk with no line in `plugins.txt`, or a line that no
 
 1. A download's `.meta` marked hidden, or the mark cleared. *catalog Meaning*
 2. A selection that mixes excluded and included rows to take the clicked row's direction.
-   *[downloads_draft.md](../surfaces/downloads_draft.md)*
+   *[downloads.md](../surfaces/downloads.md)*
 
 ## downloaded file delete
 
 1. The file and its `.meta` moved to the system trash, the file first. A failure on the file writes
    nothing; a failure on the `.meta` after it leaves a lone `.meta`, which no view shows, so the
-   delete is done. *A failed gesture writes nothing; [downloads_draft.md](../surfaces/downloads_draft.md)*
+   delete is done. *A failed gesture writes nothing; [downloads.md](../surfaces/downloads.md)*
 2. To be asked first, once for the whole selection. *Confirm what destroys*
-3. The mod it installed left in place. *[downloads_draft.md](../surfaces/downloads_draft.md)*
+3. The mod it installed left in place. *[downloads.md](../surfaces/downloads.md)*
 
 ## Test seam
 

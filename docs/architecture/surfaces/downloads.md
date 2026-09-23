@@ -1,4 +1,4 @@
-# Downloads (draft)
+# Downloads
 
 The Downloads surface lists the instance's downloaded files. Its template is MO2's Downloads tab
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,

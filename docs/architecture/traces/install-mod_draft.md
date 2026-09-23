@@ -28,7 +28,7 @@ As a user, I want:
    invariant 2*
 6. The downloaded file's `.meta` marked installed, so MO2's Downloads tab agrees. A failure there
    does not fail the install; it is a line in the Output. *ADR-0017, invariant 1;
-   [downloads_draft.md](../surfaces/downloads_draft.md)*
+   [downloads.md](../surfaces/downloads.md)*
 
 ## install: a new mod
 
@@ -42,7 +42,7 @@ As a user, I want:
 ## install: over an installed mod
 
 1. To pick the target from the installed mods that share the download's Nexus mod ID, or to install a
-   new mod. *catalog Meaning; the pick is in [downloads_draft.md](../surfaces/downloads_draft.md)*
+   new mod. *catalog Meaning; the pick is in [downloads.md](../surfaces/downloads.md)*
 2. The target confirmed every time, pre-selected by file ID, else by the mod's recorded installation
    file, and never by a guess from the file's name. *diagram*
 3. The folder's contents replaced in place, with its `.git` kept, and the folder never renamed, so its
