@@ -65,7 +65,7 @@ describe('the Toolbox gestures', () => {
   it('registers switch profile and open settings, and no deploy, purge or run', () => {
     register();
 
-    expect([...handlers.keys()]).toEqual(['modbench.profile.switch', 'modbench.instance.openSettings']);
+    expect([...handlers.keys()]).toEqual(['modbench.profile.switch', 'modbench.settings.open']);
   });
 });
 
@@ -73,7 +73,7 @@ describe('Open settings', () => {
   it('opens VS Code\'s Settings on this extension\'s own', async () => {
     const { run } = register();
 
-    await run('modbench.instance.openSettings');
+    await run('modbench.settings.open');
 
     expect(executeCommand).toHaveBeenCalledWith('workbench.action.openSettings', '@ext:publisher.modbench');
   });

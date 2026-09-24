@@ -76,13 +76,17 @@ describe('downloadContextValue', () => {
     expect(downloadContextValue(plain)).toBe('download');
   });
 
-  it('appends hasModID and hidden, in that order, when both are set', () => {
+  it('appends hasModID, hasMeta and hidden, in that order, when all three are set', () => {
     const row: DownloadRow = { ...plain, hasMeta: true, hidden: true, modID: '12345' };
-    expect(downloadContextValue(row)).toBe('download hasModID hidden');
+    expect(downloadContextValue(row)).toBe('download hasModID hasMeta hidden');
   });
 
   it('appends only hasModID when just modID is present', () => {
     expect(downloadContextValue({ ...plain, modID: '12345' })).toBe('download hasModID');
+  });
+
+  it('appends only hasMeta when just hasMeta is set — gates the openMeta menu entry', () => {
+    expect(downloadContextValue({ ...plain, hasMeta: true })).toBe('download hasMeta');
   });
 
   it('appends only hidden when just hidden is set', () => {

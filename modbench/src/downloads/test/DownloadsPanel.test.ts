@@ -147,11 +147,12 @@ describe('registerDownloadsSingleRowCommands', () => {
 
   // View on Nexus is the mod's gesture, registered once for both views, so a second
   // registration here would make activation throw.
-  it('registers install and open, and leaves view on Nexus to the mod', () => {
+  it('registers install, open and open .meta, and leaves view on Nexus to the mod', () => {
     registerDownloadsSingleRowCommands('/instance', fakeInstance(), recordingReporter(), installDeps());
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual([
       'modbench.downloads.install',
       'modbench.downloadedFile.open',
+      'modbench.downloadedFile.openMeta',
     ]);
   });
 
@@ -294,97 +295,29 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
 
-  it('open: with no .meta, OS-opens the archive and asks nothing', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z'));
-
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    expect(calledFsPath(openExternal)).toBe(archive);
-    expect(showQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('open: with a .meta, offers the file and its .meta as the target', async () => {
-    const root = await makeInstanceRoot();
-    showQuickPick.mockResolvedValueOnce(undefined);
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
-
-    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    const offered = calledWith<{ label: string }[]>(showQuickPick);
-    expect(offered.map((item) => item.label)).toEqual(['foo.7z', 'foo.7z.meta']);
-  });
-
-  it('open: a cancelled target pick opens nothing', async () => {
-    const root = await makeInstanceRoot();
-    showQuickPick.mockResolvedValueOnce(undefined);
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
-
-    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(openExternal).not.toHaveBeenCalled();
-    expect(showTextDocument).not.toHaveBeenCalled();
-  });
-
-  it('open: the file target OS-opens the archive', async () => {
+  it('open: OS-opens the archive and asks nothing, whether or not there is a .meta', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
-    showQuickPick.mockImplementationOnce((items: { label: string }[]) => Promise.resolve(items[0]));
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     expect(calledFsPath(openExternal)).toBe(archive);
+    expect(showQuickPick).not.toHaveBeenCalled();
     expect(showTextDocument).not.toHaveBeenCalled();
   });
 
-  it('open: the .meta target opens the sidecar in the editor', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
-    showQuickPick.mockImplementationOnce((items: { label: string }[]) => Promise.resolve(items[1]));
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
-
-    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
-    expect(calledFsPath(showTextDocument)).toBe(meta);
+  it('open: is a no-op when invoked with no node', async () => {
+    registerDownloadsSingleRowCommands('/instance', fakeInstance(), recordingReporter(), installDeps());
+    await invoke('modbench.downloadedFile.open', undefined);
     expect(openExternal).not.toHaveBeenCalled();
   });
 
-  it('open: a caller that supplies the target is not asked for it', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }), 'meta');
-
-    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
-    expect(calledFsPath(showTextDocument)).toBe(meta);
-    expect(showQuickPick).not.toHaveBeenCalled();
-  });
-
-  // A context menu hands the selection as the second argument, which is no target.
-  it('open: the context menu\'s selection argument still asks for the target', async () => {
-    const root = await makeInstanceRoot();
-    showQuickPick.mockResolvedValueOnce(undefined);
-    const row = node(root, 'foo.7z', { hasMeta: true });
-
-    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
-    invoke('modbench.downloadedFile.open', row, [row]);
-
-    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-  });
-
-  // runRowAction's catch -> log + error-notification path is shared by both open targets, so
-  // proving it once here, on the file, covers both.
-  it('nav actions: on failure, logs and surfaces an error notification naming the action and row', async () => {
+  // runRowAction's catch -> log + error-notification path is shared by both open and open .meta,
+  // so proving it once here, on open, covers both.
+  it('open: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
@@ -396,6 +329,40 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([
       { severity: 'error', message: 'Open File for "foo.7z" failed.', detail: 'no handler for this file type' },
+    ]);
+  });
+
+  it('open .meta: opens the sidecar in the editor and asks nothing', async () => {
+    const root = await makeInstanceRoot();
+    const meta = await writeMeta(root, 'foo.7z');
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
+
+    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
+    expect(calledFsPath(showTextDocument)).toBe(meta);
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(showQuickPick).not.toHaveBeenCalled();
+  });
+
+  it('open .meta: is a no-op when invoked with no node', async () => {
+    registerDownloadsSingleRowCommands('/instance', fakeInstance(), recordingReporter(), installDeps());
+    await invoke('modbench.downloadedFile.openMeta', undefined);
+    expect(showTextDocument).not.toHaveBeenCalled();
+  });
+
+  it('open .meta: on failure, logs and surfaces an error notification naming the action and row', async () => {
+    const root = await makeInstanceRoot();
+    await writeMeta(root, 'foo.7z');
+    showTextDocument.mockRejectedValueOnce(new Error('file changed on disk'));
+    const report = recordingReporter();
+
+    registerDownloadsSingleRowCommands(root, fakeInstance(), report, installDeps());
+    invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
+
+    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
+    expect(report.reports).toEqual([
+      { severity: 'error', message: 'Open Meta File for "foo.7z" failed.', detail: 'file changed on disk' },
     ]);
   });
 });

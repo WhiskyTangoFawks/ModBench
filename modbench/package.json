@@ -168,8 +168,23 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.instance.openSettings",
-        "title": "Open Instance Settings",
+        "command": "modbench.settings.open",
+        "title": "Open Settings",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.instance.putLoadOrder",
+        "title": "Put Instance Load Order",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.sync",
+        "title": "Sync Mods",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.plugin.sync",
+        "title": "Sync Plugins",
         "category": "Modbench"
       },
       {
@@ -299,6 +314,11 @@
       {
         "command": "modbench.downloadedFile.open",
         "title": "Open Downloaded File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloadedFile.openMeta",
+        "title": "Open Downloaded File Meta",
         "category": "Modbench"
       },
       {
@@ -448,6 +468,10 @@
           "when": "false"
         },
         {
+          "command": "modbench.downloadedFile.openMeta",
+          "when": "false"
+        },
+        {
           "command": "modbench.downloadedFile.delete",
           "when": "false"
         },
@@ -524,6 +548,18 @@
           "when": "false"
         },
         {
+          "command": "modbench.instance.putLoadOrder",
+          "when": "false"
+        },
+        {
+          "command": "modbench.mod.sync",
+          "when": "false"
+        },
+        {
+          "command": "modbench.plugin.sync",
+          "when": "false"
+        },
+        {
           "command": "modbench.mod.filter",
           "when": "modbench.folder == instance"
         },
@@ -540,7 +576,7 @@
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.instance.openSettings",
+          "command": "modbench.settings.open",
           "when": "modbench.folder == instance"
         },
         {
@@ -584,6 +620,10 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.plugin.create",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.plugin.filter",
           "when": "modbench.folder == instance"
         },
@@ -599,7 +639,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.instance.openSettings",
+          "command": "modbench.settings.open",
           "when": "view == modbench.toolbox && modbench.folder == instance",
           "group": "settings@1"
         },
@@ -791,6 +831,11 @@
           "command": "modbench.downloadedFile.open",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
           "group": "downloadActions@3"
+        },
+        {
+          "command": "modbench.downloadedFile.openMeta",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasMeta\\b/",
+          "group": "downloadActions@4"
         },
         {
           "command": "modbench.downloadedFile.delete",

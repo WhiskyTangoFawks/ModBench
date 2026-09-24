@@ -29,7 +29,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       const outcome = await switchProfile(instanceRoot, picked.label, profiles);
       if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
     }),
-    vscode.commands.registerCommand('modbench.instance.openSettings', () =>
+    vscode.commands.registerCommand('modbench.settings.open', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${extensionId}`)),
   ];
 }

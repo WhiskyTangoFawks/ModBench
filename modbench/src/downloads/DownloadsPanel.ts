@@ -148,40 +148,21 @@ export function registerDownloadsSingleRowCommands(
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
       if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
-    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode, supplied?: unknown) => {
+    vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = node?.row;
       if (!row) return;
-      const target = isOpenTarget(supplied) ? supplied : await askOpenTarget(row);
-      if (target === 'meta') {
-        await runRowAction('Open Meta File', row.name, reporter, async () => {
-          await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
-        });
-      } else if (target === 'file') {
-        await runRowAction('Open File', row.name, reporter, async () => {
-          await vscode.env.openExternal(vscode.Uri.file(row.path));
-        });
-      }
+      await runRowAction('Open File', row.name, reporter, async () => {
+        await vscode.env.openExternal(vscode.Uri.file(row.path));
+      });
+    }),
+    vscode.commands.registerCommand('modbench.downloadedFile.openMeta', async (node?: DownloadNode) => {
+      const row = node?.row;
+      if (!row) return;
+      await runRowAction('Open Meta File', row.name, reporter, async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
+      });
     }),
   ];
-}
-
-type OpenTarget = 'file' | 'meta';
-
-function isOpenTarget(value: unknown): value is OpenTarget {
-  return value === 'file' || value === 'meta';
-}
-
-async function askOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
-  return row.hasMeta ? pickOpenTarget(row) : 'file';
-}
-
-async function pickOpenTarget(row: DownloadFile): Promise<OpenTarget | undefined> {
-  const items: (vscode.QuickPickItem & { target: OpenTarget })[] = [
-    { label: row.name, description: 'the downloaded file', target: 'file' },
-    { label: `${row.name}.meta`, description: 'its .meta', target: 'meta' },
-  ];
-  const picked = await vscode.window.showQuickPick(items, { placeHolder: `Open "${row.name}" or its .meta` });
-  return picked?.target;
 }
 
 // A host that supplies no selection array, and a single-row click, both fall back to the

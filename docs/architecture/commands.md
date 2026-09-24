@@ -5,7 +5,9 @@ vocabulary. A gesture or command the code has and this file lacks is a defect in
 A gesture this file has and the model cannot hold is a ticket.
 
 - **Object**: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record,
-  Referrer, Downloaded file. `CONTEXT.md` defines each one.
+  Referrer, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own
+  configuration, which VS Code stores at user and workspace scope. It is the object of
+  `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
 - **Surface**: what a driving box presents to the user. One surface per driving box on the
   Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor
   realizes it.
@@ -203,7 +205,7 @@ Offered on Toolbox. Run entries are not an object yet; the run-list gestures nam
 | deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | planned | - |
 | run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | planned | - |
 | select game | ? | Toolbox: ? | `modbench.instance.selectGame` | game | - | MO2 toolbar | Choose the game the instance is for. | ? | - |
-| open settings | reads | Toolbox: ? | `modbench.instance.openSettings` | - | - | MO2 toolbar | Open the Modbench settings. | ? | none |
+| open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | built | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | debt #967 | load-instance |
 | add executable | writes | Toolbox: context menu | - | run entry | - | MO2 Executables dialog | Add an executable to the run list in `ModOrganizer.ini`, as a task. | planned | - |
 | remove executable | writes | Toolbox: context menu | - | run entries | - | MO2 Executables dialog | Remove an executable from the run list. | planned | - |
