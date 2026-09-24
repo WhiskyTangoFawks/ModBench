@@ -897,6 +897,59 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
   });
 });
 
+// ── The Mods palette and Space in a running host ─────────────────────────────
+
+// mods.md, Menus and keys. A test cannot press a key, so Space is checked as the command VS Code
+// runs for it on a focused row with no Modbench binding: `list.toggleExpand`.
+describe('The Mods view\'s palette entries and Space, as VS Code runs them', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
+  const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
+  let original = '';
+
+  const selectTheMod = async () => {
+    await vscode.commands.executeCommand('modbench.modList.focus');
+    await vscode.commands.executeCommand('list.focusFirst');
+    await vscode.commands.executeCommand('list.select');
+  };
+
+  before(async () => {
+    if (!root) return;
+    original = fs.readFileSync(modlistPath, 'utf8');
+    await writeAndAwaitInstance(() => {
+      fs.mkdirSync(modDir, { recursive: true });
+      fs.writeFileSync(modlistPath, '+Palette Mod\r\n');
+    });
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    if (!root) return;
+    await writeAndAwaitInstance(() => {
+      fs.writeFileSync(modlistPath, original);
+      fs.rmSync(modDir, { recursive: true, force: true });
+    });
+  });
+
+  it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
+    if (!root) this.skip();
+    await selectTheMod();
+    await vscode.commands.executeCommand('list.toggleExpand');
+    await new Promise((r) => setTimeout(r, 750));
+    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+  });
+
+  it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
+    if (!root) this.skip();
+    this.timeout(30_000);
+    await selectTheMod();
+    await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
+    await new Promise((r) => setTimeout(r, 1500));
+    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+    await waitFor('the palette\'s disable to write modlist.txt', () => fs.readFileSync(modlistPath, 'utf8').includes('-Palette Mod'));
+  });
+});
+
 // ── Notification stream lifecycle is gated on the backend ────────────────────
 
 // ADR-0014 invariant 2: every notification kind rides this one stream, proven once here.

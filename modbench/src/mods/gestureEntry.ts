@@ -8,25 +8,39 @@ export interface GestureEntry {
   readonly selection: readonly ModlistNode[];
 }
 
-// The entry every Mods gesture is registered with, pulled out so copy value's Mods text can build
-// the same shape without registering a command of its own.
+/** The `args` a Mods key passes, so a command other surfaces share knows the key is the Mods
+ *  view's. */
+export const MODS_KEY_ARGS = { view: 'modbench.modList' } as const;
+
+export function isModsKeyArgs(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && 'view' in value && value.view === MODS_KEY_ARGS.view;
+}
+
+function isRow(value: unknown): value is ModlistNode {
+  return value instanceof vscode.TreeItem;
+}
+
+// No stable API names the focused row, so from a key or the palette a selection of one row
+// stands for it.
 export function modsGestureEntry(
-  clicked: ModlistNode | null | undefined,
+  clicked: unknown,
   selected: readonly ModlistNode[] | undefined,
   viewSelection: () => readonly ModlistNode[],
 ): GestureEntry {
-  return clicked ? { clicked, selection: selected ?? [clicked] } : { selection: viewSelection() };
+  if (isRow(clicked)) return { clicked, selection: selected ?? [clicked] };
+  const selection = viewSelection();
+  const [only] = selection;
+  return selection.length === 1 && only !== undefined ? { focused: only, selection } : { selection };
 }
 
 /** VS Code passes a context menu the right-clicked row, and the selection only when that row is
- *  one of several selected. A key and the palette get nothing, and no stable API names the
- *  focused row. */
+ *  one of several selected. A key passes its own `args`, and the palette nothing. */
 export function registerModsGesture(
   commandId: string,
   viewSelection: () => readonly ModlistNode[],
   run: (entry: GestureEntry, option?: unknown) => unknown,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand(commandId, (clicked?: ModlistNode | null, selected?: readonly ModlistNode[], option?: unknown) =>
+  return vscode.commands.registerCommand(commandId, (clicked?: unknown, selected?: readonly ModlistNode[], option?: unknown) =>
     run(modsGestureEntry(clicked, selected, viewSelection), option));
 }
 
@@ -57,4 +71,24 @@ export function pluralArgument<K extends ArgumentKind>(entry: GestureEntry, ...k
  *  given: no narrowing to the anchor row's kind, so a mixed selection keeps every kind. */
 export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
   return entry.selection.filter(isOf(kinds));
+}
+
+/** What the Mods keys' `when` clauses read off the selection, since a key is handed no row. */
+export interface ModsKeyContext {
+  readonly selectionToggle?: 'enable' | 'disable';
+  readonly selectionKind?: ArgumentKind;
+}
+
+export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
+  const [firstMod] = selection.filter(isOf(['mod']));
+  const kinds = new Set(selection.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
+  const [onlyKind] = kinds;
+  return {
+    selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
+    selectionKind: kinds.size === 1 ? onlyKind : undefined,
+  };
+}
+
+function toggleOf(enabled: boolean): 'enable' | 'disable' {
+  return enabled ? 'disable' : 'enable';
 }
