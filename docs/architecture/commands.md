@@ -37,9 +37,10 @@ A gesture this file has and the model cannot hold is a ticket.
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
 - **Argument**: the value that identifies the object or objects to the gesture, such as a plugin
-  name or a FormKey. For a gesture that creates an object, it identifies the container. It is
-  the same on every surface that offers the gesture. Singular means the clicked row, and plural
-  means the whole selection. A handler that receives anything else is `debt`.
+  name or a FormKey. For a gesture that creates an object, it identifies the container, when the
+  entry point is on the container's row. A create from a title icon has none, and its container is
+  an Option. It is the same on every surface that offers the gesture. Singular means the clicked
+  row, and plural means the whole selection. A handler that receives anything else is `debt`.
 - **Template**: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md))
   or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row
   follows, read from [the xEdit audit](../research/xedit-surface-audit.md),
@@ -50,7 +51,8 @@ A gesture this file has and the model cannot hold is a ticket.
   because drawing the trace is part of designing the gesture. A built gesture with `-` has a trace
   still to draw, and `none` that it has no flow between boxes: its specification is this row and its
   surface. Gestures whose arrows are the same share one diagram. Beside each diagram, a `.md` file of
-  the same name holds the contract: the stories the diagram's gestures promise, shared ones first.
+  the same name holds the contract: what the flow promises, step by step, where it hands off, what
+  it refuses, and what a failure leaves.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -87,6 +89,10 @@ ticket names the fix).
 - **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
   can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
   command, not a second gesture.
+- **An entry point fires a gesture. A gesture does not fire another.** An entry point on any
+  surface may fire any gesture through the command registry. It passes the Argument and uses no
+  result, as a click on a plugin row opens its header. A gesture that needs another box's work as
+  a step, and acts on its outcome, calls that box through a reference the reference view draws.
 - **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb
   the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod").
   Keep the ID's verb and the user's verb the same words. Prefer existing software-development
@@ -259,8 +265,8 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 |---|---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | ? | update-load-order-file |
 | move | writes | Plugins: drag, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N (planned). Several plugins move as one block (planned) | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | ? | update-load-order-file |
-| create | writes | Plugins: title icon | `modbench.plugin.create` | mod | - | xEdit navigator | Create a plugin in a mod. | debt #956, #967 | create-plugin |
-| track | writes | Plugins: context menu (plugin untracked); Editor: context menu (column of an untracked plugin) | `modbench.plugin.track` | plugins | preset: Edits or Everything | none | Put each plugin under git, in its mod's repository. It fires `decompile plugin` with the repository as the destination: it creates the repository if the mod has none, commits each plugin's baseline to `main` as its own commit, and checks out the edit branch. The mod's other plugins stay as they are. | debt #966, #967 | decompile-plugin |
+| create | writes | Plugins: title icon | `modbench.plugin.create` | - | place: Overwrite or an enabled mod; a new mod (planned) | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | debt #956, #967 | create-plugin |
+| track | writes | Plugins: context menu (plugin untracked, not in Overwrite); Editor: context menu (column of an untracked plugin, not in Overwrite) | `modbench.plugin.track` | plugins | preset: Edits or Everything | none | Put each plugin under git, in its mod's repository. It fires `decompile plugin` with the repository as the destination: it creates the repository if the mod has none, commits each plugin's baseline to `main` as its own commit, and checks out the edit branch. The mod's other plugins stay as they are. | debt #966, #967 | decompile-plugin |
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugins | source: working tree, or `main` | xEdit main menu | Write the plugin's binary from its plugin source. The previous binary is kept as a `.bak` while compiling, and restored if the compile fails. | debt #961, #967 | compile-plugin |
 | repair | writes | Plugins: context menu | - | plugins | - | none | Rewrite a malformed plugin into its canonical form. | planned | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | planned | - |

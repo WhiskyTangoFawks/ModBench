@@ -1,9 +1,4 @@
-# Create a plugin, blue. mEdit writes the new plugin file into the mod the user picked and forgets
-# it. The plugin is untracked: Track is a manual gesture. Create writes no plugins.txt line and
-# registers nothing in the load order; the watch finds a plugin on disk with no line, and plugin
-# sync adds it at the end, disabled, as MO2 does. The rest is update-load-order-file's, then
-# index-load-order's. Governed by ADR-0003, ADR-0007, ADR-0013, ADR-0015 and ADR-0017. Contract:
-# create-plugin_draft.md.
+# Create a plugin, blue. Contract: create-plugin.md.
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -23,9 +18,11 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
 
-plugins."pick the mod or Overwrite, then the name; refuse an empty name, a wrong extension, or a name a plugin in that place has"
-plugins -> client: "create: mod, name" {class: edit}
+plugins."the name, then Overwrite or an enabled mod"
+plugins -> client: "create: origin, name, folder" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
@@ -37,7 +34,9 @@ client -> plugins: applied or refusal {class: edit}
 mo2 -> instanceloader: watch {class: signal}
 instanceloader."a plugin on disk with no plugins.txt line"
 instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
+plugin -> watcher: changed paths {class: signal}
+watcher."a tracked mod: decompile-plugin from here, offering Track"
 
 refused: "refused, before any write" {
-  commands -> http: "the file exists · no load order held" {class: edit}
+  commands -> http: "no load order held · the folder has gone · the file exists · a light plugin the game does not have" {class: edit}
 }

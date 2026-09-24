@@ -185,8 +185,8 @@ As a user, I want:
 5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
 6. `track` to act on the plugin, and `rebase edit branch` on the plugin's mod, each offered only
-   where the catalog's condition holds: track on an untracked plugin, rebase and compile on a
-   tracked, editable plugin. *catalog Where*
+   where the catalog's condition holds: track on an untracked plugin outside Overwrite, rebase and
+   compile on a tracked, editable plugin. *catalog Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
    and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
@@ -213,10 +213,16 @@ As a user, I want:
 
 ### Create plugin
 
-As a user, I want a pick of where it lives, the mods and Overwrite, then a prompt for the name that
-refuses an empty name, anything but `.esp`, `.esm` or `.esl`, and a name a plugin in that place
-already has. The same name elsewhere in the load order is not checked. Esc at either step creates
-nothing. *catalog `create`: the mod is the Argument; ruling*
+As a user, I want:
+
+1. A prompt for the name. It refuses an empty name, and a name that does not end `.esp`, `.esm` or
+   `.esl`. *ruling*
+2. Then a pick of where the plugin lives: Overwrite first, then the enabled mods. *catalog
+   `create`, place Option; ruling*
+3. A place that already holds a plugin of that name left out of the pick. The same name elsewhere
+   in the load order is not checked. *No dead entries; ruling*
+4. Esc at either step to create nothing. *Esc changes nothing*
+5. The new plugin to appear at the end of the list, disabled. *create-plugin, Hand-off*
 
 ### Track
 
@@ -296,6 +302,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `highlight origin`, `open details` on a plugin's mod | their design |
 | `repair`, `validate`, sort rules, `apply suggested sort`, `rename`, `relink source`, `remove source` | their design |
 | `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
+| `create` in a new mod, and moving a plugin out of Overwrite | the Overwrite inbox design |
 | `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
 | A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
