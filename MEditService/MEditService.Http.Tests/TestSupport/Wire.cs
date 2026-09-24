@@ -64,6 +64,19 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
+    /// <summary>Track's write reaches the answers through the watch it armed (ADR-0015 invariant 2),
+    /// on the watcher's own thread, so the answer is polled until it reports the copy tracked.
+    /// </summary>
+    internal static async Task PluginReportsTracked(this HttpClient client, string name)
+    {
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (!(await client.Plugin(name)).GetProperty("isTracked").GetBoolean())
+        {
+            Assert.True(elapsed.Elapsed < Patience, $"{name} was never reported tracked after Track");
+            await Task.Delay(50);
+        }
+    }
+
     internal static Task<long> Sequence(this HttpClient client) =>
         client.GetFromJsonAsync<long>("/load-order/sequence");
 

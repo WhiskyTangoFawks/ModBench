@@ -110,6 +110,14 @@ const MOCK_PLUGINS: MockPlugin[] = [
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
+const putLoadOrders: string[][] = [];
+
+function pluginNamesOf(body: string): string[] {
+  const parsed: unknown = JSON.parse(body);
+  const plugins = typeof parsed === 'object' && parsed !== null && 'plugins' in parsed ? parsed.plugins : undefined;
+  if (!Array.isArray(plugins)) throw new Error(`expected a PUT /load-order body with a plugins array, got: ${body}`);
+  return plugins.map((p: unknown) => (typeof p === 'object' && p !== null && 'name' in p ? String(p.name) : '?'));
+}
 // Lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same load order.
@@ -138,8 +146,8 @@ type MockLoadOrderStatus = {
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-// Mirrors the real Holder's own counter: one higher per PUT, carried on the wire response and
-// every status tick that answers for it.
+// The real Holder's counter: one higher per PUT, on the response and every tick answering it.
+// Never reset, since a real mEdit numbers its versions from 1 only when it restarts.
 let loadOrderVersion = 0;
 // When set, PUT /load-order does not answer until the test releases it — the real backend's load
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
@@ -169,16 +177,27 @@ function pushLoadOrderStatus(): void {
   for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
 }
 
+// The reset ends the mock's streams, and a stream the client reopens while attached is a connect
+// that puts the load order again. A launch left attached by an earlier suite is stopped first.
+async function resetMockBackendDetached(): Promise<void> {
+  const client = ext?.exports.client;
+  if (client?.status === 'attached') {
+    exitEditing();
+    await awaitStatus(client, 'stopped', 'the earlier launch to stop');
+  }
+  resetMockBackend();
+}
+
 function resetMockBackend(): void {
+  loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
   loadOrderHeld = false;
   requestLog.length = 0;
+  putLoadOrders.length = 0;
   mockPluginsOverride = null;
   mockImplicitMasters = [];
   putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
-  loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-  loadOrderVersion = 0;
   holdPutLoadOrder = false;
   releasePutLoadOrder?.();
   releasePutLoadOrder = null;
@@ -224,12 +243,24 @@ function createMockBackend(): http.Server {
         }
         res.writeHead(204);
         res.end();
+        // The real rebuild answers once the index is empty, then refills it against the load order
+        // it holds, as a cold load does: dropped, reconciling, then Ready at the version held.
+        if (!loadOrderHeld) return;
+        const held = loadOrderStatus;
+        for (const state of ['None', 'Reconciling'] as const) {
+          loadOrderStatus = { ...held, state, indexedPlugins: [], conflictsComputed: false };
+          pushLoadOrderStatus();
+        }
+        loadOrderStatus = { ...held, state: 'Ready', conflictsComputed: true };
+        pushLoadOrderStatus();
       });
       return;
     }
     if (method === 'PUT' && url === '/load-order') {
-      req.on('data', () => {}); // drain the body so 'end' fires
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
       req.on('end', () => {
+        putLoadOrders.push(pluginNamesOf(body));
         // ADR-0013: a failed PUT leaves whatever the backend already held in place — nothing is
         // torn down — so `loadOrderHeld` is not touched here.
         if (putLoadOrderShouldFail) {
@@ -1043,7 +1074,7 @@ describe('Notification stream connects only while the backend is up', () => {
 
   before(async () => {
     if (!root) return;
-    resetMockBackend();
+    await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
@@ -1546,15 +1577,16 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
-  let pluginsTxtTrailer = '';
+  let swapped = false;
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
 
-  // A trailing-newline toggle so the bytes change, exercising watcher → sync → PUT end to end.
+  // An order swap, so the load order itself changes, exercising watcher → sync → PUT end to end.
+  // A write that leaves the load order equal puts nothing.
   async function changePluginsTxt(): Promise<void> {
     const before = putCount();
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
-    pluginsTxtTrailer = pluginsTxtTrailer === '' ? '\n' : '';
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n' + pluginsTxtTrailer);
+    swapped = !swapped;
+    fs.writeFileSync(pluginsTxtPath, swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
     await waitFor('a fresh PUT /load-order after plugins.txt changed', () => putCount() > before ? true : undefined);
     // The PUT is answered, but the tree hand-off (GET /plugins → setLoadOrder) follows it
     // asynchronously; wait for that read too — unless the PUT failed, in which case there is none.
@@ -1565,7 +1597,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   before(async () => {
     if (!root) return;
-    resetMockBackend();
+    await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reconcile-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
@@ -1593,6 +1625,20 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
+  // update-load-order-file: put on change. The PUT after the equal write carries the swap, so a
+  // PUT for the equal write would have landed first.
+  it('a plugins.txt write that leaves the load order equal puts nothing', async () => {
+    const sent = putLoadOrders.length;
+    const unchanged = fs.readFileSync(pluginsTxtPath, 'utf8');
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, `${unchanged}\n`));
+
+    await changePluginsTxt();
+
+    const swappedOrder = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
+    assert.deepStrictEqual(putLoadOrders.slice(sent), [swappedOrder],
+      'only the write that changed the load order may put it');
+  });
+
   // The WeakMap decoration restores each row to its captured original before re-deciding what
   // to layer back on, so the same row object must lose a decoration once the backend stops
   // reporting its condition rather than gain a second copy.
@@ -1607,9 +1653,9 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'MissingMaster.esp' ? { ...p, masterIssues: [] } : p);
     await changePluginsTxt();
 
-    const after = findRow(await tree.getChildren(), 'MissingMaster.esp');
-    assert.strictEqual(tree.getTreeItem(after).tooltip, undefined,
-      'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
+    // The hand-off follows the index status on the stream, so the tree is read until it lands.
+    await waitFor('a resolved master issue to clear the tooltip, not leave the stale decoration stacked on top of the fresh one',
+      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === undefined);
   });
 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
@@ -1623,15 +1669,17 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
     await changePluginsTxt();
-    const hidden = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
-    assert.strictEqual(hidden, undefined,
-      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron');
+    // The hand-off follows the index status on the stream, so the tree is read until it lands.
+    await waitFor('sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron',
+      async () => !(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'));
 
     mockPluginsOverride = null;
     await changePluginsTxt();
-    const restored = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(restored).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a reconcile that comes up with no filter must restore a row an earlier filter hid, not leave it permanently gone');
+    await waitFor('a reconcile that comes up with no filter to restore a row an earlier filter hid, not leave it permanently gone',
+      async () => {
+        const restored = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
+        return restored !== undefined && tree.getTreeItem(restored).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+      });
   });
 
   // ADR-0013: a failed PUT tears nothing down — the backend still holds what it held — so the
@@ -1700,7 +1748,9 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
     exitEditing();
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    resetMockBackend();
+    // The setting relaunched mEdit, and the write puts the load order: that PUT is abandoned
+    // before the reset, which would otherwise forget the reconcile it waits on.
+    await resetMockBackendDetached();
   });
 
   it('the row a record filter hid stays hidden', async () => {
@@ -1729,24 +1779,22 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// ADR-0014: Refresh rebuilds the Index (drops and reopens it empty) and then resends the load
-// order exactly as a cold load does, so the reconcile that follows re-indexes everything.
-describe('Refresh rebuilds the index, then resends the load order', () => {
-  beforeEach(() => resetMockBackend());
+// load-instance, refresh: mEdit reads every copy again against the load order it holds, and the
+// re-read of the instance that follows finds that load order unchanged.
+describe('Refresh rebuilds the index and sends nothing', () => {
+  // Launched, so a re-read that changed the load order would put it.
+  beforeEach(async () => {
+    await resetMockBackendDetached();
+    await enterEditing();
+    requestLog.length = 0;
+  });
   after(() => resetMockBackend());
 
-  it('POSTs /index/rebuild before it PUTs /load-order', async () => {
+  it('POSTs /index/rebuild and PUTs no load order', async () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    const rebuildAt = requestLog.indexOf('POST /index/rebuild');
-    const putAt = requestLog.indexOf('PUT /load-order');
-    assert.ok(rebuildAt >= 0, 'modbench.instance.refresh must rebuild the index');
-    assert.ok(putAt >= 0, 'modbench.instance.refresh must resend the load order after the rebuild');
-    assert.ok(rebuildAt < putAt, 'the rebuild must run before the load order is resent');
-    // The re-read that ends a refresh lands a value, and the landed value is put again; waiting
-    // for it keeps that put out of the next test's log.
-    await waitFor('the re-read\'s own load order put', () =>
-      requestLog.filter((l) => l === 'PUT /load-order').length >= 2);
+    assert.ok(requestLog.includes('POST /index/rebuild'), 'modbench.instance.refresh must rebuild the index');
+    assert.ok(!requestLog.includes('PUT /load-order'), 'modbench.instance.refresh must send no load order');
   });
 
   // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,

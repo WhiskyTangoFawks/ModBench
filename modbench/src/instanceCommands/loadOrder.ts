@@ -3,7 +3,7 @@
 // view from here.
 
 import type {
-  LoadOrderOutcome, LoadOrderSender, LoadOrderSendOptions, LoadOrderSnapshot, MEditClient,
+  LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
 } from '../client';
 import type { GameFolder } from '../instanceAdapter/gameDirectory';
 import {
@@ -28,35 +28,45 @@ export type PutLoadOrderResult =
 // backend then rejects it visibly instead of quietly answering about the wrong game.
 const releaseOf = (gameName: string): string => gameReleaseForGame(gameName) ?? gameName;
 
-export async function putLoadOrder(
-  sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
-  options?: LoadOrderSendOptions,
-): Promise<PutLoadOrderResult> {
+function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnapshot | undefined {
   const loaded = loadOrderSnapshotOf(value);
-  if (!loaded) return { sent: false };
-  const snapshot: LoadOrderSnapshot = {
+  if (!loaded) return undefined;
+  return {
     plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value.gameName),
   };
-  return { sent: true, snapshot, outcome: await sender.send(snapshot, options) };
 }
 
-/** ADR-0014: the index is rebuilt before the load order is sent again, so the reconcile that
- *  follows re-indexes everything. ADR-0009 invariant 5: held-elsewhere is a refusal apart from
- *  every other failure, both of which send nothing. */
+export async function putLoadOrder(
+  sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
+): Promise<PutLoadOrderResult> {
+  const snapshot = snapshotOf(instanceRoot, value);
+  if (!snapshot) return { sent: false };
+  return { sent: true, snapshot, outcome: await sender.send(snapshot) };
+}
+
+/** update-load-order-file: the load order is put on change. False with no game folder found, since
+ *  there is then nothing to put. */
+export function loadOrderChanged(
+  sender: Pick<LoadOrderSender, 'alreadySent'>, instanceRoot: string, value: LoadOrderSource,
+): boolean {
+  const snapshot = snapshotOf(instanceRoot, value);
+  return snapshot !== undefined && !sender.alreadySent(snapshot);
+}
+
+/** load-instance, refresh: mEdit rebuilds the index and reads every copy again against the load
+ *  order it holds; nothing is sent. ADR-0009 invariant 5: held-elsewhere is a refusal apart from
+ *  every other failure. */
 export type RefreshResult =
-  | { applied: true; loadOrder: PutLoadOrderResult }
+  | { applied: true }
   | { applied: false; heldElsewhere: true }
   | { applied: false; heldElsewhere: false; refusal: string };
 
 export async function refresh(
-  client: Pick<MEditClient, 'rebuildIndex'>, sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string,
-  value: LoadOrderSource, options?: LoadOrderSendOptions,
+  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, gameName: string,
 ): Promise<RefreshResult> {
-  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(value.gameName));
-  if (!outcome.rebuilt) {
-    return outcome.heldElsewhere
-      ? { applied: false, heldElsewhere: true }
-      : { applied: false, heldElsewhere: false, refusal: outcome.detail };
-  }
-  return { applied: true, loadOrder: await putLoadOrder(sender, instanceRoot, value, options) };
+  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(gameName));
+  if (outcome.rebuilt) return { applied: true };
+  return outcome.heldElsewhere
+    ? { applied: false, heldElsewhere: true }
+    : { applied: false, heldElsewhere: false, refusal: outcome.detail };
 }

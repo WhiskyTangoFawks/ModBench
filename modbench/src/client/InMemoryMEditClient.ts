@@ -58,6 +58,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
+  private readonly reconnectListeners = new Set<() => void>();
   private _status: BackendStatus = 'starting';
 
   setQueryAnswer<K extends QueryMethod>(method: K, answer: Answer<K>): void {
@@ -126,6 +127,16 @@ export class InMemoryMEditClient implements MEditClient {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     this.statusListeners.add(listener);
     return () => { this.statusListeners.delete(listener); };
+  }
+
+  onReconnected(listener: () => void): () => void {
+    this.reconnectListeners.add(listener);
+    return () => { this.reconnectListeners.delete(listener); };
+  }
+
+  /** The notification stream dropped and opened again, the status never leaving `attached`. */
+  reconnected(): void {
+    for (const listener of [...this.reconnectListeners]) listener();
   }
 
   start(): Promise<void> { this.record('start', []); return Promise.resolve(); }

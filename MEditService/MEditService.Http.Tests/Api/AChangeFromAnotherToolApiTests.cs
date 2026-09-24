@@ -39,7 +39,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(Plugin);
         return fx;
     }
 

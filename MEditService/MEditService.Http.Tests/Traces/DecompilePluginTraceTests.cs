@@ -103,16 +103,17 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
     }
 
+    // The hand-off: the Mod watcher sees the source tree Track wrote, and the Indexer reads the
+    // copy's documents from then on. The load order did not change, so nothing is put.
     [Fact]
-    public async Task AfterTrackAndTheNextSnapshot_ThePluginListReportsTheCopyTracked()
+    public async Task AfterTrack_ThePluginListReportsTheCopyTracked_WithNoLoadOrderInBetween()
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
 
-        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-
-        Assert.True((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
+        await Client.PluginReportsTracked(Plugin);
     }
 
     // ADR-0015 invariant 2: no load order is put between the Track and the hand edit, so the tracked
