@@ -106,7 +106,6 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
-    // A deleted document has nothing left to read, so the key comes from the commit that files it.
     [Fact]
     public async Task ACommittedDocumentDeletedFromTheWorkingTree_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
     {
