@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
 
 const { registerCommand, writeText } = vi.hoisted(() => ({
-  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() })),
-  writeText: vi.fn(async (_value: string) => undefined),
+  registerCommand: vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() })),
+  writeText: vi.fn<(value: string) => unknown>(),
 }));
 
 vi.mock('vscode', () => ({
@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerCopyValueCommand, type CopyValueCommandDeps } from '../copyValueCommand';
-import { ReferencedByGroupNode, type ReferencedByTreeNode } from '../ReferencedByTreeProvider';
+import { ReferencedByGroupNode } from '../ReferencedByTreeProvider';
 import { ModNode, SeparatorNode } from '../../mods/ModListProvider';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { referenceResultFixture } from '../../client/test/fixtures';
@@ -26,7 +26,7 @@ function invokeCommand(...args: unknown[]): Promise<unknown> {
 
 function makeDeps(over: Partial<CopyValueCommandDeps> = {}): CopyValueCommandDeps {
   return {
-    referencedByTreeView: { selection: [] } as unknown as CopyValueCommandDeps['referencedByTreeView'],
+    referencedByTreeView: { selection: [] },
     modsCopyValueText: () => undefined,
     reporterFor: () => recordingReporter(),
     ...over,
@@ -69,7 +69,7 @@ describe('registerCopyValueCommand: the one command id every surface reaches', (
 
   it('falls back to the Referenced By tree\'s own selection when invoked with no arguments', async () => {
     const group = new ReferencedByGroupNode('Fallout4.esm:000001', [referenceResultFixture({ formKey: 'Fallout4.esm:000001' })]);
-    const referencedByTreeView = { selection: [group] } as unknown as CopyValueCommandDeps['referencedByTreeView'];
+    const referencedByTreeView: CopyValueCommandDeps['referencedByTreeView'] = { selection: [group] };
     registerCopyValueCommand(makeDeps({ referencedByTreeView, modsCopyValueText: () => undefined }));
 
     await invokeCommand();
@@ -88,7 +88,7 @@ describe('registerCopyValueCommand: the one command id every surface reaches', (
   it('reports why a failed clipboard write failed, for a Mods row', async () => {
     writeText.mockRejectedValueOnce(new Error('no clipboard'));
     let reporter: RecordingReporter | undefined;
-    const reporterFor = vi.fn((tag: string) => { reporter = recordingReporter(); return reporter; });
+    const reporterFor = vi.fn((_tag: string) => { reporter = recordingReporter(); return reporter; });
     const clicked = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
     registerCopyValueCommand(makeDeps({ modsCopyValueText: () => 'Group A', reporterFor }));
 
@@ -102,7 +102,7 @@ describe('registerCopyValueCommand: the one command id every surface reaches', (
   it('reports why a failed clipboard write failed, for Referenced By, unchanged from before', async () => {
     writeText.mockRejectedValueOnce(new Error('no clipboard'));
     let reporter: RecordingReporter | undefined;
-    const reporterFor = vi.fn((tag: string) => { reporter = recordingReporter(); return reporter; });
+    const reporterFor = vi.fn((_tag: string) => { reporter = recordingReporter(); return reporter; });
     const group = new ReferencedByGroupNode('Fallout4.esm:000001', [referenceResultFixture({ formKey: 'Fallout4.esm:000001' })]);
     registerCopyValueCommand(makeDeps({ modsCopyValueText: () => undefined, reporterFor }));
 

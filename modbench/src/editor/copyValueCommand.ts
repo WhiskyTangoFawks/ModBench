@@ -1,24 +1,27 @@
 import * as vscode from 'vscode';
-import { referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
+import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface CopyValueCommandDeps {
-  referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
+  // Only `.selection` is read — Referenced By's own multi-select fallback, narrowed so a test
+  // double needs no cast to the concrete vscode.TreeView type.
+  referencedByTreeView: Pick<vscode.TreeView<ReferencedByTreeNode>, 'selection'>;
   // Mods' own adapter (modManagementCommands.ts): undefined when `clicked` is not a Mods row, so
   // this command falls back to Referenced By's own text.
   modsCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
   reporterFor: (tag: string) => Reporter;
 }
 
+const isReferencedByGroupNode = (node: unknown): node is ReferencedByGroupNode => node instanceof ReferencedByGroupNode;
+
 function referencedByFallbackText(
-  referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>, clicked: unknown, allSelected: unknown[] | undefined,
+  referencedByTreeView: CopyValueCommandDeps['referencedByTreeView'], clicked: unknown, allSelected: readonly unknown[] | undefined,
 ): string {
-  const selected = allSelected as ReferencedByTreeNode[] | undefined;
-  const nodes = selected?.length ? selected
-    : referencedByTreeView.selection.length ? referencedByTreeView.selection
-    : clicked ? [clicked as ReferencedByTreeNode] : [];
-  return referencedByCopyText(nodes);
+  const selected = allSelected?.filter(isReferencedByGroupNode) ?? [];
+  if (selected.length) return referencedByCopyText(selected);
+  if (referencedByTreeView.selection.length) return referencedByCopyText(referencedByTreeView.selection);
+  return referencedByCopyText(isReferencedByGroupNode(clicked) ? [clicked] : []);
 }
 
 // xEdit parity (xeMainForm.pas's CopyInto). The catalog's one copy value id for every surface it
