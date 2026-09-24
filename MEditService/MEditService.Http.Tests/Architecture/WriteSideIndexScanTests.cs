@@ -14,7 +14,7 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
-        "IRecordReads", "RecordRef", "Indexer", "IQueryIndex", "IndexStore", "IndexWriteGate",
+        "IRecordReads", "RecordRef", "Indexer", "IQueryIndex", "Store", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
         "FormKeyResolutionCache", "PlacementWalker",
