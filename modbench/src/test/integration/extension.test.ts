@@ -749,12 +749,13 @@ describe('Overwrite row', () => {
     await vscode.commands.executeCommand('modbench.mod.openFolder', node);
   });
 
-  it('drops the Overwrite row once overwrite/ is emptied', async () => {
+  it('keeps the Overwrite row, with no count, once overwrite/ is emptied', async () => {
     await writeAndAwaitInstance(() => {
       fs.rmSync(overwriteDir, { recursive: true, force: true });
     });
     const roots = await provider().getChildren();
-    assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
+    const overwrite = present(roots.find((n) => n.kind === 'overwrite'), 'the Overwrite row');
+    assert.strictEqual(overwrite.description, undefined);
   });
 });
 
@@ -801,6 +802,98 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     } finally {
       listening.dispose();
     }
+  });
+});
+
+// ── The Mods tree's expansion in a running host ──────────────────────────────
+
+// Which rows VS Code shows expanded is observable only as the children it asks the provider for:
+// a collapsed separator's children are never asked for.
+describe('The Mods tree\'s expansion, as VS Code renders it', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
+  const modDirs = root ? ['Armor Pack', 'Weapons', 'Late Armor'].map((name) => path.join(root, 'mods', name)) : [];
+  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
+  let original = '';
+  let asked: string[] = [];
+  let restore = () => {};
+
+  const gearExpanded = () => asked.includes('separator:Gear');
+  const renderAfter = async (change: () => unknown): Promise<void> => {
+    asked = [];
+    await change();
+    await waitFor('the view to ask for its roots', () => asked.includes('root'));
+    await new Promise((r) => setTimeout(r, 750));
+  };
+  const onTheSeparator = async (command: 'list.expand' | 'list.collapse') => {
+    await vscode.commands.executeCommand('modbench.modList.focus');
+    await vscode.commands.executeCommand('list.focusFirst');
+    await vscode.commands.executeCommand(command);
+  };
+
+  before(async () => {
+    if (!root) return;
+    original = fs.readFileSync(modlistPath, 'utf8');
+    const p = provider();
+    const getChildren = p.getChildren.bind(p);
+    p.getChildren = (element) => {
+      asked.push(element?.id ?? 'root');
+      return getChildren(element);
+    };
+    restore = () => { p.getChildren = getChildren; };
+    await writeAndAwaitInstance(() => {
+      for (const dir of modDirs.slice(0, 2)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Weapons\r\n-Gear_separator\r\n');
+    });
+  });
+
+  after(async () => {
+    restore();
+    provider().setFilter('', true);
+    if (!root) return;
+    await writeAndAwaitInstance(() => {
+      fs.writeFileSync(modlistPath, original);
+      for (const dir of modDirs) fs.rmSync(dir, { recursive: true, force: true });
+    });
+  });
+
+  it('renders a separator collapsed on a fresh view', async function () {
+    if (!root) this.skip();
+    await renderAfter(() => vscode.commands.executeCommand('modbench.modList.focus'));
+    assert.ok(!gearExpanded(), `a fresh view expanded the separator: ${JSON.stringify(asked)}`);
+  });
+
+  it('expands a separator it already rendered collapsed, while a filter shows it for its matching mods', async function () {
+    if (!root) this.skip();
+    await renderAfter(() => provider().setFilter('armor', true));
+    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+  });
+
+  it('keeps a separator the user collapsed collapsed, and one the user expanded expanded, across a change on disk', async function () {
+    if (!root) this.skip();
+    await renderAfter(() => provider().setFilter('', true));
+    await onTheSeparator('list.collapse');
+    await renderAfter(() => writeAndAwaitInstance(() => {
+      fs.mkdirSync(present(modDirs[2], 'Late Armor'), { recursive: true });
+      fs.writeFileSync(modlistPath, '+Late Armor\r\n+Armor Pack\r\n+Weapons\r\n-Gear_separator\r\n');
+    }));
+    assert.ok(!gearExpanded(), `a change on disk expanded a collapsed separator: ${JSON.stringify(asked)}`);
+
+    await onTheSeparator('list.expand');
+    await renderAfter(() => writeAndAwaitInstance(() => {
+      fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Late Armor\r\n+Weapons\r\n-Gear_separator\r\n');
+    }));
+    assert.ok(gearExpanded(), `a change on disk collapsed an expanded separator: ${JSON.stringify(asked)}`);
+  });
+
+  it('expands a separator the user collapsed, while a filter shows it for its matching mods', async function () {
+    if (!root) this.skip();
+    await onTheSeparator('list.collapse');
+    await renderAfter(() => provider().setFilter('', true));
+    assert.ok(!gearExpanded(), `the collapse did not land: ${JSON.stringify(asked)}`);
+
+    await renderAfter(() => provider().setFilter('weap', true));
+    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
   });
 });
 

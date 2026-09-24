@@ -23,7 +23,12 @@ export function groupModlist(entries: ModlistEntry[]): ModlistTree {
   let activeCount = 0;
   let installedCount = 0;
 
+  const read = new Set<string>();
   for (const entry of entries) {
+    // MO2 skips a line whose name it has already read (profile.cpp), so the first line holds.
+    const key = `${entry.kind}:${entry.name}`;
+    if (read.has(key)) continue;
+    read.add(key);
     if (entry.kind === 'separator') {
       groups.push({ separator: entry, mods: buffered });
       buffered = [];

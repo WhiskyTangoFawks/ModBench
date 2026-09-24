@@ -29,7 +29,7 @@ import { syncMods } from './modlist/modlist';
 import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, reportFailure } from './mods/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, reportFailure } from './mods/modManagementCommands';
 import { createModListView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
@@ -440,7 +440,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
-  const { modListView } = createModListView(own, modListProvider, instance);
+  const { modListView } = createModListView(own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`));
   const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
     reportFailure(reporterFor(logLabel), failMessage, action);
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
@@ -474,7 +474,6 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
-  own(registerOverwriteView(instance));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
   const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>

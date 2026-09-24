@@ -21,6 +21,11 @@ export interface NameFilterDeps {
   hasRows: () => Promise<boolean>;
   /** The Mods tree's group-by-separator option, or absent on views with no option to carry. */
   toggle?: { icon: string; label: string };
+  /** Where the term sits beside the base description; before it unless the view says otherwise. */
+  termPlacement?: 'beforeBase' | 'afterBase';
+  /** What the view's message line says while no filter is active, asked again on each row
+   *  change. The no-match message takes the line while a filter is active. */
+  unfilteredMessage?: () => string | undefined;
   onRowsChanged?: vscode.Event<unknown>;
 }
 
@@ -38,9 +43,9 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   let toggleOn = true;
   let base: string | undefined;
 
-  // The term reads first: it is the volatile fact the user just applied.
   const render = (): void => {
-    const parts = [term && `"${term}"`, base].filter(Boolean);
+    const quoted = term && `"${term}"`;
+    const parts = (deps.termPlacement === 'afterBase' ? [base, quoted] : [quoted, base]).filter(Boolean);
     deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
   };
 
@@ -51,11 +56,12 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
   const renderMessage = async (): Promise<void> => {
     const mine = ++generation;
-    const empty = term !== '' && !(await deps.hasRows());
+    const text = term === ''
+      ? deps.unfilteredMessage?.()
+      : (await deps.hasRows()) ? undefined : `No matches for "${term}".`;
     if (mine !== generation) return;
     if (!ownsMessage()) return;
-    if (empty) {
-      const text = `No matches for "${term}".`;
+    if (text !== undefined) {
       deps.view.message = text;
       lastWritten = text;
     } else if (lastWritten !== undefined) {
@@ -64,10 +70,11 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     }
   };
 
+  // The toggle belongs to the filter, so it goes when the term does, by whatever route.
   const apply = (text: string, nextToggleOn: boolean): void => {
     term = text;
-    toggleOn = nextToggleOn;
-    deps.setFilter(text, nextToggleOn);
+    toggleOn = text === '' || nextToggleOn;
+    deps.setFilter(text, toggleOn);
     void vscode.commands.executeCommand('setContext', `${deps.object}.filterActive`, text !== '');
     render();
     void renderMessage();
@@ -87,15 +94,19 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
       apply(box.value, !toggleOn);
       updateButtons();
     });
-    box.onDidChangeValue((text) => apply(text, toggleOn));
+    box.onDidChangeValue((text) => {
+      apply(text, toggleOn);
+      updateButtons();
+    });
     // Dispose the widget, keep the filter — this one line is what makes the filter durable.
     box.onDidHide(() => box.dispose());
     box.show();
   };
 
+  // A context key outlives an extension host restart; the filter it describes does not.
+  void vscode.commands.executeCommand('setContext', `${deps.object}.filterActive`, false);
   const disposables = [
     vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
-    // Clearing resets the separator toggle too: the option belongs to the filter that is going away.
     vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
     ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
   ];
