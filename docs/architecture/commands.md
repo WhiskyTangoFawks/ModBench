@@ -273,7 +273,7 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 | enable / disable sort rule | writes | Plugins: context menu | - | sort rules | - | none | Turn a sorting rule on or off. | planned | - |
 | remove sort rule | writes | Plugins: context menu | - | sort rules | - | none | Remove a sorting rule. | planned | - |
 | apply suggested sort | writes | Plugins: code action | - | plugin | - | none | Fix a sorting problem by applying the suggested position. The problem shows as a squiggle. | planned | - |
-| rename | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin, its source tree and the master reference in every dependent. | planned | - |
+| rename | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin and its source tree. Updating the master reference in every dependent is a script. | planned | - |
 | relink source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was renamed outside Modbench: move its source tree to the new name. | planned | - |
 | remove source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was deleted outside Modbench: remove its source tree, as a working-tree deletion the user reviews. | planned | - |
 

@@ -44,16 +44,6 @@ the binary from it.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
    trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
    generates the `.gitignore`, then the user owns it.
-8. **A write that spans repositories is all-or-nothing, without git.** A renumber cascade
-   rewrites every source tree holding a reference. The pre-image of each file it writes is held in
-   memory for the call and put back in reverse order on failure; an act whose pre-image is not one
-   document's bytes is refused before the tree is touched. Nothing is written into the author's
-   repository and no ref is created. A third party's concurrent write is preserved and named,
-   never reverted ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)). A
-   rollback that cannot complete reports every unrestored path, structured, and never stops at
-   the first. Process death is out of scope: the compile round-trip gate and re-Track remain the
-   recovery for a tree left mid-write by a crash. The record index is re-derived through the
-   watcher, never rolled back.
 
 ## Alternatives rejected
 
@@ -70,10 +60,3 @@ the binary from it.
   guarantee without touching the branch.
 - **Change-group gating at commit.** Git's own model is that history may hold non-building
   states; the only door where plugin validity is at stake is compile.
-- **Disclose a partial cascade and let the author revert per repository.** A referencer rewritten
-  to an identity the target never took is a dangling link, strictly worse than not written; a
-  half-done renumber does not converge on re-run, so the only honest repair is the restore.
-- **An on-disk journal so a cascade survives process death**, as the multi-plugin compile batch
-  has. New state in the author's folder with new staleness, for a failure the existing gate
-  already catches; a compiled plugin is its own complete artifact, a half-rewritten reference is
-  not.
