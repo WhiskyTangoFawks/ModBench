@@ -27,6 +27,7 @@ const CORE_BOXES: Record<string, string[]> = {
   modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
   pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
   instanceCommands: ['client', 'instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
+  downloadsCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
   install: ['mo2Codecs', 'instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
@@ -38,7 +39,7 @@ const CORE_BOXES: Record<string, string[]> = {
 const VIEW_BOXES: Record<string, string[]> = {
   toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
   mods: ['install', 'instanceLoader', 'modlist', 'ports'],
-  downloads: ['install', 'instanceLoader', 'ports'],
+  downloads: ['downloadsCommands', 'install', 'instanceLoader', 'ports'],
   plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
   editor: ['client', 'ports', 'wire'],
 };
@@ -200,9 +201,9 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(Object.keys(DRIVEN_BOXES)).toEqual(['instanceAdapter', 'instanceLoader']);
   });
 
-  it('names the five boxes the core band draws and the code builds', () => {
+  it('names the six boxes the core band draws and the code builds', () => {
     expect(Object.keys(CORE_BOXES))
-      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'client']);
+      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install', 'client']);
   });
 
   it('names the five views the driving band draws', () => {

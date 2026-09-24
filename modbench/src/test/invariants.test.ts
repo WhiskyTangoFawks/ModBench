@@ -12,7 +12,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 // prove it touched nothing else. A verb without one is unproven.
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
-    'install/downloadSidecar.ts', 'modlist/modlist.ts',
+    'downloadsCommands/downloads.ts', 'install/installedMark.ts', 'modlist/modlist.ts',
     'pluginsCommands/plugins.ts', 'instanceCommands/profile.ts',
   ];
   const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
@@ -21,12 +21,24 @@ describe('every MO2 text-file write command has a corpus test', () => {
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setModEnabled');
     expect(writeVerbs).toContain('switchProfile');
-    expect(writeVerbs).toContain('hideDownload');
+    expect(writeVerbs).toContain('excludeDownload');
     expect(writeVerbs).toContain('deleteDownloads');
+    expect(writeVerbs).toContain('markDownloadInstalled');
   });
 
   it.each(writeVerbs)('%s', (verb) => {
     expect(corpus).toMatch(new RegExp(`\\b${verb}\\(`));
+  });
+});
+
+// The zoom-out draws exclude, include and delete as the downloads commands box: install's
+// interface is a new mod or an upgrade, and the installed mark it hides.
+describe('install holds only install', () => {
+  const installFiles = readdirSync(join(SRC, 'install')).filter((f) => f.endsWith('.ts'));
+
+  it('exports no verb but installing and its installed mark', () => {
+    expect(installFiles.flatMap((file) => commandVerbs(read(join('install', file)))).sort())
+      .toEqual(['installFromArchive', 'installFromFolder', 'markDownloadInstalled']);
   });
 });
 

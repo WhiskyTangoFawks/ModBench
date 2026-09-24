@@ -4,7 +4,7 @@
 import { basename, join } from 'node:path';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
-import { markDownloadInstalled } from './downloadSidecar';
+import { markDownloadInstalled } from './installedMark';
 import {
   MOD_META_FILE_NAME, parseMetaIni, setOwnedKeysInText, writeMetaIni, type InstalledFileId, type OwnedMetaKeys,
 } from '../mo2Codecs/metaIni';

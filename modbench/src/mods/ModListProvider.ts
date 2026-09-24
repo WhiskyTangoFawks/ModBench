@@ -15,6 +15,9 @@ import {
 } from '../modlist/modlist';
 import { errorMessage } from '../ports/errorMessage';
 
+/** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
+export type SortDirection = 'losingAtTop' | 'winningAtTop';
+
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 /** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
@@ -34,8 +37,7 @@ export interface ModListProviderOptions {
   instance: InstanceView;
   log?: (msg: string) => void;
   reporter?: Reporter;
-  /** Only for the pinned Overwrite row's resourceUri (Explorer reveal / the decoration
-   *  provider's key) — never read from disk by this provider. */
+  /** The instance the drop and check box commands write to; never read by this provider. */
   instanceRoot: string;
 }
 
@@ -58,22 +60,30 @@ function statusLabel(status: ModStatus): string {
   }
 }
 
-/** Non-interactive first root item: "247 active / 312 installed". */
-export class CountNode extends vscode.TreeItem {
-  readonly kind = 'count' as const;
-  constructor(activeCount: number, installedCount: number) {
-    super(`${activeCount} active / ${installedCount} installed`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'modCount';
+// Selection and expansion follow a row across a change on disk, and a mod and a separator may
+// share a name.
+function rowIdentity(kind: 'mod' | 'separator', name: string): string {
+  return `${kind}:${name}`;
+}
+
+/** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
+ *  shows it for them, and then it opens on its own. */
+export class SeparatorNode extends vscode.TreeItem {
+  readonly kind = 'separator' as const;
+  constructor(
+    public readonly separator: Separator,
+    public readonly mods: Mod[],
+    shown: 'allMods' | 'matchingMods' = 'allMods',
+  ) {
+    super(separator.name, separatorExpander(mods, shown));
+    this.id = rowIdentity(this.kind, separator.name);
+    this.contextValue = 'separator';
   }
 }
 
-/** Collapsible separator; children are the mods that follow it in modlist.txt. */
-export class SeparatorNode extends vscode.TreeItem {
-  readonly kind = 'separator' as const;
-  constructor(public readonly separator: Separator, public readonly mods: Mod[]) {
-    super(separator.name, vscode.TreeItemCollapsibleState.Collapsed);
-    this.contextValue = 'separator';
-  }
+function separatorExpander(mods: readonly Mod[], shown: 'allMods' | 'matchingMods'): vscode.TreeItemCollapsibleState {
+  if (mods.length === 0) return vscode.TreeItemCollapsibleState.None;
+  return shown === 'matchingMods' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
 }
 
 /** A non-'ok' status overlays a badge onto the icon, description, and tooltip. */
@@ -82,6 +92,7 @@ export class ModNode extends vscode.TreeItem {
   readonly nexusModId: string | undefined;
   constructor(public readonly mod: Mod, status?: ModStatusResult) {
     super(mod.name, vscode.TreeItemCollapsibleState.None);
+    this.id = rowIdentity(this.kind, mod.name);
     this.nexusModId = mod.nexusId;
     const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
       .filter((s): s is string => !!s)
@@ -101,27 +112,23 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-/** Pinned read-only leaf over the instance's `overwrite/` folder. Not a
- *  modlist.txt entry — no checkbox, no drag, no mod actions. Single-click and
- *  the sole context action both reveal the folder in the Explorer. */
+/** Pinned leaf over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
+ *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(public override readonly resourceUri: vscode.Uri, fileCount: number) {
+  constructor(fileCount: number) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
+    this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;
-    // No explicit icon or color here: the spec scopes the row's look to a reddish
-    // tint applied by a FileDecorationProvider keyed on resourceUri; this node
-    // only carries the resourceUri. Let VS Code render the folder icon.
-    this.tooltip = `${fileCount} file(s) swept from Data/ — reassign in the Explorer or clear.`;
-    this.command = {
-      command: 'modbench.mod.openFolder',
-      title: 'Open Mod Folder',
-      arguments: [this],
-    };
+    if (fileCount > 0) this.description = fileCount.toLocaleString();
+    this.iconPath = fileCount > 0
+      ? new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.red'))
+      : new vscode.ThemeIcon('folder');
+    this.tooltip = 'The files tools wrote while MO2 ran them, which win over every mod.';
   }
 }
 
-export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode | ErrorNode;
+export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
@@ -140,14 +147,12 @@ export class ModListProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private tree?: ModlistTree;
+  private readonly parents = new WeakMap<ModNode, SeparatorNode>();
   private cachedEntries?: ModlistEntry[];
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
-  // View order only (no override weight). false (default) = losing end at top —
-  // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
-  // MO2's default. See CONTEXT.md ("View order").
-  private winningAtTop = false;
+  private direction: SortDirection = 'losingAtTop';
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot: string;
@@ -196,6 +201,20 @@ export class ModListProvider
     this.render();
   }
 
+  /** The enabled mods over the listed mods, whatever the filter shows. */
+  description(): string | undefined {
+    if (this.instance.sequence === 0) return undefined;
+    const { activeCount, installedCount } = this.ensureLoaded();
+    return `${activeCount} / ${installedCount}`;
+  }
+
+  /** The view's message line while no filter is active. Overwrite is always a row, so an empty
+   *  list says so here, above it. */
+  emptyListMessage(): string | undefined {
+    if (this.instance.sequence === 0 || this.instanceValue.mods.length > 0) return undefined;
+    return 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+  }
+
   handleDrag(
     source: readonly ModlistNode[],
     dataTransfer: vscode.DataTransfer,
@@ -214,9 +233,8 @@ export class ModListProvider
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDragPayload(payload.value)) return;
-    // Neither the count summary nor the pinned Overwrite fixture is a modlist.txt
-    // position — dropping onto them must not fall through to "move to end".
-    if (target?.kind === 'count' || target?.kind === OVERWRITE_NODE_KIND) return;
+    // Overwrite is no modlist.txt position, so a drop on it must not fall through to "move to end".
+    if (target?.kind === OVERWRITE_NODE_KIND) return;
     const { kind, name } = payload.value;
     await this.applyDrop(kind, name, target);
   }
@@ -258,8 +276,9 @@ export class ModListProvider
   // "Drop X onto Y" gives X the visual slot of Y: before Y when the view runs winning-first
   // like the file, after it when the view runs opposite.
   private dropOnto(targetName: string | undefined): ModlistDrop {
-    if (targetName === undefined) return this.winningAtTop ? { kind: 'losingEnd' } : { kind: 'winningEnd' };
-    return { kind: this.winningAtTop ? 'before' : 'after', name: targetName };
+    const winningAtTop = this.direction === 'winningAtTop';
+    if (targetName === undefined) return winningAtTop ? { kind: 'losingEnd' } : { kind: 'winningEnd' };
+    return { kind: winningAtTop ? 'before' : 'after', name: targetName };
   }
 
   private targetName(node: ModlistNode | undefined): string | undefined {
@@ -279,9 +298,11 @@ export class ModListProvider
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
     const tree = this.ensureLoaded();
-    const roots = this.rootNodes(tree);
+    const { ungrouped, separators } = this.entryRoots(tree);
     const overwrite = this.overwriteNode();
-    return overwrite ? [...roots, overwrite] : roots;
+    return this.direction === 'winningAtTop'
+      ? [overwrite, ...[...separators].reverse(), ...[...ungrouped].reverse()]
+      : [...ungrouped, ...separators, overwrite];
   }
 
   private ensureLoaded(): ModlistTree {
@@ -292,66 +313,60 @@ export class ModListProvider
     return this.tree;
   }
 
-  private rootNodes(tree: ModlistTree): ModlistNode[] {
-    if (!this.filterText) return this.unfilteredRoots(tree);
-    if (!this.groupingOn) return this.flatFilteredRoots(tree);
-    return this.groupedFilteredRoots(tree);
+  // The roots other than Overwrite, losing end first: the ungrouped mods, which sit below every
+  // separator in mod order, and then the separators. The flat list is all ungrouped.
+  private entryRoots(tree: ModlistTree): { ungrouped: ModlistNode[]; separators: ModlistNode[] } {
+    const ungrouped = this.losingFirst(tree.ungrouped);
+    const groups = [...tree.groups].reverse();
+    if (this.filterText && !this.groupingOn) {
+      const flat = [...ungrouped, ...groups.flatMap((g) => this.losingFirst(g.mods))];
+      return { ungrouped: flat.filter((m) => this.matches(m.name)).map(this.toModNode), separators: [] };
+    }
+    if (!this.filterText) {
+      return {
+        ungrouped: ungrouped.map(this.toModNode),
+        separators: groups.map((g) => new SeparatorNode(g.separator, this.inViewOrder(g.mods))),
+      };
+    }
+    const separators: ModlistNode[] = [];
+    for (const g of groups) {
+      if (this.matches(g.separator.name)) {
+        separators.push(new SeparatorNode(g.separator, this.inViewOrder(g.mods)));
+        continue;
+      }
+      const matchingMods = g.mods.filter((m) => this.matches(m.name));
+      if (matchingMods.length > 0) {
+        separators.push(new SeparatorNode(g.separator, this.inViewOrder(matchingMods), 'matchingMods'));
+      }
+    }
+    return { ungrouped: ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode), separators };
   }
 
-  // Appended last, outside grouping and sort: a fixture over the folder, not a modlist.txt entry.
-  private overwriteNode(): OverwriteNode | undefined {
-    const count = this.instanceValue.overwriteFileCount;
-    if (count <= 0) return undefined;
-    return new OverwriteNode(vscode.Uri.file(this.instanceValue.paths.overwriteDir), count);
+  private overwriteNode(): OverwriteNode {
+    return new OverwriteNode(this.instanceValue.overwriteFileCount);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));
 
   private separatorChildren(element: SeparatorNode): ModlistNode[] {
-    const mods = this.filterText && !this.matches(element.separator.name)
-      ? element.mods.filter((m) => this.matches(m.name))
-      : element.mods;
-    return mods.map(this.toModNode);
+    return element.mods.map((m) => {
+      const row = this.toModNode(m);
+      this.parents.set(row, element);
+      return row;
+    });
   }
 
-  private unfilteredRoots(tree: ModlistTree): ModlistNode[] {
-    const ungroupedNodes = this.orderedMods(tree.ungrouped).map(this.toModNode);
-    const groupNodes = this.orderedGroups(tree.groups).map(
-      (g) => new SeparatorNode(g.separator, this.orderedMods(g.mods)),
-    );
-    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
-    return [new CountNode(tree.activeCount, tree.installedCount), ...first, ...second];
+  getParent(element: ModlistNode): SeparatorNode | undefined {
+    return element instanceof ModNode ? this.parents.get(element) : undefined;
   }
 
-  // modlist.txt is winning-first, so the default losing-at-top view reverses it. View order only.
-  private orderedMods(mods: Mod[]): Mod[] {
-    return this.winningAtTop ? mods : [...mods].reverse();
+  // modlist.txt is winning-first. View order only.
+  private losingFirst(mods: readonly Mod[]): Mod[] {
+    return [...mods].reverse();
   }
 
-  private orderedGroups(groups: ModlistTree['groups']): ModlistTree['groups'] {
-    return this.winningAtTop ? groups : [...groups].reverse();
-  }
-
-  private flatFilteredRoots(tree: ModlistTree): ModlistNode[] {
-    const ungroupedNodes = this.orderedMods(tree.ungrouped);
-    const groupedNodes = this.orderedGroups(tree.groups).flatMap((g) => this.orderedMods(g.mods));
-    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupedNodes] : [groupedNodes, ungroupedNodes];
-    return [...first, ...second].filter((m) => this.matches(m.name)).map(this.toModNode);
-  }
-
-  private groupedFilteredRoots(tree: ModlistTree): ModlistNode[] {
-    const ungroupedNodes = this.orderedMods(tree.ungrouped).filter((m) => this.matches(m.name)).map(this.toModNode);
-    const groupNodes: ModlistNode[] = [];
-    for (const g of this.orderedGroups(tree.groups)) {
-      const sepNameMatches = this.matches(g.separator.name);
-      const orderedGroupMods = this.orderedMods(g.mods);
-      const matchingMods = sepNameMatches ? orderedGroupMods : orderedGroupMods.filter((m) => this.matches(m.name));
-      if (sepNameMatches || matchingMods.length > 0) {
-        groupNodes.push(new SeparatorNode(g.separator, matchingMods));
-      }
-    }
-    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
-    return [...first, ...second];
+  private inViewOrder(mods: readonly Mod[]): Mod[] {
+    return this.direction === 'winningAtTop' ? [...mods] : this.losingFirst(mods);
   }
 
   private matches(name: string): boolean {
@@ -364,8 +379,8 @@ export class ModListProvider
   }
 
   /** Presentation only — never changes which mod wins a conflict. */
-  toggleViewDirection(): void {
-    this.winningAtTop = !this.winningAtTop;
+  setViewDirection(direction: SortDirection): void {
+    this.direction = direction;
     this.invalidate();
   }
 

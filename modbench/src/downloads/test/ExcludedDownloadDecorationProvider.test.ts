@@ -7,38 +7,38 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { HiddenDownloadDecorationProvider } from '../HiddenDownloadDecorationProvider';
+import { ExcludedDownloadDecorationProvider } from '../ExcludedDownloadDecorationProvider';
 import { fakeUri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
 
-describe('HiddenDownloadDecorationProvider', () => {
+describe('ExcludedDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';
   const downloadsDir = join(instanceRoot, 'downloads');
   const downloadUri = (name: string) => fakeUri(join(downloadsDir, name));
 
-  it('dims a hidden download row with the disabled-foreground colour (colour only, no badge)', () => {
-    const provider = new HiddenDownloadDecorationProvider(downloadsDir, () => new Set(['hidden.zip']));
-    const decoration = present(provider.provideFileDecoration(downloadUri('hidden.zip')), 'the decoration for a hidden download row');
+  it('dims an excluded download row with the disabled-foreground colour (colour only, no badge)', () => {
+    const provider = new ExcludedDownloadDecorationProvider(downloadsDir, () => new Set(['excluded.zip']));
+    const decoration = present(provider.provideFileDecoration(downloadUri('excluded.zip')), 'the decoration for an excluded download row');
 
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
     expect(decoration.badge).toBeUndefined();
   });
 
-  it('returns undefined for a visible download row', () => {
-    const provider = new HiddenDownloadDecorationProvider(downloadsDir, () => new Set(['hidden.zip']));
-    expect(provider.provideFileDecoration(downloadUri('visible.zip'))).toBeUndefined();
+  it('returns undefined for an included download row', () => {
+    const provider = new ExcludedDownloadDecorationProvider(downloadsDir, () => new Set(['excluded.zip']));
+    expect(provider.provideFileDecoration(downloadUri('included.zip'))).toBeUndefined();
   });
 
   it('returns undefined for a URI outside downloads/', () => {
-    const provider = new HiddenDownloadDecorationProvider(downloadsDir, () => new Set(['hidden.zip']));
+    const provider = new ExcludedDownloadDecorationProvider(downloadsDir, () => new Set(['excluded.zip']));
     expect(provider.provideFileDecoration(fakeUri(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
   });
 
   // A sibling path that merely shares the "downloads" string prefix must not read as inside
-  // downloads/, even when slicing it reproduces a real hidden download's name.
+  // downloads/, even when slicing it reproduces a real excluded download's name.
   it('returns undefined for a sibling path that only shares the downloads/ string prefix', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
-    const provider = new HiddenDownloadDecorationProvider(downloadsDir, () => new Set(['evil.zip']));
+    const provider = new ExcludedDownloadDecorationProvider(downloadsDir, () => new Set(['evil.zip']));
     const uri = fakeUri(`${downloadsDir}Xevil.zip`);
 
     expect(provider.provideFileDecoration(uri)).toBeUndefined();

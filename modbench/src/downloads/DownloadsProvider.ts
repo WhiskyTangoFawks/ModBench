@@ -140,11 +140,11 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Empty before the first render, and whenever Show hidden is off, because hidden rows are
-   *  then already absent from the cache. */
-  hiddenNames(): ReadonlySet<string> {
-    const hidden = (this.cache ?? []).filter((n) => n.row.hidden);
-    return new Set(hidden.map((n) => n.row.name));
+  /** Empty before the first render, and whenever Show excluded is off, because excluded rows
+   *  are then already absent from the cache. */
+  excludedNames(): ReadonlySet<string> {
+    const excluded = (this.cache ?? []).filter((n) => n.row.hidden);
+    return new Set(excluded.map((n) => n.row.name));
   }
 
   getTreeItem(element: DownloadsTreeNode): vscode.TreeItem {

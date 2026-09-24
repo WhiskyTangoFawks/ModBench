@@ -1,20 +1,16 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownloads, hideDownload, unhideDownload } from '../install/downloadSidecar';
+import { deleteDownloads, excludeDownload, includeDownload } from '../downloadsCommands/downloads';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import type { MoveToTrash } from '../ports/trash';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
-
-// The host's trash, the one capability a command cannot hold itself.
-const trashFile = async (path: string): Promise<void> => {
-  await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
-};
 
 interface UpgradePickItem extends vscode.QuickPickItem {
   /** What install is told this is: an upgrade naming the chosen mod's own folder, or the
@@ -129,10 +125,10 @@ async function confirmDelete(names: readonly string[], ask: AskQuestion): Promis
 const NOTHING_DELETED: SelectionOutcome<string> = { landed: [], refused: [] };
 
 async function deleteSelection(
-  instanceRoot: string, names: readonly string[], reporter: Reporter, ask: AskQuestion,
+  instanceRoot: string, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
 ): Promise<SelectionOutcome<string>> {
   if (names.length === 0 || !(await confirmDelete(names, ask))) return NOTHING_DELETED;
-  const outcome = await deleteDownloads(instanceRoot, names, trashFile);
+  const outcome = await deleteDownloads(instanceRoot, names, trash);
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
   return outcome;
@@ -175,19 +171,19 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 /** Acts on the whole selection. The `when` clause can only inspect the clicked row, so a mixed
  *  selection applies that row's action to all of them, as MO2's "Hide All" does. */
 export function registerDownloadsMultiRowCommands(
-  instanceRoot: string, reporter: Reporter, ask: AskQuestion,
+  instanceRoot: string, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(instanceRoot, selectionNames(clicked, selected), reporter, ask)),
+      deleteSelection(instanceRoot, selectionNames(clicked, selected), reporter, ask, trash)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
+        void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await excludeDownload(instanceRoot, name)));
       }
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Include', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
+        void runRowAction('Include', name, reporter, async () => applyOrThrow(await includeDownload(instanceRoot, name)));
       }
     }),
   ];

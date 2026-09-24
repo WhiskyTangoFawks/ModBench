@@ -20,6 +20,10 @@ import {
 const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] },
   trees: new Map<string, { description?: string; message?: string }>(),
+  reveals: [] as { label: unknown; options: unknown }[],
+  visible: { value: true },
+  visibilityListeners: [] as ((e: { visible: boolean }) => void)[],
+  revealRefusal: { value: undefined as Error | undefined },
 }));
 
 vi.mock('vscode', () => ({
@@ -29,7 +33,19 @@ vi.mock('vscode', () => ({
   window: {
     ...filterBoxWindowMock(h.state),
     createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
-      const view = { ...options, description: undefined, message: undefined };
+      const view = {
+        ...options, description: undefined, message: undefined,
+        get visible() { return h.visible.value; },
+        onDidChangeVisibility: (listener: (e: { visible: boolean }) => void) => {
+          h.visibilityListeners.push(listener);
+          return { dispose() { /* no-op */ } };
+        },
+        reveal: (element: { label: unknown }, revealOptions: unknown) => {
+          if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
+          h.reveals.push({ label: element.label, options: revealOptions });
+          return Promise.resolve();
+        },
+      };
       h.trees.set(id, view);
       return view;
     },
@@ -43,6 +59,7 @@ import { ModListProvider } from '../mods/ModListProvider';
 import { createModListView, registerDownloadsView } from '../mo2TreeViews';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
+import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 const command = commandInvoker(h.state);
@@ -62,6 +79,10 @@ async function makeInstance(root: string): Promise<Instance> {
 beforeEach(() => {
   h.state.boxes.length = 0;
   h.state.commands.clear();
+  h.reveals.length = 0;
+  h.visible.value = true;
+  h.visibilityListeners.length = 0;
+  h.revealRefusal.value = undefined;
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {
@@ -71,7 +92,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
     const provider = new ModListProvider({ instance, instanceRoot: root });
     await provider.getChildren();
 
-    const { modListView } = createModListView(own, provider, instance);
+    const { modListView } = createModListView(own, provider, () => { /* no-op */ });
     await command('modbench.mod.filter')();
     currentBox().type('zzznomatch');
     await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
@@ -91,21 +112,105 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   });
 });
 
-// A profile switch writes and forgets, so nothing but the watch can move this readout.
-describe('the Mods view\'s description follows the active profile', () => {
-  it('reads the new profile off a new instance value, with nothing pushed', async () => {
+describe('the Mods view\'s description counts the mods', () => {
+  it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, instanceRoot: root });
-    const { modListView } = createModListView(own, provider, instance);
-    expect(modListView.description).toBe('Default');
+    const { modListView } = createModListView(own, provider, () => { /* no-op */ });
+    expect(modListView.description).toBe('7 / 8');
 
-    const ini = join(root, 'ModOrganizer.ini');
-    const text = await readFile(ini, 'utf8');
-    await writeFile(ini, text.replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)'));
+    await command('modbench.mod.filter')();
+    currentBox().type('radfall');
+    expect(modListView.description).toBe('7 / 8 · "radfall"');
+  });
+
+  it('follows a new instance value, with nothing pushed', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const { modListView } = createModListView(own, provider, () => { /* no-op */ });
+
+    const modlistPath = join(root, DEFAULT_MODLIST);
+    await writeFile(modlistPath, `${await readFile(modlistPath, 'utf8')}-Parked Mod\r\n`);
     await instance.refresh();
 
-    expect(modListView.description).toBe('Secondary');
+    expect(modListView.description).toBe('7 / 9');
+  });
+});
+
+// VS Code keeps the expansion it remembers for a known row identity over the provider's
+// collapsible state, so the filter's expansion is a reveal.
+describe('the Mods view expands a separator a filter shows for its matching mods', () => {
+  const mountFiltered = async (term: string, log: (line: string) => void = () => { /* no-op */ }) => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const provider = new ModListProvider({ instance, instanceRoot: root });
+    createModListView(own, provider, log);
+    await command('modbench.mod.filter')();
+    currentBox().type(term);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  };
+
+  it('reveals it expanded, neither selecting nor focusing it', async () => {
+    await mountFiltered('tracked');
+
+    expect(h.reveals).toEqual([
+      { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
+    ]);
+  });
+
+  it('leaves a separator shown for its own name as the user left it', async () => {
+    await mountFiltered('radfall - all');
+
+    expect(h.reveals).toEqual([]);
+  });
+
+  it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
+    h.revealRefusal.value = new Error('Cannot resolve tree item');
+    const lines: string[] = [];
+    await mountFiltered('tracked', (line) => lines.push(line));
+
+    expect(lines).toEqual([
+      'Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
+    ]);
+  });
+
+  // A reveal opens a hidden view.
+  it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
+    h.visible.value = false;
+    await mountFiltered('tracked');
+    expect(h.reveals).toEqual([]);
+
+    h.visible.value = true;
+    for (const listener of h.visibilityListeners) listener({ visible: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(h.reveals.map((r) => r.label)).toEqual(['Unassigned (Modlist Development)']);
+  });
+});
+
+describe('the Mods view says when the list is empty', () => {
+  const NO_MODS = 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+
+  it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
+    await withUnreadCorpusInstance(async (instance, root) => {
+      await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
+      const provider = new ModListProvider({ instance, instanceRoot: root });
+      const { modListView } = createModListView(own, provider, () => { /* no-op */ });
+      expect(modListView.message).toBeUndefined();
+      expect(modListView.description).toBeUndefined();
+
+      await instance.refresh();
+      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
+
+      await command('modbench.mod.filter')();
+      currentBox().type('zzz');
+      await waitForMessage(modListView, (m) => m === 'No matches for "zzz".', 'the no-match message');
+
+      currentBox().type('');
+      await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message back');
+      provider.dispose();
+    });
   });
 });
 
@@ -114,7 +219,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), {
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
       nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
@@ -145,7 +250,7 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), {
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
       nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');

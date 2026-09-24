@@ -149,6 +149,13 @@ describe('the name filter is durable', () => {
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
+  // A context key outlives an extension host restart; the filter it describes does not.
+  it('lowers the filter-active context key as it registers', () => {
+    h.state.contextKeys.set(KEY, true);
+    setup();
+    expect(h.state.contextKeys.get(KEY)).toBe(false);
+  });
+
   it('names its commands and context key off the object, so no two views can drift into different conventions', () => {
     setup();
     expect([...h.state.commands.keys()]).toEqual(['test.thing.filter', 'test.thing.clearFilter']);
@@ -196,6 +203,14 @@ describe('the active term reads out in the view description', () => {
   // The merged Plugins tree carries two independent narrowing axes (plugins.md, Toolbar):
   // this name filter and the SQL record filter. Both show, and clearing either leaves the
   // other's half of the readout standing.
+  it('puts the term after the base where the view reads its base first', async () => {
+    const { view, filter } = setup({ termPlacement: 'afterBase' });
+    filter.setBaseDescription('12 / 30');
+    await open();
+    currentBox().type('arm');
+    expect(view.description).toBe('12 / 30 · "arm"');
+  });
+
   it('recomposes when the other axis changes under a live filter', async () => {
     const { view, filter } = setup();
     await open();
@@ -267,6 +282,47 @@ describe('a term that matches nothing says so', () => {
     currentBox().hide();
     await flush();
     expect(view.message).toBe('Loading plugins…');
+  });
+});
+
+describe('the view\'s own message while no filter is active', () => {
+  it('shows it on a row change, gives way to the no-match message while filtering, and returns once the filter clears', async () => {
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({
+      hasRows: () => Promise.resolve(false), onRowsChanged: rows.event, unfilteredMessage: () => 'Nothing here yet.',
+    });
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('Nothing here yet.');
+
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    await clear();
+    await flush();
+    expect(view.message).toBe('Nothing here yet.');
+  });
+
+  it('takes it down once the view has something to show', async () => {
+    let message: string | undefined = 'Nothing here yet.';
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ onRowsChanged: rows.event, unfilteredMessage: () => message });
+    rows.fire();
+    await flush();
+
+    message = undefined;
+    rows.fire();
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  it('states it on refresh, with no row change', async () => {
+    const { view, filter } = setup({ unfilteredMessage: () => 'Nothing here yet.' });
+    filter.refresh();
+    await flush();
+    expect(view.message).toBe('Nothing here yet.');
   });
 });
 
@@ -367,6 +423,25 @@ describe('the Mods separator toggle rides on the box', () => {
     await open();
     currentBox().type('armor');
     expect(applied.at(-1)).toEqual({ text: 'armor', toggleOn: false });
+  });
+
+  it('returns to grouped when the term is typed back to empty, so the next term starts grouped', async () => {
+    const { applied } = setup({ toggle });
+    await open();
+    currentBox().type('arm');
+    currentBox().pressButton();
+    currentBox().type('');
+    currentBox().type('w');
+    expect(applied.slice(-2)).toEqual([{ text: '', toggleOn: true }, { text: 'w', toggleOn: true }]);
+  });
+
+  it('shows the toggle as on again once the term is typed back to empty', async () => {
+    setup({ toggle });
+    await open();
+    currentBox().type('arm');
+    currentBox().pressButton();
+    currentBox().type('');
+    expect(currentBox().buttons.map((b) => b.tooltip)).toEqual(['Group by separator (on)']);
   });
 
   it('resets the toggle to on when the filter is cleared', async () => {
