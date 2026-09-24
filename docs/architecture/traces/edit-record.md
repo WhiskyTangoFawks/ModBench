@@ -1,4 +1,4 @@
-# edit-record: contract (draft)
+# edit-record: contract
 
 Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit field`, `add element`,
 `remove element`, `move element`, `create`, `delete`, `copy` and `renumber`, in
