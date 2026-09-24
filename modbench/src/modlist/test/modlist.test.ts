@@ -34,7 +34,7 @@ import {
   renameSeparator,
   reorderMod,
   reorderSeparatorBlock,
-  setModEnabled,
+  setModsEnabled,
   syncMods,
   uninstallMod,
 } from '../modlist';
@@ -81,37 +81,67 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('serializes two concurrent writes to the same modlist.txt — neither edit is lost', async () => {
     fsState.delayMs = 20;
     const [a, b] = await Promise.all([
-      setModEnabled(dir, 'Default', 'Harder VATS', true),
-      setModEnabled(dir, 'Default', 'ENBoost - 12k', false),
+      setModsEnabled(dir, 'Default', ['Harder VATS'], true),
+      setModsEnabled(dir, 'Default', ['ENBoost - 12k'], false),
     ]);
-    expect(a).toEqual({ applied: true, wrote: true });
-    expect(b).toEqual({ applied: true, wrote: true });
+    expect(a).toEqual({ applied: true, outcome: { landed: ['Harder VATS'], refused: [] } });
+    expect(b).toEqual({ applied: true, outcome: { landed: ['ENBoost - 12k'], refused: [] } });
     const entries = await readModlist();
     expect(entries.find((e) => e.name === 'Harder VATS')?.enabled).toBe(true);
     expect(entries.find((e) => e.name === 'ENBoost - 12k')?.enabled).toBe(false);
   });
 
-  it('setModEnabled flips only the target prefix on disk', async () => {
+  it('setModsEnabled flips only the mods not already in the chosen state, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await setModEnabled(dir, 'Default', 'Harder VATS', true);
-    expect(outcome).toEqual({ applied: true, wrote: true });
+    vi.mocked(writeFile).mockClear();
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Harder VATS', 'ENBoost - 12k'], refused: [] } });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
+    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
   });
 
-  it('setModEnabled to the state the mod already has writes nothing', async () => {
+  it('setModsEnabled to a selection already in the chosen state writes nothing', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await setModEnabled(dir, 'Default', 'Harder VATS', false); // fixture: already disabled
-    expect(outcome).toEqual({ applied: true, wrote: false });
+
+    const outcome = await setModsEnabled(
+      dir, 'Default', ['ENBoost - 12k', 'SKK Fast Start new game (Fallout 4)'], true);
+
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: { landed: ['ENBoost - 12k', 'SKK Fast Start new game (Fallout 4)'], refused: [] },
+    });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
-  it('setModEnabled refuses an unknown mod, leaving the file untouched', async () => {
+  it('setModsEnabled refuses a gone mod by name while the rest land, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await setModEnabled(dir, 'Default', 'No Such Mod', true);
-    assertRefusal(outcome, 'No Such Mod');
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
-    expect(await mtime()).toEqual(LONG_AGO);
+    vi.mocked(writeFile).mockClear();
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'No Such Mod'], true);
+
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: {
+        landed: ['Harder VATS'],
+        refused: [{ item: 'No Such Mod', reason: 'Mod not found in modlist: No Such Mod' }],
+      },
+    });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
+    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+  });
+
+  // Rival: a loop calling setModEnabled per name, each catching its own read failure into a
+  // per-item refusal — that rival still answers applied:true, with one reason repeated per mod.
+  it('refuses the whole selection once, before any write, when modlist.txt cannot be read', async () => {
+    await rm(modlistPath());
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
+
+    assertRefusal(outcome, 'ENOENT');
+    await expect(stat(modlistPath())).rejects.toThrow();
   });
 
   it('reorderMod writes the new line order', async () => {

@@ -37,19 +37,20 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator, createEmptyMod } = vi.hoisted(() => ({
+const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled } = vi.hoisted(() => ({
   uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
-  createEmptyMod: vi.fn(),
+  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', () => ({
   createEmptyMod, deleteSeparator, insertSeparator,
-  moveModToSeparator: vi.fn(), renameSeparator, uninstallMod,
+  moveModToSeparator: vi.fn(), renameSeparator, uninstallMod, setModsEnabled,
 }));
 
 import {
-  registerCreateEmptyModCommand, registerModContextCommands, registerModInstallCommands, registerModListCoreCommands,
-  registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand, type ModInstallDeps,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerModInstallCommands,
+  registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+  type ModInstallDeps,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
@@ -459,6 +460,104 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
 
     expect(showInputBox).not.toHaveBeenCalled();
     expect(insertSeparator).not.toHaveBeenCalled();
+  });
+});
+
+// Which command the menu offers, by row state, is package.json's own `when` clause (mods.md,
+// Menus and keys, story 3); these tests pin what each command does once invoked.
+describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one command per direction', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: false });
+  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+
+  it('enable applies to every selected mod, whatever its own current state', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
+
+    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    await invoke('modbench.mod.enable', modA, [modA, modB]);
+
+    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A', 'Mod B'], true);
+  });
+
+  it('disable applies to every selected mod, whatever its own current state', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
+
+    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    await invoke('modbench.mod.disable', modB, [modA, modB]);
+
+    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A', 'Mod B'], false);
+  });
+
+  it('takes only the mods of a selection mixing mods and separators, anchored on the clicked mod', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
+
+    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    await invoke('modbench.mod.enable', modA, [modA, groupA]);
+
+    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A'], true);
+  });
+
+  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
+
+    registerModEnableCommands('/instance', instance, () => [modA], recordingReporter());
+    await invoke('modbench.mod.enable');
+
+    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A'], true);
+  });
+
+  it('calls nothing and reports nothing for an empty selection', async () => {
+    const reporter = recordingReporter();
+
+    registerModEnableCommands('/instance', instance, () => [], reporter);
+    await invoke('modbench.mod.enable');
+
+    expect(setModsEnabled).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('says nothing when the whole selection lands', async () => {
+    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
+    const reporter = recordingReporter();
+
+    registerModEnableCommands('/instance', instance, () => [], reporter);
+    await invoke('modbench.mod.enable', modA);
+
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports a gone mod by name through the shared selectionOutcome reporter, once, while the rest land', async () => {
+    setModsEnabled.mockResolvedValue({
+      applied: true,
+      outcome: { landed: ['Mod A'], refused: [{ item: 'Mod B', reason: 'Mod not found in modlist: Mod B' }] },
+    });
+    const reporter = recordingReporter();
+
+    registerModEnableCommands('/instance', instance, () => [], reporter);
+    await invoke('modbench.mod.enable', modA, [modA, modB]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not enable 1 of 2 mods.',
+      detail: '"Mod B" (Mod not found in modlist: Mod B)',
+    }]);
+  });
+
+  // A cause no mod can escape (an unreadable modlist.txt) refuses the whole selection once,
+  // before any write — the Core box's own `applied: false`, not a per-item SelectionOutcome.
+  it('reports a global refusal once, naming no mod, when the whole selection cannot proceed', async () => {
+    setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
+    const reporter = recordingReporter();
+
+    registerModEnableCommands('/instance', instance, () => [], reporter);
+    await invoke('modbench.mod.disable', modB);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to disable mods.', detail: 'ENOENT: modlist.txt' },
+    ]);
   });
 });
 
