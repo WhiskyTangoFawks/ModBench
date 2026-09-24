@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
 }));
 
-import { pluralArgument, registerModsGesture, singularArgument, type GestureEntry } from '../gestureEntry';
+import { pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from '../gestureEntry';
 import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
@@ -108,6 +108,28 @@ describe('a selection mixing mods and separators', () => {
 
   it('gives nothing to a gesture that does not take the right-clicked row\'s kind', () => {
     expect(pluralArgument({ clicked: groupA, selection: mixed }, 'mod')).toEqual([]);
+  });
+});
+
+describe('selectionArgument over a selection mixing mods and separators', () => {
+  const alpha = modRow('Alpha');
+  const groupA = separatorRow('Group A');
+  const beta = modRow('Beta');
+  const groupB = separatorRow('Group B');
+  const mixed = [alpha, groupA, beta, groupB];
+
+  it('keeps every selected row of the kinds given, regardless of the right-clicked row\'s kind', () => {
+    expect(selectionArgument({ clicked: beta, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
+    expect(selectionArgument({ clicked: groupB, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
+  });
+
+  it('keeps every selected row of the kinds given for a key or the palette too', () => {
+    expect(selectionArgument({ focused: groupA, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
+    expect(selectionArgument({ selection: mixed }, 'mod', 'separator')).toEqual(mixed);
+  });
+
+  it('still excludes a kind not requested', () => {
+    expect(selectionArgument({ clicked: beta, selection: mixed }, 'mod')).toEqual([alpha, beta]);
   });
 });
 

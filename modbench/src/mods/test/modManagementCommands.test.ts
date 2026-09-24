@@ -53,9 +53,10 @@ import {
   registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerModInstallCommands,
   registerModMoveCommand,
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
+  modsCopyValueText,
   type ModInstallDeps,
 } from '../modManagementCommands';
-import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -785,5 +786,50 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
 
     expect(openExternal).not.toHaveBeenCalled();
+  });
+});
+
+// mods.md, Menus and keys, story 7: copy value copies each selected mod's or separator's name,
+// one per line — Mods' own text for the catalog's one copy value id.
+describe('modsCopyValueText', () => {
+  const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const beta = new ModNode({ kind: 'mod', name: 'Beta', enabled: true });
+  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
+  const noSelection = (): ModlistNode[] => [];
+
+  it('copies a single right-clicked mod\'s own name', () => {
+    expect(modsCopyValueText(noSelection)(alpha, undefined)).toBe('Alpha');
+  });
+
+  it('copies a single right-clicked separator\'s own name', () => {
+    expect(modsCopyValueText(noSelection)(groupA, undefined)).toBe('Group A');
+  });
+
+  it('copies every selected mod\'s and separator\'s name, one per line, when the selection mixes kinds', () => {
+    const mixed = [alpha, groupA, beta, groupB];
+    expect(modsCopyValueText(noSelection)(beta, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
+    expect(modsCopyValueText(noSelection)(groupB, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
+  });
+
+  it('falls back to just the right-clicked row when nothing else is selected', () => {
+    expect(modsCopyValueText(noSelection)(alpha, [])).toBe('Alpha');
+  });
+
+  it('excludes the Overwrite row from a selection that includes it', () => {
+    const withOverwrite = [alpha, new OverwriteNode(3)];
+    expect(modsCopyValueText(noSelection)(alpha, withOverwrite)).toBe('Alpha');
+  });
+
+  it('is undefined for a row that is not a Mods row, so another surface\'s copy takes over', () => {
+    expect(modsCopyValueText(noSelection)(new OverwriteNode(0), undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
+  });
+
+  // A key or the palette invokes with no arguments at all, unlike a context menu — and Mods has
+  // no key or palette entry of its own in this slice, so it must never guess this is its row.
+  it('is undefined with no clicked row, even when the view has a selection', () => {
+    const viewSelection = (): ModlistNode[] => [alpha, groupA];
+    expect(modsCopyValueText(viewSelection)(undefined, undefined)).toBeUndefined();
   });
 });

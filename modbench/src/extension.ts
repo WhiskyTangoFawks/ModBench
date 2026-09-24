@@ -9,7 +9,7 @@ import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } 
 import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
+import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { EXTENSION_TO_WEBVIEW } from './wire/messages';
 import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
@@ -167,6 +167,9 @@ export function activate(context: vscode.ExtensionContext) {
     setStatusText: (t) => { statusBarItem.text = t; },
     notifyConflictsComputed,
     extensionId: context.extension.id,
+    // Copy value's Referenced By adapter (commands.md, Record: copy value) — the Toolbox owns
+    // the command's one registration, alongside the other Mods gestures.
+    referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
   });
   context.subscriptions.push(
     toolbox,
@@ -193,7 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, referencedByTreeView, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
