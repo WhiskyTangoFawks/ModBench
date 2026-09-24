@@ -58,13 +58,13 @@ describe('put load order', () => {
 describe('refresh', () => {
   it('rebuilds the index for the instance, then sends the load order', async () => {
     const client = attachedClient();
-    client.setCommandResult('rebuildIndex', true);
+    client.setCommandResult('rebuildIndex', { rebuilt: true });
 
     const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex', 'putLoadOrder']);
     const [rebuild] = client.calls;
-    expect([rebuild?.args[0], rebuild?.args[2]]).toEqual(['/instance', 'Fallout4']);
+    expect(rebuild?.args).toEqual(['/instance', 'Fallout4']);
     expect(result).toEqual({
       applied: true,
       loadOrder: {
@@ -75,36 +75,25 @@ describe('refresh', () => {
     });
   });
 
-  it('sends nothing and returns the refusal when the rebuild is refused', async () => {
+  // ADR-0009 invariant 5: held-elsewhere is refused by name, apart from every other failure — the
+  // rival is a refresh that folds it into the same generic refusal every other failure gets.
+  it('sends nothing and reports held-elsewhere apart from every other refusal', async () => {
     const client = attachedClient();
-    client.setCommandHandler('rebuildIndex', (_root, onFailure) => {
-      onFailure('mEdit: Could not rebuild the index', 'The index is held by another window.');
-      return Promise.resolve(false);
-    });
+    client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });
 
     const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
-    expect(result).toEqual({ applied: false, refusal: 'The index is held by another window.' });
+    expect(result).toEqual({ applied: false, heldElsewhere: true });
   });
 
-  it('refuses a rebuild the client refuses without a reason', async () => {
+  it('sends nothing and returns the reason for every other refused rebuild', async () => {
     const client = attachedClient();
-    client.setCommandResult('rebuildIndex', false);
+    client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
 
     const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
-    expect(result).toEqual({ applied: false, refusal: 'mEdit did not rebuild the index.' });
-  });
-
-  it('sends nothing and returns the reason when the rebuild throws', async () => {
-    const client = attachedClient();
-    client.setCommandFailure('rebuildIndex', new Error('fetch failed'));
-
-    const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
-
-    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
-    expect(result).toEqual({ applied: false, refusal: 'fetch failed' });
+    expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' });
   });
 });

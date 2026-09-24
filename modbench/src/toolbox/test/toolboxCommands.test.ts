@@ -163,7 +163,7 @@ describe('Switch profile', () => {
 
 describe('Refresh', () => {
   // `rereadFailure` is what the Instance loader's re-read answers: its own failure, or none.
-  function registerRefresh(result: RefreshResult, rereadFailure?: string) {
+  function registerRefresh(result: RefreshResult, rereadFailure?: string, instanceRoot = '/instance') {
     const reporter = recordingReporter();
     registerRefreshCommand({
       refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); },
@@ -174,6 +174,7 @@ describe('Refresh', () => {
         },
       },
       reporter,
+      instanceRoot,
     });
     return { reporter, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
   }
@@ -192,11 +193,25 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // The backend's own refusal is the detail, so the notification names what holds the index.
-  it('reports a refused refresh at error with the refusal as its reason, and reads nothing again', async () => {
-    const refusal = 'This instance\'s index is open in another Modbench window (/instance/index.duckdb). '
-      + 'Close mEdit there first, or open a different instance here.';
-    const { reporter, run } = registerRefresh({ applied: false, refusal });
+  // toolbox.md, Reporting story 1: the spec's own words, naming this instance — Modbench cannot
+  // name the other window. The rival reports it the same way every other refusal is reported.
+  it('reports the second-window refusal in toolbox.md\'s words, naming this instance, and reads nothing again', async () => {
+    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: true }, undefined, '/instance/FO4');
+
+    await run();
+
+    expect(progressSteps).toEqual([
+      'progress opens on modbench.toolbox', 'instance commands: refresh', 'progress closes',
+    ]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: "This instance's index is open in another Modbench window", detail: '/instance/FO4' },
+    ]);
+  });
+
+  // Every other failed rebuild keeps its own generic report, the backend's detail as the reason.
+  it('reports any other refused refresh at error with the refusal as its reason, and reads nothing again', async () => {
+    const refusal = 'Failed to rebuild the store.';
+    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: false, refusal });
 
     await run();
 
