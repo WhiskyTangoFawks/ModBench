@@ -118,6 +118,18 @@ public sealed class LoadOrderHolderTests
         Assert.Equal(1, changes);
     }
 
+    [Fact]
+    public void Held_IsNothingBeforeAnArrival_ThenTheSnapshotWithTheVersionItArrivedAs()
+    {
+        var holder = new LoadOrderHolder();
+        Assert.Null(holder.Held);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Copy("A.esp", 0)]);
+
+        var version = holder.Apply(applied);
+
+        Assert.Equal((applied, version), holder.Held);
+    }
+
     private static RegisteredCopy Copy(string name, int slot) =>
         new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", slot, Enabled: true, Winning: true);
 

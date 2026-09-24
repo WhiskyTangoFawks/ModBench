@@ -25,6 +25,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly SchemaReflector _schemaReflector;
     private readonly TimeProvider _timeProvider;
+    // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
+    private readonly TaskScheduler _refillScheduler;
     // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for who
     // participates and for a copy's mod folder; it never writes it and keeps no view of its own.
     private readonly LoadOrderHolder _holder;
@@ -55,13 +57,15 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        TaskScheduler? refillScheduler = null)
     {
         _holder = holder;
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _refillScheduler = refillScheduler ?? TaskScheduler.Default;
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _indexFactory = new DuckDbRecordIndexFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
@@ -220,11 +224,16 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread: registrations made equal to
     /// the snapshot, never-held copies indexed, one winner sweep. Every outcome becomes status data,
     /// published once <paramref name="version"/> is answered.</summary>
-    public void Reconcile(LoadOrderSnapshot snapshot, long version)
+    public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
+
+    // The arrival is read once the exclusive right is held, so a refill reconciles the load order
+    // held then, never one a newer arrival replaced while it waited. Null reconciles nothing.
+    private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
     {
+        long version = 0;
         try
         {
-            ReconcileOrRefuse(snapshot);
+            if (!ReconcileOrRefuse(arrival, ref version)) return;
         }
         catch (OperationCanceledException)
         {
@@ -249,25 +258,30 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold throws IndexHeldElsewhereException.
-    private void ReconcileOrRefuse(LoadOrderSnapshot snapshot)
+    // successor; a second window's hold throws IndexHeldElsewhereException. False when the arrival
+    // resolved to none.
+    private bool ReconcileOrRefuse(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version)
     {
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Reconciling load order. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
-                snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Copies.Count, snapshot.GameRelease);
-        }
-
-        // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
-        // moment this one is asked for, whichever way this one goes.
-        lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
-
         EnterExclusive();
         try
         {
+            if (arrival() is not { } resolved) return false;
+            var (snapshot, arrived) = resolved;
+            version = arrived;
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Reconciling load order. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
+                    snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Copies.Count, snapshot.GameRelease);
+            }
+
+            // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
+            // moment this one is asked for, whichever way this one goes.
+            lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
+
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
             ReconcileProgressively(held, index, snapshot, token);
+            return true;
         }
         catch (OperationCanceledException ex)
         {
@@ -992,17 +1006,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // Released before the reconcile below opens the same file for its own scope.
         _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
 
-        var (held, version) = (_holder.Current, _holder.Version);
-        if (held.DataFolderPath.Length == 0) return Task.CompletedTask;
         return Task.Factory.StartNew(
-            () => ReconcileUnlessDisposed(held, version),
-            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            RefillUnlessDisposed, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
     }
 
-    private void ReconcileUnlessDisposed(LoadOrderSnapshot snapshot, long version)
+    private void RefillUnlessDisposed()
     {
         lock (_lock) if (_disposed) return;
-        Reconcile(snapshot, version);
+        Reconcile(() => _holder.Held);
     }
 
     // Drops the scope: the copies it has open and the store's connection. Cancels an in-flight

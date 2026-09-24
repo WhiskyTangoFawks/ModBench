@@ -83,6 +83,34 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
     }
 
+    // The refill reads the load order held once it holds the exclusive right, so an arrival that
+    // landed after the rebuild started is the one it fills, even when the refill cancelled that
+    // arrival's own reconcile.
+    [Fact]
+    public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted()
+    {
+        using var data = new PluginFixtureBuilder("store-rebuild-race").WithPlugin("A.esp").WithPlugin("B.esp").Build();
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var refills = new HeldBackScheduler();
+        var holder = new LoadOrderHolder();
+        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance, refillScheduler: refills);
+        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
+        index.Reconcile(onlyA, holder.Apply(onlyA));
+
+        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+        var both = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        var version = holder.Apply(both);
+        var arrival = Task.Run(() => index.Reconcile(both, version));
+        await gate.WaitUntilParkedAsync();
+        var refilling = Task.Run(refills.RunHeldBack);
+        gate.Release();
+        await Task.WhenAll(arrival, refilling, refill);
+
+        Assert.Equal(version, index.Status.Version);
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.True(index.Registers(data.Plugins[1].KeyOf()), "the refill filled the load order the rebuild started with");
+    }
+
     // The process may already have answered a caller with a sequence value the fresh file's own
     // table does not know about; the rebuild must never let Sequence regress within one process.
     [Fact]

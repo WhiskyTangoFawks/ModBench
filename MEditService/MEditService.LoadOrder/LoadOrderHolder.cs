@@ -5,16 +5,21 @@ namespace MEditService.LoadOrder;
 /// arrival); everything else reads Current.</summary>
 public sealed class LoadOrderHolder
 {
-    // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous value whole rather
-    // than a half-applied one.
-    private LoadOrderSnapshot _current = LoadOrderSnapshot.Empty;
-    private long _version;
+    // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous arrival whole: its
+    // snapshot and its version together, never one without the other.
+    private Arrival _held = new(LoadOrderSnapshot.Empty, 0);
+    private readonly Lock _applying = new();
 
-    public LoadOrderSnapshot Current => Volatile.Read(ref _current);
+    public LoadOrderSnapshot Current => Volatile.Read(ref _held).Snapshot;
 
     /// <summary>The version of the last Apply, for a caller waiting until nothing is still
     /// reconciling — a status poll needs this to know which arrival is the latest.</summary>
-    public long Version => Volatile.Read(ref _version);
+    public long Version => Volatile.Read(ref _held).Version;
+
+    /// <summary>The snapshot held and the version it arrived as, read together; null before any
+    /// snapshot has arrived.</summary>
+    public (LoadOrderSnapshot Snapshot, long Version)? Held =>
+        Volatile.Read(ref _held) is { Snapshot.DataFolderPath.Length: > 0 } held ? (held.Snapshot, held.Version) : null;
 
     /// <summary>Every reader of a snapshot change subscribes here, wired at composition. Carries
     /// this Apply's own version, so a subscriber and its caller name the same arrival.</summary>
@@ -25,15 +30,21 @@ public sealed class LoadOrderHolder
     /// current version.</summary>
     public long Apply(LoadOrderSnapshot snapshot)
     {
-        if (snapshot.Equals(Current)) return Version;
-        var version = Interlocked.Increment(ref _version);
-        Volatile.Write(ref _current, snapshot);
-        Changed?.Invoke(snapshot, version);
-        return version;
+        Arrival next;
+        lock (_applying)
+        {
+            var held = _held;
+            if (snapshot.Equals(held.Snapshot)) return held.Version;
+            next = new Arrival(snapshot, held.Version + 1);
+            Volatile.Write(ref _held, next);
+        }
+        Changed?.Invoke(next.Snapshot, next.Version);
+        return next.Version;
     }
 
     /// <summary>The value a read must have. The one place a read refuses for want of a load order:
     /// no snapshot has a data folder to name, so an empty one means none has arrived.</summary>
-    public LoadOrderSnapshot Require() =>
-        Current is { DataFolderPath.Length: > 0 } current ? current : throw new NoLoadOrderException();
+    public LoadOrderSnapshot Require() => Held?.Snapshot ?? throw new NoLoadOrderException();
+
+    private sealed record Arrival(LoadOrderSnapshot Snapshot, long Version);
 }
