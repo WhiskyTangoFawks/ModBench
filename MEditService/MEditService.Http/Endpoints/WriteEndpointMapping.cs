@@ -87,12 +87,13 @@ internal static class WriteEndpointMapping
     internal static IResult OriginNotFound(string origin) =>
         Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
 
-    /// <summary>A tracked mod carries no such origin — loaded but untracked, a state conflict
+    /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now"
     /// rather than <see cref="OriginNotFound"/>'s 404.</summary>
     internal static IResult NotTrackedMod(string origin) =>
         Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
 
-    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400.</summary>
+    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400. Same shape as
+    /// <see cref="MalformedFormKey"/>, kept separate because the argument here is never a FormKey.</summary>
     internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
     /// <summary>The adapter's IOException when a write's destination already holds something — a
