@@ -96,7 +96,8 @@ Options: a separator (built). Top, bottom, priority N, and first or last conflic
 The trigger is the active profile's `modlist.txt` disagreeing with `mods/`: a folder with no line, or
 a line whose folder is gone. Both directions land in one write.
 
-1. A line added for each folder in `mods/` that has none. *catalog Meaning*
+1. A line added for each folder in `mods/` that has none, at the winning end, disabled. *ADR-0017;
+   MO2's refresh gives a mod it has not seen the highest priority, not enabled*
 2. Each line whose folder is gone from `mods/` removed, so the mod leaves the list. *ruling; MO2's
    refresh*
 3. The same path for a folder added or removed by hand, by MO2 or by any other tool. *ADR-0015,
@@ -173,17 +174,15 @@ Two seams, one per side of the driving boundary.
 1. **Separator delete.** It removes a line, and no mod is lost. Should it ask first? I applied Confirm
    what destroys and did not write a confirmation story.
 2. **Where a mod lands in a separator.** The old spec says the end of that section. Accept?
-3. **Mod order and ends.** ADR-0017 says the top of `modlist.txt` is the winning end. The old spec says
-   an installed mod lands "at the bottom". I did not use it.
-4. **Removing a `plugins.txt` line.** `plugin sync` removes a line that nothing provides. That
+3. **Removing a `plugins.txt` line.** `plugin sync` removes a line that nothing provides. That
    destroys data, and it is a system command, so nobody can be asked. Does Confirm what destroys reach
    system commands, or is a line nothing provides not a destruction?
-5. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
+4. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
    list of suffixes it skips. I could not confirm what consumes that setting, so I left it out.
-6. **Order among several new plugins.** Not specified anywhere. No test may assert one.
-7. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
+5. **Order among several new plugins.** Not specified anywhere. No test may assert one.
+6. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
    guard-rail, and the badge reports the fallout. `mo2.md` has no row for it. Add one?
-8. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
+7. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
    diagrams draw no check.
-9. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
+8. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
    `plugins.txt` line for `plugin sync` to remove. Is that intended?

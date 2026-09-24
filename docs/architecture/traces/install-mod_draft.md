@@ -13,6 +13,8 @@ the catalog, the diagrams and the principles settle. The rest is in the Open Que
 The `modlist.txt` line is not written here. The folder appears, and `mod sync` and `plugin sync`
 pick it up. Their stories are in
 [update-load-order-file_draft.md](update-load-order-file_draft.md).
+A new mod lands where `mod sync` puts a folder it has not seen: at the winning end, disabled.
+The user moves it.
 
 ## Shared
 
@@ -64,23 +66,17 @@ The external-change question is tested in
 
 ## Open Questions
 
-1. **Enabled or disabled.** Does a new mod start disabled? The old spec says yes. MO2's own install
-   lands a mod and then sets its priority. Not written above.
-2. **Where the new line goes.** The old spec says "at the bottom". The catalog has a planned position
-   Option. ADR-0017 says the top of `modlist.txt` is the winning end.
-3. **Cross-volume staging.** The old spec refuses it and never copies silently. Accept? It touches the
+1. **Cross-volume staging.** The old spec refuses it and never copies silently. Accept? It touches the
    deployment design session.
-4. **Rollback on an upgrade.** Shared story 4 holds the principle. The old spec cannot roll back once
+2. **Rollback on an upgrade.** Shared story 4 holds the principle. The old spec cannot roll back once
    the first file is removed, and names the folder and what remains. How an upgrade keeps the promise
    is design work for the workup.
-5. **Which `meta.ini` keys change.** The old spec replaces the keys install owns and keeps the old value
+3. **Which `meta.ini` keys change.** The old spec replaces the keys install owns and keeps the old value
    for a key the download does not know, so an unknown version never blanks a known one. Rule or
    detail?
-6. **The name checked twice.** The old spec checks the name at the prompt against `modlist.txt`, and
+4. **The name checked twice.** The old spec checks the name at the prompt against `modlist.txt`, and
    again at install against the disk, which also finds folders no line mentions. Rule or detail?
-7. **Reinstall and the installer choice.** Reinstall from the recorded archive, and quick, manual or
+5. **Reinstall and the installer choice.** Reinstall from the recorded archive, and quick, manual or
    FOMOD, are planned in the catalog.
-8. **The `Everything` preset.** An upgrade overwrites tracked assets as working-tree changes. Does that
+6. **The `Everything` preset.** An upgrade overwrites tracked assets as working-tree changes. Does that
    need a warning?
-9. **Does the tracked mod's question ask?** The diagram draws the dialog. The decompile contract says
-    whether it asks is open.

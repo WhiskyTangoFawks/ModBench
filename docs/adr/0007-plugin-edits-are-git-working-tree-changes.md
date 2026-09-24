@@ -25,8 +25,8 @@ the binary from it.
    never sees a dialect.
 4. **Every edit writes working-tree text; Save & Compile writes the binary.** Compile behaves like
    a compiler: it derives what the format forces it to derive, the masters list
-   ([ADR-0008](0008-masters-are-derived-from-content.md)), the header's counters and renumber
-   cascades, refuses only what it structurally cannot emit, and reports the rest as
+   ([ADR-0008](0008-masters-are-derived-from-content.md)) and the header's counters, refuses
+   only what it structurally cannot emit, and reports the rest as
    Problems-panel diagnostics. The binary it writes is the plugin's meaning, not its old bytes
    ([ADR-0006](0006-the-plugin-is-the-source-of-truth.md)). Commit is
    git's own gesture, ungated; history may hold states that do not build.
