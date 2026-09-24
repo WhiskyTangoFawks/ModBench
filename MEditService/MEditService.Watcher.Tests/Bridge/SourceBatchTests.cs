@@ -124,6 +124,29 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
+    // A move whose two halves settle apart: the new path's batch closed before the old path's
+    // delete arrived, and the folder it went to is where no refresh by key looks.
+    [Fact]
+    public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_ValidatesTheCopyWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, "A.esp");
+        var sorted = Directory.CreateDirectory(Path.Combine(SourceRepository.RootIn(modFolder, "A.esp"), "SortedByHand")).FullName;
+        var document = tree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
+        WatchedTree.Track(modFolder, "A.esp");
+        await tree.ApplyLoadOrder();
+
+        await tree.Observes(() => tree.WriteFile(Path.Combine(sorted, Path.GetFileName(document)), File.ReadAllBytes(document)));
+        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count == 1), "the moved-to path never settled");
+
+        await tree.Observes(() => File.Delete(document));
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Single(tree.Index.Of("validate"));
+        Assert.Single(tree.Index.Of("refresh"));
+    }
+
     [Fact]
     public async Task ADocumentNoCommitFiled_DeletedFromTheWorkingTree_ValidatesTheCopyWhole()
     {

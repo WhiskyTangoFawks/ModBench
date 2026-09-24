@@ -55,11 +55,21 @@ internal static class OtherTool
     internal static void RenamesASourceDocument(string modFolder, string plugin, string textItCarries, string renamedTo)
     {
         var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
+        File.Move(document, Beside(document, renamedTo));
+    }
+
+    /// <summary>The first half of a move by a tool that copies and then deletes, in the same terms as
+    /// <see cref="RenamesASourceDocument"/>.</summary>
+    internal static void CopiesASourceDocument(string document, string copiedTo) =>
+        File.Copy(document, Beside(document, copiedTo));
+
+    private static string Beside(string document, string relativeTarget)
+    {
         var target = Path.Combine(
             Path.GetDirectoryName(document).Require(),
-            string.Format(System.Globalization.CultureInfo.InvariantCulture, renamedTo, Path.GetFileName(document)));
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, relativeTarget, Path.GetFileName(document)));
         Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
-        File.Move(document, target);
+        return target;
     }
 
     /// <summary>The user reverting one document to what the repository last saw: a write under the
