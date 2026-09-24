@@ -1,4 +1,4 @@
-# update-load-order-file: contract (draft)
+# update-load-order-file: contract
 
 Diagram: [update-load-order-file.d2](update-load-order-file.d2). Catalog rows under Mod, Separator,
 Plugin, Profile and Downloaded file, and the system commands `mod sync` and `plugin sync`, in
