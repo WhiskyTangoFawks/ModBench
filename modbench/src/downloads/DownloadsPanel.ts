@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownloads, excludeDownload, includeDownload } from '../downloadsCommands/downloads';
+import { deleteDownloads, excludeDownloads, includeDownloads } from '../downloadsCommands/downloads';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
@@ -141,15 +141,37 @@ async function confirmDelete(names: readonly string[], ask: AskQuestion): Promis
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
-const NOTHING_DELETED: SelectionOutcome<string> = { landed: [], refused: [] };
+const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 
 async function deleteSelection(
   instanceRoot: string, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
 ): Promise<SelectionOutcome<string>> {
-  if (names.length === 0 || !(await confirmDelete(names, ask))) return NOTHING_DELETED;
+  if (names.length === 0 || !(await confirmDelete(names, ask))) return NOTHING_CHANGED;
   const outcome = await deleteDownloads(instanceRoot, names, trash);
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
+  return outcome;
+}
+
+// No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
+// writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
+async function excludeSelection(
+  instanceRoot: string, names: readonly string[], reporter: Reporter,
+): Promise<SelectionOutcome<string>> {
+  if (names.length === 0) return NOTHING_CHANGED;
+  const outcome = await excludeDownloads(instanceRoot, names);
+  reporter.selectionOutcome(
+    `Could not exclude ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
+  return outcome;
+}
+
+async function includeSelection(
+  instanceRoot: string, names: readonly string[], reporter: Reporter,
+): Promise<SelectionOutcome<string>> {
+  if (names.length === 0) return NOTHING_CHANGED;
+  const outcome = await includeDownloads(instanceRoot, names);
+  reporter.selectionOutcome(
+    `Could not include ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
   return outcome;
 }
 
@@ -195,16 +217,10 @@ export function registerDownloadsMultiRowCommands(
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
       deleteSelection(instanceRoot, selectionNames(clicked, selected), reporter, ask, trash)),
-    vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-      for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await excludeDownload(instanceRoot, name)));
-      }
-    }),
-    vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-      for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Include', name, reporter, async () => applyOrThrow(await includeDownload(instanceRoot, name)));
-      }
-    }),
+    vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
+      excludeSelection(instanceRoot, selectionNames(clicked, selected), reporter)),
+    vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
+      includeSelection(instanceRoot, selectionNames(clicked, selected), reporter)),
   ];
 }
 

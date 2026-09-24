@@ -3,10 +3,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deleteDownloads, excludeDownload, includeDownload } from '../downloads';
+import { deleteDownloads, excludeDownload, excludeDownloads, includeDownload, includeDownloads } from '../downloads';
 import { scanDownloads } from '../../instanceLoader/downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../../mo2Codecs/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../../test/mo2/corpusFixture';
+import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const ARCHIVE = `downloads/${NAME}`;
@@ -42,7 +43,7 @@ describe('downloads commands corpus', () => {
   it('exclude writes one sidecar and nothing else, and the row reads back hidden', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(true);
@@ -51,7 +52,7 @@ describe('downloads commands corpus', () => {
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(dir, MANUAL)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, MANUAL)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect((await rowFor(MANUAL)).hidden).toBe(true);
@@ -61,10 +62,68 @@ describe('downloads commands corpus', () => {
     await excludeDownload(dir, NAME);
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await includeDownload(dir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(false);
+  });
+
+  it('including a metaless archive touches nothing — visible is already its default', async () => {
+    const before = await snapshotTree(dir);
+
+    expect(await includeDownload(dir, MANUAL)).toEqual({ applied: true, wrote: false });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+    expect((await rowFor(MANUAL)).hidden).toBe(false);
+  });
+
+  it('excluding an already excluded download touches nothing', async () => {
+    await excludeDownload(dir, NAME);
+    const before = await snapshotTree(dir);
+
+    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true, wrote: false });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('including an already included download touches nothing, with a real removed=false key on disk', async () => {
+    await excludeDownload(dir, NAME); // removed=true, a real change
+    await includeDownload(dir, NAME); // removed=false, a real change — the key now exists on disk
+    const before = await snapshotTree(dir);
+
+    expect(await includeDownload(dir, NAME)).toEqual({ applied: true, wrote: false });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('excludeDownloads excludes every landing name and refuses the one gone from disk, by name', async () => {
+    const before = await snapshotTree(dir);
+
+    const outcome = await excludeDownloads(dir, [NAME, 'Gone Archive.7z', MANUAL]);
+
+    assertSelectionOutcome(outcome, {
+      landed: [NAME, MANUAL],
+      refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
+    });
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
+    expect((await rowFor(NAME)).hidden).toBe(true);
+    expect((await rowFor(MANUAL)).hidden).toBe(true);
+  });
+
+  it('includeDownloads includes every landing name and refuses the one gone from disk, by name', async () => {
+    await excludeDownload(dir, NAME);
+    await excludeDownload(dir, MANUAL);
+    const before = await snapshotTree(dir);
+
+    const outcome = await includeDownloads(dir, [NAME, 'Gone Archive.7z', MANUAL]);
+
+    assertSelectionOutcome(outcome, {
+      landed: [NAME, MANUAL],
+      refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
+    });
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
+    expect((await rowFor(NAME)).hidden).toBe(false);
+    expect((await rowFor(MANUAL)).hidden).toBe(false);
   });
 
   // The other direction of the same key: MO2 hides a download, Modbench shows it hidden.
