@@ -15,8 +15,9 @@ namespace MEditService.Http.Tests.Architecture;
 public sealed class WriteRouteHandlerTests
 {
     // The wire door for each gesture, and the type behind it. Spelled rather than derived, so a
-    // route that stops reaching its handler fails here rather than following the change.
-    private static readonly (string Method, string Pattern, Type Handler)[] Routes =
+    // route that stops reaching its handler fails here rather than following the change. Internal:
+    // WriteRouteSeamTests checks its own route set against this one.
+    internal static readonly (string Method, string Pattern, Type Handler)[] Routes =
     [
         ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
         ("POST", "/records/delete", typeof(DeleteRecordHandler)),

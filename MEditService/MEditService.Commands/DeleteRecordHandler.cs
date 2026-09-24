@@ -11,17 +11,21 @@ namespace MEditService.Commands;
 public sealed class DeleteRecordHandler
 {
     private readonly WriteTargets _targets;
+    private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger<DeleteRecordHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal DeleteRecordHandler(WriteTargets targets, ILogger<DeleteRecordHandler> logger) =>
-        (_targets, _logger) = (targets, logger);
+    internal DeleteRecordHandler(WriteTargets targets, LoadOrderHolder loadOrder, ILogger<DeleteRecordHandler> logger) =>
+        (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
 
     /// <summary>Each record is deleted or refused on its own, so one refusal leaves the rest of the
-    /// selection to land. Every record shape resolves through the unit holding it.</summary>
+    /// selection to land. Throws <see cref="NoLoadOrderException"/> when none is held at all
+    /// (ADR-0013 invariant 4).</summary>
     public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
     {
+        _loadOrder.Require();
+
         var applied = new List<RecordAt>();
         var refused = new List<RecordRefused>();
         var seen = new HashSet<RecordAt>(SameRecord.Instance);

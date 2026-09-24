@@ -14,7 +14,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     private readonly HttpClient _client = loaded.Client;
     private readonly TestPluginFixture _fixture = loaded.Plugin;
 
-    private static void AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
+    private static JsonElement AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
     {
         var ct = response.Content.Headers.ContentType?.MediaType;
         Assert.Equal(ProblemContentType, ct);
@@ -22,6 +22,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         var doc = JsonDocument.Parse(body).RootElement;
         Assert.Equal(expectedStatus, doc.GetProperty("status").GetInt32());
+        return doc;
     }
 
     // --- POST /load-order ---
@@ -104,6 +105,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
+    [InlineData("deleteRecord", 503)]
     // Each route's own "no load order" guard: the request body's validation passes (real values
     // below), so the request reaches the no-load-order branch and the 503 these routes declare
     // via .ProducesProblem(503).
@@ -120,10 +122,15 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
                 "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { origin = "NoLoadOrderMod", preset = "Edits" }),
+            "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
+            {
+                records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } },
+            }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 
-        AssertIsProblemDetails(resp, expectedStatus);
+        var problem = AssertIsProblemDetails(resp, expectedStatus);
+        Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
 }
