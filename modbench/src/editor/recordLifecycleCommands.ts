@@ -116,19 +116,19 @@ type RecordLifecycleClient = Pick<MEditClient,
   // of its own.
   | 'editRecord'>;
 
-/** ADR-0018: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
- *  the titles match its captions exactly. No ambient fallback is worth a QuickPick, so all three
- *  are palette-gated. */
-export function registerRecordLifecycleCommands(
-  client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
-  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
-): vscode.Disposable[] {
-  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-  // A create/delete/renumber landed: the same re-derive every write in this file needs
-  // (plugins.md) — a changed record can start or stop matching the active filter.
-  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
+interface RenumberDeps {
+  client: RecordLifecycleClient;
+  outputChannel: vscode.LogOutputChannel;
+  reporter: Reporter;
+  ask: AskQuestion;
+  resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>;
+  onWritten: () => void;
+}
 
+// A single record is prompted for its new FormID; a selection is not.
+function makeRenumber(
+  { client, outputChannel, reporter, ask, resolveOriginOrReport, onWritten }: RenumberDeps,
+): (identities: readonly RecordIdentity[]) => Promise<void> {
   // Undefined when a count failed: the confirmation then asks without one.
   async function referencesTo(records: readonly RecordIdentity[]): Promise<number | undefined> {
     try {
@@ -194,6 +194,28 @@ export function registerRecordLifecycleCommands(
       `Could not renumber ${refused.length} of ${identities.length} records.`, { landed, refused }, recordLabel);
   }
 
+  return async (identities) => {
+    const [only] = identities;
+    if (identities.length === 1 && only) await renumberOne(only);
+    else if (identities.length > 1) await renumberSelection(identities);
+  };
+}
+
+/** ADR-0018: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
+ *  the titles match its captions exactly. No ambient fallback is worth a QuickPick, so all three
+ *  are palette-gated. */
+export function registerRecordLifecycleCommands(
+  client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter, ask: AskQuestion,
+  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
+): vscode.Disposable[] {
+  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
+  // A create/delete/renumber landed: the same re-derive every write in this file needs
+  // (plugins.md) — a changed record can start or stop matching the active filter.
+  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
+
+  const renumber = makeRenumber({ client, outputChannel, reporter, ask, resolveOriginOrReport, onWritten });
+
   return [
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
     // by editing its EditorID, matching xEdit's own gesture.
@@ -232,10 +254,7 @@ export function registerRecordLifecycleCommands(
     }),
 
     vscode.commands.registerCommand('modbench.record.renumber', async (clicked?: unknown, selected?: unknown[]) => {
-      const identities = selectedRecords(clicked, selected);
-      const [only] = identities;
-      if (identities.length === 1 && only) await renumberOne(only);
-      else if (identities.length > 1) await renumberSelection(identities);
+      await renumber(selectedRecords(clicked, selected));
     }),
   ];
 }
