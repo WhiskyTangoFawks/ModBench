@@ -227,7 +227,7 @@ describe('excludeDownloads / includeDownloads — over a selection', () => {
 });
 
 describe('deleteDownloads', () => {
-  it('trashes the sidecar BEFORE the archive: a mid-failure leaves a metaless archive, never a lone sidecar', async () => {
+  it('trashes the archive BEFORE its sidecar: a mid-failure leaves the sidecar in place, never a metaless trash', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const sidecar = await writeSidecar(root, 'foo.7z', '[General]\r\n');
@@ -238,8 +238,8 @@ describe('deleteDownloads', () => {
       return Promise.resolve();
     });
 
-    expect(outcome).toEqual({ landed: ['foo.7z'], refused: [] });
-    expect(trashed).toEqual([sidecar, archive]);
+    expect(outcome).toEqual({ landed: [{ name: 'foo.7z' }], refused: [] });
+    expect(trashed).toEqual([archive, sidecar]);
   });
 
   it('trashes only the archive when the download has no sidecar', async () => {
@@ -252,17 +252,40 @@ describe('deleteDownloads', () => {
       return Promise.resolve();
     });
 
-    expect(outcome).toEqual({ landed: ['manual.7z'], refused: [] });
+    expect(outcome).toEqual({ landed: [{ name: 'manual.7z' }], refused: [] });
     expect(trashed).toEqual([archive]);
   });
 
-  it('refuses with the trash’s own reason when it fails', async () => {
+  it('refuses with the trash’s own reason when the archive cannot go, and never touches the sidecar', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
+    await writeSidecar(root, 'foo.7z', '[General]\r\n');
+    const trashed: string[] = [];
 
-    expect(await deleteDownloads(root, ['foo.7z'], () => Promise.reject(new Error('EPERM')))).toEqual({
-      landed: [],
-      refused: [{ item: 'foo.7z', reason: 'EPERM' }],
+    const outcome = await deleteDownloads(root, ['foo.7z'], (path) => {
+      trashed.push(path);
+      return Promise.reject(new Error('EPERM'));
     });
+
+    expect(outcome).toEqual({ landed: [], refused: [{ item: { name: 'foo.7z' }, reason: 'EPERM' }] });
+    expect(trashed).toEqual([join(root, 'downloads', 'foo.7z')]);
+  });
+
+  // The archive is already gone once the sidecar's trash is attempted, so this failure is not a
+  // refusal (ADR-0019: a landed gesture that would show something untrue is logged, not failed).
+  it('a sidecar trash failure after the archive landed reports the delete as done, naming the reason', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    const sidecar = await writeSidecar(root, 'foo.7z', '[General]\r\n');
+    const trashed: string[] = [];
+
+    const outcome = await deleteDownloads(root, ['foo.7z'], (path) => {
+      trashed.push(path);
+      if (path === sidecar) return Promise.reject(new Error('EPERM'));
+      return Promise.resolve();
+    });
+
+    expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metaLeftBehind: 'EPERM' }], refused: [] });
+    expect(trashed).toEqual([archive, sidecar]);
   });
 });
