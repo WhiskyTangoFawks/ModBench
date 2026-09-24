@@ -206,4 +206,18 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod, group], byRow).selectionKind).toBeUndefined();
     expect(modsKeyContext([], byRow).selectionKind).toBeUndefined();
   });
+
+  it('F2 and a singular gesture see whether exactly one row is selected', () => {
+    expect(modsKeyContext([group], byRow).singleRow).toBe(true);
+    expect(modsKeyContext([group, separatorRow('Other')], byRow).singleRow).toBe(false);
+    expect(modsKeyContext([], byRow).singleRow).toBe(false);
+  });
+
+  it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', () => {
+    expect(modsKeyContext([enabledMod, group], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: false });
+    expect(modsKeyContext([disabledMod], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
+    expect(modsKeyContext([enabledMod, disabledMod], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: true });
+    expect(modsKeyContext([enabledMod], () => false)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
+    expect(modsKeyContext([group], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: false });
+  });
 });

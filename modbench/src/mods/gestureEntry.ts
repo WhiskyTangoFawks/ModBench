@@ -73,19 +73,27 @@ export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, .
   return entry.selection.filter(isOf(kinds));
 }
 
-/** What the Mods keys' `when` clauses read off the selection, since a key is handed no row. */
+/** What the Mods keys' and palette entries' `when` clauses read off the selection, since neither
+ *  is handed a row. */
 export interface ModsKeyContext {
   readonly selectionToggle?: 'enable' | 'disable';
   readonly selectionKind?: ArgumentKind;
+  readonly singleRow: boolean;
+  readonly holdsEnabledMod: boolean;
+  readonly holdsDisabledMod: boolean;
 }
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
-  const [firstMod] = selection.filter(isOf(['mod']));
+  const mods = selection.filter(isOf(['mod']));
+  const [firstMod] = mods;
   const kinds = new Set(selection.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
   const [onlyKind] = kinds;
   return {
     selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
+    singleRow: selection.length === 1,
+    holdsEnabledMod: mods.some(isEnabled),
+    holdsDisabledMod: mods.some((row) => !isEnabled(row)),
   };
 }
 

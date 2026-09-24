@@ -10,6 +10,7 @@ import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
 import { isRecord } from '../manifest';
+import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -908,12 +909,17 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   let original = '';
 
   // The folder's own arrival can land a sync that adds its line disabled, so each test enables
-  // the mod itself once the folder is known.
+  // the mod itself once the folder is known. Mods' own Ctrl+C copy value names what is selected.
   const enabledAndSelected = async () => {
     await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '+Palette Mod\r\n'));
-    await vscode.commands.executeCommand('modbench.modList.focus');
-    await vscode.commands.executeCommand('list.focusFirst');
-    await vscode.commands.executeCommand('list.select');
+    await waitFor('the mod row to be focused and selected', async () => {
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('modbench.modList.focus');
+      await vscode.commands.executeCommand('list.focusFirst');
+      await vscode.commands.executeCommand('list.select');
+      await vscode.commands.executeCommand('modbench.record.copyValue', MODS_KEY_ARGS);
+      return (await vscode.env.clipboard.readText()) === 'Palette Mod';
+    });
   };
 
   before(async () => {
@@ -943,11 +949,13 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
     if (!root) this.skip();
     this.timeout(30_000);
     await enabledAndSelected();
-    await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
-    await new Promise((r) => setTimeout(r, 1500));
-    await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-    await waitFor('the palette\'s disable to land in the Instance', () =>
-      instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled));
+    // The API shows no palette item, so each try reopens it and accepts its top item until the
+    // disable lands; a try made before the item is listed accepts nothing.
+    await waitFor('the palette\'s disable to land in the Instance', async () => {
+      await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      return instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled);
+    });
   });
 });
 

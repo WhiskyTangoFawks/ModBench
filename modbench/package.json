@@ -493,31 +493,31 @@
         },
         {
           "command": "modbench.mod.enable",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsDisabledMod"
         },
         {
           "command": "modbench.mod.disable",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsEnabledMod"
         },
         {
           "command": "modbench.separator.add",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind && modbench.mod.singleRow"
         },
         {
           "command": "modbench.mod.move",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind"
         },
         {
           "command": "modbench.mod.uninstall",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod"
         },
         {
           "command": "modbench.separator.rename",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == separator && modbench.mod.singleRow"
         },
         {
           "command": "modbench.separator.delete",
-          "when": "focusedView == modbench.modList && modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == separator"
         },
         {
           "command": "modbench.plugin.reveal",
@@ -1003,7 +1003,7 @@
         "command": "modbench.separator.rename",
         "key": "f2",
         "mac": "enter",
-        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator"
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator && modbench.mod.singleRow"
       },
       {
         "command": "modbench.record.copyValue",

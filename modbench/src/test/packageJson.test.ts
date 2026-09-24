@@ -918,6 +918,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(placed(rowMenu('viewItem == overwrite'))).toEqual([['modbench.mod.openFolder', '1_open']]);
   });
 
+  const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
   // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
   const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
@@ -931,21 +932,29 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       { command: 'modbench.mod.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == disable`, args: undefined },
       { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },
       { command: 'modbench.separator.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
-      { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
+      { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_SEPARATOR}`, args: undefined },
       { command: 'modbench.record.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
     ]);
   });
 
+  // commands.md, No dead entries: each is listed only while the selection holds what it acts on.
   const MODS_PALETTE = [
-    'modbench.mod.enable', 'modbench.mod.disable', 'modbench.mod.move', 'modbench.separator.add',
-    'modbench.separator.rename', 'modbench.separator.delete', 'modbench.mod.uninstall',
-    'modbench.mod.createEmpty', 'modbench.mod.install',
-  ];
+    ['modbench.mod.enable', 'modbench.mod.holdsDisabledMod'],
+    ['modbench.mod.disable', 'modbench.mod.holdsEnabledMod'],
+    ['modbench.mod.move', 'modbench.mod.selectionKind'],
+    ['modbench.separator.add', 'modbench.mod.selectionKind && modbench.mod.singleRow'],
+    ['modbench.separator.rename', ONE_SEPARATOR],
+    ['modbench.separator.delete', 'modbench.mod.selectionKind == separator'],
+    ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
+    ['modbench.mod.createEmpty', undefined],
+    ['modbench.mod.install', undefined],
+  ] as const;
 
-  it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus', (command) => {
+  it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === command);
-    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.modList && ${IN_AN_INSTANCE}`]);
+    const focused = `focusedView == modbench.modList && ${IN_AN_INSTANCE}`;
+    expect(entries.map((e) => e.when)).toEqual([holds === undefined ? focused : `${focused} && ${holds}`]);
   });
 
   it('the empty list\'s message names the overflow\'s own titles', () => {

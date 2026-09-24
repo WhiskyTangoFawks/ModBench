@@ -176,13 +176,23 @@ describe('the Mods view tells its keys what the selection holds', () => {
     const provider = new ModListProvider({ instance, instanceRoot: root });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ });
 
-    select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
-    expect(h.state.contextKeys.get('modbench.mod.selectionToggle')).toBe('enable');
-    expect(h.state.contextKeys.get('modbench.mod.selectionKind')).toBe('mod');
+    const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
+      .map((name) => `modbench.mod.${name}`);
+    const keys = () => Object.fromEntries(SELECTION_KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
+    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
+    const separator = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
 
-    select(modListView, [new SeparatorNode({ kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul', enabled: true }, [])]);
-    expect(h.state.contextKeys.get('modbench.mod.selectionToggle')).toBeUndefined();
-    expect(h.state.contextKeys.get('modbench.mod.selectionKind')).toBe('separator');
+    select(modListView, [harderVats]);
+    expect(keys()).toEqual({
+      'modbench.mod.selectionToggle': 'enable', 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true,
+      'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': true,
+    });
+
+    select(modListView, [separator('Radfall - All-In-One Survival Overhaul'), separator('Unassigned (Modlist Development)')]);
+    expect(keys()).toEqual({
+      'modbench.mod.selectionToggle': undefined, 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': false,
+      'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': false,
+    });
   });
 
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {

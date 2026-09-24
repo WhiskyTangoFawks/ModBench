@@ -49,9 +49,10 @@ export function createModListView(
   modListFilter.refresh();
   own(modListProvider.onDidChangeTreeData(showCount));
   const showKeyContext = () => {
-    const { selectionToggle, selectionKind } = modsKeyContext(modListView.selection, (row) => modListProvider.isEnabled(row));
-    void vscode.commands.executeCommand('setContext', 'modbench.mod.selectionToggle', selectionToggle);
-    void vscode.commands.executeCommand('setContext', 'modbench.mod.selectionKind', selectionKind);
+    const context = modsKeyContext(modListView.selection, (row) => modListProvider.isEnabled(row));
+    for (const [name, value] of Object.entries(context)) {
+      void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, value);
+    }
   };
   showKeyContext();
   own(modListView.onDidChangeSelection(showKeyContext));
