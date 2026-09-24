@@ -14,6 +14,7 @@ import { resolvePluginDestination, type PluginDestinationChoice } from '../plugi
 import { appendPlugin } from '../../pluginsCommands/plugins';
 import { present } from '../../ports/present';
 import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 
 const PROFILE = 'Default';
 
@@ -32,6 +33,7 @@ describe('New Plugin lands the file and the plugins.txt line, for both remaining
     instance = new Instance({
       instanceRoot: dir,
       resolveGameDirectory: resolvesNotFound,
+      resolveDownloadsDirectory: downloadsDirectoryResolver(),
       log: () => {},
     logReadFailure: () => {},
     });

@@ -81,6 +81,7 @@ import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 import { resolvesNotFound } from './mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 const command = commandInvoker(h.state);
@@ -90,6 +91,7 @@ async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: resolvesNotFound,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });

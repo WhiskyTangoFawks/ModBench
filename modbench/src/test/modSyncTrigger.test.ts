@@ -16,6 +16,7 @@ import { syncMods, type ModSyncResult } from '../modlist/modlist';
 import { installFromFolder } from '../install/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 import { modsDir } from '../instanceAdapter/layout';
 import { present } from '../ports/present';
 
@@ -67,6 +68,7 @@ async function wiredInstance(): Promise<{
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: resolvesDataFolder,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: () => {},
     logReadFailure: () => {},
   });
