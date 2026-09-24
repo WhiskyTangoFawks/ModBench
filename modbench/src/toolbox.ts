@@ -414,7 +414,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const instance = own(new Instance({
     instanceRoot, log, logReadFailure: (line) => outputChannel.error(line),
     resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(undefined, log),
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));

@@ -54,3 +54,5 @@ export const MODS_GLOB = `${MODS}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
+/** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
+export const DOWNLOADS_WATCH_GLOB = '**';

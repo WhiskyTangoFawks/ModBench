@@ -58,7 +58,7 @@ export interface GameDetectors {
   winePrefix: (steamAppId: string) => Promise<string | null>;
 }
 
-export const STEAM: GameDetectors = {
+const STEAM: GameDetectors = {
   paths: (game) => detectGamePaths(process.platform, game),
   winePrefix: detectWinePrefix,
 };

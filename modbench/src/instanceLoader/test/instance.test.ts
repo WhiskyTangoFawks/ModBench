@@ -60,7 +60,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
       iniTextsResolved.push(iniText);
       return resolve(iniText);
     },
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(undefined, (msg) => logs.push(msg)),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
@@ -326,6 +326,40 @@ describe('Instance — built by watching', () => {
     expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true, true]);
   });
 
+  // A watcher just bound is not yet armed at the OS level; a file landing in that gap fires no
+  // watcher event (never fired here) — only the rebind's own follow-up recompute can catch it.
+  it('catches a file written in the gap before the just-bound downloads watcher can arm', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh(); // binds the downloads watcher for the first time
+    const before = instance.sequence;
+
+    await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
+
+    const after = await pastSequence(instance, before);
+    expect(after.downloads.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
+  });
+
+  it('a rebind that lands after dispose() creates no orphan downloads watcher', async () => {
+    const root = await cloneCorpusFixture();
+    roots.push(root);
+    let resolveDownloadsDir: ((dir: string) => void) | undefined;
+    const pending = new Promise<string>((resolve) => { resolveDownloadsDir = resolve; });
+    const instance = new Instance({
+      instanceRoot: root,
+      resolveGameDirectory: resolvesDataFolder,
+      resolveDownloadsDirectory: () => pending,
+      log: () => {}, logReadFailure: () => {},
+    });
+    instances.push(instance);
+
+    const refreshed = instance.refresh(); // recompute begins, blocked on the pending resolver
+    instance.dispose();
+    present(resolveDownloadsDir, 'the captured resolver')(join(root, 'downloads'));
+    await refreshed;
+
+    expect(watchers.some((w) => !w.disposed)).toBe(false);
+  });
+
   // download_directory itself can move — the settings-file watcher is what notices the ini
   // rewrite — so the watcher aimed at the old folder must not linger once a newer one replaces it.
   it('rebinds the downloads watcher to the newly resolved folder when download_directory moves, disposing the old one', async () => {
@@ -341,6 +375,25 @@ describe('Instance — built by watching', () => {
     expect(instance.value.paths.downloadsDir).toBe(join(root, 'MovedDownloads'));
     expect(originalWatcher.disposed).toBe(true);
     expect(downloadsWatcherFor(instance).base).toBe(join(root, 'MovedDownloads'));
+  });
+
+  // An untranslatable download_directory must not fail the whole recompute — Mods and Plugins do
+  // not depend on downloads/, so a folder Modbench cannot resolve loses only the downloads rows.
+  it('lands mods and plugins even when download_directory names an untranslatable drive letter', async () => {
+    const { root, instance, logs } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+    const iniPath = join(root, 'ModOrganizer.ini');
+    const originalIni = await readFile(iniPath, 'utf8');
+
+    await writeFile(iniPath, `${originalIni}download_directory=D:\\Games\\downloads\r\n`);
+    await instance.refresh();
+
+    expect(instance.sequence).toBeGreaterThan(before);
+    expect(instance.readFailure).toBeUndefined();
+    expect(instance.value.mods.length).toBeGreaterThan(0);
+    expect(instance.value.paths.downloadsDir).toBe(join(root, 'downloads'));
+    expect(logs.some((l) => l.includes('download_directory'))).toBe(true);
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {

@@ -17,6 +17,10 @@ const iniOf = (downloadDirectory?: string): string =>
 const resolve = (instanceRoot: string, ini: string, detectors: GameDetectors = NO_DETECTORS) =>
   downloadsDirectoryResolver(detectors)(instanceRoot, ini);
 
+const resolveLogging = (
+  instanceRoot: string, ini: string, detectors: GameDetectors, log: (line: string) => void,
+) => downloadsDirectoryResolver(detectors, log)(instanceRoot, ini);
+
 describe('the downloads directory resolver', () => {
   const INSTANCE_ROOT = join('/instances', 'My Instance');
 
@@ -33,7 +37,10 @@ describe('the downloads directory resolver', () => {
     expect(await resolve(INSTANCE_ROOT, iniOf(outside))).toBe(outside);
   });
 
-  it('resolves a relative path against the instance root, as %BASE_DIR%\'s own default does', async () => {
+  // Real MO2 resolves a relative value against its own process working directory
+  // (settings.cpp:1667-1686), not determinable from the instance alone — Modbench's own choice
+  // pending a maintainer answer, not a claim this matches MO2 in every case.
+  it('resolves a relative path against the instance root, Modbench\'s own choice absent a determinable MO2 working directory', async () => {
     expect(await resolve(INSTANCE_ROOT, iniOf('MyDownloads'))).toBe(join(INSTANCE_ROOT, 'MyDownloads'));
   });
 
@@ -57,5 +64,36 @@ describe('the downloads directory resolver', () => {
     // iniOf already wraps every value it writes in @ByteArray(...); this proves the resolver
     // reads the unwrapped text, not the literal wrapper, by asserting on the unwrapped default.
     expect(await resolve(INSTANCE_ROOT, iniOf('Downloads'))).toBe(join(INSTANCE_ROOT, 'Downloads'));
+  });
+
+  // An untranslatable configured folder must not fail the whole Instance recompute (Mods and
+  // Plugins do not depend on downloads/) — it falls back to the default folder instead, logging
+  // why, the same "no downloads yet" state an absent folder already reaches.
+  describe('an untranslatable download_directory falls back rather than rejecting', () => {
+    it('falls back to the default folder for a drive letter neither Z nor C', async () => {
+      const logged: string[] = [];
+
+      const resolved = await resolveLogging(INSTANCE_ROOT, iniOf('D:\\Games\\downloads'), NO_DETECTORS, (l) => logged.push(l));
+
+      expect(resolved).toBe(join(INSTANCE_ROOT, 'downloads'));
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toMatch(/download_directory/);
+      expect(logged[0]).toMatch(/drive/i);
+    });
+
+    it('falls back to the default folder for a C: path with no determinable Proton prefix', async () => {
+      const logged: string[] = [];
+      const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(null) };
+
+      const resolved = await resolveLogging(INSTANCE_ROOT, iniOf('C:\\Games\\downloads'), detectors, (l) => logged.push(l));
+
+      expect(resolved).toBe(join(INSTANCE_ROOT, 'downloads'));
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toMatch(/prefix/i);
+    });
+
+    it('never rejects — the untranslatable path resolves rather than throwing, with no log callback required', async () => {
+      await expect(resolve(INSTANCE_ROOT, iniOf('D:\\Games\\downloads'))).resolves.toBe(join(INSTANCE_ROOT, 'downloads'));
+    });
   });
 });

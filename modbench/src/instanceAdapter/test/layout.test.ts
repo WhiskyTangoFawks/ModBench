@@ -6,6 +6,7 @@ import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../../mo2Codecs/modlistTe
 import { SETTINGS_FILE_NAME } from '../../mo2Codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../../mo2Codecs/pluginsText';
 import {
+  DOWNLOADS_WATCH_GLOB,
   MODLIST_GLOB,
   MODS_GLOB,
   OVERWRITE_GLOB,
@@ -76,6 +77,12 @@ describe('MO2 layout', () => {
     expect(OVERWRITE_GLOB).toBe('overwrite/**');
     expect(MODLIST_GLOB).toBe('profiles/*/modlist.txt');
     expect(PLUGINS_GLOB).toBe('profiles/*/plugins.txt');
+  });
+
+  // Downloads' own base is the resolved folder itself (instanceAdapter/downloadsDirectory.ts),
+  // never the instance root, so its glob is everything under that base rather than a segment.
+  it('names downloads\' own watch glob as everything under its base, not an instance-relative segment', () => {
+    expect(DOWNLOADS_WATCH_GLOB).toBe('**');
   });
 
   it('joins a name with separators in it as one more path segment, never as a second argument', () => {

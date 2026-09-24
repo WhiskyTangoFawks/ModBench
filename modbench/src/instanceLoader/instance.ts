@@ -231,12 +231,13 @@ export class Instance implements vscode.Disposable {
 
   private readonly watchers: vscode.Disposable[];
 
-  // Downloads is the one watcher whose base moves — resolved from the ini, not fixed at the
-  // instance root — so it is rebuilt in `recompute()` against each generation's own folder,
-  // never listed in `watchers` above alongside every fixed-base one.
+  // Downloads' own watcher: its base is resolved from the ini, so it is rebuilt in `recompute()`
+  // against each generation's own folder rather than held in `watchers` above.
   private downloadsWatcher: vscode.Disposable | undefined;
 
   private downloadsWatcherDir: string | undefined;
+
+  private disposed = false;
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.instanceRoot);
@@ -301,6 +302,7 @@ export class Instance implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.disposed = true;
     clearTimeout(this.timer);
     for (const watcher of this.watchers) watcher.dispose();
     this.downloadsWatcher?.dispose();
@@ -340,14 +342,14 @@ export class Instance implements vscode.Disposable {
     return undefined;
   }
 
-  // The resolved folder can change generation to generation — a `download_directory` edit is
-  // itself a recompute trigger (the settings-file watcher) — so the watcher aimed at it is
-  // rebuilt here rather than fixed once at construction, alongside every instance-relative one.
+  // A watcher just bound is not yet armed at the OS level (ADR-0003); one more recompute against
+  // the same folder catches a file that landed in that gap — a no-op the second time, no loop.
   private rebindDownloadsWatcherIfMoved(downloadsDir: string): void {
-    if (this.downloadsWatcherDir === downloadsDir) return;
+    if (this.disposed || this.downloadsWatcherDir === downloadsDir) return;
     this.downloadsWatcher?.dispose();
     this.downloadsWatcher = createDownloadsWatcher(downloadsDir, () => this.schedule(), 0);
     this.downloadsWatcherDir = downloadsDir;
+    this.schedule();
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
