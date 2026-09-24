@@ -46,7 +46,7 @@ public sealed class DeleteRecordHandler
             if (result.Applied) applied.Add(record);
             else refused.Add(new RecordRefused(record, result.Refusal, result.Message));
         }
-        return new PerRecordResult(applied, refused);
+        return PerRecordResult.PerRecord(applied, refused);
     }
 
     // A tree another tool changed, or a file system that refused the write, is this record's answer,

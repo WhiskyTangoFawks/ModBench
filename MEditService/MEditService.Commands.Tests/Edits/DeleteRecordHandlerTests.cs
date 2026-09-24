@@ -79,48 +79,94 @@ public sealed class DeleteRecordHandlerTests
         Assert.True(File.Exists(npcFile), "the refused record's document must survive");
     }
 
-    // A cell directory nothing may write to stops the worldspace's removal partway: its own document
-    // and the other block's whole subtree are gone by then, the locked cell's document is not.
     [Fact]
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_PutsItsWholeTreeBack_RefusesIt_AndLandsTheRest()
     {
-        var (npc, worldspace, otherNpc) = (FormKey.Null, FormKey.Null, FormKey.Null);
-        using var mod = SourceModFixture.Tracked("PartwayContainer.esp", "PartwayContainerMod", plugin =>
-        {
-            npc = plugin.Npcs.AddNew("FirstNpc").FormKey;
-            var world = plugin.Worldspaces.AddNew("LockedWorld");
-            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "LockedCell" }, x: 0, y: 0));
-            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "FreeCell" }, x: 1, y: 1));
-            worldspace = world.FormKey;
-            otherNpc = plugin.Npcs.AddNew("SecondNpc").FormKey;
-        });
+        using var mod = WorldspaceWithALockedCell(out var npcAt, out var worldAt, out var otherNpcAt);
         var worldDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedWorld\"")).Require();
         var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
         var before = FilesUnder(worldDirectory);
-        var (npcAt, worldAt, otherNpcAt) = (
-            new RecordAt(mod.Plugin, npc.ToString()), new RecordAt(mod.Plugin, worldspace.ToString()),
-            new RecordAt(mod.Plugin, otherNpc.ToString()));
 
-        PerRecordResult result;
-        Chmod(cellDirectory, "500");
-        try
-        {
-            result = mod.DeleteHandler.DeleteRecords([npcAt, worldAt, otherNpcAt]);
-        }
-        finally
-        {
-            Chmod(cellDirectory, "700");
-        }
+        var result = DeleteWhileLocked(mod, cellDirectory, [npcAt, worldAt, otherNpcAt]);
 
         Assert.Equal([npcAt, otherNpcAt], result.Applied);
+        Assert.Empty(DocumentsCarrying(mod, "\"FirstNpc\""));
+        Assert.Empty(DocumentsCarrying(mod, "\"SecondNpc\""));
         var refused = Assert.Single(result.Refused);
         Assert.Equal(worldAt, refused.Record);
         Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
-        Assert.Contains(worldspace.ToString(), refused.Message, StringComparison.Ordinal);
+        Assert.Contains(worldAt.FormKey, refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, FilesUnder(worldDirectory));
     }
 
-    // One block, one sub-block and one cell, all at the block's own coordinates.
+    // ADR-0003: a document still standing may hold another tool's write since the pre-image was read.
+    [Fact]
+    public void DeleteRecords_WhenAContainersRemovalFailsPartway_NeverWritesTheDocumentsItDidNotRemove()
+    {
+        using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
+        var standing = DocumentCarrying(mod, "\"LockedCell\"");
+        var writtenAt = File.GetLastWriteTimeUtc(standing);
+
+        var result = DeleteWhileLocked(mod, Path.GetDirectoryName(standing).Require(), [worldAt]);
+
+        Assert.Equal(worldAt, Assert.Single(result.Refused).Record);
+        Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(standing));
+    }
+
+    // A link dangles once the removal takes its target, and nothing can be made at its path again.
+    [Fact]
+    public void DeleteRecords_WhenAPathCannotBePutBack_PutsBackTheRest_AndRefusesWithTheCauseAndThatPath()
+    {
+        using var mod = WorldspaceWithALockedCell(out _, out var worldAt, out _);
+        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
+        var freeBlock = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(DocumentCarrying(mod, "\"FreeCell\"")))).Require();
+        var notes = Directory.CreateDirectory(Path.Combine(freeBlock, "Notes")).FullName;
+        File.WriteAllText(Path.Combine(notes, "note.txt"), "another tool's");
+        var link = Directory.CreateSymbolicLink(Path.Combine(cellDirectory, "NotesLink"), notes).FullName;
+        var before = FilesUnder(freeBlock);
+
+        var result = DeleteWhileLocked(mod, cellDirectory, [worldAt]);
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Contains("Access to the path", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"{Path.GetRelativePath(mod.ModFolder, link)} could not be put back", refused.Message, StringComparison.Ordinal);
+        Assert.Single(DocumentsCarrying(mod, "\"LockedWorld\""));
+        Assert.Equal(before, FilesUnder(freeBlock));
+    }
+
+    private static SourceModFixture WorldspaceWithALockedCell(out RecordAt npc, out RecordAt worldspace, out RecordAt otherNpc)
+    {
+        var (npcKey, worldKey, otherNpcKey) = (FormKey.Null, FormKey.Null, FormKey.Null);
+        var mod = SourceModFixture.Tracked("PartwayContainer.esp", "PartwayContainerMod", plugin =>
+        {
+            npcKey = plugin.Npcs.AddNew("FirstNpc").FormKey;
+            var world = plugin.Worldspaces.AddNew("LockedWorld");
+            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "LockedCell" }, x: 0, y: 0));
+            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "FreeCell" }, x: 1, y: 1));
+            worldKey = world.FormKey;
+            otherNpcKey = plugin.Npcs.AddNew("SecondNpc").FormKey;
+        });
+        (npc, worldspace, otherNpc) = (
+            new RecordAt(mod.Plugin, npcKey.ToString()), new RecordAt(mod.Plugin, worldKey.ToString()),
+            new RecordAt(mod.Plugin, otherNpcKey.ToString()));
+        return mod;
+    }
+
+    // A directory nothing may write to stops a recursive delete partway through the tree above it.
+    private static PerRecordResult DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
+    {
+        FileModes.Set(directory, "500");
+        try
+        {
+            return mod.DeleteHandler.DeleteRecords(records);
+        }
+        finally
+        {
+            FileModes.Set(directory, "700");
+        }
+    }
+
     private static WorldspaceBlock BlockHolding(Cell cell, short x, short y)
     {
         cell.Grid = new CellGrid { Point = new P2Int(x * 32, y * 32) };
@@ -131,28 +177,18 @@ public sealed class DeleteRecordHandlerTests
         return block;
     }
 
-    private static string DocumentCarrying(SourceModFixture mod, string text) =>
-        Directory.EnumerateFiles(
+    private static string DocumentCarrying(SourceModFixture mod, string text) => DocumentsCarrying(mod, text).Single();
+
+    private static List<string> DocumentsCarrying(SourceModFixture mod, string text) =>
+        [.. Directory.EnumerateFiles(
                 Path.Combine(mod.ModFolder, SourceRepository.RootFor(mod.Plugin.Name)), "*.json", SearchOption.AllDirectories)
-            .Single(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal));
+            .Where(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal))];
 
     private static SortedDictionary<string, string> FilesUnder(string directory) =>
         Directory.Exists(directory)
             ? new(Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
                 .ToDictionary(file => Path.GetRelativePath(directory, file), File.ReadAllText), StringComparer.Ordinal)
             : new(StringComparer.Ordinal);
-
-    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
-    // Linux-only runtime.
-    private static void Chmod(string path, string mode)
-    {
-        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "chmod", [mode, path])
-        { RedirectStandardError = true }).Require();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
-    }
 
     [Fact]
     public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()

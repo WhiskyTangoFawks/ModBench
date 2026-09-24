@@ -124,25 +124,53 @@ public sealed partial class SourceRepository
 
     // A failed recursive delete goes on past the entry it could not take, so it stops partway. The
     // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
-    private static void DeleteWholeOrNotAtAll(string directory)
+    private void DeleteWholeOrNotAtAll(string directory)
     {
-        var directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
+        var directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
+            .Prepend(directory)
+            .Order(StringComparer.Ordinal)
+            .ToList();
         var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
             .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
             .ToList();
         try
         {
             Directory.Delete(directory, recursive: true);
         }
+        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException)
+        {
+            var unrestored = PutBack(directories, files);
+            if (unrestored.Count == 0) throw;
+            throw new IOException(
+                $"{cause.Message} Everything it removed is back except: {string.Join(" ", unrestored)}", cause);
+        }
+    }
+
+    // One path that cannot be written never stops the pass (ADR-0019): every other one is still put back.
+    private List<string> PutBack(List<string> directories, List<(string Path, byte[] Bytes)> files)
+    {
+        var unrestored = new List<string>();
+        foreach (var level in directories)
+        {
+            TryPutBack(level, () => Directory.CreateDirectory(level), unrestored);
+        }
+        foreach (var (path, bytes) in files.Where(file => !File.Exists(file.Path)))
+        {
+            TryPutBack(path, () => File.WriteAllBytes(path, bytes), unrestored);
+        }
+        return unrestored;
+    }
+
+    private void TryPutBack(string path, Action write, List<string> unrestored)
+    {
+        try
+        {
+            write();
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Directory.CreateDirectory(directory);
-            foreach (var level in directories) Directory.CreateDirectory(level);
-            foreach (var (path, bytes) in files)
-            {
-                if (!File.Exists(path)) File.WriteAllBytes(path, bytes);
-            }
-            throw;
+            unrestored.Add($"{Path.GetRelativePath(_modFolder, path)} could not be put back: {ex.Message}");
         }
     }
 
@@ -187,9 +215,8 @@ public sealed partial class SourceRepository
     private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
         new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
 
-    /// <summary>Throws <see cref="GitUnavailableException"/> when no repository can be made here at
-    /// all: a gesture's one check before its first write, or the parse loop a failure would waste.
-    /// The track below checks again.</summary>
+    /// <summary>Throws <see cref="GitUnavailableException"/> when git cannot be run, so no repository
+    /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
