@@ -28,12 +28,18 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         var onDisk = DocumentsOnDisk(sourceRoot, key.Name, failures, out var treeFullyRead);
         var held = HeldDocuments(key);
 
-        // A document the index never saw, or a held record with no document: either moves which
-        // records the plugin has, which only a rebuild expresses. Concluded from a whole tree only.
-        if (treeFullyRead && (onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).Any()
-                              || held.Keys.Except(onDisk.Keys, StringComparer.Ordinal).Any()))
-        {
+        // A document the index never saw moves which records the plugin has, which only a rebuild
+        // expresses. Concluded from a whole tree only.
+        if (treeFullyRead && onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).Any())
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
+
+        // A held record with no document was deleted in the working tree: refreshed by key, so the
+        // rows-changed it publishes names it (ADR-0015 invariant 3).
+        var deleted = treeFullyRead ? held.Keys.Except(onDisk.Keys, StringComparer.Ordinal).ToList() : [];
+        if (deleted.Count > 0)
+        {
+            index.RefreshByKeys(key, modFolder, deleted);
+            foreach (var formKey in deleted) held.Remove(formKey);
         }
 
         // The tree files the records the rows hold, so from here the copy loads from it (ADR-0007
@@ -68,7 +74,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
             index.RefreshByKeys(key, modFolder, [.. drifted]);
         }
 
-        return new ValidationReport(key, [.. goneAtHead, .. drifted], NeedsRebuild: false, failures);
+        return new ValidationReport(key, [.. deleted, .. goneAtHead, .. drifted], NeedsRebuild: false, failures);
     }
 
     // The committed half, from one ls-tree rather than a git process per record: a document whose
