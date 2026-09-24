@@ -907,7 +907,10 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
   let original = '';
 
-  const selectTheMod = async () => {
+  // The folder's own arrival can land a sync that adds its line disabled, so each test enables
+  // the mod itself once the folder is known.
+  const enabledAndSelected = async () => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '+Palette Mod\r\n'));
     await vscode.commands.executeCommand('modbench.modList.focus');
     await vscode.commands.executeCommand('list.focusFirst');
     await vscode.commands.executeCommand('list.select');
@@ -916,10 +919,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   before(async () => {
     if (!root) return;
     original = fs.readFileSync(modlistPath, 'utf8');
-    await writeAndAwaitInstance(() => {
-      fs.mkdirSync(modDir, { recursive: true });
-      fs.writeFileSync(modlistPath, '+Palette Mod\r\n');
-    });
+    await writeAndAwaitInstance(() => fs.mkdirSync(modDir, { recursive: true }));
   });
 
   after(async () => {
@@ -933,7 +933,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
-    await selectTheMod();
+    await enabledAndSelected();
     await vscode.commands.executeCommand('list.toggleExpand');
     await new Promise((r) => setTimeout(r, 750));
     assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
@@ -942,7 +942,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
     if (!root) this.skip();
     this.timeout(30_000);
-    await selectTheMod();
+    await enabledAndSelected();
     await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
     await new Promise((r) => setTimeout(r, 1500));
     await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
