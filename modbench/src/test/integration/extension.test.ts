@@ -725,6 +725,8 @@ describe('modbench.downloads tree', () => {
         'expected the file already in the external folder to be scanned once the ini named it',
       );
 
+      // A freshly (re)bound watcher's OS-level arm lags its JS creation; no API exposes "armed".
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       fs.writeFileSync(path.join(external, 'external-new.zip'), 'data');
       const watched = await waitFor('external-new.zip via the watcher', async () => {
         const found = await provider().getChildren();
