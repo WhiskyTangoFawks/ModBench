@@ -38,10 +38,12 @@ import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
+import {
+  loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
+} from './instanceCommands/loadOrder';
+import { registerLoadOrderPut } from './loadOrderPutTrigger';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
-import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
 // The port members every gesture, plugin sync and the launch in this file call — narrowed off
@@ -320,13 +322,14 @@ interface EnterEditingDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   revealLog: () => void;
-  putCurrentLoadOrder: () => Promise<void>;
+  /** What a connect runs once the Instance value it reads has landed. */
+  onConnect: () => Promise<void>;
 }
 
 // ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { session, instance, sender, client, outputChannel, reporter, revealLog, putCurrentLoadOrder } = deps;
+  const { session, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
   const enter = async (): Promise<void> => {
     const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
@@ -351,7 +354,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       exitEditing(session, client);
       return;
     }
-    await putCurrentLoadOrder();
+    await onConnect();
   };
   return () => withPluginsViewProgress(session, enter);
 }
@@ -406,10 +409,8 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     reporter: reporterFor('loadOrder'),
   };
   // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameRelease } = instance.value;
-    return { plugins, gameFolder, gameName: gameRelease };
-  };
+  const loadOrderSource = (value = instance.value): LoadOrderSource =>
+    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
   const putCurrentLoadOrder = async (): Promise<void> => {
     await handleLoadOrder(
       handlingDeps, (options) => putLoadOrder(sender, instanceRoot, loadOrderSource(), options), (put) => put);
@@ -450,18 +451,18 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
+  // ADR-0013: a landed Instance recompute and a connect put the load order, never a gesture.
+  const loadOrderPuts = own(registerLoadOrderPut(
+    instance, client, (value) => loadOrderChanged(sender, instanceRoot, loadOrderSource(value)),
+    putCurrentLoadOrder, outputChannel));
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
       session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
-      revealLog: () => outputChannel.show(true), putCurrentLoadOrder,
+      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnConnect(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
-  // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
-  // in the applied outcome is logged here, because no caller is left to hear it.
-  own(instance.subscribe(() => void putCurrentLoadOrder().catch((e: unknown) => outputChannel.error(
-    `[toolbox] handing mEdit the load order threw: ${errorMessage(e)}`))));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));

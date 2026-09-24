@@ -28,16 +28,30 @@ export type PutLoadOrderResult =
 // backend then rejects it visibly instead of quietly answering about the wrong game.
 const releaseOf = (gameName: string): string => gameReleaseForGame(gameName) ?? gameName;
 
+function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnapshot | undefined {
+  const loaded = loadOrderSnapshotOf(value);
+  if (!loaded) return undefined;
+  return {
+    plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value.gameName),
+  };
+}
+
 export async function putLoadOrder(
   sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
   options?: LoadOrderSendOptions,
 ): Promise<PutLoadOrderResult> {
-  const loaded = loadOrderSnapshotOf(value);
-  if (!loaded) return { sent: false };
-  const snapshot: LoadOrderSnapshot = {
-    plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value.gameName),
-  };
+  const snapshot = snapshotOf(instanceRoot, value);
+  if (!snapshot) return { sent: false };
   return { sent: true, snapshot, outcome: await sender.send(snapshot, options) };
+}
+
+/** update-load-order-file: the load order is put on change. False with no game folder found, since
+ *  there is then nothing to put. */
+export function loadOrderChanged(
+  sender: Pick<LoadOrderSender, 'alreadySent'>, instanceRoot: string, value: LoadOrderSource,
+): boolean {
+  const snapshot = snapshotOf(instanceRoot, value);
+  return snapshot !== undefined && !sender.alreadySent(snapshot);
 }
 
 /** ADR-0014: the index is rebuilt before the load order is sent again, so the reconcile that

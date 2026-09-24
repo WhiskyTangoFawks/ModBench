@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress, MEditClient } from './MEditClient';
 
 /** One generation of ADR-0013's hand-off, whole: every physical plugin copy plus the three facts
@@ -23,6 +24,9 @@ export interface LoadOrderSender {
   /** Hand mEdit this snapshot. Resolves with this snapshot's own outcome: `abandoned` when a
    *  newer snapshot superseded it before it was sent, or when it was abandoned outright. */
   send(snapshot: LoadOrderSnapshot, options?: LoadOrderSendOptions): Promise<LoadOrderOutcome>;
+  /** Whether this snapshot equals the last one sent to the backend attached now. Forgotten when
+   *  that send fails, on abandon, and when the backend leaves `attached`: the next one holds none. */
+  alreadySent(snapshot: LoadOrderSnapshot): boolean;
   /** The abort scope the send in flight runs under. A launch arms it before its own earlier
    *  phase; re-arming never aborts the scope it replaces, which the backend answers 409. */
   arm(): { signal: AbortSignal; abandoned: () => boolean };
@@ -47,6 +51,11 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
   let waiting: Waiting | undefined;
   let sending = false;
   let disposed = false;
+  let lastSent: LoadOrderSnapshot | undefined;
+
+  const forget = (snapshot: LoadOrderSnapshot): void => {
+    if (lastSent === snapshot) lastSent = undefined;
+  };
 
   const arm = (): { signal: AbortSignal; abandoned: () => boolean } => {
     const controller = new AbortController();
@@ -71,35 +80,43 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     const { plugins, gameDirectory, instanceRoot, gameRelease } = next.snapshot;
     void client.putLoadOrder(plugins, gameDirectory, instanceRoot, gameRelease, {
       onProgress: next.options.onProgress, signal,
-    }).then(
-      next.settle,
+    }).catch(
       // Swallowing the throw here is what keeps one bad send from wedging every send after it;
       // the caller still hears the failure as this snapshot's own outcome (ADR-0019).
-      (e: unknown) => next.settle({
+      (e: unknown): LoadOrderOutcome => ({
         outcome: 'failed',
         message: `mEdit: Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
       }),
-    ).finally(() => {
+    ).then((outcome) => {
+      if (outcome.outcome === 'failed') forget(next.snapshot);
+      next.settle(outcome);
+    }).finally(() => {
       sending = false;
       pump();
     });
   };
 
-  const unsubscribe = client.onStatusChanged(() => pump());
+  const unsubscribe = client.onStatusChanged((status) => {
+    if (status !== 'attached') lastSent = undefined;
+    pump();
+  });
 
   return {
     send(snapshot, options = {}) {
       if (disposed) return Promise.resolve(ABANDONED);
       dropWaiting();
+      lastSent = snapshot;
       return new Promise<LoadOrderOutcome>((resolve) => {
         waiting = { snapshot, options, settle: resolve };
         pump();
       });
     },
+    alreadySent: (snapshot) => lastSent !== undefined && isDeepStrictEqual(lastSent, snapshot),
     arm,
     abandon() {
       armed?.abort();
       armed = undefined;
+      lastSent = undefined;
       dropWaiting();
     },
     dispose() {
