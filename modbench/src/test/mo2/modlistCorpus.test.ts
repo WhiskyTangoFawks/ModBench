@@ -10,7 +10,7 @@ import {
   renameSeparator,
   reorderMod,
   reorderSeparatorBlock,
-  setModEnabled,
+  setModsEnabled,
   syncMods,
 } from '../../modlist/modlist';
 import {
@@ -33,25 +33,37 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('setModEnabled(false) on an enabled mod touches only modlist.txt', async () => {
-    const before = await snapshotTree(dir);
-    await setModEnabled(dir, PROFILE, "Ñoño's Retexture", false);
-    const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([MODLIST]));
-
-    const entry = (await readModlistEntries(dir)).find(isMod("Ñoño's Retexture"));
-    expect(entry?.enabled).toBe(false);
-  });
-
   // Rival this catches: a handler that unconditionally re-renders the line (e.g.
   // normalizes casing/whitespace) instead of a minimal-diff flip — re-asserting an
   // already-true state must reproduce byte-identical content, not merely "the same
   // meaning".
-  it('setModEnabled(true) on an already-enabled mod is a byte-identical no-op over the whole instance', async () => {
+  it('setModsEnabled on a selection already in that state is a byte-identical no-op over the whole instance', async () => {
     const before = await snapshotTree(dir);
-    await setModEnabled(dir, PROFILE, 'Unofficial Fallout 4 Patch', true);
+    const outcome = await setModsEnabled(dir, PROFILE, ['Unofficial Fallout 4 Patch'], true);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set());
+    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
+  });
+
+  // modbench.mod.enable / modbench.mod.disable over a mixed selection, in one write, and a gone
+  // mod refused by name while the other lands.
+  it('setModsEnabled flips only the mods asked for that are not already in that state, touching only modlist.txt, in one write', async () => {
+    const before = await snapshotTree(dir);
+    const outcome = await setModsEnabled(
+      dir, PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([MODLIST]));
+
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: {
+        landed: ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch'],
+        refused: [{ item: 'No Such Mod', reason: 'Mod not found in modlist: No Such Mod' }],
+      },
+    });
+    const entries = await readModlistEntries(dir);
+    expect(entries.find(isMod("Ñoño's Retexture"))?.enabled).toBe(false);
+    expect(entries.find(isMod('Unofficial Fallout 4 Patch'))?.enabled).toBe(false);
   });
 
   it('reorderMod moves a mod to the winning end, touching only modlist.txt', async () => {
