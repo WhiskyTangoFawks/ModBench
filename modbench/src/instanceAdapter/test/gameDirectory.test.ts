@@ -18,6 +18,10 @@ const NO_DETECTORS: GameDetectors = {
 const iniOf = (gamePath?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath})\r\n`}`;
 
+const SETTING_PLACE = 'the game folder setting, modbench.mods.gameDirectory';
+const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
+const STEAM_PLACE = 'the Steam install';
+
 const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
 ) => gameDirectoryResolver(() => overrides, detectors);
@@ -108,13 +112,21 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot });
   });
 
-  it('errors (not silently falls through) when the explicit setting has no Data/ subfolder', async () => {
+  // Rival: falling through to the ini gamePath, which resolves a folder the user did not name.
+  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const gameRoot = join(dir, 'Stock Game Folder');
     await mkdir(gameRoot, { recursive: true }); // no Data/ underneath
+    const iniGameRoot = await gameFolder();
 
-    await expect(resolverWith({ gameDirectory: gameRoot })(iniOf())).rejects.toThrow(/Data\//);
+    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOf(iniGameRoot));
+
+    expect(resolved).toEqual({
+      kind: 'notFound',
+      setting: 'modbench.mods.gameDirectory',
+      looked: [{ place: SETTING_PLACE, answer: `${gameRoot} has no Data folder` }],
+    });
   });
 
   it('falls back to the ini gamePath of the text it was handed when the setting is unset', async () => {
@@ -147,13 +159,21 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it('errors (does not answer with the detected folder) when a C: ini path has no determinable prefix', async () => {
+  it('answers not found, with the reason, and does not answer with the detected folder when a C: ini path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),
     };
 
-    await expect(resolverWith({}, detectors)(iniOf('C:\\Games\\Fallout4'))).rejects.toThrow(/prefix/i);
+    const resolved = await resolverWith({}, detectors)(iniOf('C:\\Games\\Fallout4'));
+
+    expect(resolved).toMatchObject({
+      kind: 'notFound',
+      looked: [
+        { place: SETTING_PLACE, answer: 'not set' },
+        { place: GAME_PATH_PLACE, answer: expect.stringMatching(/prefix could not be determined/) as unknown },
+      ],
+    });
   });
 
   it('falls back to Steam autodetection when the setting and the ini gamePath are both absent', async () => {
@@ -164,7 +184,7 @@ describe('the game directory resolver', () => {
 
     const resolved = await resolverWith({}, detectors)(iniOf());
 
-    expect(resolved).toEqual({ root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
+    expect(resolved).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
   it('falls through a resolved-but-invalid ini gamePath (no Data/) to autodetect, rather than trusting it', async () => {
@@ -182,11 +202,37 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
-  it('answers undefined when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
-    expect(await resolverWith()(iniOf())).toBeUndefined();
+  it('answers not found, naming each place looked, when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
+    expect(await resolverWith()(iniOf())).toEqual({
+      kind: 'notFound',
+      setting: 'modbench.mods.gameDirectory',
+      looked: [
+        { place: SETTING_PLACE, answer: 'not set' },
+        { place: GAME_PATH_PLACE, answer: 'not set' },
+        { place: STEAM_PLACE, answer: 'the game is in no Steam library' },
+      ],
+    });
   });
 
-  it('answers undefined for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
+  it('names the ini gamePath it tried when that folder has no Data/ and Steam finds nothing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    dirs.push(dir);
+    const staleGameRoot = join(dir, 'Stale Game Folder');
+    await mkdir(staleGameRoot, { recursive: true });
+
+    const resolved = await resolverWith()(iniOf(staleGameRoot));
+
+    expect(resolved).toMatchObject({
+      kind: 'notFound',
+      looked: [
+        { place: SETTING_PLACE, answer: 'not set' },
+        { place: GAME_PATH_PLACE, answer: `${staleGameRoot} has no Data folder` },
+        { place: STEAM_PLACE, answer: 'the game is in no Steam library' },
+      ],
+    });
+  });
+
+  it('answers not found for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
     const unknownGame = `[General]\r\ngameName=Morrowind\r\n`;
     let asked = false;
     const detectors: GameDetectors = {
@@ -194,7 +240,14 @@ describe('the game directory resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    expect(await resolverWith({}, detectors)(unknownGame)).toBeUndefined();
+    expect(await resolverWith({}, detectors)(unknownGame)).toMatchObject({
+      kind: 'notFound',
+      looked: [
+        { place: SETTING_PLACE, answer: 'not set' },
+        { place: GAME_PATH_PLACE, answer: 'not set' },
+        { place: STEAM_PLACE, answer: 'not asked: Modbench has no Steam entry for this game' },
+      ],
+    });
     expect(asked).toBe(false);
   });
 
@@ -210,7 +263,7 @@ describe('the game directory resolver', () => {
 
     const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOf());
 
-    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+    expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
   });
 
@@ -224,7 +277,7 @@ describe('the game directory resolver', () => {
 
     const resolved = await resolverWith({}, detectors)(iniOf(gameRoot));
 
-    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+    expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
   });
 });

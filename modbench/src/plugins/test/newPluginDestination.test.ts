@@ -13,6 +13,7 @@ import { Instance } from '../../instanceLoader/instance';
 import { resolvePluginDestination, type PluginDestinationChoice } from '../pluginDestination';
 import { appendPlugin } from '../../pluginsCommands/plugins';
 import { present } from '../../ports/present';
+import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 const PROFILE = 'Default';
 
@@ -30,7 +31,7 @@ describe('New Plugin lands the file and the plugins.txt line, for both remaining
     await writeFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
     instance = new Instance({
       instanceRoot: dir,
-      resolveGameDirectory: () => Promise.resolve(undefined),
+      resolveGameDirectory: resolvesNotFound,
       log: () => {},
     logReadFailure: () => {},
     });

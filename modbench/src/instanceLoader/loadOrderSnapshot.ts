@@ -11,7 +11,7 @@ import { isPluginFile } from '../instanceAdapter/pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
 import { listDir } from '../instanceAdapter/files';
-import type { GameDirectory } from '../instanceAdapter/gameDirectory';
+import type { GameFolder } from '../instanceAdapter/gameDirectory';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -214,15 +214,15 @@ export async function buildLoadOrderRows(
 }
 
 /** ADR-0013's snapshot, read from the current value (ADR-0015) rather than a fresh walk.
- *  `undefined` — no PUT — when the game directory has not resolved. The filter states a
- *  resolved game directory's own guarantee, never an unchecked cast. */
+ *  `undefined` — no PUT — when the game folder is not found. The filter states a found game
+ *  folder's own guarantee, never an unchecked cast. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  readonly gameDirectory: GameDirectory | undefined;
+  readonly gameFolder: GameFolder;
 }): { dataFolder: string; plugins: LoadOrderPlugin[] } | undefined {
-  if (!value.gameDirectory) return undefined;
+  if (value.gameFolder.kind !== 'found') return undefined;
   return {
-    dataFolder: value.gameDirectory.dataFolder,
+    dataFolder: value.gameFolder.dataFolder,
     plugins: value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined),
   };
 }

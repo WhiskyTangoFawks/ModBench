@@ -8,12 +8,13 @@ import { ToolboxProvider } from '../ToolboxProvider';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 const GAME_FOLDER = '/games/Fallout 4';
 const VALUE = instanceValueFixture({
   activeProfile: 'Survival',
   gameRelease: 'Fallout 4',
-  gameDirectory: { root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
+  gameFolder: { kind: 'found', root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
 });
 
 function rowsOf(instance: FakeInstance | undefined) {
@@ -62,6 +63,44 @@ describe('the Toolbox view, given an instance value', () => {
 
     expect(fired).toEqual([undefined]);
     expect(provider.getChildren().find((r) => r.label === 'Profile')?.description).toBe('Modding');
+  });
+});
+
+describe('the Toolbox view, given the game folder not found', () => {
+  const NOT_FOUND = { ...VALUE, gameFolder: GAME_FOLDER_NOT_FOUND };
+
+  it('keeps the game\'s name on the Game row, with a warning icon and "game folder not found"', () => {
+    const game = row(new FakeInstance(NOT_FOUND), 'Game');
+
+    expect(game.description).toBe('Fallout 4 · game folder not found');
+    expect(game.iconPath).toEqual(new ThemeIcon('warning'));
+    expect(game.command).toBeUndefined();
+  });
+
+  it('names each place Modbench looked, and the setting that fixes it, in the Game row\'s tooltip', () => {
+    expect(row(new FakeInstance(NOT_FOUND), 'Game').tooltip).toBe([
+      'Game folder not found. Modbench looked at:',
+      'the game folder setting, modbench.mods.gameDirectory: not set',
+      "ModOrganizer.ini's gamePath: not set",
+      'the Steam install: the game is in no Steam library',
+      'Set modbench.mods.gameDirectory to the game folder to fix it.',
+    ].join('\n'));
+  });
+
+  it('keeps the Profile row, which does not need the game folder', () => {
+    expect(row(new FakeInstance(NOT_FOUND), 'Profile').description).toBe('Survival');
+  });
+
+  it('clears the warning on the next value with the game folder found', () => {
+    const instance = new FakeInstance(NOT_FOUND);
+    const provider = new ToolboxProvider({ instance });
+
+    instance.publish(VALUE);
+
+    const game = present(provider.getChildren().find((r) => r.label === 'Game'), 'the Game row');
+    expect(game.description).toBe('Fallout 4');
+    expect(game.iconPath).toEqual(new ThemeIcon('game'));
+    expect(game.tooltip).toBe(GAME_FOLDER);
   });
 });
 

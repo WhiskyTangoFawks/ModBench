@@ -22,7 +22,7 @@ import { present } from '../ports/present';
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
 const resolvesDataFolder: GameDirectoryResolver = () =>
-  Promise.resolve({ root: '/game', dataFolder: DATA_FOLDER });
+  Promise.resolve({ kind: 'found', root: '/game', dataFolder: DATA_FOLDER });
 
 const roots: string[] = [];
 const instances: Instance[] = [];

@@ -971,7 +971,7 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
     await setGameDirectory(gameDir);
 
     const instance = present(instanceExport(), 'the Instance activate() exports');
-    assert.strictEqual(instance.value.gameDirectory?.root, gameDir);
+    assert.deepStrictEqual(instance.value.gameFolder, { kind: 'found', root: gameDir, dataFolder: path.join(gameDir, 'Data') });
   });
 });
 

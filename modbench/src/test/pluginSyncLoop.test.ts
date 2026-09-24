@@ -78,7 +78,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
   const resolveGameDirectory: GameDirectoryResolver = () =>
-    Promise.resolve({ root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
+    Promise.resolve({ kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
   const instance = new Instance({ instanceRoot: root, resolveGameDirectory, log: () => {}, logReadFailure: () => {} });
   instances.push(instance);
 

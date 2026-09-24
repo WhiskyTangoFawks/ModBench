@@ -5,7 +5,7 @@
 import type {
   LoadOrderOutcome, LoadOrderSender, LoadOrderSendOptions, LoadOrderSnapshot, MEditClient,
 } from '../client';
-import type { GameDirectory } from '../instanceAdapter/gameDirectory';
+import type { GameFolder } from '../instanceAdapter/gameDirectory';
 import {
   loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../instanceLoader/loadOrderSnapshot';
@@ -15,13 +15,12 @@ import { errorMessage } from '../ports/errorMessage';
 /** The slice of the instance value a load order is built from. */
 export interface LoadOrderSource {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  readonly gameDirectory: GameDirectory | undefined;
+  readonly gameFolder: GameFolder;
   /** MO2's own name for the game. */
   readonly gameName: string;
 }
 
-/** Nothing is sent without a resolved game directory: there is no Data folder to key the load
- *  order on. */
+/** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
 export type PutLoadOrderResult =
   | { sent: false }
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };

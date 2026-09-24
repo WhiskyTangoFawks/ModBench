@@ -6,6 +6,7 @@ import {
 } from './vscodeMock';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
+import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
 } from './nameFilterViewHarness';
@@ -39,8 +40,16 @@ function plugin(name: string): LoadOrderPlugin | LoadOrderPluginLine {
   return { name, path: `/fixture/${name}`, origin: 'SomeMod', slot: 0, enabled: true, winning: true };
 }
 
+const FOUND = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
+
 const valueOf = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue =>
-  instanceValueFixture({ plugins });
+  instanceValueFixture({ plugins, gameFolder: FOUND });
+
+const notFoundValueOf = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue =>
+  instanceValueFixture({ plugins, gameFolder: GAME_FOLDER_NOT_FOUND });
+
+const GAME_FOLDER_MESSAGE =
+  "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
 
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
@@ -113,5 +122,79 @@ describe('a running say() statement survives a background row change', () => {
     instance.publish(valueOf([plugin('TestMod.esp'), plugin('zzznomatch.esp')]));
     await flush();
     expect(view.message).toBe('Starting backend…');
+  });
+});
+
+describe('the Plugins view, given the game folder not found', () => {
+  async function pluginsView(instance: FakeInstance) {
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    await provider.getChildren();
+    const view: { description?: string; message?: string } = {};
+    const filter = registerPluginsNameFilter(view, provider);
+    return { provider, view, filter };
+  }
+
+  it('says so in its message line, and keeps its rows', async () => {
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const { provider, view } = await pluginsView(instance);
+
+    instance.publish(notFoundValueOf([plugin('TestMod.esp')]));
+
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message');
+    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+    expect(await provider.getChildren()).toHaveLength(1);
+  });
+
+  it('clears the message on the next value with the game folder found', async () => {
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const { view } = await pluginsView(instance);
+    instance.publish(notFoundValueOf([plugin('TestMod.esp')]));
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message');
+
+    instance.publish(valueOf([plugin('TestMod.esp')]));
+
+    await waitForMessage(view, (m) => m === undefined, 'the message clearing');
+    expect(view.message).toBeUndefined();
+  });
+
+  // Rival: reading the empty value before the first read as a game folder not found.
+  it('says nothing before the first read lands', async () => {
+    const instance = new FakeInstance(notFoundValueOf([]), 0);
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    const view: { description?: string; message?: string } = {};
+    const filter = registerPluginsNameFilter(view, provider);
+
+    filter.refresh();
+    await flush();
+
+    expect(view.message).toBeUndefined();
+  });
+
+  it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
+    const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
+    const { view } = await pluginsView(instance);
+
+    await command('modbench.plugin.filter')();
+    currentBox().type('zzznomatch');
+    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the no-match message');
+
+    await command('modbench.plugin.clearFilter')();
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
+    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+  });
+
+  it('leaves the start-up message its line, and takes it back once that clears', async () => {
+    const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
+    const { view, filter } = await pluginsView(instance);
+    const session = { pluginsTreeView: view, pluginsNameFilter: filter };
+
+    say(session, 'Starting backend…');
+    instance.publish(notFoundValueOf([plugin('TestMod.esp')]));
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+
+    say(session, undefined);
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
+    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
   });
 });

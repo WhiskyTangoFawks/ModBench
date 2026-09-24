@@ -19,7 +19,7 @@ const LINE_WITHOUT_A_FILE = {
 
 const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',
-  gameDirectory: { root: '/game', dataFolder: '/game/Data' },
+  gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
   plugins: [PLUGIN, LINE_WITHOUT_A_FILE],
 };
 
@@ -48,7 +48,7 @@ describe('put load order', () => {
   it('sends nothing while the game directory is unresolved', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameDirectory: undefined });
+    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameFolder: { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } });
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });

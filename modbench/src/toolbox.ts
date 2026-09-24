@@ -9,7 +9,7 @@ import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcom
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
-import { gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
@@ -36,6 +36,7 @@ import { collidingModName } from './mods/modNameCollision';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
+import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -174,6 +175,7 @@ export function registerPluginsNameFilter(
     view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
+    viewMessage: () => provider.viewMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
   });
 }
@@ -234,10 +236,8 @@ async function settleLoadOrder(
   deps: LoadOrderHandlingDeps, treeProgress: TreeProgressHandler, put: PutLoadOrderResult,
 ): Promise<void> {
   const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
-  if (!put.sent) {
-    outputChannel.info('[toolbox] no game directory resolved — there is no load order to hand mEdit');
-    return;
-  }
+  // The game folder not found has its own one Output line; a line per value would repeat it.
+  if (!put.sent) return;
   const { plugins } = put.snapshot;
   outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugin copies)`);
   await applyLoadOrderOutcome(plugins, put.outcome, treeProgress.lastFailures(), treeProgress.lastTotalPlugins(), {
@@ -345,13 +345,9 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       return;
     }
     await instanceReady;
-    // No game directory means no snapshot to hand over — don't strand the UI in an empty editing
-    // view. This is the one path that asked for a load order, so this is where it is reported.
+    // No game folder means no snapshot to hand over. The Toolbox, the Plugins view and the Output
+    // already say so, without a notification (common.md, States, story 5).
     if (!loadOrderSnapshotOf(instance.value)) {
-      reporter.report(
-        'error',
-        'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
-      );
       exitEditing(session, client);
       return;
     }
@@ -386,13 +382,14 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));
   const firstRead = own(markFirstReadLanded(instance));
+  own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   // The Instance watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
   // The value's own resolution, read fresh per call: a config change is a recompute trigger like
   // any watched file, so the folder a view reads can never be a generation behind the rows.
   const dataFolder = (): Promise<string | undefined> =>
-    Promise.resolve(instance.value.gameDirectory?.dataFolder);
+    Promise.resolve(dataFolderOf(instance.value.gameFolder));
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
@@ -410,8 +407,8 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   };
   // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameDirectory, gameRelease } = instance.value;
-    return { plugins, gameDirectory, gameName: gameRelease };
+    const { plugins, gameFolder, gameRelease } = instance.value;
+    return { plugins, gameFolder, gameName: gameRelease };
   };
   const putCurrentLoadOrder = async (): Promise<void> => {
     await handleLoadOrder(
