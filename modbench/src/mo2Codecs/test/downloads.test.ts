@@ -50,7 +50,7 @@ describe('parseDownloadMeta, through buildDownloadRows', () => {
     expect(row.hidden).toBe(true);
   });
 
-  // A hand-edited .meta (docs/specs/downloads.md:84) can pad key=value spacing a writer never
+  // A .meta hand-edited after open .meta (downloads.md, Menus and keys) can pad key=value spacing a writer never
   // would. modID, not an Installed-status key, stays clear of the seam gap noted above.
   it('parses a hand-edited .meta with padded key=value spacing the same as the tight form', () => {
     const tight = rowFor('[General]\r\nmodID=12345\r\n');

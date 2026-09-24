@@ -100,7 +100,7 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
 }
 
-// Non-regular dirent policy is specified in docs/specs/mods.md: follow symlinks as MO2 does,
+// Non-regular dirents: follow symlinks as MO2 does,
 // skip and log a broken link or a cycle, propagate any other stat failure.
 async function walk(
   dir: string,

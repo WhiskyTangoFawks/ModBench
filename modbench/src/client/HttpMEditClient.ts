@@ -19,7 +19,7 @@ import {
 import { errorMessage } from '../ports/errorMessage';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
-// No convention in ADR-0019 or docs/specs/plugins.md anchors this: 30s is an ordinary
+// No convention in ADR-0019 or plugins.md anchors this: 30s is an ordinary
 // HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
 // tell them apart.
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;

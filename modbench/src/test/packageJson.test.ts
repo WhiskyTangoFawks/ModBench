@@ -280,7 +280,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
       `a view/title entry for ${command} on modbench.pluginListTree`,
     );
 
-  // Rule 5 — docs/specs/containers.md.
+  // commands.md, Chrome: the order.
   it('keeps modbench.plugin.filter at slot 1 (unchanged by this slice)', () => {
     expect(entryFor('modbench.plugin.filter').group).toBe('navigation@1');
   });
@@ -322,7 +322,7 @@ describe('package.json filtering is one UX', () => {
   const commandTitle = (id: string) =>
     present(commandOf().find((c) => c.command === id), `a command entry for ${id}`);
 
-  // Rule 6 — docs/specs/containers.md.
+  // commands.md, Chrome: the icons.
   const FILTERED_VIEWS = [
     ['modbench.modList', 'modbench.mod.filter'],
     ['modbench.pluginListTree', 'modbench.plugin.filter'],
@@ -416,7 +416,7 @@ describe('package.json title-bar rubric', () => {
   const viewsOf = (entries: MenuEntry[]) =>
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter((v): v is string => v !== undefined));
 
-  // Rule 1 — docs/specs/containers.md.
+  // commands.md, Chrome: an action that is not about a tree's own object.
   const WORKSPACE_ACTIONS = ['modbench.profile.switch'];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
@@ -424,7 +424,7 @@ describe('package.json title-bar rubric', () => {
     expect([...views].filter((v) => v !== 'modbench.toolbox')).toEqual([]);
   });
 
-  // Rule 2 — docs/specs/containers.md.
+  // commands.md, Chrome: at most four icons.
   it('never exposes more than four navigation icons on any view, in any state', () => {
     const navEntries = titleMenus().filter((e) => (e.group ?? '').startsWith('navigation'));
     for (const view of viewsOf(navEntries)) {
@@ -436,7 +436,7 @@ describe('package.json title-bar rubric', () => {
     }
   });
 
-  // Rule 7 — docs/specs/containers.md.
+  // commands.md, Chrome: Collapse All is on trees only.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebarIds = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
     const sidebar = sidebarIds.map((v) => v.id);

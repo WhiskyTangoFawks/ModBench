@@ -7,7 +7,7 @@ function makeViews() {
   return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn() };
 }
 
-// docs/specs/medit.md § Status bar names these four verbatim; Ready is the reconcile's own.
+// common.md, The status bar, names these four verbatim; Ready is the reconcile's own.
 describe('backendStatusText', () => {
   it('names each backend state the way the status bar shows it', () => {
     expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Connecting…');
