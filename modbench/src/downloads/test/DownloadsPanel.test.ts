@@ -33,7 +33,13 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive,
 }));
 
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+// The real delete, watched: the view hands it the whole selection, never one file at a time.
+vi.mock('../../install/downloadSidecar', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../install/downloadSidecar')>();
+  return { ...real, deleteDownloads: vi.fn(real.deleteDownloads) };
+});
+
+import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -45,6 +51,7 @@ import {
 } from '../DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
+import { deleteDownloads } from '../../install/downloadSidecar';
 import type { Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -126,11 +133,13 @@ function calledWith<T>(mockFn: { mock: { calls: T[][] } }, argIndex = 0): T {
   return present(call[argIndex], "the call's argument");
 }
 
-function invoke(commandId: string, ...args: unknown[]): void {
+function invoke(commandId: string, ...args: unknown[]): unknown {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
-  call[1](...args);
+  return call[1](...args);
 }
+
+const onDisk = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
 
 // ── registerDownloadsSingleRowCommands ──────────────────────────────────────
 
@@ -628,7 +637,7 @@ describe('registerDownloadsMultiRowCommands', () => {
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
-    // confirm's and trashOneArchive's own awaits before the early return lands.
+    // the command's own awaits before the early return lands.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fsDelete).not.toHaveBeenCalled();
   });
@@ -647,11 +656,10 @@ describe('registerDownloadsMultiRowCommands', () => {
   });
 });
 
-// ── deleteArchives — batch delete confirmation, driven through the modbench.downloadedFile.delete
-// command (deleteArchives is not exported; a selection array of two-plus names is this seam's
-// only route to it) ──────────────────────────────────────────────────────────
+// ── modbench.downloadedFile.delete over a selection ─────────────────────────
 describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => fsDelete.mockReset());
 
   it('confirms once for the whole batch, then trashes every archive (+ its .meta, if present)', async () => {
     const root = await makeInstanceRoot();
@@ -667,20 +675,55 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     assertAskedOnce(ask, { messageContains: '2 items', buttons: ['Delete'] });
   });
 
-  it('on cancel, trashes nothing', async () => {
+  it('Esc deletes nothing and says nothing', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
+    const reporter = recordingReporter();
     const ask = scriptedDialog(undefined);
 
-    registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
+    registerDownloadsMultiRowCommands(root, reporter, ask);
+    const outcome = await invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
-    await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
-    // deleteArchives' own await before the early return lands.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcome).toEqual({ landed: [], refused: [] });
+    expect(ask.asked).toHaveLength(1);
     expect(fsDelete).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.selectionOutcomeCalls).toEqual([]);
+  });
+
+  it('given the right-clicked row and the selection, deletes the whole selection in one call, refuses the file that cannot go, and reports once', async () => {
+    const root = await makeInstanceRoot();
+    const a = await writeArchive(root, 'a.7z');
+    const b = await writeArchive(root, 'b.7z');
+    const locked = await writeArchive(root, 'locked.7z');
+    fsDelete.mockImplementation(async (uri: FakeUri) => {
+      if (uri.fsPath === locked) throw new Error('EPERM: operation not permitted');
+      await rm(uri.fsPath);
+    });
+    const reporter = recordingReporter();
+    const ask = scriptedDialog('Delete');
+
+    registerDownloadsMultiRowCommands(root, reporter, ask);
+    const outcome = await invoke(
+      'modbench.downloadedFile.delete',
+      node(root, 'b.7z'),
+      [node(root, 'a.7z'), node(root, 'b.7z'), node(root, 'locked.7z')],
+    );
+
+    const refused = { item: 'locked.7z', reason: 'EPERM: operation not permitted' };
+    expect(outcome).toEqual({ landed: ['a.7z', 'b.7z'], refused: [refused] });
+    expect(vi.mocked(deleteDownloads).mock.calls.map((call) => call[1])).toEqual([['a.7z', 'b.7z', 'locked.7z']]);
+    assertAskedOnce(ask, { messageContains: '3 items', buttons: ['Delete'] });
+    expect([await onDisk(a), await onDisk(b), await onDisk(locked)]).toEqual([false, false, true]);
+    expect(reporter.selectionOutcomeCalls).toEqual([
+      { message: 'Could not delete 1 of 3 downloaded files.', outcome },
+    ]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not delete 1 of 3 downloaded files.',
+      detail: '"locked.7z" (EPERM: operation not permitted)',
+    }]);
   });
 
   it('a selection array of exactly one item still uses the singular confirmation text', async () => {
@@ -690,8 +733,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
     // A one-item *array*, not the no-array fallback the clicked-row-alone test above already
-    // covers — deleteArchives' own names.length === 1 branch either way, reached by a different
-    // selectionNames() path.
+    // covers, reaching the singular confirmation by a different selectionNames() path.
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));

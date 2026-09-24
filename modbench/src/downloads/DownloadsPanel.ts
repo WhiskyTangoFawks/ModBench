@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownload, hideDownload, unhideDownload } from '../install/downloadSidecar';
+import { deleteDownloads, hideDownload, unhideDownload } from '../install/downloadSidecar';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
-import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 // The host's trash, the one capability a command cannot hold itself.
 const trashFile = async (path: string): Promise<void> => {
@@ -117,48 +117,25 @@ async function runRowAction(
   }
 }
 
-// The caller supplies `confirm`, so a batch delete can ask once for the whole selection instead
-// of once per file. Cancel is a silent no-op.
-async function trashOneArchive(
-  instanceRoot: string,
-  name: string,
-  reporter: Reporter,
-  confirm: () => Promise<boolean>,
-): Promise<void> {
-  if (!(await confirm())) return;
-  const outcome = await deleteDownload(instanceRoot, name, trashFile);
-  if (outcome.applied) return;
-  // ADR-0019: explicit user action failed -> error notification + log.
-  reporter.report('error', `Failed to delete "${name}".`, outcome.refusal);
+// One question for the whole selection: an N-file selection must not stack N modal dialogs.
+async function confirmDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+  const [only] = names;
+  const question = names.length === 1 && only !== undefined
+    ? `Delete "${only}"? The archive and its .meta file (if any) will be moved to the system trash.`
+    : `Delete ${names.length} items? Each archive and its .meta file (if any) will be moved to the system trash.`;
+  return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
-async function deleteArchive(
-  instanceRoot: string, name: string, reporter: Reporter, ask: AskQuestion,
-): Promise<void> {
-  await trashOneArchive(instanceRoot, name, reporter, async () =>
-    (await ask(
-      `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
-      { modal: true },
-      'Delete',
-    )) === 'Delete');
-}
+const NOTHING_DELETED: SelectionOutcome<string> = { landed: [], refused: [] };
 
-// Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
-// Cancel is a silent no-op for the whole batch, matching the single-file contract.
-async function deleteArchives(
-  instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
-): Promise<void> {
-  if (names.length === 1) {
-    await deleteArchive(instanceRoot, present(names[0], 'the sole selected archive name'), reporter, ask);
-    return;
-  }
-  const confirmed = (await ask(
-    `Delete ${names.length} items? Each archive and its .meta file (if any) will be moved to the system trash.`,
-    { modal: true },
-    'Delete',
-  )) === 'Delete';
-  if (!confirmed) return;
-  for (const name of names) await trashOneArchive(instanceRoot, name, reporter, () => Promise.resolve(true));
+async function deleteSelection(
+  instanceRoot: string, names: readonly string[], reporter: Reporter, ask: AskQuestion,
+): Promise<SelectionOutcome<string>> {
+  if (names.length === 0 || !(await confirmDelete(names, ask))) return NOTHING_DELETED;
+  const outcome = await deleteDownloads(instanceRoot, names, trashFile);
+  reporter.selectionOutcome(
+    `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
+  return outcome;
 }
 
 /** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
@@ -220,10 +197,8 @@ export function registerDownloadsMultiRowCommands(
   instanceRoot: string, reporter: Reporter, ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-      const names = selectionNames(clicked, selected);
-      if (names.length > 0) void deleteArchives(instanceRoot, names, reporter, ask);
-    }),
+    vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
+      deleteSelection(instanceRoot, selectionNames(clicked, selected), reporter, ask)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
         void runRowAction('Exclude', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));

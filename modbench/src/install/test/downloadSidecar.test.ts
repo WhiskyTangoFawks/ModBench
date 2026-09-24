@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  deleteDownload,
+  deleteDownloads,
   hideDownload,
   markDownloadInstalled,
   unhideDownload,
@@ -147,19 +147,19 @@ describe('markDownloadInstalled', () => {
   });
 });
 
-describe('deleteDownload', () => {
+describe('deleteDownloads', () => {
   it('trashes the sidecar BEFORE the archive: a mid-failure leaves a metaless archive, never a lone sidecar', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const sidecar = await writeSidecar(root, 'foo.7z', '[General]\r\n');
     const trashed: string[] = [];
 
-    const outcome = await deleteDownload(root, 'foo.7z', (path) => {
+    const outcome = await deleteDownloads(root, ['foo.7z'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
 
-    expect(outcome).toEqual({ applied: true });
+    expect(outcome).toEqual({ landed: ['foo.7z'], refused: [] });
     expect(trashed).toEqual([sidecar, archive]);
   });
 
@@ -168,12 +168,12 @@ describe('deleteDownload', () => {
     const archive = await writeArchive(root, 'manual.7z');
     const trashed: string[] = [];
 
-    const outcome = await deleteDownload(root, 'manual.7z', (path) => {
+    const outcome = await deleteDownloads(root, ['manual.7z'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
 
-    expect(outcome).toEqual({ applied: true });
+    expect(outcome).toEqual({ landed: ['manual.7z'], refused: [] });
     expect(trashed).toEqual([archive]);
   });
 
@@ -181,9 +181,9 @@ describe('deleteDownload', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
 
-    expect(await deleteDownload(root, 'foo.7z', () => Promise.reject(new Error('EPERM')))).toEqual({
-      applied: false,
-      refusal: 'EPERM',
+    expect(await deleteDownloads(root, ['foo.7z'], () => Promise.reject(new Error('EPERM')))).toEqual({
+      landed: [],
+      refused: [{ item: 'foo.7z', reason: 'EPERM' }],
     });
   });
 });

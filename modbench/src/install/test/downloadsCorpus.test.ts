@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deleteDownload,
+  deleteDownloads,
   hideDownload,
   markDownloadInstalled,
   unhideDownload,
@@ -22,6 +22,10 @@ const META = `${ARCHIVE}.meta`;
 const MANUAL = 'Manually Dropped Archive.7z';
 const MANUAL_ARCHIVE = `downloads/${MANUAL}`;
 const MANUAL_META = `${MANUAL_ARCHIVE}.meta`;
+
+// A file the host's trash will not take, as one another program holds open is.
+const LOCKED = 'Locked Archive.7z';
+const LOCKED_ARCHIVE = `downloads/${LOCKED}`;
 
 describe('downloads commands corpus', () => {
   let dir: string;
@@ -94,12 +98,12 @@ describe('downloads commands corpus', () => {
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
 
-    const outcome = await deleteDownload(dir, NAME, async (path) => {
+    const outcome = await deleteDownloads(dir, [NAME], async (path) => {
       trashed.push(path);
       await rm(path);
     });
 
-    expect(outcome).toEqual({ applied: true });
+    expect(outcome).toEqual({ landed: [NAME], refused: [] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([ARCHIVE, META]));
     expect(after.has(ARCHIVE)).toBe(false);
@@ -110,14 +114,32 @@ describe('downloads commands corpus', () => {
   it('a trash failure on the archive leaves the sidecar gone, the archive intact, and refuses', async () => {
     const before = await snapshotTree(dir);
 
-    const outcome = await deleteDownload(dir, NAME, async (path) => {
+    const outcome = await deleteDownloads(dir, [NAME], async (path) => {
       if (path === join(dir, ARCHIVE)) throw new Error('disk full');
       await rm(path);
     });
 
-    expect(outcome).toEqual({ applied: false, refusal: 'disk full' });
+    expect(outcome).toEqual({ landed: [], refused: [{ item: NAME, reason: 'disk full' }] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([META]));
     expect(after.has(ARCHIVE)).toBe(true);
+  });
+
+  it('over a selection, a file that cannot be deleted is refused with why, writes nothing, and the rest are deleted', async () => {
+    await writeFile(join(dir, LOCKED_ARCHIVE), 'archive bytes');
+    const before = await snapshotTree(dir);
+
+    const outcome = await deleteDownloads(dir, [NAME, LOCKED, MANUAL], async (path) => {
+      if (path === join(dir, LOCKED_ARCHIVE)) throw new Error('EPERM: operation not permitted');
+      await rm(path);
+    });
+
+    expect(outcome).toEqual({
+      landed: [NAME, MANUAL],
+      refused: [{ item: LOCKED, reason: 'EPERM: operation not permitted' }],
+    });
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([ARCHIVE, META, MANUAL_ARCHIVE]));
+    expect([ARCHIVE, META, MANUAL_ARCHIVE].filter((path) => after.has(path))).toEqual([]);
   });
 });
