@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import type { ModlistNode, ModNode, SeparatorNode } from './ModListProvider';
 
-/** What an entry point hands a Mods gesture: a context menu the right-clicked row, a key the
- *  focused row, each with the selection, and the palette the selection alone. */
+/** The rows a Mods gesture's Argument is taken from. */
 export interface GestureEntry {
   readonly clicked?: ModlistNode;
   readonly focused?: ModlistNode;
@@ -28,8 +27,8 @@ type RowOf<K extends ArgumentKind> = Extract<ArgumentRow, { kind: K }>;
 const isOf = <K extends ArgumentKind>(kinds: readonly K[]) =>
   (row: ModlistNode): row is RowOf<K> => kinds.some((kind) => kind === row.kind);
 
-/** The Argument of a gesture the catalog calls singular: the right-clicked row, or the focused row
- *  for a key, when the gesture takes its kind. */
+/** The Argument of a gesture the catalog calls singular: the right-clicked or focused row, when
+ *  the gesture takes its kind. */
 export function singularArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K> | undefined {
   const anchor = entry.clicked ?? entry.focused;
   return anchor !== undefined && isOf(kinds)(anchor) ? anchor : undefined;
