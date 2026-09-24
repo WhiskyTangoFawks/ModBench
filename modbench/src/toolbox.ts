@@ -440,7 +440,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
-  const { modListView } = createModListView(own, modListProvider);
+  const { modListView } = createModListView(own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`));
   const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
     reportFailure(reporterFor(logLabel), failMessage, action);
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>

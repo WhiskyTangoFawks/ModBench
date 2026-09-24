@@ -1,5 +1,5 @@
-// mods.md, A row, Overwrite: its icon carries the tint, and no decoration tints its label or the
-// Explorer's `overwrite/`.
+// mods.md, A row, Overwrite: the row's icon is its tint, with no badge, so no file decoration
+// is keyed on `overwrite/`.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -31,7 +31,6 @@ describe('nothing decorates Overwrite', () => {
       .toEqual({ [relativePath]: [] });
   });
 
-  // The rivals: the retired provider class, and its registration under any name.
   it('flags a provider over overwrite/ and its registration', () => {
     expect(overwriteDecorations(
       'export class OverwriteDecorationProvider implements vscode.FileDecorationProvider {}',

@@ -203,6 +203,23 @@ describe('a row\'s identity is its kind and its name', () => {
   });
 });
 
+// MO2 reads a line it has already read as nothing, and VS Code renders no two rows with one id.
+describe('a line modlist.txt repeats', () => {
+  const repeated = (): ModlistEntry[] => [mod('Armor'), sep('Gear'), mod('Armor', false), mod('Boots'), sep('Gear')];
+
+  it('is read as MO2 reads it: the first line holds, and each repeat is not a row', async () => {
+    const provider = makeProvider(repeated());
+    const roots = await provider.getChildren();
+    const gear = expectInstanceOf(roots.find((n) => n.kind === 'separator'), SeparatorNode);
+    const children = await provider.getChildren(gear);
+
+    expect(rowsOf(roots)).toEqual(['mod Boots', 'separator Gear', 'overwrite Overwrite']);
+    expect(rowsOf(children)).toEqual(['mod Armor']);
+    expect(expectInstanceOf(children[0], ModNode).checkboxState).toBe(TreeItemCheckboxState.Checked);
+    expect(provider.description()).toBe('2 / 2');
+  });
+});
+
 describe('a separator\'s expander', () => {
   const separatorRows = async (provider: ModListProvider) =>
     new Map((await provider.getChildren())
