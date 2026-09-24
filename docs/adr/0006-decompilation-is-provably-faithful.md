@@ -37,8 +37,7 @@ That hand-over only works if the decompilation is provably faithful.
 7. **A plugin Mutagen cannot parse is diagnosed, never silently repaired.** Legitimate data that
    Mutagen's own model mishandles is refused as blocked upstream, because a byte-level fix of
    correct data is data destruction. A plugin malformed by another tool is repaired only by an
-   explicit, previewed gesture the user confirms, never by Track, compile or load. The engine is
-   planned.
+   explicit, previewed gesture the user confirms, never by Track, compile or load.
 
 ## Alternatives rejected
 

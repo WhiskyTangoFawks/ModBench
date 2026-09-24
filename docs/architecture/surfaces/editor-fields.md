@@ -60,8 +60,8 @@ user, I want:
 
 1. A column whose plugin has nothing there, such as an array slot past its own length, an unset
    struct that may be unset, or a member its kind does not have, to show an empty cell. *ruling*
-2. A struct that cannot be unset to keep its placeholder, with each member at its default. *old
-   spec; ADR-0005, invariant 1*
+2. A struct that cannot be unset to keep its placeholder, with each member at its default. *ruling;
+   ADR-0005, invariant 1*
 3. A row no column has a value for, which holds only its children, to keep its placeholder in every
    column. *ruling*
 
@@ -138,8 +138,7 @@ As a user, I want:
 
 1. A reading to go one level deep: a property whose value is a list or a struct reads by its name
    and kind. *xEdit*
-2. An element with no reading, inside one that has, to read `{…}`, so the count stays true. *old
-   spec*
+2. An element with no reading, inside one that has, to read `{…}`, so the count stays true. *ruling*
 3. The elements joined by `, `, with no length limit: the cell cuts what does not fit. *ruling*
 
 ## Conditions

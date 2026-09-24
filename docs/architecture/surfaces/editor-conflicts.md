@@ -31,8 +31,7 @@ xEdit's benign and ignored states come from its priority table, which Modbench d
 
 As a user, I want:
 
-1. Each row painted from its own field, so one changed field tints its own row and no other. *old
-   spec*
+1. Each row painted from its own field, so one changed field tints its own row and no other. *ruling*
 2. A collapsed struct or array row to show the worst state beneath it, so collapsing hides nothing,
    and an expanded one to show no background, since its rows show their own. *xedit.md, divergence
    6*

@@ -78,8 +78,7 @@ As a user, I want:
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed,
-header and cells alike, so it reads as outside the conflict after the header scrolls away. *old
-spec*
+header and cells alike, so it reads as outside the conflict after the header scrolls away. *ruling*
 
 ## Rows
 

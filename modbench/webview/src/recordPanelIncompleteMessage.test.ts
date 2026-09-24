@@ -25,8 +25,8 @@ describe('recordPanelIncompleteMessage', () => {
     expect(recordPanelIncompleteMessage(true)).toBeUndefined();
   });
 
-  // Never Mod Management's vocabulary ("mod") as a common noun — this surface's own boundary
-  // (medit-record-editor.md: the Editing context operates on records, FormKeys and plugins).
+  // Never Mod Management's vocabulary ("mod") as a common noun: the Editor speaks of records,
+  // FormKeys and plugins.
   it('never uses "mod" as a common noun', () => {
     expect(recordPanelIncompleteMessage(false)).not.toMatch(/\bmod\b/i);
   });

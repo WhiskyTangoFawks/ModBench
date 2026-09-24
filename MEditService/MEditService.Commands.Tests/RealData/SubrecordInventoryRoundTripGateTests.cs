@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.RealData;
 
 /// <summary><c>LitR - TrueStorms.esp</c> carries a REGN whose malformed 6-byte <c>RDAT</c> desyncs
-/// Mutagen's reader, which silently drops every following subrecord (R2 in medit-repair.md).</summary>
+/// Mutagen's reader, which silently drops every following subrecord.</summary>
 public sealed class SubrecordInventoryRoundTripGateTests
 {
     private const string FixtureFileName = "LitR - TrueStorms.esp";

@@ -51,7 +51,7 @@ describe('the createTreeView sites', () => {
     ]);
   });
 
-  // commands.md, Chrome: showCollapseAll on every tree, never a flat list.
+  // commands.md, Chrome: Collapse All is on trees only, never on a flat list.
   it('collapse-all views are the Mods tree and the merged Plugins tree', () => {
     const collapsible = new Set(sites.filter((s) => /showCollapseAll:\s*true/.test(s.options)).map((s) => s.id));
     expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree']);
