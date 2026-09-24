@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import type {
-  LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
-} from './client';
-import { createLoadOrderSender, type LoadOrderSender, type LoadOrderSendOptions } from './client';
+import type { MEditClient, PluginLoadFailure } from './client';
+import { createLoadOrderSender, type LoadOrderSender } from './client';
 import { implicitMastersFrom } from './toolboxClientCalls';
-import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOrderProgress';
-import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
+import {
+  createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator,
+} from './medit/reconcileNarrator';
+import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
-import { Instance } from './instanceLoader/instance';
+import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
@@ -40,7 +40,9 @@ import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
-import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
+import {
+  loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
+} from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { errorMessage } from './ports/errorMessage';
@@ -50,7 +52,7 @@ import { applyOrThrow } from './ports/applyOrThrow';
 // `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
   'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
-  | 'status' | 'start' | 'stop' | 'onStatusChanged'>;
+  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
 
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -98,6 +100,45 @@ export interface Toolbox extends vscode.Disposable {
   pluginsTree?: PluginsTreeProvider;
   instance?: Instance;
   enterEditing?: () => Promise<void>;
+}
+
+export interface LoadOrderPuts {
+  /** The put that follows a connect, sent whatever the backend before it had: the backend just
+   *  attached holds no load order. Until it runs, no recompute puts. */
+  putOnConnect(): Promise<void>;
+}
+
+// update-load-order-file: put on change and on connect. Nothing is put while detached, since the
+// connect's put reads the value current then; a stream reopen is a connect, the process behind it
+// perhaps another.
+export function registerLoadOrderPut(
+  own: Own,
+  instance: Pick<Instance, 'subscribe'>,
+  client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
+  changed: (value: InstanceValue) => boolean,
+  put: () => Promise<void>,
+  channel: { error(msg: string): void },
+): LoadOrderPuts {
+  let connectPutRan = false;
+  const putLogged = (): void => {
+    void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
+  };
+  own({ dispose: client.onStatusChanged((status) => {
+    if (status !== 'attached') connectPutRan = false;
+  }) });
+  // Deferred past the other reopen listeners, the sender's forgetting what it sent among them.
+  own({ dispose: client.onReconnected(() => {
+    void Promise.resolve().then(() => { if (connectPutRan) putLogged(); });
+  }) });
+  own(instance.subscribe((value) => {
+    if (connectPutRan && changed(value)) putLogged();
+  }));
+  return {
+    putOnConnect: () => {
+      connectPutRan = true;
+      return put();
+    },
+  };
 }
 
 /** One surface's contribution to the catalog's one copy value id (commands.md, Record: copy
@@ -214,7 +255,7 @@ export function registerPluginsNameFilter(
 }
 
 
-interface LoadOrderHandlingDeps {
+interface ReconcileNarrationDeps {
   session: ExtensionSession;
   client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
@@ -237,52 +278,50 @@ function applySyncedFilterState(
   });
 }
 
-// ADR-0013: instance commands hand the client the load order, and the answer is reported and
-// applied here, where the views are. `loadOrderOf` picks the put out of the answer: undefined
-// when nothing was sent.
-function handleLoadOrder<T>(
-  deps: LoadOrderHandlingDeps,
-  command: (options: LoadOrderSendOptions) => Promise<T>,
-  loadOrderOf: (answer: T) => PutLoadOrderResult | undefined,
-): Promise<T> {
-  const { session, client, setStatusText } = deps;
-  const run = async (): Promise<T> => {
-    const treeProgress = makeTreeProgressHandler(session);
-    const answer = await command({
-      // The Index's own known refusal rides a tick, never the put's own outcome (ADR-0013) — this
-      // is the only place it is seen, so it is checked on every one, not folded into treeProgress.
-      onProgress: (status: LoadOrderProgress): void => {
-        reportIndexRefusal(status, { setStatusText });
-        treeProgress.onProgress(status);
-      },
-    });
-    const put = loadOrderOf(answer);
-    if (put) await settleLoadOrder(deps, treeProgress, put);
-    return answer;
-  };
-  // A snapshot handed over before mEdit is attached waits on the client for the connect, so
-  // narrating it would leave the Plugins view spinning on a load nobody has asked for yet.
-  return client.status === 'attached' ? withPluginsViewProgress(session, run) : run();
+// plugins.md, States 2: the index status the stream carries drives the Plugins view, whoever
+// started the reconcile. mEdit going away, or a stream reopening onto another process, starts its
+// versions over.
+function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNarrator {
+  const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
+  const narrator = createReconcileNarrator({
+    showProgress: (until) => void withPluginsViewProgress(session, () => until),
+    applyIndexed: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
+    setStatusText,
+    settle: (status) => settleReconciled(status, {
+      log: (m) => outputChannel.info(`[toolbox] ${m}`),
+      warn: (m) => reporter.report('warning', m),
+      setStatusText,
+      refreshTree: () => recordBrowser.refresh(),
+      notifyConflictsComputed,
+      syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
+      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
+    }),
+    log: (m) => outputChannel.error(`[toolbox] ${m}`),
+  });
+  own({ dispose: subscribeNarratorToLoadOrderStatus(client, narrator) });
+  own({ dispose: client.onStatusChanged((status) => { if (status !== 'attached') narrator.detached(); }) });
+  own({ dispose: client.onReconnected(() => narrator.detached()) });
+  return narrator;
 }
 
-async function settleLoadOrder(
-  deps: LoadOrderHandlingDeps, treeProgress: TreeProgressHandler, put: PutLoadOrderResult,
+// ADR-0013: instance commands hand the client the load order. What the reconcile does is the
+// narrator's to show; what the send itself answered is reported here.
+async function handleLoadOrder(
+  outputChannel: vscode.LogOutputChannel, reporter: Reporter, narrator: ReconcileNarrator,
+  command: () => Promise<PutLoadOrderResult>,
 ): Promise<void> {
-  const { session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed, reporter } = deps;
+  const put = await command();
   // The game folder not found has its own one Output line; a line per value would repeat it.
   if (!put.sent) return;
   const { plugins } = put.snapshot;
   outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugin copies)`);
-  await applyLoadOrderOutcome(plugins, put.outcome, treeProgress.lastFailures(), treeProgress.lastTotalPlugins(), {
-    log: (m) => outputChannel.info(`[toolbox] ${m}`),
-    warn: (m) => reporter.report('warning', m),
-    error: (m) => reporter.report('error', m),
-    setStatusText,
-    refreshTree: () => recordBrowser.refresh(),
-    notifyConflictsComputed,
-    syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
-    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
+  reportPutOutcome(plugins, put.outcome, {
+    warn: (m) => reporter.report('warning', m), error: (m) => reporter.report('error', m),
   });
+  if (put.outcome.outcome !== 'applied') return;
+  // The status the put waited for, heard here too: its ticks can be lost to a stream reopening.
+  narrator.hear(put.outcome.status);
+  await narrator.settled(put.outcome.status.version);
 }
 
 // ADR-0002: rows gain chevrons here — and *finish* gaining them here. The tree reads the
@@ -316,29 +355,6 @@ async function applyLoadOrderToTree(
   );
 }
 
-// Each tick's `totalPlugins` is the backend's count, implicit masters included — a larger number
-// than the frontend's own snapshot, and the one `applyLoadOrderToTree`'s completion log compares
-// against.
-interface TreeProgressHandler {
-  onProgress: (status: LoadOrderProgress) => void;
-  lastTotalPlugins: () => number;
-  /** The last tick's own failures — the PUT response carries none of its own (ADR-0019). */
-  lastFailures: () => PluginLoadFailure[];
-}
-
-function makeTreeProgressHandler(session: ExtensionSession): TreeProgressHandler {
-  let totalPlugins = 0;
-  let failures: PluginLoadFailure[] = [];
-  const applyTick = makeReconcileProgressHandler({
-    applyLoadOrder: (indexedPlugins, tickFailures) => session.pluginsTree?.applyIndexed(indexedPlugins, tickFailures),
-  });
-  return {
-    onProgress: (status) => { totalPlugins = status.totalPlugins; failures = status.failures; applyTick(status); },
-    lastTotalPlugins: () => totalPlugins,
-    lastFailures: () => failures,
-  };
-}
-
 // `loadOrderSender.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0013) —
 // so each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
@@ -353,13 +369,14 @@ interface EnterEditingDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   revealLog: () => void;
-  putCurrentLoadOrder: () => Promise<void>;
+  /** What a connect runs once the Instance value it reads has landed. */
+  onConnect: () => Promise<void>;
 }
 
 // ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { session, instance, sender, client, outputChannel, reporter, revealLog, putCurrentLoadOrder } = deps;
+  const { session, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
   const enter = async (): Promise<void> => {
     const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
@@ -384,7 +401,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       exitEditing(session, client);
       return;
     }
-    await putCurrentLoadOrder();
+    await onConnect();
   };
   return () => withPluginsViewProgress(session, enter);
 }
@@ -438,24 +455,19 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   // send in flight through it (ADR-0013).
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
-  const handlingDeps: LoadOrderHandlingDeps = {
+  const loadOrderReporter = reporterFor('loadOrder');
+  const narrator = narrateReconciles(own, {
     session, client, recordBrowser, outputChannel, setStatusText, notifyConflictsComputed,
-    reporter: reporterFor('loadOrder'),
-  };
+    reporter: loadOrderReporter,
+  });
   // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameRelease } = instance.value;
-    return { plugins, gameFolder, gameName: gameRelease };
-  };
-  const putCurrentLoadOrder = async (): Promise<void> => {
-    await handleLoadOrder(
-      handlingDeps, (options) => putLoadOrder(sender, instanceRoot, loadOrderSource(), options), (put) => put);
-  };
-  // ADR-0014: instance commands rebuild the index and then put the load order; the gesture itself
-  // asks the Instance loader to read every file again.
-  const refreshIndex = () => handleLoadOrder(
-    handlingDeps, (options) => refresh(client, sender, instanceRoot, loadOrderSource(), options),
-    (answer) => (answer.applied ? answer.loadOrder : undefined));
+  const loadOrderSource = (value = instance.value): LoadOrderSource =>
+    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
+  const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
+    outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
+  // load-instance, refresh: instance commands rebuild the index and send nothing; the gesture
+  // itself asks the Instance loader to read every file again.
+  const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
@@ -487,18 +499,18 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
+  // ADR-0013: a landed Instance recompute and a connect put the load order, never a gesture.
+  const loadOrderPuts = registerLoadOrderPut(
+    own, instance, client, (value) => loadOrderChanged(sender, instanceRoot, loadOrderSource(value)),
+    putCurrentLoadOrder, outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
       session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
-      revealLog: () => outputChannel.show(true), putCurrentLoadOrder,
+      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnConnect(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
-  // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
-  // in the applied outcome is logged here, because no caller is left to hear it.
-  own(instance.subscribe(() => void putCurrentLoadOrder().catch((e: unknown) => outputChannel.error(
-    `[toolbox] handing mEdit the load order threw: ${errorMessage(e)}`))));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
@@ -528,7 +540,9 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     warnIfFomod,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
-  own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh'), instanceRoot }));
+  own(registerRefreshCommand({
+    refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+  }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
     modListSelection: () => modListView.selection,

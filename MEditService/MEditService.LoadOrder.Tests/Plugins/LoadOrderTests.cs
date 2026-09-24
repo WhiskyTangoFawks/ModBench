@@ -74,7 +74,7 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void ApplyingTheSameSnapshotTwice_YieldsAnEqualValue()
+    public void ApplyingTheSameSnapshotTwice_KeepsTheValueHeld()
     {
         var holder = new LoadOrderHolder();
         var copies = () => new[] { Copy("A.esp", "ModA", slot: 0), Copy("B.esp", "ModB", slot: 1, winning: false) };
@@ -83,8 +83,7 @@ public sealed class LoadOrderTests
         var first = holder.Current;
         holder.Apply(Order(copies()));
 
-        Assert.Equal(first, holder.Current);
-        Assert.NotSame(first, holder.Current);
+        Assert.Same(first, holder.Current);
     }
 
     [Fact]

@@ -139,6 +139,7 @@ public sealed class WatchArmingTests
         tree.AdvancePastBothWindows();
         Assert.Empty(tree.Index.Projections);
 
+        tree.AddMod("OtherMod", "Other.esp");
         await tree.ApplyLoadOrder();
         await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, PluginName));
 
