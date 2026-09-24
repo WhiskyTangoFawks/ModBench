@@ -247,6 +247,25 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
+  it('insertSeparator whose line cannot be written refuses with the reason and makes no folder', async () => {
+    vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
+
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', { kind: 'mod', name: 'ENBoost - 12k' });
+
+    assertRefusal(outcome, 'disk full');
+    await expect(stat(join(dir, 'mods', 'New Section_separator'))).rejects.toThrow();
+  });
+
+  it('renameSeparator to its own name, as MO2 would name its folder, writes nothing', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+
+    const outcome = await renameSeparator(dir, 'Default', 'Unassigned (Modlist Development)', ' Unassigned (Modlist Development). ');
+
+    expect(outcome).toEqual({ applied: true, wrote: false });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(await mtime()).toEqual(LONG_AGO);
+  });
+
   it('insertSeparator refuses a name another separator has, writing neither line nor folder', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
@@ -271,6 +290,66 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await readFile(modlistPath(), 'utf8')).toBe('+Armor\r\n+Gear_separator\r\n+Gear\r\n+New Section_separator\r\n');
+  });
+
+  // MO2 filters a separator's name as it filters every folder name under mods/
+  // (MOBase::fixDirectoryName), so no name reaches a folder outside mods/<name>_separator/.
+  describe('a separator name filtered as MO2 filters a folder name', () => {
+    it('insertSeparator drops path separators, so ../x and A/B stay folders inside mods/', async () => {
+      await insertSeparator(dir, 'Default', '../Escape', { kind: 'mod', name: 'ENBoost - 12k' });
+      await insertSeparator(dir, 'Default', 'A/B', { kind: 'mod', name: 'ENBoost - 12k' });
+
+      const separators = (await readModlist()).filter((e) => e.kind === 'separator').map((e) => e.name);
+      expect(separators).toContain('..Escape');
+      expect(separators).toContain('AB');
+      expect((await stat(join(dir, 'mods', '..Escape_separator'))).isDirectory()).toBe(true);
+      expect((await stat(join(dir, 'mods', 'AB_separator'))).isDirectory()).toBe(true);
+      expect(await readdir(dir)).not.toContain('Escape_separator');
+      await expect(stat(join(dir, 'mods', 'A'))).rejects.toThrow();
+    });
+
+    it('insertSeparator refuses a name that leaves no folder name, writing neither line nor folder', async () => {
+      const before = await readFile(modlistPath(), 'utf8');
+      const foldersBefore = await readdir(join(dir, 'mods'));
+
+      const outcome = await insertSeparator(dir, 'Default', 'CON', { kind: 'mod', name: 'ENBoost - 12k' });
+
+      expect(outcome).toEqual({ applied: false, refusal: 'Not a valid separator name: "CON"' });
+      expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+      expect(await readdir(join(dir, 'mods'))).toEqual(foldersBefore);
+    });
+
+    it('renameSeparator drops path separators from the new name, so its folder stays inside mods/', async () => {
+      await renameSeparator(dir, 'Default', 'Unassigned (Modlist Development)', '../Escape');
+
+      expect((await readModlist()).some((e) => e.kind === 'separator' && e.name === '..Escape')).toBe(true);
+      expect((await stat(join(dir, 'mods', '..Escape_separator'))).isDirectory()).toBe(true);
+      expect(await readdir(dir)).not.toContain('Escape_separator');
+    });
+
+    // A line another tool wrote, naming a folder no filtered name could reach.
+    it('a separator line whose name escapes mods/ is renamed and deleted on its line alone', async () => {
+      await writeFile(modlistPath(), '+../Escape_separator\r\n+Harder VATS\r\n', 'utf8');
+      const outside = join(dir, 'Escape_separator');
+      await mkdir(outside);
+      const trashed: string[] = [];
+
+      await renameSeparator(dir, 'Default', '../Escape', 'Inside');
+      await deleteSeparators(dir, 'Default', ['Inside'], (path) => {
+        trashed.push(path);
+        return Promise.resolve();
+      });
+      await writeFile(modlistPath(), '+../Escape_separator\r\n', 'utf8');
+      await deleteSeparators(dir, 'Default', ['../Escape'], (path) => {
+        trashed.push(path);
+        return Promise.resolve();
+      });
+
+      expect(trashed).toEqual([]);
+      expect((await stat(outside)).isDirectory()).toBe(true);
+      await expect(stat(join(dir, 'mods', 'Inside_separator'))).rejects.toThrow();
+      expect(await readModlist()).toEqual([]);
+    });
   });
 
   it('insertSeparator refuses when the anchor entry is absent', async () => {
@@ -313,6 +392,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(outcome).toEqual({ applied: false, refusal: 'A separator with this name already exists' });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect((await stat(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'))).isDirectory()).toBe(true);
+    await expect(stat(join(dir, 'mods', 'Radfall - All-In-One Survival Overhaul_separator'))).rejects.toThrow();
   });
 
   it('renameSeparator takes a name a mod has: a mod is no clash', async () => {
@@ -362,12 +442,37 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     };
     beforeEach(() => { trashed.length = 0; });
 
-    it('removes each line, so the mods of the first join the separator above and the mods of the other become ungrouped', async () => {
+    const order = async () => (await readModlist()).map((e) => `${e.kind}:${e.name}`);
+
+    it('removes the line and trashes the folder, and the mods it held join the separator above', async () => {
+      const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED], trash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [UNASSIGNED], refused: [] } });
+      expect(await order()).toEqual([
+        'mod:SKK Fast Start new game (Fallout 4)', 'mod:[NODELETE] Radfall', 'mod:Unofficial Fallout 4 Patch',
+        `separator:${RADFALL}`, 'mod:ENBoost - 12k', 'mod:Harder VATS', 'mod:Cracked and Smudged Pip-Boy Screen',
+      ]);
+      expect(trashed).toEqual([unassignedFolder()]);
+    });
+
+    it('the mods of the first separator become ungrouped', async () => {
+      const outcome = await deleteSeparators(dir, 'Default', [RADFALL], trash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [RADFALL], refused: [] } });
+      expect(await order()).toEqual([
+        'mod:SKK Fast Start new game (Fallout 4)', `separator:${UNASSIGNED}`, 'mod:[NODELETE] Radfall',
+        'mod:Unofficial Fallout 4 Patch', 'mod:ENBoost - 12k', 'mod:Harder VATS', 'mod:Cracked and Smudged Pip-Boy Screen',
+      ]);
+    });
+
+    it('removes every selected line in one write', async () => {
+      vi.mocked(writeFile).mockClear();
+
       const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED, RADFALL], trash);
 
       expect(outcome).toEqual({ applied: true, outcome: { landed: [UNASSIGNED, RADFALL], refused: [] } });
-      expect((await readModlist()).map((e) => e.kind)).toEqual(['mod', 'mod', 'mod', 'mod', 'mod', 'mod']);
-      expect(trashed).toEqual([unassignedFolder()]);
+      expect((await readModlist()).every((e) => e.kind === 'mod')).toBe(true);
+      expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
     });
 
     // The gone separator's folder is still under mods/, as MO2 or another tool may leave it.
@@ -397,17 +502,28 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(trashed).toEqual([]);
     });
 
-    it('whose lines cannot be written trashes no folder', async () => {
+    // The folder is in the trash by then; the line alone is a separator with no folder.
+    it('refuses a separator whose line cannot go after its folder was trashed, naming the part that failed', async () => {
+      const before = await readFile(modlistPath(), 'utf8');
       vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
 
-      const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED], trash);
+      const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED, RADFALL], trash);
 
-      assertRefusal(outcome, 'disk full');
-      expect(trashed).toEqual([]);
-      expect((await stat(unassignedFolder())).isDirectory()).toBe(true);
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: {
+          landed: [],
+          refused: [
+            { item: UNASSIGNED, reason: 'its folder went to the trash, but its modlist.txt line could not be removed: disk full' },
+            { item: RADFALL, reason: 'disk full' },
+          ],
+        },
+      });
+      expect(trashed).toEqual([unassignedFolder()]);
+      expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
 
-    it('puts back, where it was, the line of a separator whose folder the trash refuses, while the others land', async () => {
+    it('writes nothing for a separator whose folder the trash refuses, and refuses it with the reason, while the others land', async () => {
       const before = await readFile(modlistPath(), 'utf8');
       const refusingTrash = async (path: string) => {
         if (path === unassignedFolder()) throw new Error('trash unavailable');

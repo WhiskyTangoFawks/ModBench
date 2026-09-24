@@ -559,7 +559,10 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
 
     const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
     expect(validate('Group A')).toBe(CLASH);
+    expect(validate(' Group A ')).toBe(CLASH);
     expect(validate('Mod A')).toBeUndefined();
+    expect(validate('')).toBeUndefined();
+    expect(validate('CON')).toBe('Not a valid separator name: "CON"');
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {

@@ -102,7 +102,7 @@ export function insertSeparatorAtIndexInText(
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
     const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
-    const newLine = `+${name}${SEPARATOR_SUFFIX}${detectEol(bomless)}`;
+    const newLine = `+${separatorModName(name)}${detectEol(bomless)}`;
     let insertAt: number;
     if (entryLineIdx.length === 0) {
       insertAt = lines.length;
@@ -122,11 +122,11 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
   return withBomPreserved(text, (bomless) => {
     for (const { start, end, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
-      if (matchesModLine(content, oldName + SEPARATOR_SUFFIX)) {
+      if (matchesModLine(content, separatorModName(oldName))) {
         const eol = bomless.slice(contentEnd, end);
         // content matched `+`/`-` above, so its first character is that prefix, never absent.
         const prefix = content.slice(0, 1);
-        return bomless.slice(0, start) + prefix + newName + SEPARATOR_SUFFIX + eol + bomless.slice(end);
+        return bomless.slice(0, start) + prefix + separatorModName(newName) + eol + bomless.slice(end);
       }
     }
     throw new Error(`Separator not found in modlist: ${oldName}`);
@@ -137,31 +137,9 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
 export function deleteSeparatorInText(text: string, name: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
-    const idx = lines.findIndex((l) => matchesModLine(l, name + SEPARATOR_SUFFIX));
+    const idx = lines.findIndex((l) => matchesModLine(l, separatorModName(name)));
     if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
     lines.splice(idx, 1);
-    return lines.join('');
-  });
-}
-
-/** Puts back the named separators' lines as `before` had them: each directly after the nearest
- *  entry above it in `before` that is still listed, or first when none is. */
-export function restoreSeparatorLinesInText(text: string, before: string, names: readonly string[]): string {
-  const bodyOf = (line: string): string => lineContent(line).slice(1);
-  const beforeEntries = splitLinesKeepEol(stripBom(before)).filter(isEntryLine);
-  const restored = new Set(names.map(separatorModName));
-  return withBomPreserved(text, (bomless) => {
-    const eol = detectEol(bomless);
-    const lines = splitLinesKeepEol(bomless);
-    for (const [i, line] of beforeEntries.entries()) {
-      if (!restored.has(bodyOf(line))) continue;
-      const aboveBodies = new Set(beforeEntries.slice(0, i).map(bodyOf));
-      const above = lines.findLastIndex((l) => isEntryLine(l) && aboveBodies.has(bodyOf(l)));
-      const insertAt = above === -1 ? firstEntryLineAt(lines) : above + 1;
-      const prevLine = lines[insertAt - 1];
-      if (prevLine !== undefined && lineContent(prevLine) === prevLine) lines[insertAt - 1] = prevLine + eol;
-      lines.splice(insertAt, 0, lineContent(line) + eol);
-    }
     return lines.join('');
   });
 }
@@ -229,7 +207,7 @@ function ungroupedWinningEndAt(lines: readonly string[]): number {
 }
 
 function separatorLineAt(lines: readonly string[], separatorName: string): number {
-  const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
+  const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorModName(separatorName)));
   if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
   return sepIdx;
 }
@@ -305,7 +283,7 @@ export function moveModsInText(text: string, modNames: readonly string[], place:
 function separatorBlockLineIndices(lines: readonly string[], separatorNames: readonly string[]): Set<number> {
   const inBlock = new Set<number>();
   for (const [i, line] of lines.entries()) {
-    if (!separatorNames.some((name) => matchesModLine(line, name + SEPARATOR_SUFFIX))) continue;
+    if (!separatorNames.some((name) => matchesModLine(line, separatorModName(name)))) continue;
     for (let j = lineBlockStartAt(lines, i); j <= i; j++) inBlock.add(j);
   }
   return inBlock;

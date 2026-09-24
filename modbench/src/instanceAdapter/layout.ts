@@ -23,8 +23,25 @@ export const modsDir = (instanceRoot: string): string => join(instanceRoot, MODS
 export const modDir = (instanceRoot: string, modName: string): string =>
   join(modsDir(instanceRoot), modName);
 
-export const separatorDir = (instanceRoot: string, separatorName: string): string =>
-  modDir(instanceRoot, separatorModName(separatorName));
+// MOBase::fixDirectoryName, which MO2 runs on every name it gives a folder: surrounding and
+// repeated whitespace and trailing dots go, the characters Windows forbids in a file name go, and
+// a DOS device name is no name.
+const FORBIDDEN_IN_FOLDER_NAME = /[<>:"/\\|?*]/g;
+const DEVICE_NAMES = new Set([
+  'CON', 'PRN', 'AUX', 'NUL', ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => [`COM${n}`, `LPT${n}`]),
+]);
+const simplified = (text: string): string => text.trim().replace(/\s+/g, ' ');
+
+/** The name MO2 would give a folder asked to be `name`; empty when nothing of it is left. */
+export function mo2FolderName(name: string): string {
+  const filtered = simplified(name).replace(/\.+$/, '').replace(FORBIDDEN_IN_FOLDER_NAME, '');
+  return DEVICE_NAMES.has(filtered) ? '' : simplified(filtered);
+}
+
+/** `undefined` for a name MO2 never gives a folder, such as one another tool wrote with a `/`:
+ *  such a separator has no folder, and no path is built from its name. */
+export const separatorDir = (instanceRoot: string, separatorName: string): string | undefined =>
+  mo2FolderName(separatorName) === separatorName ? modDir(instanceRoot, separatorModName(separatorName)) : undefined;
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 

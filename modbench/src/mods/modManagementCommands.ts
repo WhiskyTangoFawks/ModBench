@@ -15,7 +15,7 @@ import {
   renameSeparator,
   setModsEnabled,
   uninstallMod,
-  SEPARATOR_NAME_CLASH,
+  separatorNameRefusal,
   type ModlistSelectionResult,
   type MovePlace,
 } from '../modlist/modlist';
@@ -218,11 +218,8 @@ export function registerModContextCommands(
       }),
   ];
 }
-// A name another separator has is refused as the user types; `own` is the renamed separator's.
-function separatorNameClash(instance: Pick<Instance, 'value'>, own?: string): (value: string) => string | undefined {
-  return (value) => value !== own && instance.value.mods.some((e) => e.kind === 'separator' && e.name === value)
-    ? SEPARATOR_NAME_CLASH
-    : undefined;
+function separatorNamePrompt(instance: Pick<Instance, 'value'>, own?: string): (value: string) => string | undefined {
+  return (value) => (value === '' ? undefined : separatorNameRefusal(instance.value.mods, value, own));
 }
 
 export function registerSeparatorCommands(
@@ -235,7 +232,7 @@ export function registerSeparatorCommands(
         if (!node) return;
         const oldName = node.separator.name;
         const newName = await vscode.window.showInputBox({
-          prompt: 'Rename separator', value: oldName, validateInput: separatorNameClash(instance, oldName),
+          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(instance, oldName),
         });
         if (!newName || newName === oldName) return;
         await reportFailure(reporter, 'Failed to rename separator.', async () => {
@@ -246,7 +243,7 @@ export function registerSeparatorCommands(
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
         const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNameClash(instance),
+          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(instance),
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
