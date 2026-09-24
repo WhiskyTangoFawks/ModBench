@@ -168,6 +168,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.openSettings",
+        "title": "Open Instance Settings",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.create",
         "title": "Create Plugin…",
         "icon": "$(add)",
@@ -531,6 +536,14 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.instance.refresh",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.instance.openSettings",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.mod.sortWinningAtTop",
           "when": "modbench.folder == instance"
         },
@@ -584,6 +597,11 @@
           "command": "modbench.instance.refresh",
           "when": "view == modbench.toolbox && modbench.folder == instance",
           "group": "navigation@1"
+        },
+        {
+          "command": "modbench.instance.openSettings",
+          "when": "view == modbench.toolbox && modbench.folder == instance",
+          "group": "settings@1"
         },
         {
           "command": "modbench.plugin.filter",
@@ -674,6 +692,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "modbench.profile.switch",
+          "when": "view == modbench.toolbox && viewItem == profile",
+          "group": "modbench@1"
+        },
         {
           "command": "modbench.openEditor",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",

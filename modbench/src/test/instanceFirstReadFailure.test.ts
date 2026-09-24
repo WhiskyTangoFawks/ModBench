@@ -27,10 +27,12 @@ import { PluginsTreeProvider } from '../plugins/PluginsTreeProvider';
 import { ErrorNode as PluginsErrorNode } from '../plugins/errorNode';
 import { DownloadsProvider } from '../downloads/DownloadsProvider';
 import { ErrorNode as DownloadsErrorNode } from '../downloads/errorNode';
+import { ToolboxProvider } from '../toolbox/ToolboxProvider';
 import { makeReporter } from '../reporter';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { expectInstanceOf } from './expectInstanceOf';
+import { present } from '../ports/present';
 
 const roots: string[] = [];
 const disposables: { dispose(): void }[] = [];
@@ -47,8 +49,8 @@ function channelWrites(channel: FakeLogOutputChannel): unknown[][] {
     .flatMap((spy) => spy.mock.calls);
 }
 
-// The three views over the one Instance, wired to the Output as the composition root wires them.
-async function threeViewsOverOneInstance() {
+// The four views over the one Instance, wired to the Output as the composition root wires them.
+async function fourViewsOverOneInstance() {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const channel = new FakeLogOutputChannel();
@@ -65,14 +67,15 @@ async function threeViewsOverOneInstance() {
     reporter: makeReporter(channel, 'pluginList'),
   });
   const downloads = new DownloadsProvider({ instance });
-  disposables.push(instance, mods, plugins, downloads);
+  const toolbox = new ToolboxProvider({ instance });
+  disposables.push(instance, mods, plugins, downloads, toolbox);
   const render = () => Promise.all([mods.getChildren(), plugins.getChildren(), downloads.getChildren()]);
-  return { root, channel, instance, render };
+  return { root, channel, instance, render, toolbox };
 }
 
-describe('a failed first read across the Mods, Plugins and Downloads views', () => {
+describe('a failed first read across the Toolbox, Mods, Plugins and Downloads views', () => {
   it('shows each view the one error row, writes one Output line, raises no notification, and the next good read brings rows', async () => {
-    const { root, channel, instance, render } = await threeViewsOverOneInstance();
+    const { root, channel, instance, render, toolbox } = await fourViewsOverOneInstance();
     const ini = join(root, 'ModOrganizer.ini');
     const complete = await readFile(ini, 'utf8');
     await writeFile(ini, '');
@@ -82,12 +85,14 @@ describe('a failed first read across the Mods, Plugins and Downloads views', () 
     const rendered = await pending;
 
     const [modsRows, pluginsRows, downloadsRows] = rendered;
+    const toolboxRows = toolbox.getChildren();
     const errors = [
       expectInstanceOf(modsRows[0], ModsErrorNode),
       expectInstanceOf(pluginsRows[0], PluginsErrorNode),
       expectInstanceOf(downloadsRows[0], DownloadsErrorNode),
+      present(toolboxRows[0], 'the Toolbox\'s error row'),
     ];
-    expect(rendered.map((rows) => rows.length)).toEqual([1, 1, 1]);
+    expect([...rendered, toolboxRows].map((rows) => rows.length)).toEqual([1, 1, 1, 1]);
     const reason = instance.readFailure;
     expect(reason).toContain('ModOrganizer.ini');
     for (const error of errors) {
@@ -103,6 +108,7 @@ describe('a failed first read across the Mods, Plugins and Downloads views', () 
 
     await writeFile(ini, complete);
     await instance.refresh();
+    expect(toolbox.getChildren().map((row) => row.label)).toEqual(['Game', 'Profile']);
     for (const rows of await render()) {
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.some((row) => row instanceof ModsErrorNode || row instanceof PluginsErrorNode || row instanceof DownloadsErrorNode)).toBe(false);

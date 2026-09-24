@@ -1,40 +1,58 @@
 import * as vscode from 'vscode';
+import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 
-/** The Instance fields the Toolbox's rows render (ADR-0015), and nothing else — MO2's top bar
- *  as a tree, reading the one read model. */
-export interface ToolboxState {
-  activeProfile: string;
-}
-
-/** Home for actions scoped to the workspace, not one tree: VS Code's container-level `…` is an
- *  auto-generated Views menu, not a contribution point, so they need a view of their own. */
 export interface ToolboxDeps {
-  /** `undefined` with no MO2 instance open. The view still registers then — it is the
-   *  container's first view and must never be a hole — but the commands its rows activate do
-   *  not exist, so it renders no rows. */
-  state: () => ToolboxState | undefined;
+  /** `undefined` with no instance open. The view still registers then — it is the container's
+   *  first view and must never be a hole — but the commands its rows activate do not exist, so
+   *  it renders no rows. */
+  instance: InstanceView | undefined;
 }
 
-// An unread instance names no profile yet, which reads as the same em-dash an unreadable one
-// does: ADR-0019's background tier degrades a readout inline rather than toasting.
-function profileRow(activeProfile: string): vscode.TreeItem {
+function gameRow({ gameRelease, gameDirectory }: InstanceValue): vscode.TreeItem {
+  const row = new vscode.TreeItem('Game');
+  row.description = gameRelease;
+  row.iconPath = new vscode.ThemeIcon('game');
+  row.tooltip = gameDirectory?.root;
+  return row;
+}
+
+function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Profile');
-  row.description = activeProfile || '—';
+  row.description = activeProfile;
   row.iconPath = new vscode.ThemeIcon('account');
   row.tooltip = 'Switch profile';
+  row.contextValue = 'profile';
   row.command = { command: 'modbench.profile.switch', title: 'Switch Profile' };
   return row;
 }
 
-export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+// ADR-0019: a failed first read is shown in place of the rows, never as an empty readout.
+function failedReadRow(reason: string): vscode.TreeItem {
+  const row = new vscode.TreeItem(`Failed to load: ${reason}`);
+  row.tooltip = reason;
+  row.iconPath = new vscode.ThemeIcon('error');
+  return row;
+}
+
+/** A readout of the instance itself, one fact per row, read from the instance value alone
+ *  (ADR-0015). */
+export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<undefined>();
 
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private readonly deps: ToolboxDeps) {}
+  private readonly subscriptions: vscode.Disposable[];
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire(undefined);
+  constructor(private readonly deps: ToolboxDeps) {
+    const changed = () => this._onDidChangeTreeData.fire(undefined);
+    this.subscriptions = deps.instance
+      ? [deps.instance.subscribe(changed), deps.instance.onReadFailure(changed)]
+      : [];
+  }
+
+  dispose(): void {
+    for (const subscription of this.subscriptions) subscription.dispose();
+    this._onDidChangeTreeData.dispose();
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -42,8 +60,11 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
-    const state = element ? undefined : this.deps.state();
-    if (!state) return [];
-    return [profileRow(state.activeProfile)];
+    const { instance } = this.deps;
+    if (element || !instance) return [];
+    if (instance.sequence === 0) {
+      return instance.readFailure === undefined ? [] : [failedReadRow(instance.readFailure)];
+    }
+    return [gameRow(instance.value), profileRow(instance.value)];
   }
 }

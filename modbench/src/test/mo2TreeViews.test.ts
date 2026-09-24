@@ -91,6 +91,24 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   });
 });
 
+// A profile switch writes and forgets, so nothing but the watch can move this readout.
+describe('the Mods view\'s description follows the active profile', () => {
+  it('reads the new profile off a new instance value, with nothing pushed', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const { modListView } = createModListView(own, provider, instance);
+    expect(modListView.description).toBe('Default');
+
+    const ini = join(root, 'ModOrganizer.ini');
+    const text = await readFile(ini, 'utf8');
+    await writeFile(ini, text.replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)'));
+    await instance.refresh();
+
+    expect(modListView.description).toBe('Secondary');
+  });
+});
+
 describe('the Downloads filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const root = await cloneCorpusFixture();

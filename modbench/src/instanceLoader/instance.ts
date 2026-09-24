@@ -203,7 +203,7 @@ export class Instance implements vscode.Disposable {
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   // Recomputes never overlap, so a slow walk cannot publish over a newer one.
-  private queue: Promise<void> = Promise.resolve();
+  private queue: Promise<unknown> = Promise.resolve();
 
   private readonly watchers: vscode.Disposable[];
 
@@ -263,8 +263,9 @@ export class Instance implements vscode.Disposable {
   }
 
   /** The recompute activation runs, and the one that corrects the value after a watcher event
-   *  the platform never delivered. Identical to the one an event runs. */
-  refresh(): Promise<void> {
+   *  the platform never delivered. Identical to the one an event runs. Answers with this read's
+   *  own failure, undefined when it landed. */
+  refresh(): Promise<string | undefined> {
     clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
     return this.run();
   }
@@ -281,7 +282,7 @@ export class Instance implements vscode.Disposable {
     this.timer = setTimeout(() => void this.run(), SETTLE_MS);
   }
 
-  private run(): Promise<void> {
+  private run(): Promise<string | undefined> {
     const task = this.queue.then(() => this.recompute());
     this.queue = task;
     return task;
@@ -289,7 +290,7 @@ export class Instance implements vscode.Disposable {
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
   // MO2 is half-way through writing never empties the trees.
-  private async recompute(): Promise<void> {
+  private async recompute(): Promise<string | undefined> {
     let next: InstanceValue;
     try {
       next = await this.read();
@@ -298,12 +299,13 @@ export class Instance implements vscode.Disposable {
       this.options.logReadFailure(`[instance] Failed to read the MO2 instance: ${failure}`);
       this.failure = failure;
       this.notify(this.failureListeners, (listener) => listener());
-      return;
+      return failure;
     }
     this.current = next;
     this.failure = undefined;
     this.seq++;
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
+    return undefined;
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute

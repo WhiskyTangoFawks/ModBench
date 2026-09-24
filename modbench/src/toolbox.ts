@@ -35,7 +35,7 @@ import { collidingModName } from './mods/modNameCollision';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
-import { registerRefreshCommand, registerToolboxCommands, type RefreshGestureDeps } from './toolbox/toolboxCommands';
+import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
@@ -71,6 +71,8 @@ export interface ToolboxDeps {
   reporterFor: (tag: string) => Reporter;
   /** ADR-0019 surfacing: the one modal question every gesture below here asks through. */
   ask: AskQuestion;
+  /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
+  extensionId: string;
 }
 
 /** The MO2 side's wiring, which the activation file calls: the Toolbox view and everything below
@@ -363,14 +365,13 @@ interface Mo2Side {
   modListProvider: ModListProvider;
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
-  refreshGesture: RefreshGestureDeps;
   enterEditing: () => Promise<void>;
 }
 
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
-    setStatusText, notifyConflictsComputed, reporterFor, ask,
+    setStatusText, notifyConflictsComputed, reporterFor, ask, extensionId,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
@@ -436,7 +437,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
-  const { modListView, updateProfileDescription } = createModListView(own, modListProvider, instance);
+  const { modListView } = createModListView(own, modListProvider, instance);
   const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
     try {
       await action();
@@ -470,7 +471,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
-  ownAll(own, registerToolboxCommands({ instanceRoot, instance, updateProfileDescription, reporterFor }));
+  ownAll(own, registerToolboxCommands({ instanceRoot, instance, extensionId, reporterFor }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
@@ -484,8 +485,8 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,
   });
-  const refreshGesture = { refresh: refreshIndex, instance, reporter: reporterFor('refresh') };
-  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, refreshGesture, enterEditing };
+  own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh') }));
+  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
@@ -517,14 +518,8 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   const opened = openedFolder(deps.outputChannel);
   const mo2 = opened.folder === 'instance' ? buildMo2Side(own, opened.instanceRoot, deps) : undefined;
 
-  // ADR-0015: the view's rows are the Instance's value. The provider holds no state and reads
-  // no disk, so a landed recompute is the only thing that can change what it shows.
-  const provider = new ToolboxProvider({
-    state: () => (mo2 ? { activeProfile: mo2.instance.value.activeProfile } : undefined),
-  });
+  const provider = own(new ToolboxProvider({ instance: mo2?.instance }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
-  if (mo2) own(mo2.instance.subscribe(() => provider.refresh()));
-  own(registerRefreshCommand(mo2?.refreshGesture));
   own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
 
   return {

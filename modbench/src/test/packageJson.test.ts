@@ -197,6 +197,26 @@ describe('package.json Toolbox view', () => {
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
     expect(present(sidebarViews()[0], 'the first view of the Modbench container').id).toBe('modbench.toolbox');
   });
+
+  // toolbox.md, Menus and keys: "Title bar | 1: refresh. Overflow: open settings."
+  it('has refresh as its one title icon and open settings in its title bar\'s overflow', () => {
+    const toolboxTitle = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
+      .filter((e) => requires(e.when, 'view == modbench.toolbox'));
+
+    expect(toolboxTitle.map((e) => ({ command: e.command, icon: (e.group ?? '').startsWith('navigation') })))
+      .toEqual([
+        { command: 'modbench.instance.refresh', icon: true },
+        { command: 'modbench.instance.openSettings', icon: false },
+      ]);
+  });
+
+  // toolbox.md, Menus and keys: "Profile menu | switch".
+  it('offers switch, and only switch, on the Profile row\'s menu', () => {
+    const profileMenu = present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => requires(e.when, 'view == modbench.toolbox') && requires(e.when, 'viewItem == profile'));
+
+    expect(profileMenu.map((e) => e.command)).toEqual(['modbench.profile.switch']);
+  });
 });
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
