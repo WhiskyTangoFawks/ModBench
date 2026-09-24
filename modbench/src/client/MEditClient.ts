@@ -99,6 +99,13 @@ export type RecordEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };
 
+/** `rebuildIndex`'s own outcome (ADR-0009 invariant 5): a 423 — this instance's index held by
+ *  another window — is told apart from every other failure, which carries its own detail. */
+export type RebuildIndexOutcome =
+  | { rebuilt: true }
+  | { rebuilt: false; heldElsewhere: true }
+  | { rebuilt: false; heldElsewhere: false; detail: string };
+
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type CellPage = components['schemas']['CellSummaryPagedResult'];
@@ -121,11 +128,9 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  port number, no generated client. */
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
-  // `rebuildIndex` is a command too, in its own pre-existing shape.
+  // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
-  rebuildIndex(
-    instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
-  ): Promise<boolean>;
+  rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
     origin: string, preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<TrackResponse | WriteRefused>;
