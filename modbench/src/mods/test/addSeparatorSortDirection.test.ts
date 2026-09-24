@@ -28,6 +28,7 @@ import { ModListProvider, type ModlistNode, type SortDirection } from '../ModLis
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 // The row a real tree, sorted the given way, hands a right click — not a hand-built fixture.
@@ -37,6 +38,7 @@ async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) =>
     const instance = new Instance({
       instanceRoot: root, log: () => {}, logReadFailure: () => {},
       resolveGameDirectory: resolvesNotFound,
+      resolveDownloadsDirectory: downloadsDirectoryResolver(),
     });
     await instance.refresh();
     const provider = new ModListProvider({ instance, instanceRoot: root });

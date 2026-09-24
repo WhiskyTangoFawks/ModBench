@@ -10,6 +10,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
@@ -37,6 +38,7 @@ import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type 
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { logGameFolderNotFound } from './gameFolderNotFoundLog';
+import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -413,9 +415,11 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const instance = own(new Instance({
     instanceRoot, log, logReadFailure: (line) => outputChannel.error(line),
     resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
+  own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   // The Instance watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));

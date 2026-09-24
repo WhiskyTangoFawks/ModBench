@@ -35,13 +35,13 @@ async function selectionOutcomeOf<T>(
 // The transform returns `text` untouched when `hidden` already matches, so `putIfChanged` sees no
 // change and writes nothing — no `.meta` for a row already at rest. A missing archive is refused
 // first, so a stale row never writes a lone `.meta`.
-async function spliceHidden(instanceRoot: string, name: string, hidden: boolean): Promise<DownloadsCommandResult> {
+async function spliceHidden(downloadsDir: string, name: string, hidden: boolean): Promise<DownloadsCommandResult> {
   try {
-    if (!(await exists(downloadFile(instanceRoot, name)))) {
+    if (!(await exists(downloadFile(downloadsDir, name)))) {
       return { applied: false, refusal: `"${name}" is gone from disk.` };
     }
     const { wrote } = await putIfChanged(
-      downloadSidecarFile(instanceRoot, name),
+      downloadSidecarFile(downloadsDir, name),
       (text) => (parseDownloadMeta(text).hidden === hidden ? text : setHiddenInText(text, hidden)),
       { ifMissing: '' },
     );
@@ -53,22 +53,22 @@ async function spliceHidden(instanceRoot: string, name: string, hidden: boolean)
 
 /** Excluded is MO2's `removed` key — a separate axis from Status, so this says nothing about
  *  whether the download was ever installed. */
-export function excludeDownload(instanceRoot: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceHidden(instanceRoot, name, true);
+export function excludeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
+  return spliceHidden(downloadsDir, name, true);
 }
 
-export function includeDownload(instanceRoot: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceHidden(instanceRoot, name, false);
+export function includeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
+  return spliceHidden(downloadsDir, name, false);
 }
 
 const bareName = (name: string): string => name;
 
-export function excludeDownloads(instanceRoot: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => excludeDownload(instanceRoot, name), bareName);
+export function excludeDownloads(downloadsDir: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => excludeDownload(downloadsDir, name), bareName);
 }
 
-export function includeDownloads(instanceRoot: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => includeDownload(instanceRoot, name), bareName);
+export function includeDownloads(downloadsDir: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => includeDownload(downloadsDir, name), bareName);
 }
 
 /** A landed delete: `metaLeftBehind` is set only when the file's own trash landed but its
@@ -83,22 +83,22 @@ const toDeletedDownload = (name: string, metaLeftBehind?: string): DeletedDownlo
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
-  instanceRoot: string, names: readonly string[], trash: MoveToTrash,
+  downloadsDir: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionOutcome<DeletedDownload>> {
-  return selectionOutcomeOf(names, (name) => deleteDownload(instanceRoot, name, trash), toDeletedDownload);
+  return selectionOutcomeOf(names, (name) => deleteDownload(downloadsDir, name, trash), toDeletedDownload);
 }
 
 // The file is trashed first, so a failure there refuses with the sidecar untouched. Past that
 // point a `.meta` trash failure comes back as `metaLeftBehind` (downloads.md, Reporting story 2).
 async function deleteDownload(
-  instanceRoot: string, name: string, trash: MoveToTrash,
+  downloadsDir: string, name: string, trash: MoveToTrash,
 ): Promise<DownloadsCommandResult> {
   try {
-    await trash(downloadFile(instanceRoot, name));
+    await trash(downloadFile(downloadsDir, name));
   } catch (err) {
     return refuse(err);
   }
-  const sidecar = downloadSidecarFile(instanceRoot, name);
+  const sidecar = downloadSidecarFile(downloadsDir, name);
   if (!(await exists(sidecar))) return { applied: true, wrote: true };
   try {
     await trash(sidecar);

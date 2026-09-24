@@ -49,7 +49,7 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
 // Only `.downloads` is ever read by the row provider — the rest of InstanceValue is other
 // views' territory this ticket does not touch.
 function valueOf(downloads: DownloadFile[]): InstanceValue {
-  return instanceValueFixture({ downloads });
+  return instanceValueFixture({ downloads: { kind: 'listed', rows: downloads } });
 }
 
 // The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
@@ -531,5 +531,53 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+// A folder Modbench cannot resolve is not the folder MO2 names (downloads.md, story 1): the shared
+// "Failed to load:" state (common.md, States, story 2), scoped to this view alone.
+describe('DownloadsProvider — the configured downloads folder could not be resolved', () => {
+  const REASON = 'download_directory "D:\\Games\\downloads" could not be resolved: '
+    + "Cannot translate Wine drive letter 'D:' in 'D:\\Games\\downloads': only Z: and C: are translated";
+  const unresolvedValue = () => instanceValueFixture({ downloads: { kind: 'unresolved', reason: REASON } });
+
+  it('renders one error row naming the reason, even though the instance read itself landed', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(unresolvedValue(), 1) });
+
+    const rows = await provider.getChildren();
+
+    expect(rows).toHaveLength(1);
+    const error = expectInstanceOf(rows[0], ErrorNode);
+    expect(error.label).toBe(`Failed to load: ${REASON}`);
+    expect(error.tooltip).toBe(REASON);
+  });
+
+  // Rival: the row provider falling back to whatever rows happened to be cached or the value
+  // otherwise carries, rather than the dedicated unresolved state.
+  it('never renders a download row while unresolved, whatever rows a stale cache might hold', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
+    const provider = makeProvider([], { instance });
+    await provider.getChildren(); // caches the 'a.zip' row
+
+    instance.publish(unresolvedValue());
+    const rows = await provider.getChildren();
+
+    expect(rows).toHaveLength(1);
+    expectInstanceOf(rows[0], ErrorNode);
+  });
+
+  it('allExcluded is false while unresolved — there are no rows to be all-excluded', () => {
+    const provider = makeProvider([], { instance: new FakeInstance(unresolvedValue(), 1) });
+    expect(provider.allExcluded()).toBe(false);
+  });
+
+  it('renders rows again once a later recompute resolves the folder', async () => {
+    const instance = new FakeInstance(unresolvedValue(), 1);
+    const provider = makeProvider([], { instance });
+    expect(await provider.getChildren()).toHaveLength(1); // the error row
+
+    instance.publish(valueOf([row({ name: 'a.zip' })]));
+
+    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
   });
 });

@@ -706,6 +706,78 @@ describe('modbench.downloads tree', () => {
     }, 10000);
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
+
+  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
+  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
+    this.timeout(40000);
+    if (!root) throw new Error('no open workspace');
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
+    const iniPath = path.join(root, 'ModOrganizer.ini');
+    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    try {
+      fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
+      await writeAndAwaitInstance(() => {
+        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`);
+      });
+
+      const scanned = await provider().getChildren();
+      assert.ok(
+        scanned.some((r) => archiveNameOf(r) === 'external-preexisting.zip'),
+        'expected the file already in the external folder to be scanned once the ini named it',
+      );
+
+      // A freshly (re)bound watcher's arm lags its JS creation. Writing a new file each poll
+      // attempt, not one file after a fixed sleep, means some attempt lands after it is armed.
+      const written = new Set<string>();
+      const watched = await waitFor('a file written after the external watcher has had a chance to arm', async () => {
+        const name = `external-new-${written.size}.zip`;
+        written.add(name);
+        fs.writeFileSync(path.join(external, name), 'data');
+        const found = await provider().getChildren();
+        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
+      }, 35000);
+      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')), 'expected the watcher on the external folder to fire with no manual refresh');
+    } finally {
+      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      fs.rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  // The ruling's own ENOENT-is-empty state applies before the folder exists at all, not only
+  // once MO2 has created it — this proves the watch survives that gap too.
+  it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
+    this.timeout(40000);
+    if (!root) throw new Error('no open workspace');
+    const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
+    const notYetCreated = path.join(container, 'NotYetCreated');
+    const iniPath = path.join(root, 'ModOrganizer.ini');
+    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    try {
+      await writeAndAwaitInstance(() => {
+        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`);
+      });
+
+      const beforeCreate = await provider().getChildren();
+      assert.strictEqual(beforeCreate.filter((r) => archiveNameOf(r) !== undefined).length, 0,
+        'expected no rows before the configured folder even exists');
+
+      const written = new Set<string>();
+      const watched = await waitFor('a file written after the not-yet-existing folder is created and the watcher has had a chance to arm', async () => {
+        fs.mkdirSync(notYetCreated, { recursive: true });
+        const name = `created-${written.size}.zip`;
+        written.add(name);
+        fs.writeFileSync(path.join(notYetCreated, name), 'data');
+        const found = await provider().getChildren();
+        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
+      }, 35000);
+      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')),
+        'expected the watcher to fire once the configured folder was created, with no manual refresh');
+    } finally {
+      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      fs.rmSync(container, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Overwrite row ──────────────────────────────────────────────────────────────

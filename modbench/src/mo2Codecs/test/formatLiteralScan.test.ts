@@ -16,7 +16,10 @@ const KERNEL_TESTS = KERNEL_FILES.map((f) => f.replace(/\.ts$/, '.test.ts'));
 // its rival-plant test); it does not read or write any MO2 file.
 const SELF = 'formatLiteralScan.test.ts';
 
-const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath', 'installed', 'uninstalled', 'removed'];
+const TOKENS = [
+  '+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath',
+  'download_directory', 'installed', 'uninstalled', 'removed',
+];
 
 // MO2's layout: the names of the directories and files the extension touches, each against its
 // one speller. A directory is the Instance adapter's; a file's own name is its codec's.

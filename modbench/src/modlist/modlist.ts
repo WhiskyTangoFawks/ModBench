@@ -268,9 +268,9 @@ export function deleteSeparators(
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no
 // archive is one MO2 never writes. `installed` stays, as MO2 leaves it — the codec resolves the
 // keys' precedence.
-async function unmarkDownload(instanceRoot: string, name: string): Promise<void> {
-  if (!(await exists(downloadFile(instanceRoot, name)))) return;
-  await put(downloadSidecarFile(instanceRoot, name), setUninstalledInText, { ifMissing: '' });
+async function unmarkDownload(downloadsDir: string, name: string): Promise<void> {
+  if (!(await exists(downloadFile(downloadsDir, name)))) return;
+  await put(downloadSidecarFile(downloadsDir, name), setUninstalledInText, { ifMissing: '' });
 }
 
 /** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
@@ -291,9 +291,11 @@ export type UninstallModsResult =
   | { applied: false; refusal: string };
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
- *  then its downloaded file marked (update-load-order-file, mod `uninstall`). */
+ *  then its downloaded file marked (update-load-order-file, mod `uninstall`). `downloadsDir`
+ *  undefined (unresolved) skips the mark; its reason was already logged once. */
 export async function uninstallMods(
-  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
+  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string | undefined,
+  trash: MoveToTrash,
 ): Promise<UninstallModsResult> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
   const result = await trashThenUnlist(
@@ -310,12 +312,12 @@ export async function uninstallMods(
       continue;
     }
     const archiveFilename = archiveOf.get(entry.name);
-    if (archiveFilename === undefined) {
+    if (archiveFilename === undefined || downloadsDir === undefined) {
       landed.push({ name: entry.name });
       continue;
     }
     try {
-      await unmarkDownload(instanceRoot, archiveFilename);
+      await unmarkDownload(downloadsDir, archiveFilename);
       landed.push({ name: entry.name });
     } catch (err) {
       landed.push({ name: entry.name, markRefusal: errorMessage(err) });
