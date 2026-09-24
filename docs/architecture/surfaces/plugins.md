@@ -66,7 +66,7 @@ As a user, I want:
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |
 | Tooltip | the file name, the mod it comes from, "read-only" when its records cannot be edited, and a line for each status | ADR-0012, invariant 3 |
-| Identity | the row's kind and the file name | |
+| Identity | the row's kind and the plugin, as (origin, filename) | ADR-0012, invariant 1 |
 
 A plugin's statuses, the first in this order sets the icon, and the tooltip lists every one:
 
@@ -111,7 +111,7 @@ It cannot be dragged. A `plugins.txt` line that names one is not a second row.
 | Icon | `$(error)` red when it, or a record beneath it, could not be read; none otherwise | |
 | Tooltip | its name, when it has one, and the reason it could not be read | xEdit's third column |
 | Badge | `M` modified and `A` added, in git's colours, while its plugin source has working-tree changes | ADR-0007; VS Code's source control badges |
-| Identity | the row's kind, the plugin's file name and the FormKey | |
+| Identity | the row's kind, the plugin as (origin, filename), and the FormKey | ADR-0012, invariant 1 |
 
 A block and a sub-block take xEdit's labels, "Block x, y" and "Sub-Block x, y". An exterior cell
 without an EditorID takes its grid position. A placed reference without an EditorID takes its base
