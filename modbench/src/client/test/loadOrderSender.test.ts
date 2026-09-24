@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '../MEditClient';
 import { present } from '../../ports/present';
 
 const READY_STATUS: LoadOrderProgress = {
-  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, failures: [],
+  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
@@ -236,12 +236,119 @@ describe('createLoadOrderSender — dispose', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
-    const onProgress = vi.fn();
 
-    const sent = sender.send(snapshot('A.esp'), { onProgress });
+    const sent = sender.send(snapshot('A.esp'));
     sender.dispose();
 
     expect(await sent).toEqual(ABANDONED);
-    expect(onProgress).not.toHaveBeenCalled();
+    expect(puts(client)).toEqual([]);
+  });
+});
+
+// update-load-order-file: the load order is put on change and on connect, so what mEdit already
+// has from this connection is what a recompute compares against.
+describe('createLoadOrderSender — what mEdit already has', () => {
+  it('has nothing before the first send', () => {
+    const sender = createLoadOrderSender(attached());
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+  });
+
+  it('has a snapshot equal to the last one sent, compared by value', async () => {
+    const sender = createLoadOrderSender(attached());
+
+    await sender.send(snapshot('A.esp'));
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(true);
+    expect(sender.alreadySent(snapshot('B.esp'))).toBe(false);
+  });
+
+  it('has a snapshot built with its fields in another order', async () => {
+    const sender = createLoadOrderSender(attached());
+    await sender.send(snapshot('A.esp'));
+    const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot('A.esp');
+    const [only] = plugins;
+    const reordered = {
+      gameRelease, instanceRoot, gameDirectory,
+      plugins: [{ winning: true, enabled: true, slot: 0, origin: 'Data', path: only?.path ?? '', name: 'A.esp' }],
+    };
+
+    expect(sender.alreadySent(reordered)).toBe(true);
+  });
+
+  it('has it from the moment it is handed over, before its outcome is known', () => {
+    const client = attached();
+    client.setCommandHandler('putLoadOrder', () => new Promise<LoadOrderOutcome>(() => {}));
+    const sender = createLoadOrderSender(client);
+
+    void sender.send(snapshot('A.esp'));
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(true);
+  });
+
+  it('has only the latest: an earlier snapshot is not had once a newer one is sent', async () => {
+    const sender = createLoadOrderSender(attached());
+
+    await sender.send(snapshot('A.esp'));
+    await sender.send(snapshot('B.esp'));
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+  });
+
+  it('forgets it when the send fails, so the next recompute tries again', async () => {
+    const client = attached();
+    client.setCommandHandler('putLoadOrder', () => Promise.reject(new Error('boom')));
+    const sender = createLoadOrderSender(client);
+
+    await sender.send(snapshot('A.esp'));
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+  });
+
+  it('keeps a newer snapshot when an older send fails after it was handed over', async () => {
+    const client = attached();
+    let failFirst!: (e: Error) => void;
+    client.setCommandHandler('putLoadOrder', () => new Promise<LoadOrderOutcome>((_, reject) => { failFirst = reject; }));
+    const sender = createLoadOrderSender(client);
+    const first = sender.send(snapshot('A.esp'));
+    client.setCommandHandler('putLoadOrder', () => Promise.resolve(APPLIED));
+    const second = sender.send(snapshot('B.esp'));
+
+    failFirst(new Error('boom'));
+    await first;
+    await second;
+
+    expect(sender.alreadySent(snapshot('B.esp'))).toBe(true);
+  });
+
+  it.each(['stopped', 'disconnected', 'starting'] as const)(
+    'forgets it when the backend goes %s: the backend attached next holds no load order', async (status) => {
+      const client = attached();
+      const sender = createLoadOrderSender(client);
+      await sender.send(snapshot('A.esp'));
+
+      client.setStatus(status);
+      client.setStatus('attached');
+
+      expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+    });
+
+  it('forgets it when the notification stream reopens: the backend behind it may be another process', async () => {
+    const client = attached();
+    const sender = createLoadOrderSender(client);
+    await sender.send(snapshot('A.esp'));
+
+    client.reconnected();
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+  });
+
+  it('forgets it on abandon', async () => {
+    const sender = createLoadOrderSender(attached());
+    await sender.send(snapshot('A.esp'));
+
+    sender.abandon();
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
   });
 });

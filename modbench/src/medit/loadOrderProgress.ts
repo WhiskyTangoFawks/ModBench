@@ -1,8 +1,7 @@
 import type { LoadOrderProgress, PluginLoadFailure } from '../client';
 
-/** A tick is never the last word: the subscription stops before `putLoadOrder` returns, so the
- *  completed reconcile's hand-off always follows the final tick — otherwise read-only state and
- *  master issues would vanish from a fully reconciled tree. */
+/** A tick is never the last word: the narrator hands Ready to the views after the final tick —
+ *  otherwise read-only state and master issues would vanish from a fully reconciled tree. */
 export function makeReconcileProgressHandler(deps: {
   applyLoadOrder: (indexedPlugins: string[], failures: PluginLoadFailure[]) => void;
 }): (status: LoadOrderProgress) => void {

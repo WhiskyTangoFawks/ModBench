@@ -112,13 +112,15 @@ export interface LoadOrderStatus {
   /** The Apply this status answers for. A client waits for this to reach its own Apply's
    *  version, never for a tick a fast or no-op reconcile can settle before it subscribes. */
   version: number;
+  /** The wire's `None`: no load order has arrived, or a rebuild dropped the index it filled. */
+  holdsNone: boolean;
 }
 
 const REFUSAL_STATES = new Set<Schemas['LoadOrderStatus']['state']>(['HeldElsewhere', 'Failed']);
 
 /** The transform a `load-order-status` payload needs before it is this side's
  *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
- *  consumer keys on filename alone; `state` is dropped except for its two refusal values. */
+ *  consumer keys on filename alone; `state` is kept as its two refusal values and `None`. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
@@ -127,6 +129,7 @@ export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderSt
     failures: wire.failures,
     refusalMessage: REFUSAL_STATES.has(wire.state) ? (wire.message ?? undefined) : undefined,
     version: wire.version,
+    holdsNone: wire.state === 'None',
   };
 }
 

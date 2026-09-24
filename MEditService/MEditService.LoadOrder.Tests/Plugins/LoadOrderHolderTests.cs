@@ -64,7 +64,7 @@ public sealed class LoadOrderHolderTests
         holder.Changed += (_, version) => seen.Add(version);
 
         var first = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
-        var second = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
+        var second = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Copy("A.esp", 0)]));
 
         Assert.True(second > first);
         Assert.Equal([first, second], seen);
@@ -87,6 +87,51 @@ public sealed class LoadOrderHolderTests
         Assert.True(firstSeen);
         Assert.True(secondSeen);
     }
+
+    // ADR-0013 invariant 1: an identical snapshot is a no-op at the door. Changed is what re-arms the
+    // watcher and reconciles the Index, so neither runs.
+    [Fact]
+    public void Apply_ASnapshotEqualToTheCurrentOne_RaisesNoChanged_AndAnswersTheCurrentVersion()
+    {
+        var holder = new LoadOrderHolder();
+        var applied = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [Copy("A.esp", 0)]));
+        var changes = 0;
+        holder.Changed += (_, _) => changes++;
+
+        var again = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [Copy("A.esp", 0)]));
+
+        Assert.Equal(0, changes);
+        Assert.Equal(applied, again);
+        Assert.Equal(applied, holder.Version);
+    }
+
+    [Fact]
+    public void Apply_ASnapshotThatMovedACopy_RaisesChanged()
+    {
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Copy("A.esp", 0), Copy("B.esp", 1)]));
+        var changes = 0;
+        holder.Changed += (_, _) => changes++;
+
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Copy("A.esp", 1), Copy("B.esp", 0)]));
+
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void Held_IsNothingBeforeAnArrival_ThenTheSnapshotWithTheVersionItArrivedAs()
+    {
+        var holder = new LoadOrderHolder();
+        Assert.Null(holder.Held);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Copy("A.esp", 0)]);
+
+        var version = holder.Apply(applied);
+
+        Assert.Equal((applied, version), holder.Held);
+    }
+
+    private static RegisteredCopy Copy(string name, int slot) =>
+        new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", slot, Enabled: true, Winning: true);
 
     // A subscriber with nothing registered is Apply's ordinary case (every test elsewhere in this
     // file), so raising Changed must never require one.

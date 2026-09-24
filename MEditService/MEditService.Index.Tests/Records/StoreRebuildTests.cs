@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009 invariant 5's Refresh: a rebuild drops every trace of what the file held, because it must
-// fix a row no hash-validate can (a wrong but self-consistent body). The next reconcile fills the file cold.
+// ADR-0009 invariant 5: a rebuild drops every trace of the file, to fix a row no hash-validate can
+// (a wrong but self-consistent body), then reads every copy again against the load order held.
 public sealed class StoreRebuildTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("store-rebuild")
@@ -58,31 +58,69 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void Rebuild_DropsEveryRow_SoTheNextReconcileReadsThePluginAgain()
+    public async Task Rebuild_DropsEveryRow_AndReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
+        var held = _holder.Version;
 
-        _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
-        Assert.Equal(LoadOrderState.None, _index.Status.State);
-        Reconcile(_fixture.InstanceRoot);
         Assert.Equal(2, _opens.OpenedTotal);
+        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
+        Assert.Equal(held, _index.Status.Version);
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
+    }
+
+    [Fact]
+    public async Task Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
+    {
+        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(0, _opens.OpenedTotal);
+        Assert.Equal(LoadOrderState.None, _index.Status.State);
+        Assert.Null(_index.Status.Message);
+        Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
+    }
+
+    // The refill reads the load order held once it holds the exclusive right, so an arrival that
+    // landed after the rebuild started is the one it fills, even when the refill cancelled that
+    // arrival's own reconcile.
+    [Fact]
+    public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted()
+    {
+        using var data = new PluginFixtureBuilder("store-rebuild-race").WithPlugin("A.esp").WithPlugin("B.esp").Build();
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var refills = new HeldBackScheduler();
+        var holder = new LoadOrderHolder();
+        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance, refillScheduler: refills);
+        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
+        index.Reconcile(onlyA, holder.Apply(onlyA));
+
+        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+        var both = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        var version = holder.Apply(both);
+        var arrival = Task.Run(() => index.Reconcile(both, version));
+        await gate.WaitUntilParkedAsync();
+        var refilling = Task.Run(refills.RunHeldBack);
+        gate.Release();
+        await Task.WhenAll(arrival, refilling, refill);
+
+        Assert.Equal(version, index.Status.Version);
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.True(index.Registers(data.Plugins[1].KeyOf()), "the refill filled the load order the rebuild started with");
     }
 
     // The process may already have answered a caller with a sequence value the fresh file's own
     // table does not know about; the rebuild must never let Sequence regress within one process.
     [Fact]
-    public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
+    public async Task Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
         Reconcile(_fixture.InstanceRoot);
         var priorSequence = _index.Sequence;
         Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
 
-        _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
-        Reconcile(_fixture.InstanceRoot);
+        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.True(_index.Sequence > priorSequence,
             $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
@@ -99,7 +137,7 @@ public sealed class StoreRebuildTests : IDisposable
         var bytesBeforeHold = File.ReadAllBytes(indexPath);
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
 
-        Assert.Throws<IndexHeldElsewhereException>(() => _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
+        Assert.Throws<IndexHeldElsewhereException>(() => { _ = _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot); });
 
         Assert.True(File.Exists(indexPath), "the file must still exist — a refusal must never delete it");
         Assert.Equal(bytesBeforeHold, File.ReadAllBytes(indexPath));
@@ -129,10 +167,9 @@ public sealed class StoreRebuildTests : IDisposable
         })).ToArray();
 
         Assert.True(await Waits.Until(() => Volatile.Read(ref answered) > 0), "no read ever landed before the rebuild");
-        _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
         await rebuilding.CancelAsync();
         await Task.WhenAll(readers);
-        Reconcile(_fixture.InstanceRoot);
         Assert.Equal(2, _opens.OpenedTotal);
     }
 }
