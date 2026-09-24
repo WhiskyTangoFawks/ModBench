@@ -239,7 +239,7 @@ async function pickCopyDestination(
 async function runCopyRecordCommand(
   gesture: CopyGesture, arg: unknown, client: RecordCopyClient,
   resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
-  reporter: Reporter, _ask: AskQuestion,
+  reporter: Reporter,
   onWritten: () => void,
 ): Promise<void> {
   const identity = recordIdentity(arg);
@@ -281,10 +281,10 @@ export function registerRecordCopyCommands(
 
   return [
     vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-override', arg, client, resolveOriginOrReport, reporter, ask, onWritten);
+      await runCopyRecordCommand('copy-as-override', arg, client, resolveOriginOrReport, reporter, onWritten);
     }),
     vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-new', arg, client, resolveOriginOrReport, reporter, ask, onWritten);
+      await runCopyRecordCommand('copy-as-new', arg, client, resolveOriginOrReport, reporter, onWritten);
     }),
   ];
 }
