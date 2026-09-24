@@ -1,82 +1,77 @@
 # install-mod: contract (draft)
 
-Diagram: [install-mod.d2](install-mod.d2). It draws both targets, because an upgrade is `install`
-with an installed mod as the target, through the same boxes. Catalog row: `install` under Mod in [commands.md](../commands.md). Governed by
+Diagram: [install-mod.d2](install-mod.d2). Catalog row: `install` under Mod in
+[commands.md](../commands.md). What the user picks and types is in
+[mods.md](../surfaces/mods.md), Create empty mod and install, and
+[downloads.md](../surfaces/downloads.md), The install target. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md) and
 [ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md).
 
-Each story cites its source. **Install is under a specification workup**, so this file holds only what
-the catalog, the diagrams and the principles settle. The rest is in the Open Questions.
+`install` puts a source, an archive, a folder or a downloaded file, into `mods/`: as a new mod, or
+over an installed mod, which is an upgrade. The caller states the target: a new mod and its name,
+or an installed mod the user confirmed. Install never infers the target from disk.
 
-The `modlist.txt` line is not written here. The folder appears, and `mod sync` and `plugin sync`
-pick it up. Their stories are in
-[update-load-order-file.md](update-load-order-file.md).
-A new mod lands where `mod sync` puts a folder it has not seen: at the winning end, disabled.
-The user moves it.
+## The flow
 
-## Shared
+1. Downloads or Mods sends `install` to the install box: the source, the target, and, for a
+   downloaded file, what its `.meta` knows: the Nexus mod ID, the file ID and the version.
+2. The install box refuses a new mod whose folder exists, and an upgrade whose folder has gone. It
+   checks here whatever the prompt checked, because the disk can change in between.
+3. Through the Instance adapter, it stages the source in a folder inside the instance root, on the
+   same volume as `mods/`: it extracts an archive, or copies a folder.
+4. It finds the mod's root: a `Data/` folder, or the level that holds the plugins and asset
+   folders, below any single wrapper folder. A FOMOD installer is found and flagged. Its steps do
+   not run, and its files stay as they are.
+5. It writes `meta.ini` through the codec: the game, the Nexus mod ID, the version, the installation
+   file and the installed files. On an upgrade, a key the source does not know keeps its old value,
+   so an unknown version never blanks a known one. Every key install does not own survives.
+6. The mod lands:
+   - **A new mod.** `meta.ini` is written in the staged tree first. Then one rename moves the tree
+     into `mods/<name>`, so the folder is never seen half built.
+   - **An upgrade.** The folder's contents are replaced in place, except `.git`. The folder is never
+     renamed, so its identity, its repository and its watchers survive (ADR-0007).
+7. For a downloaded file, it marks the file installed in its `.meta`, for MO2's Downloads tab
+   (ADR-0017, invariant 1).
+8. The install box removes the staging folder, then answers: applied, and whether the source was a
+   FOMOD, or the refusal. It keeps no copy.
 
-As a user, I want:
+## Hand-off
 
-1. To install from an archive, a folder or a downloaded file. *catalog Argument*
-2. A downloaded file to supply its own source, and the Mods menu to ask me for one. *catalog Meaning;
-   The surface supplies the Argument*
-3. Esc on any prompt or pick to install nothing. *Esc changes nothing*
-4. A failure to leave `mods/` as it was, and to tell me why. *A failed gesture writes nothing;
-   ADR-0019*
-5. The new or changed folder to reach every view through the watch. *A write is forgotten; ADR-0015,
-   invariant 2*
-6. The downloaded file's `.meta` marked installed, so MO2's Downloads tab agrees. A failure there
-   does not fail the install; it is a line in the Output. *ADR-0017, invariant 1;
-   [downloads.md](../surfaces/downloads.md)*
+This flow waits for no hand-off. Install writes no `modlist.txt` line.
 
-## install: a new mod
+- The Instance loader's watch sees the folder. `mod sync` adds its line at the winning end,
+  disabled, and `plugin sync` adds its plugins' lines
+  ([update-load-order-file](update-load-order-file.md)).
+- For a tracked mod, the Mod watcher sees the new bytes and the moved `meta.ini` version.
+  [decompile-plugin](decompile-plugin.md)'s trigger asks, with the new baseline as the default.
+  That question is the user's notice that tracked files changed.
 
-1. The mod staged with its `meta.ini` written first, then one rename into `mods/`, so the folder is
-   never seen half built. *diagram*
-2. The root detected: a `Data/` folder, or plugins and meshes at the root, both install the same.
-   *ruling*
-3. A FOMOD detected and flagged for manual setup, not run. *ruling*
-4. A new mod whose folder exists refused, naming the mod and pointing at upgrade. *ruling: refuse, never silently destroy*
+## Refusals
 
-## install: over an installed mod
+The install box refuses before it writes to `mods/`, and names the cause.
 
-1. To pick the target from the installed mods that share the download's Nexus mod ID, or to install a
-   new mod. *catalog Meaning; the pick is in [downloads.md](../surfaces/downloads.md)*
-2. The target confirmed every time, pre-selected by file ID, else by the mod's recorded installation
-   file, and never by a guess from the file's name. *diagram*
-3. The folder's contents replaced in place, with its `.git` kept, and the folder never renamed, so its
-   identity, its repository and its watchers survive. *diagram*
-4. `meta.ini` to reflect the new download, with the installed file IDs recorded. *diagram*
-5. A target whose folder has gone refused, naming it. *A gone object is refused*
-6. A tracked mod to go on to the external-change question, with the new baseline pre-selected because
-   the version moved. *diagram header; ADR-0003, invariant 3;
-   [decompile-plugin.md](decompile-plugin.md)*
+| Refusal | Where | Why |
+|---|---|---|
+| A new mod whose folder exists, naming it and pointing at an upgrade | a new mod | A folder is never merged into or replaced by surprise. |
+| An upgrade whose folder has gone, naming it | an upgrade | A gone object is refused. |
+| `mods/` is on another volume than the instance root | a new mod | One rename cannot move the mod in, and a mod folder is never copied in pieces. |
+| The archive cannot be extracted, with the reason, or no 7-Zip is found, naming what to install | an archive | |
+
+## Failure
+
+- **A new mod.** A failure before the rename leaves `mods/` as it was.
+- **The `.meta` mark.** A failed mark is a line in the Output, and the install stands
+  ([downloads.md](../surfaces/downloads.md), Reporting).
+
+Exceptions to the principles:
+
+- **A failed gesture writes nothing.** An upgrade that fails after the old files are removed is not
+  rolled back. It says so, naming the folder and what failed. Installing the download again is the
+  recovery, and a tracked mod's source stays in git.
 
 ## Test seam
 
-- **The driving box** (Downloads, Mods): the source, the target pick, the name prompt, and Esc.
-- **The install box:** given a source and a target, what it asks the Instance adapter to stage, rename, remove and
-  write, or the refusal.
-
-The external-change question is tested in
-[decompile-plugin.md](decompile-plugin.md).
-
-## Open Questions
-
-1. **Cross-volume staging.** The old spec refuses it and never copies silently. Accept? It touches the
-   deployment design session.
-2. **Rollback on an upgrade.** Shared story 4 holds the principle. The old spec cannot roll back once
-   the first file is removed, and names the folder and what remains. How an upgrade keeps the promise
-   is design work for the workup.
-3. **Which `meta.ini` keys change.** The old spec replaces the keys install owns and keeps the old value
-   for a key the download does not know, so an unknown version never blanks a known one. Rule or
-   detail?
-4. **The name checked twice.** The old spec checks the name at the prompt against `modlist.txt`, and
-   again at install against the disk, which also finds folders no line mentions. Rule or detail?
-5. **Reinstall and the installer choice.** Reinstall from the recorded archive, and quick, manual or
-   FOMOD, are planned in the catalog.
-6. **The `Everything` preset.** An upgrade overwrites tracked assets as working-tree changes. Does that
-   need a warning?
+- **The install box:** given a source, a target and the files on disk, the folder, `meta.ini` and
+  `.meta` written, or the refusal and `mods/` untouched.
