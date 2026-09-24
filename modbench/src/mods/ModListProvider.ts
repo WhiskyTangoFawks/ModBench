@@ -2,19 +2,11 @@ import * as vscode from 'vscode';
 import { OVERWRITE_DIR_NAME, type Mod, type ModlistEntry, type Separator } from '../instanceLoader/instance';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
-import type { Reporter } from '../ports/reporter';
 import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
-import { endAtTop } from './movePick';
-import {
-  moveMods as moveModsCommand,
-  reorderMod as reorderModCommand,
-  reorderSeparatorBlock as reorderSeparatorBlockCommand,
-  setModsEnabled as setModsEnabledCommand,
-  type ModlistDrop,
-} from '../modlist/modlist';
-import { errorMessage } from '../ports/errorMessage';
+import { dropMove, type DraggedRows } from './moveDrop';
+import { setModsEnabled as setModsEnabledCommand } from '../modlist/modlist';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -25,20 +17,17 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
  *  on: the row stands for MO2's folder, so it is named as the value names that folder. */
 export const OVERWRITE_NODE_KIND = OVERWRITE_DIR_NAME;
 
-// `DataTransferItem.value` is `any` — handleDrag, above, is this provider's only writer of it.
-function isDragPayload(value: unknown): value is { kind: 'mod' | 'separator'; name: string } {
-  if (typeof value !== 'object' || value === null) return false;
-  const witness = value as { kind?: unknown; name?: unknown };
-  return (witness.kind === 'mod' || witness.kind === 'separator') && typeof witness.name === 'string';
+// `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
+function isDraggedRows(value: unknown): value is DraggedRows {
+  if (typeof value !== 'object' || value === null || !('rows' in value) || !Array.isArray(value.rows)) return false;
+  return value.rows.every((row) => row instanceof ModNode || row instanceof SeparatorNode);
 }
 
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count — the tree's only data input (ADR-0015). */
   instance: InstanceView;
-  log?: (msg: string) => void;
-  reporter?: Reporter;
-  /** The instance the drop and check box commands write to; never read by this provider. */
+  /** The instance the check box command writes to; never read by this provider. */
   instanceRoot: string;
 }
 
@@ -138,8 +127,6 @@ export class OverwriteNode extends vscode.TreeItem {
 
 export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
-type DropOutcome = { applied: true } | { applied: false; refusal: string };
-
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
@@ -163,8 +150,6 @@ export class ModListProvider
   private filterLower = '';
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
-  private readonly log: (msg: string) => void;
-  private readonly reporter?: Reporter;
   private readonly instanceRoot: string;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
@@ -172,8 +157,6 @@ export class ModListProvider
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
-    this.log = options.log ?? (() => {});
-    this.reporter = options.reporter;
     this.instanceRoot = options.instanceRoot;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
@@ -225,79 +208,31 @@ export class ModListProvider
     return 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
   }
 
+  // No stable API names the focused row. VS Code appends the row a click selects to the selection
+  // it drags, so the last row stands in for it.
   handleDrag(
     source: readonly ModlistNode[],
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken,
   ): void {
-    const node = source.at(0);
-    if (!node || !isEntryNode(node)) return;
-    const name = node.kind === 'mod' ? node.mod.name : node.separator.name;
-    dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ kind: node.kind, name }));
+    const rows = source.filter(isEntryNode);
+    if (rows.length === 0) return;
+    const dragged: DraggedRows = { rows, focused: rows.at(-1) };
+    dataTransfer.set(DND_MIME, new vscode.DataTransferItem(dragged));
   }
 
+  // An entry point to move: it fires the gesture and uses no result, and the watch brings the
+  // write back to the view (commands.md, Entry points are not gestures).
   async handleDrop(
     target: ModlistNode | undefined,
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
-    if (!payload || !isDragPayload(payload.value)) return;
-    // Overwrite is no modlist.txt position, so a drop on it must not fall through to "move to end".
-    if (target?.kind === OVERWRITE_NODE_KIND) return;
-    const { kind, name } = payload.value;
-    await this.applyDrop(kind, name, target);
-  }
-
-  private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
-    const drop = this.dropOnto(this.targetName(target));
-    const profile = this.instanceValue.activeProfile;
-    if (kind === 'mod') {
-      if (target instanceof SeparatorNode) {
-        await this.runMutation('moveMods', async () => {
-          const result = await moveModsCommand(
-            this.instanceRoot, profile, [name], { kind: 'separator', name: target.separator.name }, endAtTop(this.direction));
-          const refusal = result.applied ? result.outcome.refused[0]?.reason : result.refusal;
-          return refusal === undefined ? { applied: true } : { applied: false, refusal };
-        });
-      } else {
-        await this.runMutation('reorder', () =>
-          reorderModCommand(this.instanceRoot, profile, name, drop));
-      }
-    } else {
-      await this.runMutation('reorderSeparatorBlock', () =>
-        reorderSeparatorBlockCommand(this.instanceRoot, profile, name, drop),
-      );
-    }
-  }
-
-  private async runMutation(
-    operation: 'reorder' | 'moveMods' | 'reorderSeparatorBlock',
-    mutate: () => Promise<DropOutcome>,
-  ): Promise<void> {
-    try {
-      const outcome = await mutate();
-      if (outcome.applied) return;
-      this.log(`[ModListProvider] ${operation} failed: ${outcome.refusal}`);
-      this.reporter?.report('error', 'Failed to reorder mods.', outcome.refusal);
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[ModListProvider] ${operation} failed: ${message}`);
-      this.reporter?.report('error', 'Failed to reorder mods.', message);
-    }
-  }
-
-  // "Drop X onto Y" gives X the visual slot of Y: before Y when the view runs winning-first
-  // like the file, after it when the view runs opposite.
-  private dropOnto(targetName: string | undefined): ModlistDrop {
-    const winningAtTop = this.direction === 'winningAtTop';
-    if (targetName === undefined) return winningAtTop ? { kind: 'losingEnd' } : { kind: 'winningEnd' };
-    return { kind: winningAtTop ? 'before' : 'after', name: targetName };
-  }
-
-  private targetName(node: ModlistNode | undefined): string | undefined {
-    if (!node || !isEntryNode(node)) return undefined;
-    return node.kind === 'mod' ? node.mod.name : node.separator.name;
+    if (!payload || !isDraggedRows(payload.value)) return;
+    const move = dropMove(payload.value, target, this.direction);
+    if (!move) return;
+    await vscode.commands.executeCommand('modbench.mod.move', move.argument[0], move.argument, move.target);
   }
 
 
@@ -405,9 +340,5 @@ export class ModListProvider
   setViewDirection(direction: SortDirection): void {
     this.direction = direction;
     this.invalidate();
-  }
-
-  private err(e: unknown): string {
-    return errorMessage(e);
   }
 }
