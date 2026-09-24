@@ -288,14 +288,13 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** What the view's message line says about its rows: the game folder not found, which the
-   *  rows of the plugins it holds need (common.md, States, story 5). */
+  /** What the view's message line says about its rows: the game folder not found (common.md,
+   *  States, story 5), else a record filter that matches nothing (plugins.md, States, story 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    // plugins.md, States, story 5.
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
     }
