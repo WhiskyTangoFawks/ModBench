@@ -1,11 +1,4 @@
-# One instance file updated. Fifteen commands draw this shape, so the two actors that differ are
-# declared here as sets and the contract's table says which command uses which. A command
-# splices through the pure codec and puts through the Instance adapter; the write is forgotten and the
-# watch closes the loop, so a change from MO2 takes the same path. A system command is handed
-# the instance value as an argument and reads nothing itself. An uninstall also marks the downloaded
-# file it came from, for MO2's sake. Only plugins commands ask mEdit
-# which plugins load with no line. The tail, indexing the new load order, is index-load-order's.
-# Governed by ADR-0003, ADR-0013, ADR-0015, ADR-0016 and ADR-0017. Contract: update-load-order-file.md.
+# One instance file updated. Contract: update-load-order-file_draft.md.
 ...@../styles
 shape: sequence_diagram
 surfaces: "Mods · Plugins · Toolbox · Downloads" {class: driving}
@@ -24,7 +17,7 @@ views: "every view" {class: driving}
 
 surfaces -> cmds: "the gesture, with its argument" {class: loadorder}
 instanceloader -> cmds: "a system command: the value as an argument" {class: loadorder}
-cmds -> client: "which plugins load with no line?" {class: query}
+cmds -> client: "which plugins load with no line? · for a move, their masters" {class: query}
 client -> cmds: the set, or unreachable {class: query}
 cmds -> codecs: "the lines to flip, move, add or drop" {class: loadorder}
 codecs -> cmds: bytes {class: loadorder}
@@ -44,5 +37,5 @@ instanceloader -> cmds: "put load order: the snapshot, on change and on connect"
 cmds."the rest is index-load-order"
 
 refused: "refused, before any write" {
-  cmds -> surfaces: "the object has gone · the target is not a valid place · mEdit cannot answer" {class: loadorder}
+  cmds -> surfaces: "the object has gone · a taken name · a master below its dependant · the trash fails · mods/ or a folder cannot be listed · mEdit cannot say" {class: loadorder}
 }
