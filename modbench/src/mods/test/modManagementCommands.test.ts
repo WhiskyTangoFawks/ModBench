@@ -27,12 +27,12 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod, deleteSeparator, renameSeparator } = vi.hoisted(() => ({
-  uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(),
+const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator } = vi.hoisted(() => ({
+  uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', () => ({
-  createEmptyMod: vi.fn(), deleteSeparator, insertSeparator: vi.fn(),
+  createEmptyMod: vi.fn(), deleteSeparator, insertSeparator,
   moveModToSeparator: vi.fn(), renameSeparator, uninstallMod,
 }));
 
@@ -294,6 +294,64 @@ describe('rename separator takes its separator through the gesture entry', () =>
 
     expect(showInputBox).not.toHaveBeenCalled();
     expect(renameSeparator).not.toHaveBeenCalled();
+  });
+});
+
+describe('add separator: one command for a mod anchor and a separator anchor', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+
+  it('prompts and anchors the new separator on the right-clicked mod, not the selection around it', async () => {
+    insertSeparator.mockResolvedValue({ applied: true, wrote: true });
+    showInputBox.mockResolvedValueOnce('New Section');
+    const otherMod = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [otherMod, modA]);
+    await invoke('modbench.separator.add', modA, [otherMod, modA]);
+
+    expect(showInputBox).toHaveBeenCalledWith({ prompt: 'Separator name', placeHolder: 'My Group' });
+    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', 'Mod A']]);
+  });
+
+  it('prompts and anchors the new separator on the right-clicked separator, not the selection around it', async () => {
+    insertSeparator.mockResolvedValue({ applied: true, wrote: true });
+    showInputBox.mockResolvedValueOnce('New Section');
+    const otherGroup = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [otherGroup, groupA]);
+    await invoke('modbench.separator.add', groupA, [otherGroup, groupA]);
+
+    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', 'Group A']]);
+  });
+
+  it('adds nothing when the prompt is cancelled (Esc)', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [modA]);
+    await invoke('modbench.separator.add', modA);
+
+    expect(insertSeparator).not.toHaveBeenCalled();
+  });
+
+  it('adds nothing for an empty name', async () => {
+    showInputBox.mockResolvedValueOnce('');
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [modA]);
+    await invoke('modbench.separator.add', modA);
+
+    expect(insertSeparator).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing and adds nothing from the palette, where no row is right-clicked or focused', async () => {
+    registerSeparatorCommands('/instance', instance, runModAction, () => [modA]);
+    await invoke('modbench.separator.add');
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(insertSeparator).not.toHaveBeenCalled();
   });
 });
 

@@ -88,7 +88,8 @@ const isSeparatorLine = (line: string): boolean => {
   return (c.startsWith('+') || c.startsWith('-')) && c.endsWith(SEPARATOR_SUFFIX);
 };
 
-/** `afterIndex` is 0-based among entry lines, and clamps to the last one. */
+/** `afterIndex` is 0-based among entry lines, and clamps to the last one. `-1` inserts before the
+ *  first entry line, the one position "after index i" cannot reach. */
 export function insertSeparatorAtIndexInText(
   text: string,
   name: string,
@@ -101,8 +102,10 @@ export function insertSeparatorAtIndexInText(
     let insertAt: number;
     if (entryLineIdx.length === 0) {
       insertAt = lines.length;
+    } else if (afterIndex < 0) {
+      insertAt = entryLineIdx[0] ?? lines.length;
     } else {
-      const clamped = Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1));
+      const clamped = Math.min(afterIndex, entryLineIdx.length - 1);
       const atClamped = entryLineIdx[clamped];
       insertAt = atClamped !== undefined ? atClamped + 1 : lines.length;
     }

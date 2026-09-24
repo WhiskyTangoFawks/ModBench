@@ -156,6 +156,84 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(entries[idx + 1]).toEqual({ kind: 'separator', name: 'New Section', enabled: true });
   });
 
+  it('insertSeparator on a mod inside a separator splits it: the mods on the anchor\'s winning side join the new one', async () => {
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', '[NODELETE] Radfall');
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual([
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
+      '[NODELETE] Radfall',
+      'New Section',
+      'Unofficial Fallout 4 Patch',
+      'Radfall - All-In-One Survival Overhaul',
+      'ENBoost - 12k',
+      'Harder VATS',
+      'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
+  it('insertSeparator on an ungrouped mod lands directly on its losing side, same as a mod inside a separator', async () => {
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Harder VATS');
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual([
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
+      '[NODELETE] Radfall',
+      'Unofficial Fallout 4 Patch',
+      'Radfall - All-In-One Survival Overhaul',
+      'ENBoost - 12k',
+      'Harder VATS',
+      'New Section',
+      'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
+  it('insertSeparator on a separator lands on the winning side of its last mod, taking none', async () => {
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Radfall - All-In-One Survival Overhaul');
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual([
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
+      'New Section',
+      '[NODELETE] Radfall',
+      'Unofficial Fallout 4 Patch',
+      'Radfall - All-In-One Survival Overhaul',
+      'ENBoost - 12k',
+      'Harder VATS',
+      'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
+  it('insertSeparator on the winning-most separator lands before every mod', async () => {
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Unassigned (Modlist Development)');
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual([
+      'New Section',
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
+      '[NODELETE] Radfall',
+      'Unofficial Fallout 4 Patch',
+      'Radfall - All-In-One Survival Overhaul',
+      'ENBoost - 12k',
+      'Harder VATS',
+      'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
+  it('insertSeparator on a separator with no mods of its own adds an equally empty one before it', async () => {
+    await writeFile(modlistPath(), '+FirstGroup_separator\r\n+SecondGroup_separator\r\n+SKK Fast Start new game (Fallout 4)\r\n', 'utf8');
+
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'SecondGroup');
+
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual(['FirstGroup', 'New Section', 'SecondGroup', 'SKK Fast Start new game (Fallout 4)']);
+  });
+
   it('insertSeparator refuses when the anchor entry is absent', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await insertSeparator(dir, 'Default', 'New Section', 'No Such Entry');
