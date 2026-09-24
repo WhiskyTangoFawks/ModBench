@@ -175,8 +175,8 @@ export class ModListProvider
   }
 
   /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
-   *  a caller forcing a resync (a failed write, a gesture's own callback) gets whatever the
-   *  Instance is currently holding, not a snapshot that predates it. */
+   *  a check box whose write failed returns to whatever the Instance is currently holding, not a
+   *  snapshot that predates it. */
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.tree = undefined;
@@ -218,10 +218,7 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === OVERWRITE_NODE_KIND) return;
     const { kind, name } = payload.value;
-    // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
-    // screen (ADR-0019).
     await this.applyDrop(kind, name, target);
-    this.invalidate();
   }
 
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
@@ -242,8 +239,6 @@ export class ModListProvider
     }
   }
 
-  // Swallows the failure (thrown, or a `{ applied: false }` refusal) rather than rethrowing, so
-  // `handleDrop` still reaches its resync.
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
     mutate: () => Promise<ModlistCommandResult>,
@@ -366,7 +361,6 @@ export class ModListProvider
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const outcome = await setModEnabledCommand(this.instanceRoot, this.instanceValue.activeProfile, modName, enabled);
     if (!outcome.applied) throw new Error(outcome.refusal);
-    this.invalidate();
   }
 
   /** Presentation only — never changes which mod wins a conflict. */
