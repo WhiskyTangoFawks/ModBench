@@ -68,22 +68,25 @@ export function reorderMod(
     moveModInText(text, modName, entryIndexOf(text, [modName], drop)));
 }
 
-/** Insert a new enabled separator after `afterEntryName`; when that entry is itself a
- *  separator, inserts after its last member. */
+/** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
+ *  after it; on a separator, before its own group's winning-most member. */
 export function insertSeparator(
-  instanceRoot: string, profile: string, name: string, afterEntryName: string,
+  instanceRoot: string, profile: string, name: string, anchorName: string,
 ): Promise<ModlistCommandResult> {
   return spliceModlist(instanceRoot, profile, (text) => {
     const entries = parseModlist(text);
-    const entryIdx = entries.findIndex((e) => e.name === afterEntryName);
-    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${afterEntryName}`);
-    const afterEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
+    const entryIdx = entries.findIndex((e) => e.name === anchorName);
+    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${anchorName}`);
+    const anchorEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
     let afterIndex = entryIdx;
-    if (afterEntry.kind === 'separator') {
-      for (const [i, entry] of [...entries.entries()].slice(entryIdx + 1)) {
-        if (entry.kind === 'separator') break;
-        afterIndex = i;
+    if (anchorEntry.kind === 'separator') {
+      let groupStart = entryIdx;
+      for (let i = entryIdx - 1; i >= 0; i--) {
+        const entry = entries[i];
+        if (!entry || entry.kind === 'separator') break;
+        groupStart = i;
       }
+      afterIndex = groupStart - 1;
     }
     return insertSeparatorAtIndexInText(text, name, afterIndex);
   });

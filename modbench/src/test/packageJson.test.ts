@@ -524,11 +524,10 @@ describe('package.json command titles and categories', () => {
     'modbench.downloadedFile.exclude',
     'modbench.downloadedFile.include',
     'modbench.mod.openFolder',
-    'modbench.modList.mod.addSeparatorBelow',
+    'modbench.separator.add',
     'modbench.mod.move',
     'modbench.mod.uninstall',
     'modbench.separator.rename',
-    'modbench.modList.separator.addSeparatorBelow',
     'modbench.separator.delete',
     'modbench.plugin.reveal',
     // Needs the clicked row's plugin name to resolve which mod folder to track.
@@ -553,7 +552,7 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(29);
+    expect(PALETTE_GATED).toHaveLength(28);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter(
@@ -783,7 +782,6 @@ const LEGACY_GESTURES = [
   { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
   { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },
   { gesture: 'record filter', removedBy: '#964', ids: ['modbench.setFilter', 'modbench.clearFilter', 'modbench.setFilterFromDocument'] },
-  { gesture: 'add separator', removedBy: '#960', ids: ['modbench.modList.mod.addSeparatorBelow', 'modbench.modList.separator.addSeparatorBelow'] },
 ] as const;
 
 describe('package.json registers every command under its catalog Command ID', () => {
