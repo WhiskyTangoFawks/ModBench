@@ -29,7 +29,7 @@ instancecommands -> client: load order snapshot {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}
-  instancecommands -> client: "rebuild the index, then the load order snapshot" {class: loadorder}
+  instancecommands -> client: "rebuild the index" {class: loadorder}
   client -> instancecommands: applied or refusal {class: loadorder}
   instancecommands."a refused rebuild stops here: nothing sent, nothing read again"
   instancecommands -> toolbox: applied or refusal {class: loadorder}
