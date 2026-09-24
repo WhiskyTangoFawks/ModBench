@@ -112,15 +112,6 @@ export function registerModContextCommands(
   ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode | undefined) => {
-        if (node?.kind !== 'mod') return;
-        const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
-        if (!name) return;
-        await runModAction('addSeparatorBelow', 'Failed to add separator.', async () => {
-          const profile = instance.value.activeProfile;
-          applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.mod.name));
-        });
-      }),
       vscode.commands.registerCommand('modbench.mod.move', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const separators = instance.value.mods.filter((e) => e.kind === 'separator').map((e) => e.name);
@@ -171,13 +162,15 @@ export function registerSeparatorCommands(
           applyOrThrow(await renameSeparator(instanceRoot, profile, node.separator.name, newName));
         });
       }),
-      vscode.commands.registerCommand('modbench.modList.separator.addSeparatorBelow', async (node: SeparatorNode | undefined) => {
-        if (node?.kind !== 'separator') return;
+      registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
+        const node = singularArgument(entry, 'mod', 'separator');
+        if (!node) return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
-        await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', async () => {
+        await runModAction('addSeparator', 'Failed to add separator.', async () => {
           const profile = instance.value.activeProfile;
-          applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.separator.name));
+          const anchorName = node.kind === 'mod' ? node.mod.name : node.separator.name;
+          applyOrThrow(await insertSeparator(instanceRoot, profile, name, anchorName));
         });
       }),
       vscode.commands.registerCommand('modbench.separator.delete', async (node: SeparatorNode | undefined) => {

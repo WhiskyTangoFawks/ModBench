@@ -272,8 +272,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.mod.addSeparatorBelow",
-        "title": "Add Separator Below…",
+        "command": "modbench.separator.add",
+        "title": "Add Separator…",
         "category": "Modbench"
       },
       {
@@ -294,11 +294,6 @@
       {
         "command": "modbench.separator.rename",
         "title": "Rename Separator…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.modList.separator.addSeparatorBelow",
-        "title": "Add Separator Below…",
         "category": "Modbench"
       },
       {
@@ -488,7 +483,7 @@
           "when": "false"
         },
         {
-          "command": "modbench.modList.mod.addSeparatorBelow",
+          "command": "modbench.separator.add",
           "when": "false"
         },
         {
@@ -501,10 +496,6 @@
         },
         {
           "command": "modbench.separator.rename",
-          "when": "false"
-        },
-        {
-          "command": "modbench.modList.separator.addSeparatorBelow",
           "when": "false"
         },
         {
@@ -758,7 +749,7 @@
           "group": "modActions@1"
         },
         {
-          "command": "modbench.modList.mod.addSeparatorBelow",
+          "command": "modbench.separator.add",
           "when": "view == modbench.modList && viewItem == mod",
           "group": "modActions@2"
         },
@@ -778,7 +769,7 @@
           "group": "modActions@1"
         },
         {
-          "command": "modbench.modList.mod.addSeparatorBelow",
+          "command": "modbench.separator.add",
           "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@2"
         },
@@ -803,7 +794,7 @@
           "group": "sepActions@1"
         },
         {
-          "command": "modbench.modList.separator.addSeparatorBelow",
+          "command": "modbench.separator.add",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@2"
         },
