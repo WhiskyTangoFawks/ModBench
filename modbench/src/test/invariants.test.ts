@@ -22,6 +22,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
     expect(writeVerbs).toContain('setModEnabled');
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('hideDownload');
+    expect(writeVerbs).toContain('deleteDownloads');
   });
 
   it.each(writeVerbs)('%s', (verb) => {
@@ -29,11 +30,12 @@ describe('every MO2 text-file write command has a corpus test', () => {
   });
 });
 
-// A verb is an exported function whose signature answers with a result — `applied` inline, or
-// one of the named `…Result` types every gesture returns (ADR-0015 invariant 2).
+// A verb is an exported function whose signature answers with a result — `applied` inline, one
+// of the named `…Result` types every gesture returns (ADR-0015 invariant 2), or a selection's
+// outcome.
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /applied|Result>/.test(present(m[2], "the function body between signature and opening brace")))
+    .filter((m) => /applied|Result>|SelectionOutcome</.test(present(m[2], "the function body between signature and opening brace")))
     .map((m) => present(m[1], "the exported function's name"));
 }
 
