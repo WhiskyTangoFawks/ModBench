@@ -5,6 +5,7 @@ import { setHiddenInText, setInstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';
 import { exists, put } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** Every verb here writes unconditionally — a splice of the sidecar, or a trash — so `applied`
  *  carries no `wrote` flag of its own (ADR-0014 invariant 4). */
@@ -46,9 +47,23 @@ export function markDownloadInstalled(instanceRoot: string, name: string): Promi
   return spliceSidecar(instanceRoot, name, setInstalledInText);
 }
 
-/** The sidecar is trashed BEFORE the archive, so a mid-failure leaves a metaless archive — an
- *  ordinary Downloaded row — never a lone sidecar. Never touches the mod installed from it. */
-export async function deleteDownload(
+/** Never touches the mod installed from any of them. */
+export async function deleteDownloads(
+  instanceRoot: string, names: readonly string[], trash: TrashFile,
+): Promise<SelectionOutcome<string>> {
+  const landed: string[] = [];
+  const refused: ItemRefusal<string>[] = [];
+  for (const name of names) {
+    const outcome = await deleteDownload(instanceRoot, name, trash);
+    if (outcome.applied) landed.push(name);
+    else refused.push({ item: name, reason: outcome.refusal });
+  }
+  return { landed, refused };
+}
+
+// The sidecar is trashed BEFORE the archive, so a mid-failure leaves a metaless archive — an
+// ordinary Downloaded row — never a lone sidecar.
+async function deleteDownload(
   instanceRoot: string, name: string, trash: TrashFile,
 ): Promise<DownloadCommandResult> {
   const sidecar = downloadSidecarFile(instanceRoot, name);

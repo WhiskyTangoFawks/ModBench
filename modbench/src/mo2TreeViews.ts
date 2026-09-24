@@ -25,6 +25,7 @@ export function createModListView(
 ): { modListView: vscode.TreeView<ModlistNode>; updateProfileDescription: () => Promise<void> } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
+    canSelectMany: true,
     showCollapseAll: true,
     dragAndDropController: modListProvider,
   }));

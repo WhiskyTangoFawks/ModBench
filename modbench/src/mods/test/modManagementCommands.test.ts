@@ -26,18 +26,18 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod } = vi.hoisted(() => ({ uninstallMod: vi.fn() }));
+const { uninstallMod, deleteSeparator } = vi.hoisted(() => ({ uninstallMod: vi.fn(), deleteSeparator: vi.fn() }));
 
 vi.mock('../../modlist/modlist', () => ({
-  createEmptyMod: vi.fn(), deleteSeparator: vi.fn(), insertSeparator: vi.fn(),
+  createEmptyMod: vi.fn(), deleteSeparator, insertSeparator: vi.fn(),
   moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
 }));
 
 import {
-  registerModContextCommands, registerModInstallCommands, registerOpenFolderCommand, registerViewOnNexusCommand,
-  type ModInstallDeps,
+  registerModContextCommands, registerModInstallCommands, registerOpenFolderCommand, registerSeparatorCommands,
+  registerViewOnNexusCommand, type ModInstallDeps,
 } from '../modManagementCommands';
-import { ModNode, OverwriteNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -174,6 +174,41 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
     await invoke('modbench.mod.uninstall', modNode);
 
     expect(uninstallMod).not.toHaveBeenCalled();
+  });
+});
+
+// VS Code hands every row gesture of a multi-select tree the right-clicked row and the selection.
+// debt #975: the destructive Mods gestures take the right-clicked row alone.
+describe('the destructive Mods row gestures take the right-clicked row, not the selection', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+
+  it('uninstall asks about and uninstalls the right-clicked mod alone', async () => {
+    uninstallMod.mockResolvedValue({ applied: true });
+    const other = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
+    const clicked = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, archiveFilename: 'my-mod.7z' });
+    const ask = scriptedDialog('Uninstall');
+
+    registerModContextCommands('/instance', instance, runModAction, ask);
+    await invoke('modbench.mod.uninstall', clicked, [other, clicked]);
+
+    expect(ask.asked.map((q) => q.message)).toEqual([
+      'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
+    ]);
+    expect(uninstallMod.mock.calls).toEqual([['/instance', 'Default', 'My Mod', 'my-mod.7z']]);
+  });
+
+  it('delete separator deletes the right-clicked separator alone', async () => {
+    deleteSeparator.mockResolvedValue({ applied: true });
+    const other = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);
+    const clicked = new SeparatorNode({ kind: 'separator', name: 'My Group', enabled: true }, []);
+
+    registerSeparatorCommands('/instance', instance, runModAction);
+    await invoke('modbench.separator.delete', clicked, [other, clicked]);
+
+    expect(deleteSeparator.mock.calls).toEqual([['/instance', 'Default', 'My Group']]);
   });
 });
 
