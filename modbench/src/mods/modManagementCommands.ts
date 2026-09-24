@@ -15,7 +15,7 @@ import {
   setModsEnabled,
   uninstallMod,
   type ModlistSelectionResult,
-  type ModsPlace,
+  type MovePlace,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
 import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
@@ -150,6 +150,9 @@ export interface MoveView {
   direction: () => SortDirection;
 }
 
+const SEPARATOR_PLACES =
+  'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
+
 export function registerModMoveCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
@@ -162,7 +165,6 @@ export function registerModMoveCommand(
     reporter.selectionOutcome(
       `Could not move ${result.outcome.refused.length} of ${count} ${noun}.`, result.outcome, (name) => name);
   };
-  // A drop hands over its target; the menu, a key and the palette pick one.
   return registerModsGesture('modbench.mod.move', view.selection, async (entry, option) => {
     const rows = pluralArgument(entry, 'mod', 'separator');
     const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
@@ -170,7 +172,7 @@ export function registerModMoveCommand(
     const { mods: entries, activeProfile } = instance.value;
     const direction = view.direction();
     const given = moveTargetOf(option);
-    const pick = async <T extends ModsPlace>(items: MovePickItem<T>[], placeHolder: string) => {
+    const pick = async <T extends MovePlace>(items: MovePickItem<T>[], placeHolder: string) => {
       const picked = await vscode.window.showQuickPick(items, { placeHolder });
       return picked && { place: picked.target, end: endAtTop(direction) };
     };
@@ -180,7 +182,11 @@ export function registerModMoveCommand(
       report('mod', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, target.place, target.end));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
-      if (!target || !isSeparatorsPlace(target.place)) return;
+      if (!target) return;
+      if (!isSeparatorsPlace(target.place)) {
+        reporter.report('error', 'Failed to move separators.', SEPARATOR_PLACES);
+        return;
+      }
       report('separator', separatorNames.length,
         await moveSeparators(instanceRoot, activeProfile, separatorNames, target.place, target.end));
     }

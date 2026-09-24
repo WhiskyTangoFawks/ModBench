@@ -648,6 +648,20 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'modOrder' }, 'winning');
   });
 
+  it('handed a target no separator can take, refuses it once, saying why, and moves nothing', async () => {
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'mod', name: 'Mod A' }, end: 'losing' });
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(moveSeparators).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Failed to move separators.',
+      detail: 'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.',
+    }]);
+  });
+
   it('offers the places in the order the view shows them', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 

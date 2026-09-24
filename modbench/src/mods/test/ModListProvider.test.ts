@@ -19,8 +19,6 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-// The check box's modlist.txt command, mocked at the module boundary, in the style already
-// established by recordPanelContextCommands.test.ts.
 const { setModsEnabledMock } = vi.hoisted(() => ({
   setModsEnabledMock: vi.fn<typeof setModsEnabled>(),
 }));

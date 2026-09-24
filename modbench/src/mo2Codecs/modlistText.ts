@@ -234,16 +234,16 @@ function moveBlock(
   return rest.map((line, i) => (i < rest.length - 1 && lineContent(line) === line ? line + eol : line)).join('');
 }
 
-/** Where moved mods land: among a separator's mods, among the ungrouped mods, beside a mod, or
- *  at an end of the whole mod order. */
-export type ModsPlace =
+/** Where a move lands: among a separator's mods, among the ungrouped mods, beside a mod, or at an
+ *  end of the whole mod order. Mods take any of them; separators take a {@link SeparatorsPlace}. */
+export type MovePlace =
   | { kind: 'ungrouped' }
   | { kind: 'separator'; name: string }
   | { kind: 'mod'; name: string }
   | { kind: 'modOrder' };
 
 /** Where moved separators land: beside a separator and its mods, or at an end of mod order. */
-export type SeparatorsPlace = Extract<ModsPlace, { kind: 'separator' | 'modOrder' }>;
+export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
 function modLineAt(lines: readonly string[], modName: string): number {
   const modIdx = lines.findIndex((l) => matchesModLine(l, modName));
@@ -256,7 +256,7 @@ const lastEntryLineAt = (lines: readonly string[]): number => {
   return lastEntry === undefined ? lines.length : lastEntry[0] + 1;
 };
 
-function modsInsertAt(lines: readonly string[], place: ModsPlace, end: OrderEnd): number {
+function modsInsertAt(lines: readonly string[], place: MovePlace, end: OrderEnd): number {
   switch (place.kind) {
     case 'ungrouped': return end === 'losing' ? lastEntryLineAt(lines) : ungroupedWinningEndAt(lines);
     // A separator's line trails the mods it holds, so its losing end is directly above its line.
@@ -268,7 +268,7 @@ function modsInsertAt(lines: readonly string[], place: ModsPlace, end: OrderEnd)
 
 /** The mods land as one block, in their own order, at the `end` of the place's mods, or on the
  *  `end` side of the place's mod. Throws if the separator or the mod is absent. */
-export function moveModsInText(text: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd): string {
+export function moveModsInText(text: string, modNames: readonly string[], place: MovePlace, end: OrderEnd): string {
   return withBomPreserved(text, (bomless) => moveBlock(
     bomless,
     (line) => modNames.some((name) => matchesModLine(line, name)),
@@ -287,19 +287,19 @@ function separatorBlockLineIndices(lines: readonly string[], separatorNames: rea
 
 // A separator block landing at the losing end would take the ungrouped mods, so it stops on their
 // winning side.
-function separatorsInsertAt(lines: readonly string[], place: SeparatorsPlace, side: OrderEnd): number {
-  if (place.kind === 'modOrder') return side === 'losing' ? ungroupedWinningEndAt(lines) : firstEntryLineAt(lines);
-  return side === 'losing' ? separatorLineAt(lines, place.name) + 1 : separatorBlockStartAt(lines, place.name);
+function separatorsInsertAt(lines: readonly string[], place: SeparatorsPlace, end: OrderEnd): number {
+  if (place.kind === 'modOrder') return end === 'losing' ? ungroupedWinningEndAt(lines) : firstEntryLineAt(lines);
+  return end === 'losing' ? separatorLineAt(lines, place.name) + 1 : separatorBlockStartAt(lines, place.name);
 }
 
 /** Each separator and the mods it holds land as one block, in their own order, directly on the
- *  `side` of the place's separator and its mods, or at that end of mod order. Throws if the
+ *  `end` side of the place's separator and its mods, or at that end of mod order. Throws if the
  *  separator is absent. */
 export function moveSeparatorsInText(
-  text: string, separatorNames: readonly string[], place: SeparatorsPlace, side: OrderEnd,
+  text: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): string {
   return withBomPreserved(text, (bomless) => {
     const inBlock = separatorBlockLineIndices(splitLinesKeepEol(bomless), separatorNames);
-    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) => separatorsInsertAt(rest, place, side));
+    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) => separatorsInsertAt(rest, place, end));
   });
 }

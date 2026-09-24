@@ -1,7 +1,7 @@
 // mods.md, Pickers, Move: the places a move offers.
 
 import type { ModlistEntry } from '../instanceLoader/instance';
-import type { ModsPlace, OrderEnd, SeparatorsPlace } from '../modlist/modlist';
+import type { MovePlace, OrderEnd, SeparatorsPlace } from '../modlist/modlist';
 import { groupModlist, type ModlistGroup } from './modlistTree';
 import type { SortDirection } from './ModListProvider';
 
@@ -19,7 +19,7 @@ function groupsInViewOrder(entries: readonly ModlistEntry[], direction: SortDire
 
 /** Where a move lands: a place, and the end of it the moved rows take. */
 export interface MoveTarget {
-  readonly place: ModsPlace;
+  readonly place: MovePlace;
   readonly end: OrderEnd;
 }
 
@@ -33,7 +33,7 @@ const CURRENT = { description: 'current' } as const;
  *  marked current. */
 export function modsMovePick(
   entries: readonly ModlistEntry[], direction: SortDirection, modNames: readonly string[],
-): MovePickItem<ModsPlace>[] {
+): MovePickItem<MovePlace>[] {
   const holdsSelected = (mods: readonly { name: string }[]) => mods.some((m) => modNames.includes(m.name));
   const { ungrouped } = groupModlist([...entries]);
   return [
@@ -55,12 +55,12 @@ export function separatorsMovePick(
     .map((g) => ({ label: g.separator.name, target: { kind: 'separator', name: g.separator.name } }));
 }
 
-export const isSeparatorsPlace = (place: ModsPlace): place is SeparatorsPlace =>
+export const isSeparatorsPlace = (place: MovePlace): place is SeparatorsPlace =>
   place.kind === 'separator' || place.kind === 'modOrder';
 
 const isOrderEnd = (value: unknown): value is OrderEnd => value === 'winning' || value === 'losing';
 
-function placeOf(value: unknown): ModsPlace | undefined {
+function placeOf(value: unknown): MovePlace | undefined {
   if (typeof value !== 'object' || value === null || !('kind' in value)) return undefined;
   if (value.kind === 'ungrouped' || value.kind === 'modOrder') return { kind: value.kind };
   if (value.kind !== 'separator' && value.kind !== 'mod') return undefined;

@@ -13,7 +13,7 @@ import {
   renameSeparatorInText,
   setEnabledInText,
   unlistedModNames,
-  type ModsPlace,
+  type MovePlace,
   type OrderEnd,
   type SeparatorsPlace,
 } from '../mo2Codecs/modlistText';
@@ -80,24 +80,24 @@ export function setModsEnabled(
     found.reduce((acc, name) => setEnabledInText(acc, name, enabled), text));
 }
 
-export type { ModsPlace, OrderEnd, SeparatorsPlace } from '../mo2Codecs/modlistText';
+export type { MovePlace, OrderEnd, SeparatorsPlace } from '../mo2Codecs/modlistText';
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
  *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
 export function moveMods(
-  instanceRoot: string, profile: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd,
+  instanceRoot: string, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
   return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
     moveModsInText(text, found, place, end));
 }
 
 /** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
- *  and they land on the `side` of the place. A target that has gone refuses the whole move. */
+ *  and they land on the `end` side of the place. A target that has gone refuses the whole move. */
 export function moveSeparators(
-  instanceRoot: string, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, side: OrderEnd,
+  instanceRoot: string, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
   return spliceSelection(instanceRoot, profile, 'separator', separatorNames, (text, found) =>
-    moveSeparatorsInText(text, found, place, side));
+    moveSeparatorsInText(text, found, place, end));
 }
 
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
