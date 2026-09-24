@@ -5,7 +5,7 @@ import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '
 import { present } from '../../ports/present';
 
 const READY_STATUS: LoadOrderProgress = {
-  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, failures: [],
+  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
@@ -262,6 +262,19 @@ describe('createLoadOrderSender — what mEdit already has', () => {
 
     expect(sender.alreadySent(snapshot('A.esp'))).toBe(true);
     expect(sender.alreadySent(snapshot('B.esp'))).toBe(false);
+  });
+
+  it('has a snapshot built with its fields in another order', async () => {
+    const sender = createLoadOrderSender(attached());
+    await sender.send(snapshot('A.esp'));
+    const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot('A.esp');
+    const [only] = plugins;
+    const reordered = {
+      gameRelease, instanceRoot, gameDirectory,
+      plugins: [{ winning: true, enabled: true, slot: 0, origin: 'Data', path: only?.path ?? '', name: 'A.esp' }],
+    };
+
+    expect(sender.alreadySent(reordered)).toBe(true);
   });
 
   it('has it from the moment it is handed over, before its outcome is known', () => {

@@ -42,7 +42,7 @@ describe('errorText', () => {
 // ADR-0013: the whole-set conflict sweep leaves a Ready load order with stale winners, so
 // anything rendering conflict information must read `conflictsComputed`, never the wire's `state`.
 describe('toLoadOrderStatus', () => {
-  it('keys indexedPlugins on filename alone, dropping origin and state', () => {
+  it('keys indexedPlugins on filename alone, dropping origin', () => {
     const status = toLoadOrderStatus({
       state: 'Reconciling',
       totalPlugins: 3, version: 1,
@@ -56,11 +56,23 @@ describe('toLoadOrderStatus', () => {
       indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
+      holdsNone: false,
     });
     expect(status.refusalMessage).toBeUndefined();
   });
 
-  // The two states this transform does carry: nothing else here can say "another window has
+  // A rebuild drops the index before it refills: the one state that says nothing is held, which
+  // no other field can tell apart from a reconcile that has indexed nothing yet.
+  it('says the index holds none for the None state, and only for it', () => {
+    const tick = (state: 'None' | 'Reconciling') => toLoadOrderStatus({
+      state, totalPlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [],
+    });
+
+    expect(tick('None').holdsNone).toBe(true);
+    expect(tick('Reconciling').holdsNone).toBe(false);
+  });
+
+  // The two refusal states this transform carries: nothing else here can say "another window has
   // this instance open" or "the reconcile hit something unknown".
   it('carries refusalMessage for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({

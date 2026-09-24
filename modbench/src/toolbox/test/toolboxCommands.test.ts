@@ -163,10 +163,14 @@ describe('Switch profile', () => {
 
 describe('Refresh', () => {
   // `rereadFailure` is what the Instance loader's re-read answers: its own failure, or none.
-  function registerRefresh(result: RefreshResult, rereadFailure?: string, instanceRoot = '/instance') {
+  function registerRefresh(
+    result: RefreshResult, rereadFailure?: string, instanceRoot = '/instance',
+    refill: Promise<void> = Promise.resolve(),
+  ) {
     const reporter = recordingReporter();
     registerRefreshCommand({
       refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); },
+      nextRefill: () => refill,
       instance: {
         refresh: () => {
           progressSteps.push('Instance loader: read every file again');
@@ -191,6 +195,21 @@ describe('Refresh', () => {
       'progress closes',
     ]);
     expect(reporter.reports).toEqual([]);
+  });
+
+  // toolbox.md, Refresh: the view's progress while it runs. The rebuild answers once the index is
+  // empty, before mEdit has read anything again.
+  it('keeps the Toolbox\'s progress open until mEdit\'s refill ends, not only until the rebuild answers', async () => {
+    let refillEnds!: () => void;
+    const { run } = registerRefresh({ applied: true }, undefined, '/instance', new Promise<void>((resolve) => { refillEnds = resolve; }));
+
+    const running = run();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(progressSteps).toEqual(['progress opens on modbench.toolbox', 'instance commands: refresh']);
+
+    refillEnds();
+    await running;
+    expect(progressSteps.at(-1)).toBe('progress closes');
   });
 
   // toolbox.md, Reporting story 1: the spec's own words, naming this instance — Modbench cannot

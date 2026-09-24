@@ -146,7 +146,8 @@ const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // Mirrors the real Holder's own counter: one higher per PUT, carried on the wire response and
-// every status tick that answers for it.
+// every status tick that answers for it. Never reset: the extension's process lives across every
+// suite, and a real mEdit numbers its versions from 1 only when it restarts.
 let loadOrderVersion = 0;
 // When set, PUT /load-order does not answer until the test releases it — the real backend's load
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
@@ -188,6 +189,7 @@ async function resetMockBackendDetached(): Promise<void> {
 }
 
 function resetMockBackend(): void {
+  loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
   loadOrderHeld = false;
   requestLog.length = 0;
   putLoadOrders.length = 0;
@@ -196,8 +198,6 @@ function resetMockBackend(): void {
   putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
-  loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-  loadOrderVersion = 0;
   holdPutLoadOrder = false;
   releasePutLoadOrder?.();
   releasePutLoadOrder = null;
@@ -243,6 +243,16 @@ function createMockBackend(): http.Server {
         }
         res.writeHead(204);
         res.end();
+        // The real rebuild answers once the index is empty, then refills it against the load order
+        // it holds, as a cold load does: dropped, reconciling, then Ready at the version held.
+        if (!loadOrderHeld) return;
+        const held = loadOrderStatus;
+        for (const state of ['None', 'Reconciling'] as const) {
+          loadOrderStatus = { ...held, state, indexedPlugins: [], conflictsComputed: false };
+          pushLoadOrderStatus();
+        }
+        loadOrderStatus = { ...held, state: 'Ready', conflictsComputed: true };
+        pushLoadOrderStatus();
       });
       return;
     }
@@ -1510,9 +1520,9 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'MissingMaster.esp' ? { ...p, masterIssues: [] } : p);
     await changePluginsTxt();
 
-    const after = findRow(await tree.getChildren(), 'MissingMaster.esp');
-    assert.strictEqual(tree.getTreeItem(after).tooltip, undefined,
-      'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
+    // The hand-off follows the index status on the stream, so the tree is read until it lands.
+    await waitFor('a resolved master issue to clear the tooltip, not leave the stale decoration stacked on top of the fresh one',
+      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === undefined);
   });
 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
@@ -1526,15 +1536,17 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
     await changePluginsTxt();
-    const hidden = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
-    assert.strictEqual(hidden, undefined,
-      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron');
+    // The hand-off follows the index status on the stream, so the tree is read until it lands.
+    await waitFor('sanity: the mechanism reaches the tree — a filter with no matches on this plugin hides its row entirely, not just its chevron',
+      async () => !(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'));
 
     mockPluginsOverride = null;
     await changePluginsTxt();
-    const restored = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(restored).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a reconcile that comes up with no filter must restore a row an earlier filter hid, not leave it permanently gone');
+    await waitFor('a reconcile that comes up with no filter to restore a row an earlier filter hid, not leave it permanently gone',
+      async () => {
+        const restored = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
+        return restored !== undefined && tree.getTreeItem(restored).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+      });
   });
 
   // ADR-0013: a failed PUT tears nothing down — the backend still holds what it held — so the
@@ -1603,7 +1615,9 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
     exitEditing();
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-    resetMockBackend();
+    // The setting relaunched mEdit, and the write puts the load order: that PUT is abandoned
+    // before the reset, which would otherwise forget the reconcile it waits on.
+    await resetMockBackendDetached();
   });
 
   it('the row a record filter hid stays hidden', async () => {

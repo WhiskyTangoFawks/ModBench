@@ -2,18 +2,24 @@
 // wires it, through the real sender, so a put is a put the client actually receives.
 import { describe, it, expect, vi } from 'vitest';
 import type * as vscode from 'vscode';
+import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
+
+// `../toolbox` wires every MO2-side view, so its own vscode surface is wide: `fakeVscodeModule()`
+// covers it, as copyValueCommand.test.ts does for the same module.
+vi.mock('vscode', () => ({ ...fakeVscodeModule(), TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon }));
 import {
   createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput,
 } from '../client';
 import type { InstanceSubscriber, InstanceValue } from '../instanceLoader/instance';
 import { loadOrderChanged, putLoadOrder, type LoadOrderSource } from '../instanceCommands/loadOrder';
-import { registerLoadOrderPut } from '../loadOrderPutTrigger';
+import { registerLoadOrderPut } from '../toolbox';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 
 const ROOT = '/instance';
 const APPLIED: LoadOrderOutcome = {
   outcome: 'applied',
-  status: { totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, failures: [] },
+  status: { totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [] },
 };
 
 function valueWith(name: string, overrides: Partial<InstanceValue> = {}): InstanceValue {
@@ -45,8 +51,9 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     },
   };
   const channel = { error: vi.fn() };
+  const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
-    instance, client,
+    (d) => { owned.push(d); return d; }, instance, client,
     (value) => loadOrderChanged(sender, ROOT, sourceOf(value)),
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
     channel,
@@ -67,7 +74,8 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
       if (!isPluginInputs(plugins)) throw new Error('expected putLoadOrder args[0] to be a plugin array');
       return plugins.map((p) => p.name).join(',');
     });
-  return { client, puts, land, sent, channel };
+  const dispose = (): void => { for (const d of owned) d.dispose(); };
+  return { client, puts, land, sent, channel, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -109,7 +117,7 @@ describe('the load order is put on change', () => {
     const instance = { subscribe: (s: InstanceSubscriber) => { land = s; return { dispose: () => {} }; } };
     const channel = { error: vi.fn() };
     const puts = registerLoadOrderPut(
-      instance, new InMemoryMEditClient(), () => true, () => Promise.reject(new Error('boom')), channel);
+      (d) => d, instance, new InMemoryMEditClient(), () => true, () => Promise.reject(new Error('boom')), channel);
     await puts.putOnConnect().catch(() => {});
 
     land(valueWith('B.esp'), 1);
@@ -189,10 +197,10 @@ describe('the load order is put on connect', () => {
   });
 
   it('puts nothing once disposed', async () => {
-    const { client, puts, land, sent } = wired('attached', valueWith('A.esp'));
+    const { client, puts, land, sent, dispose } = wired('attached', valueWith('A.esp'));
     await puts.putOnConnect();
 
-    puts.dispose();
+    dispose();
     land(valueWith('B.esp'));
     client.reconnected();
     await settled();

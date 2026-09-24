@@ -58,6 +58,19 @@ function putSnapshot(
   }));
 }
 
+// Field by field: a serialization would tell two equal snapshots apart by the order of their keys.
+function sameSnapshot(a: LoadOrderSnapshot, b: LoadOrderSnapshot): boolean {
+  return a.gameDirectory === b.gameDirectory && a.instanceRoot === b.instanceRoot && a.gameRelease === b.gameRelease
+    && a.plugins.length === b.plugins.length && a.plugins.every((plugin, i) => samePlugin(plugin, b.plugins[i]));
+}
+
+function samePlugin(a: LoadOrderPluginInput, b: LoadOrderPluginInput | undefined): boolean {
+  if (b === undefined) return false;
+  const left: [string, unknown][] = Object.entries(a);
+  const right = new Map<string, unknown>(Object.entries(b));
+  return left.length === right.size && left.every(([key, value]) => right.has(key) && Object.is(value, right.get(key)));
+}
+
 export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSender {
   let armed: AbortController | undefined;
   // At most one: an arrival replaces whatever had not been sent yet, which is what makes the
@@ -115,8 +128,7 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
         pump();
       });
     },
-    // Both built by one function from plain data, so their serializations order keys alike.
-    alreadySent: (snapshot) => lastSent !== undefined && JSON.stringify(lastSent) === JSON.stringify(snapshot),
+    alreadySent: (snapshot) => lastSent !== undefined && sameSnapshot(lastSent, snapshot),
     arm,
     abandon() {
       armed?.abort();

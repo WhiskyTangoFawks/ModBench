@@ -50,10 +50,6 @@ export class HttpMEditClient implements MEditClient {
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
-  // The most recent load-order-status tick, held from construction on — so a version this call's
-  // own PUT answers with, already reached before this call ever subscribes, is not missed.
-  private lastLoadOrderStatus: LoadOrderStatus | undefined;
-
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
@@ -61,9 +57,6 @@ export class HttpMEditClient implements MEditClient {
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
-    });
-    this.notifications.subscribe('load-order-status', (event) => {
-      if (event.loadOrderStatus) this.lastLoadOrderStatus = toLoadOrderStatus(event.loadOrderStatus);
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
@@ -179,14 +172,15 @@ export class HttpMEditClient implements MEditClient {
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
 
-    let resolveTerminal: (status: LoadOrderProgress) => void;
+    let resolveTerminal!: (status: LoadOrderProgress) => void;
     const terminal = new Promise<LoadOrderProgress>((resolve) => { resolveTerminal = resolve; });
     // A box, not a `let`: the subscriber below closes over it before this call's own PUT answers
     // with the version it holds.
-    const applying: { version?: number } = {};
+    const applying: { version?: number; latest?: LoadOrderStatus } = {};
     const unsubscribe = this.notifications.subscribe('load-order-status', (event) => {
       if (!event.loadOrderStatus) return;
       const status = toLoadOrderStatus(event.loadOrderStatus);
+      applying.latest = status;
       options.onProgress?.(status);
       if (applying.version !== undefined && isTerminalLoadOrderStatusFor(status, applying.version)) resolveTerminal(status);
     });
@@ -215,15 +209,48 @@ export class HttpMEditClient implements MEditClient {
     // Applied answers at once; the Index catches up on its own subscription, learned here by
     // version, never a tick a fast reconcile can publish before this call even subscribes.
     applying.version = data.version;
-    // Already known, from a tick this call's own subscription was too late to catch.
-    if (this.lastLoadOrderStatus && isTerminalLoadOrderStatusFor(this.lastLoadOrderStatus, applying.version)) {
+    const already = await this.terminalAlready(applying.latest, data.version);
+    if (already) {
       unsubscribe();
-      return { outcome: 'applied', status: this.lastLoadOrderStatus };
+      return { outcome: 'applied', status: already };
     }
 
+    const unsubscribeReopen = this.rereadOnReopen(data.version, resolveTerminal);
     const status = await this.awaitTerminalOrAbort(terminal, options.signal);
     unsubscribe();
+    unsubscribeReopen();
     return status === undefined ? { outcome: 'abandoned' } : { outcome: 'applied', status };
+  }
+
+  // A fast reconcile's tick can land before the PUT's answer, and an identical snapshot's no-op
+  // publishes none: the latest tick the call heard, else the process's own current status.
+  private async terminalAlready(
+    latest: LoadOrderProgress | undefined, version: number,
+  ): Promise<LoadOrderProgress | undefined> {
+    if (latest && isTerminalLoadOrderStatusFor(latest, version)) return latest;
+    const current = await this.currentLoadOrderStatus();
+    return current && isTerminalLoadOrderStatusFor(current, version) ? current : undefined;
+  }
+
+  // A reopened stream carries none of the ticks published while it was down, so the process's
+  // own status is read again when it opens.
+  private rereadOnReopen(version: number, settle: (status: LoadOrderProgress) => void): () => void {
+    return this.notifications.onReconnected(() => {
+      void this.currentLoadOrderStatus().then((current) => {
+        if (current && isTerminalLoadOrderStatusFor(current, version)) settle(current);
+      });
+    });
+  }
+
+  // Undefined when the read fails: the caller then waits on the stream's own ticks.
+  private async currentLoadOrderStatus(): Promise<LoadOrderStatus | undefined> {
+    try {
+      const { data } = await this.apiClient.GET('/load-order/status', {});
+      return data ? toLoadOrderStatus(data) : undefined;
+    } catch (e) {
+      this.log(`[HttpMEditClient] reading the load order status threw: ${errorMessage(e)}`);
+      return undefined;
+    }
   }
 
   // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving

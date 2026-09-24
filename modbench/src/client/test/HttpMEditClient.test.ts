@@ -335,7 +335,11 @@ describe('HttpMEditClient — putLoadOrder', () => {
     let resolveStream!: (r: Response) => void;
     const streamPromise = new Promise<Response>((r) => { resolveStream = r; });
     const putFetch = vi.fn(() => Promise.resolve(jsonResponse(200, appliedBody)));
-    const fetch = routedFetch([['/notifications/stream', () => streamPromise], ['/load-order', putFetch]]);
+    const fetch = routedFetch([
+      ['/notifications/stream', () => streamPromise],
+      ['/load-order/status', () => Promise.reject(new Error('no status read in this test'))],
+      ['/load-order', putFetch],
+    ]);
     const client = makeClient(fetch);
     await client.start();
 
@@ -378,6 +382,107 @@ describe('HttpMEditClient — putLoadOrder', () => {
     // stream reader's own read loop before a (wrongly) still-subscribed callback would see it.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onProgress).toHaveBeenCalledTimes(2); // still 2 — the settled PUT's subscription is gone
+  });
+
+  // A new process numbers its versions from 1 again, so the last process's Ready would answer
+  // for a load order this one has not reconciled.
+  it('answers a PUT to a process attached again from that process\'s own ticks, never the last one\'s', async () => {
+    const streams: { push: (chunk: Uint8Array) => void }[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => {
+        const stream = pushableStreamResponse();
+        streams.push(stream);
+        return Promise.resolve(stream.response);
+      }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Reconciling', totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0,
+      }))],
+      ['/load-order', () => { puts += 1; return Promise.resolve(jsonResponse(200, appliedBody)); }],
+    ]);
+    let puts = 0;
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]?.push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 5 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await client.stop();
+    await client.start();
+    await vi.waitFor(() => expect(streams).toHaveLength(2));
+
+    let settled = false;
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4').then((r) => { settled = true; return r; });
+    await vi.waitFor(() => expect(puts).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    streams[1]?.push(readyTick());
+    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+  });
+
+  // ADR-0013 invariant 1: a snapshot identical to the one held reconciles nothing and publishes no
+  // tick, so its answer is the version already Ready.
+  it('answers a PUT whose version is already Ready from the process\'s own status, with no tick', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    await expect(client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4'))
+      .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
+  });
+
+  // A reopened stream carries none of the ticks published while it was down, so the terminal one
+  // is read from the process when it opens again.
+  it('settles a PUT whose terminal tick was lost to a stream reopening, from the status read then', async () => {
+    const streams: { push: (chunk: Uint8Array) => void; end: () => void }[] = [];
+    let status = { state: 'Reconciling', totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
+    const fetch = routedFetch([
+      ['/notifications/stream', () => {
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+        streams.push({ push: (chunk) => controller.enqueue(chunk), end: () => controller.close() });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, status))],
+      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => expect(streams).toHaveLength(1));
+
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
+    streams[0]?.end();
+
+    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
+  }, 10_000);
+
+  it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
+    const { response: stream, push } = pushableStreamResponse();
+    let answerPut!: (r: Response) => void;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(stream)],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+      ['/load-order', () => new Promise<Response>((resolve) => { answerPut = resolve; })],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    await vi.waitFor(() => expect(answerPut).toBeDefined());
+    push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    answerPut(jsonResponse(200, appliedBody));
+
+    await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
   it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {

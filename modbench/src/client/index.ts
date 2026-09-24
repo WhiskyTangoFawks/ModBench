@@ -10,6 +10,7 @@ export type {
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isRefused, isCrashRepairReason } from './MEditClient';
+export { toLoadOrderStatus } from './apiClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
 export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
