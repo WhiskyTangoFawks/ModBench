@@ -47,6 +47,31 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
+    // ADR-0013 invariant 1: an identical snapshot does nothing. Every reconcile ends by publishing
+    // its status, so a reconcile the identical PUT started would publish before the moved one opens.
+    [Fact]
+    public async Task PuttingTheLoadOrderHeld_AnswersItsVersion_AndStartsNoReconcile()
+    {
+        using var fx = OneMod();
+        var held = await VersionOf(await Client.PutLoadOrder(fx));
+        using var stream = await Client.NotificationStream();
+
+        var again = await VersionOf(await Client.PutLoadOrder(fx));
+        var moved = await VersionOf(await Client.PutLoadOrder(fx, fx.Plugins.Select(p => p with { Slot = p.Slot + 1 })));
+
+        var statuses = (await stream.FramesThrough("load-order-status", d => StatusOf(d).GetProperty("version").GetInt64() == moved))
+            .Where(f => f.Kind == "load-order-status")
+            .Select(f => StatusOf(f.Data))
+            .ToList();
+        Assert.Equal("Reconciling", statuses[0].GetProperty("state").GetString());
+        Assert.Equal(held, again);
+    }
+
+    private static async Task<long> VersionOf(HttpResponseMessage put) =>
+        (await put.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
+
+    private static JsonElement StatusOf(JsonElement frame) => frame.GetProperty("loadOrderStatus");
+
     // A binary has no smaller unit than itself, so the copy the reconcile names is re-derived whole
     // rather than by key.
     [Fact]

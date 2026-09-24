@@ -170,6 +170,61 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
+  // A backend the client attached to without owning it can restart under a live status: the
+  // stream opening again is the one sign that the process behind it may be another.
+  it('announces a reopen after a drop, and not the first open', async () => {
+    const openStream = vi.fn()
+      .mockResolvedValueOnce(streamResponse([]))
+      .mockResolvedValueOnce(streamResponse([]))
+      .mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const reconnects = vi.fn();
+    subscriber.onReconnected(reconnects);
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    expect(reconnects).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(openStream).toHaveBeenCalledTimes(3);
+    expect(reconnects).toHaveBeenCalledTimes(2);
+    subscriber.stop();
+  });
+
+  it('announces no reopen for the first open after a stop and start', async () => {
+    const openStream = vi.fn().mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const reconnects = vi.fn();
+    subscriber.onReconnected(reconnects);
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    subscriber.stop();
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(2));
+
+    expect(reconnects).not.toHaveBeenCalled();
+    subscriber.stop();
+  });
+
+  it('announces no reopen for an attempt that failed', async () => {
+    const openStream = vi.fn()
+      .mockResolvedValueOnce(streamResponse([]))
+      .mockRejectedValue(new Error('ECONNREFUSED'));
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const reconnects = vi.fn();
+    subscriber.onReconnected(reconnects);
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(openStream).toHaveBeenCalledTimes(2);
+    expect(reconnects).not.toHaveBeenCalled();
+    subscriber.stop();
+  });
+
   it('stop() aborts the in-flight attempt and stops retrying', async () => {
     let sawSignal: AbortSignal | undefined;
     const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {
