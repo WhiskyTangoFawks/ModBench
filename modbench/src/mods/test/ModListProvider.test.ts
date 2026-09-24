@@ -12,7 +12,7 @@ import {
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import type {
-  setModEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
+  setModsEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
 } from '../../modlist/modlist';
 
 vi.mock('vscode', () => ({
@@ -25,15 +25,15 @@ vi.mock('vscode', () => ({
 // point 6) rather than an injected source — mocked at the module boundary, in the style already
 // established by recordPanelContextCommands.test.ts.
 const {
-  setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock,
+  setModsEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock,
 } = vi.hoisted(() => ({
-  setModEnabledMock: vi.fn<typeof setModEnabled>(),
+  setModsEnabledMock: vi.fn<typeof setModsEnabled>(),
   reorderModMock: vi.fn<typeof reorderMod>(),
   moveModToSeparatorMock: vi.fn<typeof moveModToSeparator>(),
   reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
 vi.mock('../../modlist/modlist', () => ({
-  setModEnabled: (...args: Parameters<typeof setModEnabledMock>) => setModEnabledMock(...args),
+  setModsEnabled: (...args: Parameters<typeof setModsEnabledMock>) => setModsEnabledMock(...args),
   reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
   moveModToSeparator: (...args: Parameters<typeof moveModToSeparatorMock>) => moveModToSeparatorMock(...args),
   reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
@@ -52,7 +52,9 @@ const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
 
 beforeEach(() => {
-  for (const m of [setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock]) {
+  setModsEnabledMock.mockReset();
+  setModsEnabledMock.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
+  for (const m of [reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock]) {
     m.mockReset();
     m.mockResolvedValue({ applied: true, wrote: true });
   }
@@ -352,22 +354,38 @@ describe('ModListProvider', () => {
     expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
-  // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's.
-  it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires no refresh', async () => {
+  // package.json's mod-menu `when` clauses read these flags to offer enable or disable by row
+  // state (mods.md, Menus and keys, story 3), and view on Nexus by hasNexus.
+  it('a mod row states its enabled state and whether it has a Nexus id in its contextValue', async () => {
+    const provider = makeProvider([
+      mod('UFO4P', true, { nexusId: '4598' }),
+      mod('Disabled Mod', false),
+    ]);
+    const rows = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode);
+    const enabled = present(rows.find((n) => n.mod.name === 'UFO4P'), 'the enabled row');
+    const disabled = present(rows.find((n) => n.mod.name === 'Disabled Mod'), 'the disabled row');
+
+    expect(enabled.contextValue).toBe('mod hasNexus enabled');
+    expect(disabled.contextValue).toBe('mod disabled');
+  });
+
+  // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's. The check
+  // box reaches the same command a context-menu click or key does — one mod, through the entry.
+  it('setModEnabled calls the setModsEnabled command with the instance root, active profile and one-mod selection, and fires no refresh', async () => {
     const provider = makeProvider([mod('A')]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
     await provider.setModEnabled('A', false);
 
-    expect(setModEnabledMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'A', false);
+    expect(setModsEnabledMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, ['A'], false);
     expect(fired).toBe(false);
   });
 
   // A modlist command answers applied or a refusal and never throws for one; the provider turns
   // a refusal into a rejected promise, so the checkbox handler has one failure path, not two.
-  it('setModEnabled throws when the command refuses, and fires no refresh', async () => {
-    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'nope' });
+  it('setModEnabled throws when the command globally refuses, and fires no refresh', async () => {
+    setModsEnabledMock.mockResolvedValue({ applied: false, refusal: 'nope' });
     const provider = makeProvider([mod('A')]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
@@ -376,8 +394,20 @@ describe('ModListProvider', () => {
     expect(fired).toBe(false);
   });
 
+  // A gone mod comes back as a per-item refusal in an otherwise-applied outcome, not a global one.
+  it('setModEnabled throws the per-item refusal when the one mod it asked for comes back refused', async () => {
+    setModsEnabledMock.mockResolvedValue({
+      applied: true, outcome: { landed: [], refused: [{ item: 'A', reason: 'Mod not found in modlist: A' }] },
+    });
+    const provider = makeProvider([mod('A')]);
+
+    await expect(provider.setModEnabled('A', false)).rejects.toThrow('Mod not found in modlist: A');
+  });
+
   it('a check box whose write is refused returns to what the disk says, and says why', async () => {
-    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'Mod not found in modlist: A' });
+    setModsEnabledMock.mockResolvedValue({
+      applied: true, outcome: { landed: [], refused: [{ item: 'A', reason: 'Mod not found in modlist: A' }] },
+    });
     const provider = makeProvider([mod('A')]);
     const row = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode), 'the A row');
     let fired = false;

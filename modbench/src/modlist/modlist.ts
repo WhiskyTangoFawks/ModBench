@@ -22,6 +22,7 @@ import { downloadFile, downloadSidecarFile, modDir, modlistFile, modsDir } from 
 import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -44,11 +45,29 @@ async function spliceModlist(
   }
 }
 
-/** Flip a mod's `+`/`-` prefix — the Mods tree checkbox. */
-export function setModEnabled(
-  instanceRoot: string, profile: string, modName: string, enabled: boolean,
-): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => setEnabledInText(text, modName, enabled));
+export type SetModsEnabledResult =
+  | { applied: true; outcome: SelectionOutcome<string> }
+  | { applied: false; refusal: string };
+
+/** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one splice. A gone
+ *  mod is refused by name; the rest still land in the same write. */
+export async function setModsEnabled(
+  instanceRoot: string, profile: string, modNames: readonly string[], enabled: boolean,
+): Promise<SetModsEnabledResult> {
+  const landed: string[] = [];
+  const refused: ItemRefusal<string>[] = [];
+  const outcome = await spliceModlist(instanceRoot, profile, (text) => {
+    const known = new Set(parseModlist(text).filter((e) => e.kind === 'mod').map((e) => e.name));
+    return modNames.reduce((acc, name) => {
+      if (!known.has(name)) {
+        refused.push({ item: name, reason: `Mod not found in modlist: ${name}` });
+        return acc;
+      }
+      landed.push(name);
+      return setEnabledInText(acc, name, enabled);
+    }, text);
+  });
+  return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
 }
 
 /** Where a drag landed in the Mods tree. Re-exported so the view names the drop without naming
