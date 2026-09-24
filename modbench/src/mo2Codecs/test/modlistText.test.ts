@@ -221,8 +221,6 @@ describe('insertSeparatorAtIndexInText', () => {
     expect(out).toBe('+A\n+B\r\n+Sep_separator\r\n');
   });
 
-  // -1 reaches the one position "after index i" cannot: before every entry line, at the
-  // winning-most extreme of the file.
   it('inserts before the first entry line when afterIndex is -1, leaving the comment header above it', () => {
     const out = insertSeparatorAtIndexInText(defaultModlist(), 'Winning Sep', -1);
     expect(names(out)[0]).toBe('Winning Sep');

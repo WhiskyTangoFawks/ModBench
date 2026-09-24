@@ -71,17 +71,15 @@ export function reorderMod(
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
  *  after it; on a separator, before its own group's winning-most member. */
 export function insertSeparator(
-  instanceRoot: string, profile: string, name: string, afterEntryName: string,
+  instanceRoot: string, profile: string, name: string, anchorName: string,
 ): Promise<ModlistCommandResult> {
   return spliceModlist(instanceRoot, profile, (text) => {
     const entries = parseModlist(text);
-    const entryIdx = entries.findIndex((e) => e.name === afterEntryName);
-    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${afterEntryName}`);
-    const afterEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
+    const entryIdx = entries.findIndex((e) => e.name === anchorName);
+    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${anchorName}`);
+    const anchorEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
     let afterIndex = entryIdx;
-    if (afterEntry.kind === 'separator') {
-      // The anchor's own group: mods between it and the nearest separator toward the winning
-      // end. groupStart stays at entryIdx when the group is empty.
+    if (anchorEntry.kind === 'separator') {
       let groupStart = entryIdx;
       for (let i = entryIdx - 1; i >= 0; i--) {
         const entry = entries[i];

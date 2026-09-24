@@ -162,8 +162,6 @@ export function registerSeparatorCommands(
           applyOrThrow(await renameSeparator(instanceRoot, profile, node.separator.name, newName));
         });
       }),
-      // One command for both anchors: modlist commands' insertSeparator resolves the anchor's
-      // kind and picks the position (mods.md, Add separator).
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;

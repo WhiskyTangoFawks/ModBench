@@ -297,7 +297,6 @@ describe('rename separator takes its separator through the gesture entry', () =>
   });
 });
 
-// One command for both anchors (ticket: one add-separator command, not two legacy ones).
 describe('add separator: one command for a mod anchor and a separator anchor', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -306,7 +305,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
 
-  it('prompts and adds a separator after the right-clicked mod, not the selection around it', async () => {
+  it('prompts and anchors the new separator on the right-clicked mod, not the selection around it', async () => {
     insertSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('New Section');
     const otherMod = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
@@ -318,7 +317,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', 'Mod A']]);
   });
 
-  it('prompts and adds a separator after the right-clicked separator, not the selection around it', async () => {
+  it('prompts and anchors the new separator on the right-clicked separator, not the selection around it', async () => {
     insertSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('New Section');
     const otherGroup = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);

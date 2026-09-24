@@ -156,18 +156,16 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(entries[idx + 1]).toEqual({ kind: 'separator', name: 'New Section', enabled: true });
   });
 
-  // On a mod, everything from its separator's winning edge through the anchor itself joins the
-  // new separator; what was on the anchor's losing side stays with the old one.
   it('insertSeparator on a mod inside a separator splits it: the mods on the anchor\'s winning side join the new one', async () => {
-    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Unofficial Fallout 4 Patch');
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', '[NODELETE] Radfall');
     expect(outcome).toEqual({ applied: true, wrote: true });
     const names = (await readModlist()).map((e) => e.name);
     expect(names).toEqual([
       'SKK Fast Start new game (Fallout 4)',
       'Unassigned (Modlist Development)',
       '[NODELETE] Radfall',
-      'Unofficial Fallout 4 Patch',
       'New Section',
+      'Unofficial Fallout 4 Patch',
       'Radfall - All-In-One Survival Overhaul',
       'ENBoost - 12k',
       'Harder VATS',
@@ -192,8 +190,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     ]);
   });
 
-  // On a separator, the new one takes the winning side of its last (most winning) mod, taking
-  // none, and the anchor's own group is untouched.
   it('insertSeparator on a separator lands on the winning side of its last mod, taking none', async () => {
     const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Radfall - All-In-One Survival Overhaul');
     expect(outcome).toEqual({ applied: true, wrote: true });
@@ -211,8 +207,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     ]);
   });
 
-  // The winning-most separator's group runs to the file's own start, so the winning side of its
-  // last mod is the file's winning-most extreme.
   it('insertSeparator on the winning-most separator lands before every mod', async () => {
     const outcome = await insertSeparator(dir, 'Default', 'New Section', 'Unassigned (Modlist Development)');
     expect(outcome).toEqual({ applied: true, wrote: true });
@@ -228,6 +222,16 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       'Harder VATS',
       'Cracked and Smudged Pip-Boy Screen',
     ]);
+  });
+
+  it('insertSeparator on a separator with no mods of its own adds an equally empty one before it', async () => {
+    await writeFile(modlistPath(), '+FirstGroup_separator\r\n+SecondGroup_separator\r\n+SKK Fast Start new game (Fallout 4)\r\n', 'utf8');
+
+    const outcome = await insertSeparator(dir, 'Default', 'New Section', 'SecondGroup');
+
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names).toEqual(['FirstGroup', 'New Section', 'SecondGroup', 'SKK Fast Start new game (Fallout 4)']);
   });
 
   it('insertSeparator refuses when the anchor entry is absent', async () => {
