@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress, MEditClient } from './MEditClient';
 
 /** One generation of ADR-0013's hand-off, whole: every physical plugin copy plus the three facts
@@ -111,7 +110,8 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
         pump();
       });
     },
-    alreadySent: (snapshot) => lastSent !== undefined && isDeepStrictEqual(lastSent, snapshot),
+    // Both built by one function from plain data, so their serializations order keys alike.
+    alreadySent: (snapshot) => lastSent !== undefined && JSON.stringify(lastSent) === JSON.stringify(snapshot),
     arm,
     abandon() {
       armed?.abort();

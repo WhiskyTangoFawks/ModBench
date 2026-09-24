@@ -1,7 +1,11 @@
 import type * as vscode from 'vscode';
-import type { MEditClient } from './client';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { errorMessage } from './ports/errorMessage';
+
+// Stated structurally, since the MO2 side never imports the mEdit client: only its status is heard.
+interface StatusSource {
+  onStatusChanged(listener: (status: string) => void): () => void;
+}
 
 export interface LoadOrderPuts extends vscode.Disposable {
   /** The put that follows a connect, sent whatever the backend before it had: the backend just
@@ -13,7 +17,7 @@ export interface LoadOrderPuts extends vscode.Disposable {
 // while mEdit is detached is not put, because the connect's own put reads the value current then.
 export function registerLoadOrderPut(
   instance: Pick<Instance, 'subscribe'>,
-  client: Pick<MEditClient, 'onStatusChanged'>,
+  client: StatusSource,
   changed: (value: InstanceValue) => boolean,
   put: () => Promise<void>,
   channel: { error(msg: string): void },
