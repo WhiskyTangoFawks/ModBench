@@ -763,33 +763,33 @@
           "group": "modActions@1"
         },
         {
-          "command": "modbench.separator.add",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@2"
-        },
-        {
-          "command": "modbench.mod.move",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@3"
-        },
-        {
-          "command": "modbench.mod.uninstall",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@4"
-        },
-        {
           "command": "modbench.mod.viewOnNexus",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bhasNexus\\b/",
-          "group": "modActions@5"
+          "group": "modActions@2"
         },
         {
           "command": "modbench.mod.enable",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bdisabled\\b/",
-          "group": "modActions@6"
+          "group": "modActions@3"
         },
         {
           "command": "modbench.mod.disable",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\benabled\\b/",
+          "group": "modActions@3"
+        },
+        {
+          "command": "modbench.separator.add",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "modActions@4"
+        },
+        {
+          "command": "modbench.mod.move",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "modActions@5"
+        },
+        {
+          "command": "modbench.mod.uninstall",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "modActions@6"
         },
         {

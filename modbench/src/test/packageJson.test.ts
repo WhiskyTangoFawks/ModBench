@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 import { IN_AN_INSTANCE, isRecord, requires } from './manifest';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
+
+// Only the Mods row menu's own contextValue-vs-when test below needs a live ModNode.
+vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon }));
+
+import { ModNode } from '../mods/ModListProvider';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
 // throws rather than handing back an unproven shape.
@@ -537,8 +543,8 @@ describe('package.json command titles and categories', () => {
     'modbench.downloadedFile.exclude',
     'modbench.downloadedFile.include',
     'modbench.mod.openFolder',
-    // Has the plural gesture's own ambient selection fallback, but whether the palette should
-    // act on "whatever is selected, if anything" is still an open design question.
+    // Has the plural gesture's own ambient selection fallback; the Space key and the palette
+    // entries are placed by a later slice.
     'modbench.mod.enable',
     'modbench.mod.disable',
     'modbench.separator.add',
@@ -712,21 +718,33 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
 
   // Enable and disable are one slot, mutually exclusive by their own `when` — same posture as
   // Downloads' exclude/include pair.
-  it('shares one slot between enable and disable, and touches no other mod-row entry\'s slot', () => {
+  it('shares one slot between enable and disable', () => {
     const entries = modRowMenu();
     const slotOf = (command: string): number => {
       const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
       return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
     };
     expect(slotOf('modbench.mod.enable')).toBe(slotOf('modbench.mod.disable'));
+  });
 
-    // The rest of the row keeps the order it already had — this ticket adds a slot, it does not
-    // renumber the others.
-    const openFolder = slotOf('modbench.mod.openFolder');
-    const addSeparator = slotOf('modbench.separator.add');
-    const move = slotOf('modbench.mod.move');
+  // mods.md's row order: "open folder · view on Nexus · enable or disable · move… · add
+  // separator · … · uninstall" — a change gesture between the last read (view on Nexus) and the
+  // destroy group (uninstall), never after it.
+  it('sits after view on Nexus and before uninstall', () => {
+    const entries = modRowMenu();
+    const slotOf = (command: string): number => {
+      const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
+      return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
+    };
+    const viewOnNexus = slotOf('modbench.mod.viewOnNexus');
+    const enable = slotOf('modbench.mod.enable');
+    const disable = slotOf('modbench.mod.disable');
     const uninstall = slotOf('modbench.mod.uninstall');
-    expect([openFolder, addSeparator, move, uninstall]).toEqual([1, 2, 3, 4]);
+
+    expect(enable).toBeGreaterThan(viewOnNexus);
+    expect(disable).toBeGreaterThan(viewOnNexus);
+    expect(enable).toBeLessThan(uninstall);
+    expect(disable).toBeLessThan(uninstall);
   });
 
   it('registers both IDs under the same view/item/context gate a mod row matches, whether or not it has a Nexus id', () => {
@@ -734,6 +752,26 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
       const entry = present(modRowMenu().find((e) => e.command === command), `a ${command} row-menu entry`);
       expect(entry.when).not.toContain('hasNexus');
     }
+  });
+
+  // Ties the two halves together: a real row's own contextValue is what the `when` string above
+  // actually matches against, so this fails if either side drifts from the other.
+  it('a disabled row\'s own contextValue matches enable\'s when-clause flags, and not disable\'s', () => {
+    const disabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: false });
+    const enabledRow = new ModNode({ kind: 'mod', name: 'X', enabled: true });
+    const enable = present(modRowMenu().find((e) => e.command === 'modbench.mod.enable'), 'a modbench.mod.enable row-menu entry');
+    const disable = present(modRowMenu().find((e) => e.command === 'modbench.mod.disable'), 'a modbench.mod.disable row-menu entry');
+    const flagsOf = (when: string): string[] =>
+      [...when.matchAll(/\\b(\w+)\\b/g)].map((m) => present(m[1], 'a \\b...\\b flag name'));
+    const tokensOf = (contextValue: string | undefined): string[] =>
+      present(contextValue, 'the row\'s own contextValue').split(' ');
+    const matches = (whenFlags: readonly string[], contextValue: string | undefined): boolean =>
+      whenFlags.every((flag) => tokensOf(contextValue).includes(flag));
+
+    expect(matches(flagsOf(enable.when), disabledRow.contextValue)).toBe(true);
+    expect(matches(flagsOf(enable.when), enabledRow.contextValue)).toBe(false);
+    expect(matches(flagsOf(disable.when), enabledRow.contextValue)).toBe(true);
+    expect(matches(flagsOf(disable.when), disabledRow.contextValue)).toBe(false);
   });
 });
 

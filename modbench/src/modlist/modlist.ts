@@ -45,13 +45,6 @@ async function spliceModlist(
   }
 }
 
-/** Flip a mod's `+`/`-` prefix — the Mods tree checkbox. */
-export function setModEnabled(
-  instanceRoot: string, profile: string, modName: string, enabled: boolean,
-): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => setEnabledInText(text, modName, enabled));
-}
-
 export type SetModsEnabledResult =
   | { applied: true; outcome: SelectionOutcome<string> }
   | { applied: false; refusal: string };

@@ -19,7 +19,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
   const corpus = walk(SRC).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
-    expect(writeVerbs).toContain('setModEnabled');
+    expect(writeVerbs).toContain('setModsEnabled');
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('excludeDownload');
     expect(writeVerbs).toContain('deleteDownloads');

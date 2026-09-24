@@ -472,7 +472,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   ownAll(own, registerToolboxCommands({ instanceRoot, instance, extensionId, reporterFor }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
-  ownAll(own, registerModEnableCommands(instanceRoot, instance, () => modListView.selection, reporterFor('mod.enable')));
+  ownAll(own, registerModEnableCommands(instanceRoot, instance, () => modListView.selection, reporterFor('mod.enableDisable')));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
