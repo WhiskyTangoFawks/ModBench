@@ -41,6 +41,7 @@ vi.mock('../../modlist/modlist', () => ({
 
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { ErrorNode } from '../errorNode';
+import { onModCheckboxChanged } from '../modCheckboxHandler';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -207,7 +208,8 @@ describe('ModListProvider', () => {
     expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
-  it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires a refresh', async () => {
+  // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's.
+  it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires no refresh', async () => {
     const provider = makeProvider([mod('A')]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
@@ -215,7 +217,7 @@ describe('ModListProvider', () => {
     await provider.setModEnabled('A', false);
 
     expect(setModEnabledMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'A', false);
-    expect(fired).toBe(true);
+    expect(fired).toBe(false);
   });
 
   // A modlist command answers applied or a refusal and never throws for one; the provider turns
@@ -230,18 +232,20 @@ describe('ModListProvider', () => {
     expect(fired).toBe(false);
   });
 
-  // Asymmetry test: unlike setFilter (render-only), a mutation must invalidate — the next
-  // getChildren() re-pulls the Instance's current value, since a mutation may have changed it.
-  it('setModEnabled invalidates: a subsequent getChildren() re-pulls the instance value', async () => {
-    const instance = new FakeInstance(valueOf([mod('A')]));
-    const provider = makeProvider([], { instance });
-    await provider.getChildren();
+  it('a check box whose write is refused returns to what the disk says, and says why', async () => {
+    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'Mod not found in modlist: A' });
+    const provider = makeProvider([mod('A')]);
+    const row = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode), 'the A row');
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    const reporter = recordingReporter();
 
-    instance.value = valueOf([mod('A'), mod('B')]); // no publish() — set directly, as a stale-cache probe
-    await provider.setModEnabled('A', false);
-    const roots = await provider.getChildren();
+    await onModCheckboxChanged({ items: [[row, TreeItemCheckboxState.Unchecked]] }, provider, reporter);
 
-    expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label)).toContain('B');
+    expect(fired).toBe(true);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to update "A".', detail: 'Mod not found in modlist: A' },
+    ]);
   });
 
   // Rival: subscribe but drop the callback, or never subscribe — rows would stay at the value
@@ -369,8 +373,6 @@ describe('ModListProvider', () => {
     });
 
     // A filter keystroke must re-render already-built rows, never re-pull the instance value.
-    // Only setFilter is render-only; every other call site still invalidates (see the asymmetry
-    // test above and the drag-and-drop section).
     it('setFilter does not rebuild rows (render-only, not invalidate)', async () => {
       const instance = new FakeInstance(valueOf(entries()));
       const provider = makeProvider([], { instance });
@@ -630,7 +632,9 @@ describe('ModListProvider', () => {
       expect(logs.some((l) => l.includes('reorderSeparatorBlock failed: disk full'))).toBe(true);
     });
 
-    it('resyncs the tree after a failed drop, and a successful drop refreshes silently', async () => {
+    // A drop moves no row on screen by itself, so the view already shows the disk until the watch
+    // lands the write (ADR-0015 invariant 2).
+    it('a drop fires no refresh, whether its write lands or fails', async () => {
       reorderModMock.mockRejectedValueOnce(new Error('disk full'));
       const { provider: failing, reports: failingReports } = makeFailingProvider();
       let failingFired = false;
@@ -638,7 +642,7 @@ describe('ModListProvider', () => {
       const roots = await failing.getChildren();
       const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(failing, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(failingFired).toBe(true); // refresh fired to resync against disk
+      expect(failingFired).toBe(false);
       expect(failingReports).toHaveLength(1);
 
       const okReporter = recordingReporter();
@@ -648,7 +652,8 @@ describe('ModListProvider', () => {
       const okRoots = await ok.getChildren();
       const okDeltaNode = present(okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(ok, okDeltaNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(okFired).toBe(true);
+      expect(reorderModMock).toHaveBeenCalledTimes(2);
+      expect(okFired).toBe(false);
       expect(okReporter.reports).toEqual([]);
     });
   });
