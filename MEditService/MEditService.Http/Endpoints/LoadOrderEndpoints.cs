@@ -82,7 +82,7 @@ public static class LoadOrderEndpoints
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
-            return Results.Problem(ex.Message, statusCode: 500);
+            return WriteEndpointMapping.WriteFailure(ex.Message);
         }
     }
 

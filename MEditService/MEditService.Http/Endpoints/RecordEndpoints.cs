@@ -98,7 +98,8 @@ public static class RecordEndpoints
             "surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.")
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
-        .ProducesProblem(400);
+        .ProducesProblem(400)
+        .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RenumberRecordHandler edits) =>
@@ -232,11 +233,22 @@ public static class RecordEndpoints
                 string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
 
-        var result = edits.DeleteRecords(
-            [.. records.Select(r => new RecordAt(new PluginCopyKey(r.Plugin, r.Origin), r.FormKey))]);
-        return Results.Ok(new RecordDeleteResponse(
-            [.. result.Applied.Select(Addressed)],
-            [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
+        try
+        {
+            var result = edits.DeleteRecords(
+                [.. records.Select(r => new RecordAt(new PluginCopyKey(r.Plugin, r.Origin), r.FormKey))]);
+            return Results.Ok(new RecordDeleteResponse(
+                [.. result.Applied.Select(Addressed)],
+                [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            // Matches every sibling write route's own mapping for it (WriteEndpointMapping, the
+            // shared seam): the load order went away underneath the request, a "not right now",
+            // never a per-record refusal.
+            logger.LogError(ex, "No usable loadOrder while deleting {Count} records", records.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
     }
 
     private static RecordAddress Addressed(RecordAt record) =>

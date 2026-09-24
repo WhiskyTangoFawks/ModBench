@@ -35,6 +35,7 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new DeleteRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ILogger<DeleteRecordHandler>>()));
 
         services.AddSingleton(sp => new CreateRecordHandler(
