@@ -161,10 +161,6 @@ public sealed class TrackServiceTests
             // No \r anywhere in the tracked tree.
             foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
                 Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
-
-            var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
-            Assert.Contains($"Binary-SHA256: Fixture.esp=", body);
         }
         finally
         {
@@ -210,7 +206,7 @@ public sealed class TrackServiceTests
     }
 
     // Positive control's index: no meta.ini beside the plugin (an authored/manually-installed
-    // mod, ADR-0003) means no Meta-SHA256 trailer at all — every TrackProvenance field
+    // mod, ADR-0003) means no Meta-SHA256 trailer at all — every BaselineTrailers fact
     // is optional, this must not fabricate one.
     [Fact]
     public async Task TrackAsync_WithNoMetaIni_WritesNoMetaSha256Trailer()
@@ -263,10 +259,9 @@ public sealed class TrackServiceTests
             // Track the mod folder once, for real, before corrupting anything — a dummy path shaped
             // like what TrackAsync would actually have written, though the content doesn't matter
             // for this test: only IsTracked's answer does.
-            SourceRepository.Track(
+            PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
-                [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
-                new TrackProvenance(null, null, new Dictionary<string, string>()));
+                [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())]);
 
             // The load order already parsed a good copy; the file on disk is corrupted afterward —
             // exactly the state TrackService's own fresh deep parse must fail against if it is

@@ -57,7 +57,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
             new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), FixtureFileName, GameRelease.Fallout4,
             PluginStrings.In(_modFolder)).GetAwaiter().GetResult();
         var pristineFiles = SourceRepository.PristineFilesOf(FixtureFileName, treeFiles);
-        SourceRepository.Track(_modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, pristineFiles);
     }
 
     [Fact]

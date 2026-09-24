@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -39,13 +40,12 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 
     private static SourceRepository Track(string modFolder, string pluginName, params TreeFile[] alsoWrite)
     {
-        SourceRepository.Track(
+        PluginBaselines.Track(
             modFolder, SourcePreset.Edits,
             [
                 new TreeFile(OriginalNpcPath(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
-            ],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            ]);
         return SourceRepository.Open(modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
     }

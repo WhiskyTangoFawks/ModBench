@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -14,7 +15,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
         try
         {
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string> { ["Test.esp"] = "0000" }));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", atRef: null, binarySha256: "DEADBEEF1234");
 
@@ -33,10 +34,9 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
         try
         {
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            // Track parks the ref only for plugins named in trailers.BinarySha256ByPlugin — an empty
-            // dict here leaves "Other.esp" with no parked ref at all, the orphaned-ref case the
-            // pinned decision says must degrade, never throw.
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+            // Track parks a ref only for the plugins it tracks, which leaves "Other.esp" with none: the
+            // orphaned-ref case must degrade, never throw.
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             Assert.Null(SourceRepository.ParkedCompileBinarySha256(modFolder, "Other.esp"));
         }

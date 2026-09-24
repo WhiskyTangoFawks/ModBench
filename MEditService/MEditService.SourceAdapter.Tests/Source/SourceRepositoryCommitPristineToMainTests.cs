@@ -12,13 +12,15 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-absorb-main-").FullName;
     private const string Plugin = "Test.esp";
 
-    private static string Track(string modFolder, string sourceRelativePath, string content)
-    {
-        var files = new[] { new TreeFile(sourceRelativePath, System.Text.Encoding.UTF8.GetBytes(content)) };
-        var trailers = new TrackProvenance("1.0.0", "OLDMETA", new Dictionary<string, string> { [Plugin] = "OLDBIN" });
-        SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
-        return Path.Combine(modFolder, ".git");
-    }
+    private static void Track(string modFolder, string sourceRelativePath, string content) =>
+        SourceRepository.Track(
+            modFolder, SourcePreset.Edits,
+            [([new TreeFile(sourceRelativePath, System.Text.Encoding.UTF8.GetBytes(content))],
+              new BaselineTrailers(Plugin, "1.0.0", "OLDMETA", "OLDBIN"))]);
+
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(
+        string relativePath, string content, BaselineTrailers trailers) =>
+        ([new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(content))], trailers);
 
     [Fact]
     public void CommitPristineToMain_AdvancesMain_WithTheNewContentAndFreshTrailers()
@@ -29,18 +31,12 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         {
             Track(modFolder, relativePath, "{\"old\":true}");
 
-            var newFiles = new[] { new TreeFile(relativePath, "{\"new\":true}"u8.ToArray()) };
-            var newTrailers = new TrackProvenance("2.0.0", "NEWMETA", new Dictionary<string, string> { [Plugin] = "NEWBIN" });
-            SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
+            SourceRepository.CommitPristineToMain(
+                modFolder, [Baseline(relativePath, "{\"new\":true}", new BaselineTrailers(Plugin, "2.0.0", "NEWMETA", "NEWBIN"))]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             Assert.Equal("{\"new\":true}", GitProbe.Run(gitDir, modFolder, "show", $"main:{relativePath}"));
-
-            var baseline = SourceRepository.LatestBaselineTrailers(modFolder, Plugin);
-            Assert.NotNull(baseline);
-            Assert.Equal("2.0.0", baseline.UpstreamVersion);
-            Assert.Equal("NEWMETA", baseline.MetaSha256);
-            Assert.Equal("NEWBIN", baseline.BinarySha256);
+            Assert.Equal(new BaselineTrailers(Plugin, "2.0.0", "NEWMETA", "NEWBIN"), SourceRepository.LatestBaselineTrailers(modFolder, Plugin));
         }
         finally
         {
@@ -49,22 +45,67 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     }
 
     [Fact]
-    public void CommitPristineToMain_AdvancesTheParkedRef_ToTheNewBaselineCommit()
+    public void CommitPristineToMain_CommitsEachPlugin_ThenTheChangedTrackedFiles_EachOnItsOwn()
+    {
+        var root = Directory.CreateTempSubdirectory("medit-absorb-main-").FullName;
+        var modFolder = Path.Combine(root, "UpdatedMod");
+        Directory.CreateDirectory(Path.Combine(modFolder, "Textures"));
+        File.WriteAllText(Path.Combine(modFolder, "Textures", "Thing.dds"), "old pixels");
+        try
+        {
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Everything,
+                [
+                    new TreeFile("source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray()),
+                    new TreeFile("source/B.esp/npc_/B.esp/000001.json", "{}"u8.ToArray()),
+                ]);
+            File.WriteAllText(Path.Combine(modFolder, "Textures", "Thing.dds"), "new pixels");
+
+            SourceRepository.CommitPristineToMain(
+                modFolder,
+                [
+                    Baseline("source/A.esp/npc_/A.esp/000001.json", "{\"a\":2}", new BaselineTrailers("A.esp", "2.0", null, "AAAA")),
+                    Baseline("source/B.esp/npc_/B.esp/000001.json", "{\"b\":2}", new BaselineTrailers("B.esp", null, null, "BBBB")),
+                ],
+                [new TrackedFileChange("Textures/Thing.dds", TrackedFileChangeKind.Modified, StagedAlready: false)]);
+
+            var gitDir = Path.Combine(modFolder, ".git");
+            Assert.Equal(
+                ["Update UpdatedMod", "Update B.esp", "Update A.esp to 2.0"],
+                GitProbe.Run(gitDir, modFolder, "log", "-3", "--format=%s", "main").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+            Assert.Equal(["source/A.esp/npc_/A.esp/000001.json"], PathsIn(modFolder, "main~2"));
+            Assert.Equal(["source/B.esp/npc_/B.esp/000001.json"], PathsIn(modFolder, "main~1"));
+            Assert.Equal(["Textures/Thing.dds"], PathsIn(modFolder, "main"));
+            Assert.Equal("new pixels", GitProbe.Run(gitDir, modFolder, "show", "main:Textures/Thing.dds"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static string[] PathsIn(string modFolder, string revision) =>
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "show", "--name-only", "--format=", revision)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    [Fact]
+    public void CommitPristineToMain_AdvancesEachPluginsParkedRef_ToItsOwnNewBaselineCommit()
     {
         var modFolder = NewModFolder();
         var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
         try
         {
             Track(modFolder, relativePath, "{\"old\":true}");
+            File.WriteAllText(Path.Combine(modFolder, ".gitignore"), "# edited by hand\n");
 
-            var newFiles = new[] { new TreeFile(relativePath, "{\"new\":true}"u8.ToArray()) };
-            var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [Plugin] = "NEWBIN" });
-            SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
+            SourceRepository.CommitPristineToMain(
+                modFolder, [Baseline(relativePath, "{\"new\":true}", new BaselineTrailers(Plugin, null, null, "NEWBIN"))],
+                [new TrackedFileChange(".gitignore", TrackedFileChangeKind.Modified, StagedAlready: false)]);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var mainSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
+            var pluginsBaselineSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/heads/main~1").Trim();
             var parkedSha = GitProbe.Run(gitDir, modFolder, "rev-parse", $"refs/medit/last-compile/{Plugin}").Trim();
-            Assert.Equal(mainSha, parkedSha);
+            Assert.Equal(pluginsBaselineSha, parkedSha);
         }
         finally
         {
@@ -95,9 +136,8 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             Assert.Equal(RebaseOutcome.Refused, dirtBefore.Outcome);
             var fileContentBefore = File.ReadAllText(fullPath);
 
-            var newFiles = new[] { new TreeFile(relativePath, "{\"upstream\":true}"u8.ToArray()) };
-            var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [Plugin] = "NEWBIN" });
-            SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
+            SourceRepository.CommitPristineToMain(
+                modFolder, [Baseline(relativePath, "{\"upstream\":true}", new BaselineTrailers(Plugin, null, null, "NEWBIN"))]);
 
             Assert.Equal(branchBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
             Assert.Equal(headBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim());

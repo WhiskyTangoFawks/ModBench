@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -19,11 +20,10 @@ public sealed class AutostashRebaseTests : IDisposable
     {
         Directory.CreateDirectory(Path.Combine(_modFolder, "Meshes"));
         File.WriteAllBytes(Path.Combine(_modFolder, AssetRelativePath), "original-mesh"u8.ToArray());
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder,
             SourcePreset.Everything,
-            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
     }
 
     public void Dispose()
@@ -41,9 +41,8 @@ public sealed class AutostashRebaseTests : IDisposable
         // Main gains a baseline value for the asset, committed by plumbing — the edit branch's own
         // history and working tree are untouched by this step.
         File.WriteAllBytes(Path.Combine(_modFolder, AssetRelativePath), "main-baseline-mesh"u8.ToArray());
-        var trailers = new TrackProvenance(null, null, new Dictionary<string, string>());
         SourceRepository.CommitPristineToMain(
-            _modFolder, [], trailers,
+            _modFolder, [],
             [new TrackedFileChange(AssetRelativePath, TrackedFileChangeKind.Modified, StagedAlready: false)]);
 
         // The edit branch separately holds staged dirt on that very same asset, with different bytes.

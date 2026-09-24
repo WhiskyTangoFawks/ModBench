@@ -1,5 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -16,10 +18,10 @@ public sealed class SourceRepositoryRefEncodingTests
         try
         {
             const string plugin = "LitR - Settings Holotapes Sorting.esp";
-            var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-            var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "AAAA" });
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+            Assert.Equal("Track " + plugin, GitProbeSubject(modFolder));
         }
         finally
         {
@@ -35,9 +37,8 @@ public sealed class SourceRepositoryRefEncodingTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-            var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "AAAA" });
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
             SourceRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256: "DEADBEEF");
 
@@ -57,13 +58,13 @@ public sealed class SourceRepositoryRefEncodingTests
         var relativePath = $"source/{plugin}/npc_/{plugin}/000001.json";
         try
         {
-            var files = new[] { new TreeFile(relativePath, "{\"old\":true}"u8.ToArray()) };
-            var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "OLDBIN" });
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+            SourceRepository.Track(
+                modFolder, SourcePreset.Edits,
+                [([new TreeFile(relativePath, "{\"old\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "OLDBIN"))]);
 
-            var newFiles = new[] { new TreeFile(relativePath, "{\"new\":true}"u8.ToArray()) };
-            var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "NEWBIN" });
-            SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
+            SourceRepository.CommitPristineToMain(
+                modFolder,
+                [([new TreeFile(relativePath, "{\"new\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "NEWBIN"))]);
 
             Assert.Equal("NEWBIN", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
         }
@@ -72,4 +73,7 @@ public sealed class SourceRepositoryRefEncodingTests
             Directory.Delete(modFolder, recursive: true);
         }
     }
+
+    private static string GitProbeSubject(string modFolder) =>
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "log", "-1", "--format=%s", "main").Trim();
 }

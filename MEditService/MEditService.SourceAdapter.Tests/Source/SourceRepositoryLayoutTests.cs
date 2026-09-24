@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -36,8 +37,8 @@ public sealed class SourceRepositoryLayoutTests
         var modFolder = Directory.CreateTempSubdirectory("medit-layout-roundtrip-").FullName;
         try
         {
-            SourceRepository.Track(
-                modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Edits, []);
             var repository = SourceRepository.Open(modFolder, Release)
                 ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
             var plugin = new PluginCopyKey(pluginFileName, "LayoutMod");

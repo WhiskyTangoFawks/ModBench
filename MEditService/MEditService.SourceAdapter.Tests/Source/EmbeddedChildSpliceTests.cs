@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -51,8 +52,8 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         _quest = new Quest(_mod) { EditorID = "Quest" };
         _quest.DialogTopics.Add(_topic);
 
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, PristineFiles(), new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, PristineFiles());
     }
 
     public void Dispose()

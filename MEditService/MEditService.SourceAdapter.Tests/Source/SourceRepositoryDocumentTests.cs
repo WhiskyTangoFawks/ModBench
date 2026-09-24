@@ -32,8 +32,8 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     // Track rather than a hand-made .git: the repository the tests open is the one the product makes.
     private void Track(params TreeFile[] files) =>
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, files);
 
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
