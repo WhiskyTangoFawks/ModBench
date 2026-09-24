@@ -23,10 +23,67 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
 
         // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
+    }
+
+    // The Creation Kit's own shape: the source's name with "DUPLICATE001" appended, never the
+    // source's own name unchanged.
+    [Fact]
+    public void CopyRecordAsNewRecord_DerivesTheCopysEditorID_InTheCreationKitsShape()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.NotEqual(CopyFixture.SourceNpcEditorId, document.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
+    }
+
+    // Two copies of the same source into the same destination cannot mint the same derived name —
+    // the second draws the next free counter, past the first copy's own minted name.
+    [Fact]
+    public void CopyRecordAsNewRecord_TwoCopiesOfOneRecordIntoOneDestination_GetDistinctEditorIDs()
+    {
+        using var mod = CopyFixture.Create();
+
+        var first = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var second = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(first.Applied, first.Message);
+        Assert.True(second.Applied, second.Message);
+        Assert.NotNull(first.NewFormKey);
+        Assert.NotNull(second.NewFormKey);
+        var firstDocument = mod.Document(mod.DestinationPlugin, first.NewFormKey);
+        var secondDocument = mod.Document(mod.DestinationPlugin, second.NewFormKey);
+        Assert.NotNull(firstDocument);
+        Assert.NotNull(secondDocument);
+        Assert.NotEqual(firstDocument.EditorId, secondDocument.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", firstDocument.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", secondDocument.EditorId);
+    }
+
+    // A source with no EditorID gives a copy with none — derivation never mints a name out of
+    // nothing.
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheSourceHasNoEditorID_TheCopyHasNone()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+            mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Null(document.EditorId);
     }
 
     [Fact]

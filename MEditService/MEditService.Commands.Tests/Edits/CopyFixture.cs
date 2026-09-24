@@ -39,6 +39,10 @@ public sealed class CopyFixture : IDisposable
     public const string SourceNpcEditorId = "SourceNpc";
     public FormKey SourceNpc { get; }
 
+    // No EditorID at all — derivation has nothing to build a name from, so the copy lands with
+    // none either (xedit.md divergence 5).
+    public FormKey SourceNpcWithNoEditorId { get; }
+
     // Related to itself: the self-reference-follows-the-duplicate proof needs a FormLink that can
     // validly target its own record type.
     public const string SelfLinkingFactionEditorId = "SelfLinkingFaction";
@@ -57,12 +61,14 @@ public sealed class CopyFixture : IDisposable
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var npc = sourceMod.Npcs.AddNew(SourceNpcEditorId);
+        var namelessNpc = sourceMod.Npcs.AddNew((string?)null);
         var faction = sourceMod.Factions.AddNew(SelfLinkingFactionEditorId);
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
         sourceMod.WriteToBinary(sourcePath);
         (SourceNpc, SelfLinkingFaction) = (npc.FormKey, faction.FormKey);
+        SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
