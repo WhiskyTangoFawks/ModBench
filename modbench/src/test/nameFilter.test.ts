@@ -83,7 +83,21 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
 
 const open = async () => { await present(h.state.commands.get(OPEN), "the filter's open command")(); };
 const clear = async () => { await present(h.state.commands.get(CLEAR), "the filter's clear command")(); };
+
+// A minimal `vscode.Event<unknown>` double: a view's own row-change signal, fired by the test in
+// place of a real provider's `onDidChangeTreeData`.
+function fakeRowsChangedEvent() {
+  const handlers: ((e: unknown) => void)[] = [];
+  return {
+    event: (cb: (e: unknown) => void) => {
+      handlers.push(cb);
+      return { dispose: () => { const i = handlers.indexOf(cb); if (i >= 0) handlers.splice(i, 1); } };
+    },
+    fire: () => handlers.forEach((cb) => cb(undefined)),
+  };
+}
 const currentBox = () => present(h.state.boxes.at(-1), 'the most recently created input box');
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
   h.state.commands.clear();
@@ -194,8 +208,6 @@ describe('the active term reads out in the view description', () => {
 });
 
 describe('a term that matches nothing says so', () => {
-  const flush = () => new Promise((resolve) => setImmediate(resolve));
-
   it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     await open();
@@ -233,14 +245,16 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // The Plugins view has one message surface and two claimants: the load's own statement and this.
-  // The load wins while running; `refresh` is how the filter gets its statement back.
-  it('restates its message on refresh, after something else has taken the view message surface', async () => {
+  // The Plugins view has one message surface and two claimants: the load's own statement and
+  // this. The load hands the line back blank before `refresh` restates the filter's own.
+  it('restates its message on refresh, once the caller has handed the blanked line back', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
     await open();
     currentBox().type('zzz');
     await flush();
     view.message = 'Loading plugins…';
+    await flush();
+    view.message = undefined;
     filter.refresh();
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -253,6 +267,83 @@ describe('a term that matches nothing says so', () => {
     currentBox().hide();
     await flush();
     expect(view.message).toBe('Loading plugins…');
+  });
+});
+
+describe('the message follows the view\'s own row-change signal', () => {
+  it('recomputes in both directions off onRowsChanged alone, with a keystroke setting the term once beforehand', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBeUndefined();
+
+    matches = false;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('does nothing while no filter is active — a provider free to fire whenever must not conjure a message', async () => {
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(false), onRowsChanged: rows.event });
+    rows.fire();
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  it('stops recomputing once the filter is disposed, alongside its commands', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view, filter } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    filter.dispose();
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('leaves another owner\'s message alone when a row change still matches nothing', async () => {
+    const matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    view.message = 'Starting backend…';
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+  });
+
+  it('leaves another owner\'s message alone when a row change would otherwise have cleared it', async () => {
+    let matches = false;
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+
+    view.message = 'Starting backend…';
+    matches = true;
+    rows.fire();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
   });
 });
 

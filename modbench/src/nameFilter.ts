@@ -21,6 +21,7 @@ export interface NameFilterDeps {
   hasRows: () => Promise<boolean>;
   /** The Mods tree's group-by-separator option, or absent on views with no option to carry. */
   toggle?: { icon: string; label: string };
+  onRowsChanged?: vscode.Event<unknown>;
 }
 
 export interface NameFilter extends vscode.Disposable {
@@ -43,20 +44,23 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
   };
 
-  // Only ever clears a message it put there itself: the reconcile writes the same property.
-  // `generation` drops a `hasRows` answer a later keystroke has already overtaken.
-  let generation = 0;
-  let messageShown = false;
+  // `lastWritten` is what this filter itself last put on the line — every recompute leaves the
+  // line alone once something else holds it.
+  let generation = 0; // drops a `hasRows` answer a later call has already overtaken
+  let lastWritten: string | undefined;
+  const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
   const renderMessage = async (): Promise<void> => {
     const mine = ++generation;
     const empty = term !== '' && !(await deps.hasRows());
     if (mine !== generation) return;
+    if (!ownsMessage()) return;
     if (empty) {
-      deps.view.message = `No matches for "${term}".`;
-      messageShown = true;
-    } else if (messageShown) {
+      const text = `No matches for "${term}".`;
+      deps.view.message = text;
+      lastWritten = text;
+    } else if (lastWritten !== undefined) {
       deps.view.message = undefined;
-      messageShown = false;
+      lastWritten = undefined;
     }
   };
 
@@ -93,6 +97,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
     // Clearing resets the separator toggle too: the option belongs to the filter that is going away.
     vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
+    ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
   ];
 
   return {
