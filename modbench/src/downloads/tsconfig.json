@@ -8,6 +8,7 @@
     "types": ["node", "vscode"]
   },
   "references": [
+    { "path": "../downloadsCommands" },
     { "path": "../install" },
     { "path": "../instanceLoader" },
     { "path": "../ports" }
