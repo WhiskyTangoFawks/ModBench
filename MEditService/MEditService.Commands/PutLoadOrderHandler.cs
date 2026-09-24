@@ -7,7 +7,8 @@ namespace MEditService.Commands;
 
 /// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2) and
 /// applies the result to Load order state. Reconciling into the Index and re-arming the watcher
-/// are subscriptions wired at composition.</summary>
+/// are subscriptions wired at composition, so a snapshot identical to the one held, while the Index
+/// holds that one, is a no-op here (ADR-0013 invariant 1).</summary>
 public sealed class PutLoadOrderHandler
 {
     private readonly LoadOrderHolder _holder;
@@ -18,8 +19,12 @@ public sealed class PutLoadOrderHandler
     internal PutLoadOrderHandler(LoadOrderHolder holder, SchemaReflector schemaReflector, IPluginAdapter adapter) =>
         (_holder, _schemaReflector, _adapter) = (holder, schemaReflector, adapter);
 
+    /// <summary><paramref name="indexHoldsCurrent"/>: whether the Index holds the load order held
+    /// now, or is reconciling it. False after a rebuild, a refusal or a failure, when the same
+    /// snapshot is the retry.</summary>
     public PutLoadOrderResult Put(
-        string dataFolder, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
+        string dataFolder, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries,
+        bool indexHoldsCurrent)
     {
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
         // schema this warms is what the reconcile that follows Apply needs anyway.
@@ -33,8 +38,8 @@ public sealed class PutLoadOrderHandler
         }
 
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, WithForcedFirst(dataFolder, gameRelease, entries));
-        var version = _holder.Apply(snapshot);
-        return PutLoadOrderResult.Success(version);
+        if (indexHoldsCurrent && snapshot.Equals(_holder.Current)) return PutLoadOrderResult.Success(_holder.Version);
+        return PutLoadOrderResult.Success(_holder.Apply(snapshot));
     }
 
     // A sent entry naming a forced plugin is dropped, so one file never registers twice; what a

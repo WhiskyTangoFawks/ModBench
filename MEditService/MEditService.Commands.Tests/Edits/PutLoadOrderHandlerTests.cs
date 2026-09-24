@@ -21,7 +21,7 @@ public sealed class PutLoadOrderHandlerTests
         new(name, $"C:\\Instance\\mods\\ModA\\{name}", "ModA", slot, Enabled: true, Winning: true);
 
     private PutLoadOrderResult Put(GameRelease release = GameRelease.Fallout4, params LoadOrderEntry[] entries) =>
-        Handler.Put(DataFolder, InstanceRoot, release, entries);
+        Handler.Put(DataFolder, InstanceRoot, release, entries, indexHoldsCurrent: true);
 
     [Fact]
     public void Put_WithASupportedRelease_AppliesTheSnapshotToLoadOrderState()
@@ -102,6 +102,52 @@ public sealed class PutLoadOrderHandlerTests
         Put(entries: new LoadOrderEntry("Loose.esp", "C:\\Instance\\mods\\ModA\\Loose.esp", "ModA", null, false, false));
 
         Assert.Null(_holder.Current.Copies[1].Slot);
+    }
+
+    // ADR-0013 invariant 1: a snapshot identical to the current state is a no-op, at the door — the
+    // watcher re-arms and the Index reconciles only on Changed.
+    [Fact]
+    public void Put_TheSnapshotHeldNow_WhileTheIndexHoldsIt_RaisesNoChanged_AndAnswersTheHeldVersion()
+    {
+        _adapter.Forced = ["Fallout4.esm"];
+        var held = Put(entries: [Entry("A.esp", 0), Entry("B.esp", 1)]);
+        var changes = 0;
+        _holder.Changed += (_, _) => changes++;
+
+        var again = Handler.Put(DataFolder, InstanceRoot, GameRelease.Fallout4, [Entry("A.esp", 0), Entry("B.esp", 1)], indexHoldsCurrent: true);
+
+        Assert.True(again.Applied);
+        Assert.Equal(0, changes);
+        Assert.Equal(held.Version, again.Version);
+        Assert.Equal(held.Version, _holder.Version);
+    }
+
+    // The rebuilt index is empty, and a refused or failed reconcile holds nothing current: the same
+    // snapshot is then the retry, not a no-op.
+    [Fact]
+    public void Put_TheSnapshotHeldNow_WhenTheIndexHoldsItNot_AppliesItAgain()
+    {
+        var held = Put(entries: Entry("A.esp", 0));
+        var changes = 0;
+        _holder.Changed += (_, _) => changes++;
+
+        var again = Handler.Put(DataFolder, InstanceRoot, GameRelease.Fallout4, [Entry("A.esp", 0)], indexHoldsCurrent: false);
+
+        Assert.Equal(1, changes);
+        Assert.True(again.Version > held.Version);
+    }
+
+    [Fact]
+    public void Put_ASnapshotThatMovedACopy_Applies_WhileTheIndexHoldsTheOneBefore()
+    {
+        var held = Put(entries: [Entry("A.esp", 0), Entry("B.esp", 1)]);
+        var changes = 0;
+        _holder.Changed += (_, _) => changes++;
+
+        var moved = Put(entries: [Entry("B.esp", 0), Entry("A.esp", 1)]);
+
+        Assert.Equal(1, changes);
+        Assert.True(moved.Version > held.Version);
     }
 
     private sealed class ForcingAdapter : ReadOnlyPluginAdapter

@@ -1,6 +1,8 @@
 using MEditService.Commands;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Ports;
 
 namespace MEditService.Http.Endpoints;
 
@@ -44,7 +46,8 @@ public static class LoadOrderEndpoints
         return app;
     }
 
-    internal static IResult PutLoadOrder(LoadOrderRequest req, PutLoadOrderHandler handler, ILoggerFactory loggerFactory)
+    internal static IResult PutLoadOrder(
+        LoadOrderRequest req, PutLoadOrderHandler handler, Indexer index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -76,7 +79,8 @@ public static class LoadOrderEndpoints
                     p.Enabled ?? throw new InvalidOperationException("Expected a validated plugin to state Enabled."),
                     p.Winning ?? throw new InvalidOperationException("Expected a validated plugin to state Winning.")))
                 .ToList();
-            var result = handler.Put(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
+            var result = handler.Put(req.GameDirectory, req.InstanceRoot, gameRelease, entries,
+                indexHoldsCurrent: index.Status.State is LoadOrderState.Ready or LoadOrderState.Reconciling);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
