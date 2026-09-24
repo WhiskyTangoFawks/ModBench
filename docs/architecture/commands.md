@@ -5,7 +5,7 @@ vocabulary. A gesture or command the code has and this file lacks is a defect in
 A gesture this file has and the model cannot hold is a ticket.
 
 - **Object**: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record,
-  Downloaded file. `CONTEXT.md` defines each one.
+  Referrer, Downloaded file. `CONTEXT.md` defines each one.
 - **Surface**: what a driving box presents to the user. One surface per driving box on the
   Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor
   realizes it.
@@ -290,7 +290,7 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
 | edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. | ? | edit-record |
-| add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | - | xEdit View grid | Add an element to an array field. Sorted arrays add too (planned). | debt #967 | edit-record |
+| add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. Sorted arrays add too (planned). | debt #967 | edit-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | elements | - | xEdit View grid | Remove an element from an array field. Sorted arrays remove too (planned). | debt #967 | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an unsorted array. Sorted arrays have no move. | debt #967 | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | built | edit-record |
@@ -303,6 +303,15 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | show referenced by | reads | Editor: automatic | `modbench.record.showReferencedBy` | active record | - | xEdit Referenced By tab | The Referenced By list follows the active record and shows the records that reference it. It has no menu entry; the command only focuses the view. | debt #967 | query-index |
 | hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | planned | - |
 | copy value | reads | Mods: context menu, key; Plugins: context menu, key; Editor: context menu, key | `modbench.record.copyValue` | selection | - | xEdit navigator, Referenced By, View grid; MO2 mod list | Copy the selected rows, or a focused cell value, to the clipboard. Each surface says what a row copies. | debt #967 | none |
+
+## Referrer
+
+Offered on Editor, in Referenced By. A referrer is a record, listed because it references the active record.
+
+| Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
+|---|---|---|---|---|---|---|---|---|---|
+| filter | reads | Editor: title icon (on Referenced By), key (Ctrl+F, on Referenced By) | `modbench.referrer.filter`, `modbench.referrer.clearFilter` | - | - | xEdit Referenced By | Narrow the Referenced By list by name. | planned | none |
+| sort direction | reads | Editor: title icon (on Referenced By) | `modbench.referrer.sortAscending`, `modbench.referrer.sortDescending` | - | - | xEdit Referenced By | List referrers by record type, then label, or in reverse. | planned | none |
 
 ## Downloaded file
 

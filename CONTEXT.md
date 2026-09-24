@@ -129,6 +129,11 @@ array field lists that carries its own FormKey. A struct element has no FormKey 
 record. An override is never a child of the record it overrides.
 Avoid: sub-record, nested record
 
+## Referrer
+A record that holds a reference to the record the Referenced By list is about. It is one row in
+that list, whichever plugins hold the reference.
+Avoid: referencing record, back-reference
+
 # FormKey
 A record's identity: its origin plugin and its ID inside that plugin. It is not a FormID, which also
 depends on load position.

@@ -163,9 +163,11 @@ As a user, I want:
 
 1. A prompt for the name. Esc or an empty name adds nothing. A name another separator has is refused
    in the prompt: "A separator with this name already exists". *MO2*
-2. On a mod, the separator directly above that mod, as shown, so the mod and the mods below it in its
-   separator join the new one. On a separator, directly below that separator's last mod, taking
-   none. *ruling; catalog `add`, position*
+2. On a mod, the separator on the mod's losing side in mod order, so the mod and the mods on its
+   winning side in its separator join the new one. On a separator, on the winning side of that
+   separator's last mod, taking none. With losing at the top, that is directly above the mod, and
+   directly below the separator's last mod, as shown. *ruling; catalog `add`, position; A gesture
+   is atomic*
 
 ### Rename separator
 
