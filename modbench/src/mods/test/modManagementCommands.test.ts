@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, fakeUri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
 const { registerCommand, executeCommand, showOpenDialog, showInputBox, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -37,8 +37,8 @@ vi.mock('../../modlist/modlist', () => ({
 }));
 
 import {
-  registerModContextCommands, registerModInstallCommands, registerOpenFolderCommand, registerSeparatorCommands,
-  registerViewOnNexusCommand, type ModInstallDeps,
+  registerModContextCommands, registerModInstallCommands, registerModListCoreCommands, registerOpenFolderCommand,
+  registerSeparatorCommands, registerViewOnNexusCommand, type ModInstallDeps,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
@@ -67,6 +67,35 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     ...over,
   };
 }
+
+describe('the sort direction', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const directionKeys = () => executeCommand.mock.calls
+    .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.mod.winningAtTop')
+    .map((c) => (c as unknown[])[2]);
+
+  // A context key outlives an extension host restart; the provider's direction does not.
+  it('starts losing at the top, and the title-bar icon agrees', () => {
+    const setViewDirection = vi.fn();
+    registerModListCoreCommands({ setViewDirection });
+
+    expect(setViewDirection).not.toHaveBeenCalled();
+    expect(directionKeys()).toEqual([false]);
+  });
+
+  it('each title-bar icon sets its own direction, whatever the view last showed', async () => {
+    const setViewDirection = vi.fn();
+    registerModListCoreCommands({ setViewDirection });
+
+    await invoke('modbench.mod.sortLosingAtTop');
+    await invoke('modbench.mod.sortWinningAtTop');
+    await invoke('modbench.mod.sortWinningAtTop');
+
+    expect(setViewDirection.mock.calls).toEqual([['losingAtTop'], ['winningAtTop'], ['winningAtTop']]);
+    expect(directionKeys()).toEqual([false, false, true, true]);
+  });
+});
 
 describe('registerModInstallCommands: the install target', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -288,7 +317,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
 
   it('reveals the overwrite folder from the Overwrite row', async () => {
     registerOpenFolderCommand(instance, recordingReporter());
-    await invoke('modbench.mod.openFolder', new OverwriteNode(fakeUri('/instance/overwrite'), 3));
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
   });

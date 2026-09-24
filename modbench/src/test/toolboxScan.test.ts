@@ -70,7 +70,6 @@ const DISPOSABLE_PRODUCERS = [
   'registerModSync',
   'registerNameFilter',
   'registerOpenFolderCommand',
-  'registerOverwriteView',
   'registerPluginSync',
   'registerRefreshCommand',
   'registerSeparatorCommands',
