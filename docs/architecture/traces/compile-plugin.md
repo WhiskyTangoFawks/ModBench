@@ -1,4 +1,4 @@
-# compile-plugin: contract (draft)
+# compile-plugin: contract
 
 Diagram: [compile-plugin.d2](compile-plugin.d2). Catalog row: `compile` under Plugin in
 [commands.md](../commands.md). What the user picks and confirms is in
