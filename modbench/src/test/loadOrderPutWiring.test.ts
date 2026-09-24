@@ -51,11 +51,13 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     },
   };
   const channel = { error: vi.fn() };
+  const connected = vi.fn();
   const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
     (d) => { owned.push(d); return d; }, instance, client,
     (value) => loadOrderChanged(sender, ROOT, sourceOf(value)),
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
+    connected,
     channel,
   );
   // After the trigger, so the trigger hears a reopen before the sender does.
@@ -75,7 +77,7 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
       return plugins.map((p) => p.name).join(',');
     });
   const dispose = (): void => { for (const d of owned) d.dispose(); };
-  return { client, puts, land, sent, channel, dispose };
+  return { client, puts, land, sent, channel, connected, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -117,7 +119,8 @@ describe('the load order is put on change', () => {
     const instance = { subscribe: (s: InstanceSubscriber) => { land = s; return { dispose: () => {} }; } };
     const channel = { error: vi.fn() };
     const puts = registerLoadOrderPut(
-      (d) => d, instance, new InMemoryMEditClient(), () => true, () => Promise.reject(new Error('boom')), channel);
+      (d) => d, instance, new InMemoryMEditClient(), () => true, () => Promise.reject(new Error('boom')), () => {},
+      channel);
     await puts.putOnConnect().catch(() => {});
 
     land(valueWith('B.esp'), 1);
@@ -206,5 +209,34 @@ describe('the load order is put on connect', () => {
     await settled();
 
     expect(sent()).toEqual(['A.esp']);
+  });
+});
+
+// Plugin sync asks mEdit which plugins load with no line, so it runs again at the same moment.
+describe('a connect runs what waits on mEdit', () => {
+  // Rival: a second attach detector of its own, which runs on an `attached` status alone.
+  it('on the connect and on a stream reopen after it, never on a reopen before it', async () => {
+    const { client, puts, connected } = wired('attached', valueWith('A.esp'));
+    client.reconnected();
+    await settled();
+    expect(connected).not.toHaveBeenCalled();
+
+    await puts.putOnConnect();
+    expect(connected).toHaveBeenCalledTimes(1);
+
+    client.reconnected();
+    await settled();
+    expect(connected).toHaveBeenCalledTimes(2);
+  });
+
+  it('not on a status change alone', async () => {
+    const { client, puts, connected } = wired('attached', valueWith('A.esp'));
+    await puts.putOnConnect();
+
+    client.setStatus('disconnected');
+    client.setStatus('attached');
+    await settled();
+
+    expect(connected).toHaveBeenCalledTimes(1);
   });
 });

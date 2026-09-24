@@ -15,7 +15,7 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { registerNameFilter } from './nameFilter';
+import { messageLine, registerNameFilter } from './nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -25,7 +25,8 @@ export function createModListView(
   own: Own,
   modListProvider: ModListProvider,
   log: (line: string) => void,
-): { modListView: vscode.TreeView<ModlistNode> } {
+  syncMessage: () => string | undefined,
+): { modListView: vscode.TreeView<ModlistNode>; refreshMessage: () => void } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     canSelectMany: true,
@@ -41,7 +42,7 @@ export function createModListView(
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    viewMessage: () => modListProvider.emptyListMessage(),
+    viewMessage: () => messageLine(modListProvider.emptyListMessage(), syncMessage()),
     onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
   const showCount = () => modListFilter.setBaseDescription(modListProvider.description());
@@ -60,7 +61,7 @@ export function createModListView(
   const expand = () => void expandFilteredSeparators(modListView, modListProvider, log);
   own(modListProvider.onDidChangeTreeData(expand));
   own(modListView.onDidChangeVisibility(expand));
-  return { modListView };
+  return { modListView, refreshMessage: () => modListFilter.refresh() };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's

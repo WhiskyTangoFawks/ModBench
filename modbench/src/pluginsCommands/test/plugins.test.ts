@@ -100,7 +100,6 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   const pluginsPath = () => join(dir, 'profiles', PROFILE, 'plugins.txt');
   const plugins = () => readFile(pluginsPath(), 'utf8');
   const mtime = async () => (await stat(pluginsPath())).mtime;
-  const logs: string[] = [];
   const dataFolder = () => join(dir, 'Game', 'Data');
 
   // What the value carries when the folder resolved and the listing threw: the read's own reason,
@@ -118,18 +117,17 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     return { kind: 'listed', names: new Set(names) };
   };
 
-  // `null` is the game directory that never resolved; `undefined` selects the default, which is
-  // what the folder on disk holds. A backend that could not answer is `implicit` null.
+  // `undefined` selects what the folder on disk holds. A backend that could not answer is
+  // `implicit` null.
   const run = async (
-    inData?: DataFolderPlugins | null,
+    inData?: DataFolderPlugins,
     implicit: readonly string[] | null = [],
   ) => syncPlugins(
     dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()),
-    inData === null ? { kind: 'unresolved' } : (inData ?? await inDataOnDisk()),
-    () => Promise.resolve(implicit ?? undefined), (m) => logs.push(m));
+    inData ?? await inDataOnDisk(),
+    () => Promise.resolve(implicit ?? undefined));
 
   beforeEach(async () => {
-    logs.length = 0;
     dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
     await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
     await mkdir(join(dir, 'mods', 'Dormant'), { recursive: true });
@@ -225,34 +223,39 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
   });
 
-  // Rival: refuse on unknown implicit masters too. That run wrote nothing either way, so the
-  // earlier answer stands and the refusal never reaches the log.
-  it('answers the unknown implicit masters first, even when the Data folder could not be read', async () => {
-    expect(await run(UNREADABLE, null)).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
-  });
-
-  // A game directory that never resolved is the other unknowable, and a milder one: pruning
-  // against it would delete every line, so nothing is pruned and appending goes on.
-  it('with the game directory unresolved, still appends but prunes nothing', async () => {
+  // Rival: the old answer to an unknown game folder, appending and pruning nothing. A run that
+  // appended against it would list a plugin the game already loads from Data.
+  it('refuses when the game folder is not found, writing nothing, and never asks mEdit', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
+    const old = new Date('2020-01-01T00:00:00Z');
+    await utimes(pluginsPath(), old, old);
+    let asked = false;
 
-    expect(await run(null)).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
-    expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\nNew.esp\r\n');
+    const result = await syncPlugins(
+      dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()), { kind: 'unresolved' },
+      () => { asked = true; return Promise.resolve([]); });
+
+    assertRefusal(result, 'game folder is not found');
+    expect(await mtime()).toEqual(old);
+    expect(asked).toBe(false);
   });
 
-  // Unknowable, not empty: treating an unreachable backend as "no implicit masters" would append
-  // a line for every mod-shipped vanilla master and prune every line naming one.
-  it('with the implicit masters unknown, appends and prunes nothing, and says so in the log', async () => {
+  // Rival: count an unknown answer as an applied run that adds and drops nothing, which says
+  // nothing to the user.
+  it('refuses when mEdit cannot say which plugins load with no line, writing nothing', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
     const old = new Date('2020-01-01T00:00:00Z');
     await utimes(pluginsPath(), old, old);
 
-    expect(await run(undefined, null)).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
-    expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
+    assertRefusal(await run(undefined, null), 'mEdit cannot say');
     expect(await mtime()).toEqual(old);
-    expect(logs.join('\n')).toContain('implicit masters are unknown');
+  });
+
+  // The folder is read before mEdit is asked, so the refusal names the listing that failed.
+  it('names the unreadable Data folder even when mEdit cannot answer either', async () => {
+    assertRefusal(await run(UNREADABLE, null), 'ENOENT');
   });
 
   it('an empty delta writes nothing at all: the file on disk is not touched', async () => {

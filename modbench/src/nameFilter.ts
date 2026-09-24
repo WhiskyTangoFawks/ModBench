@@ -29,6 +29,12 @@ export interface NameFilterDeps {
   onRowsChanged?: vscode.Event<unknown>;
 }
 
+/** One view's message line, said by several writers: each part present, in order. */
+export function messageLine(...parts: (string | undefined)[]): string | undefined {
+  const said = parts.filter((part) => part !== undefined);
+  return said.length > 0 ? said.join(' ') : undefined;
+}
+
 export interface NameFilter extends vscode.Disposable {
   /** Whatever else this view says about itself. The filter owns `view.description` outright —
    *  two writers would race — and the term appears beside the base rather than replacing it. */

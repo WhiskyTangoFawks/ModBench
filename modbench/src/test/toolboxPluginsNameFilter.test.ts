@@ -70,7 +70,7 @@ describe('the Plugins filter follows a row change with no keystroke', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    registerPluginsNameFilter(view, provider);
+    registerPluginsNameFilter(view, provider, () => undefined);
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -94,7 +94,7 @@ describe('a running say() statement survives a background row change', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, () => undefined);
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -112,7 +112,7 @@ describe('a running say() statement survives a background row change', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, () => undefined);
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -130,7 +130,7 @@ describe('the Plugins view, given the game folder not found', () => {
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, () => undefined);
     return { provider, view, filter };
   }
 
@@ -162,7 +162,7 @@ describe('the Plugins view, given the game folder not found', () => {
     const instance = new FakeInstance(notFoundValueOf([]), 0);
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, () => undefined);
 
     filter.refresh();
     await flush();
@@ -195,6 +195,29 @@ describe('the Plugins view, given the game folder not found', () => {
 
     say(session, undefined);
     await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
+    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+  });
+});
+
+describe('the Plugins view, given a plugin sync that refused', () => {
+  const SYNC_MESSAGE = 'plugins.txt is not synced: the game folder is not found.';
+
+  // Rival: the sync's line replacing the view's own, or never reaching the line at all.
+  it('says it beside the game folder message, and drops only its own once the sync lands', async () => {
+    const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    await provider.getChildren();
+    const view: { description?: string; message?: string } = {};
+    let syncMessage: string | undefined = SYNC_MESSAGE;
+    const filter = registerPluginsNameFilter(view, provider, () => syncMessage);
+    filter.refresh();
+
+    await waitForMessage(view, (m) => m === `${GAME_FOLDER_MESSAGE} ${SYNC_MESSAGE}`, 'both messages');
+    expect(view.message).toBe(`${GAME_FOLDER_MESSAGE} ${SYNC_MESSAGE}`);
+
+    syncMessage = undefined;
+    filter.refresh();
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message alone');
     expect(view.message).toBe(GAME_FOLDER_MESSAGE);
   });
 });
