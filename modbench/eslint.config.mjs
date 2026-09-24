@@ -2,6 +2,7 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
+import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 
 // ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
@@ -109,6 +110,16 @@ export default tseslint.config(
             'no-restricted-syntax': ['error',
                 ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
             ],
+        },
+    },
+
+    // commands.md, "An entry point fires a gesture. A gesture does not fire another.": the only
+    // place `vscode.commands.executeCommand('modbench.…')` appears is `src/`, entry-point wiring.
+    {
+        files: ['src/**/*.ts'],
+        plugins: { local: { rules: { 'no-gesture-result-use': noGestureResultUse } } },
+        rules: {
+            'local/no-gesture-result-use': 'error',
         },
     },
 
