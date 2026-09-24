@@ -10,7 +10,7 @@ export interface LoadOrderSnapshot {
 }
 
 /** The port members the sender itself calls — narrowed off `MEditClient` (ADR-0014 invariant 2). */
-export type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged'>;
+export type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged' | 'onReconnected'>;
 
 export interface LoadOrderSendOptions {
   /** Rides this snapshot's own PUT; a snapshot superseded before it is sent never ticks. */
@@ -24,7 +24,8 @@ export interface LoadOrderSender {
    *  newer snapshot superseded it before it was sent, or when it was abandoned outright. */
   send(snapshot: LoadOrderSnapshot, options?: LoadOrderSendOptions): Promise<LoadOrderOutcome>;
   /** Whether this snapshot equals the last one sent to the backend attached now. Forgotten when
-   *  that send fails, on abandon, and when the backend leaves `attached`: the next one holds none. */
+   *  that send fails, on abandon, when the backend leaves `attached` and when the notification
+   *  stream reopens: the backend then may hold none. */
   alreadySent(snapshot: LoadOrderSnapshot): boolean;
   /** The abort scope the send in flight runs under. A launch arms it before its own earlier
    *  phase; re-arming never aborts the scope it replaces, which the backend answers 409. */
@@ -45,7 +46,7 @@ interface Waiting {
 
 // Swallowing the throw here is what keeps one bad send from wedging every send after it; the
 // caller still hears the failure as this snapshot's own outcome (ADR-0019).
-function putWhole(
+function putSnapshot(
   client: LoadOrderSendClient, { snapshot, options }: Waiting, signal: AbortSignal,
 ): Promise<LoadOrderOutcome> {
   const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot;
@@ -89,7 +90,7 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     const next = waiting;
     waiting = undefined;
     sending = true;
-    void putWhole(client, next, arm().signal).then((outcome) => {
+    void putSnapshot(client, next, arm().signal).then((outcome) => {
       if (outcome.outcome === 'failed') forget(next.snapshot);
       next.settle(outcome);
     }).finally(() => {
@@ -98,10 +99,11 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     });
   };
 
-  const unsubscribe = client.onStatusChanged((status) => {
+  const unsubscribeStatus = client.onStatusChanged((status) => {
     if (status !== 'attached') lastSent = undefined;
     pump();
   });
+  const unsubscribeReopen = client.onReconnected(() => { lastSent = undefined; });
 
   return {
     send(snapshot, options = {}) {
@@ -124,7 +126,8 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     },
     dispose() {
       disposed = true;
-      unsubscribe();
+      unsubscribeStatus();
+      unsubscribeReopen();
       dropWaiting();
     },
   };

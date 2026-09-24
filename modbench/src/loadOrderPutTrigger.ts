@@ -2,9 +2,11 @@ import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { errorMessage } from './ports/errorMessage';
 
-// Stated structurally, since the MO2 side never imports the mEdit client: only its status is heard.
-interface StatusSource {
-  onStatusChanged(listener: (status: string) => void): () => void;
+// Stated structurally: contextBoundary.test.ts refuses an import of the mEdit client from any file
+// outside its COMPOSITION_ROOT list, and this trigger only hears the client, never calls it.
+interface ClientConnection {
+  onStatusChanged(listener: (status: 'starting' | 'attached' | 'disconnected' | 'stopped') => void): () => void;
+  onReconnected(listener: () => void): () => void;
 }
 
 export interface LoadOrderPuts extends vscode.Disposable {
@@ -15,28 +17,36 @@ export interface LoadOrderPuts extends vscode.Disposable {
 
 // update-load-order-file: the load order is put on change and on connect. A value that lands
 // while mEdit is detached is not put, because the connect's own put reads the value current then.
+// A stream reopen is a connect too: the process behind it may be another.
 export function registerLoadOrderPut(
   instance: Pick<Instance, 'subscribe'>,
-  client: StatusSource,
+  client: ClientConnection,
   changed: (value: InstanceValue) => boolean,
   put: () => Promise<void>,
   channel: { error(msg: string): void },
 ): LoadOrderPuts {
-  let connected = false;
+  let connectPutRan = false;
+  const putLogged = (): void => {
+    void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
+  };
   const unsubscribeStatus = client.onStatusChanged((status) => {
-    if (status !== 'attached') connected = false;
+    if (status !== 'attached') connectPutRan = false;
+  });
+  // Deferred past the other reopen listeners, the sender's forgetting what it sent among them.
+  const unsubscribeReopen = client.onReconnected(() => {
+    void Promise.resolve().then(() => { if (connectPutRan) putLogged(); });
   });
   const subscription = instance.subscribe((value) => {
-    if (!connected || !changed(value)) return;
-    void put().catch((e: unknown) => channel.error(`[toolbox] handing mEdit the load order threw: ${errorMessage(e)}`));
+    if (connectPutRan && changed(value)) putLogged();
   });
   return {
     putOnConnect: () => {
-      connected = true;
+      connectPutRan = true;
       return put();
     },
     dispose: () => {
       unsubscribeStatus();
+      unsubscribeReopen();
       subscription.dispose();
     },
   };

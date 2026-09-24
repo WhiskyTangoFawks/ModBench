@@ -321,6 +321,16 @@ describe('createLoadOrderSender — what mEdit already has', () => {
       expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
     });
 
+  it('forgets it when the notification stream reopens: the backend behind it may be another process', async () => {
+    const client = attached();
+    const sender = createLoadOrderSender(client);
+    await sender.send(snapshot('A.esp'));
+
+    client.reconnected();
+
+    expect(sender.alreadySent(snapshot('A.esp'))).toBe(false);
+  });
+
   it('forgets it on abandon', async () => {
     const sender = createLoadOrderSender(attached());
     await sender.send(snapshot('A.esp'));

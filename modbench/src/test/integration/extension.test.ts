@@ -109,8 +109,6 @@ const MOCK_PLUGINS: MockPlugin[] = [
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
-// Each PUT /load-order's plugin names in the order the body lists them, so a test can tell which
-// load order a PUT carried.
 const putLoadOrders: string[][] = [];
 
 function pluginNamesOf(body: string): string[] {

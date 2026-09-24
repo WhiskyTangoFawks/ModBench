@@ -51,7 +51,7 @@ import { applyOrThrow } from './ports/applyOrThrow';
 // `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
   'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
-  | 'status' | 'start' | 'stop' | 'onStatusChanged'>;
+  | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected'>;
 
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;

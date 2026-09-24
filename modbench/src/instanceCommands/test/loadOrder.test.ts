@@ -85,7 +85,6 @@ describe('load order changed', () => {
 });
 
 describe('refresh', () => {
-  // The rebuilt index is empty, so what mEdit had before the rebuild is no reason to skip the put.
   it('puts the load order after a rebuild even when it is the one already put', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });

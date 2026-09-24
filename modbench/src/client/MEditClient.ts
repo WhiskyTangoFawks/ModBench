@@ -194,6 +194,10 @@ export interface MEditClient {
   // status-changed event.
   readonly status: BackendStatus;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
+  /** The notification stream opened again while `attached`. The client attaches to any healthy
+   *  backend on its port, so the process behind the stream may be another, holding nothing sent
+   *  before. */
+  onReconnected(listener: () => void): () => void;
   start(): Promise<void>;
   stop(): Promise<void>;
 }

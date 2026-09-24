@@ -80,6 +80,9 @@ export class HttpMEditClient implements MEditClient {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);
   }
+  onReconnected(listener: () => void): () => void {
+    return this.notifications.onReconnected(listener);
+  }
   start(): Promise<void> { return this.lifecycle.start(); }
   stop(): Promise<void> { return this.lifecycle.stop(); }
 

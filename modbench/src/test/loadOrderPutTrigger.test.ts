@@ -36,7 +36,6 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
   const client = new InMemoryMEditClient();
   client.setCommandResult('putLoadOrder', APPLIED);
   client.setStatus(status);
-  const sender = createLoadOrderSender(client);
   let current = first;
   const subscribers: InstanceSubscriber[] = [];
   const instance = {
@@ -52,6 +51,8 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
     channel,
   );
+  // After the trigger, so the trigger hears a reopen before the sender does.
+  const sender = createLoadOrderSender(client);
   let sequence = 0;
   const land = (value: InstanceValue): void => {
     current = value;
@@ -155,12 +156,45 @@ describe('the load order is put on connect', () => {
     expect(sent()).toEqual(['A.esp']);
   });
 
+  // A backend the client attached to without owning it can restart under a live status.
+  it('puts once on a stream reopen, and not again for a value with the same load order', async () => {
+    const { client, puts, land, sent } = wired('attached', valueWith('A.esp'));
+    await puts.putOnConnect();
+
+    client.reconnected();
+    await settled();
+    land(valueWith('A.esp', { overwriteFileCount: 3 }));
+    await settled();
+
+    expect(sent()).toEqual(['A.esp', 'A.esp']);
+  });
+
+  it('puts on a stream reopen, with no value landing after it', async () => {
+    const { client, puts, sent } = wired('attached', valueWith('A.esp'));
+    await puts.putOnConnect();
+
+    client.reconnected();
+    await settled();
+
+    expect(sent()).toEqual(['A.esp', 'A.esp']);
+  });
+
+  it('puts nothing on a stream reopen before the connect has put', async () => {
+    const { client, sent } = wired('attached', valueWith('A.esp'));
+
+    client.reconnected();
+    await settled();
+
+    expect(sent()).toEqual([]);
+  });
+
   it('puts nothing once disposed', async () => {
-    const { puts, land, sent } = wired('attached', valueWith('A.esp'));
+    const { client, puts, land, sent } = wired('attached', valueWith('A.esp'));
     await puts.putOnConnect();
 
     puts.dispose();
     land(valueWith('B.esp'));
+    client.reconnected();
     await settled();
 
     expect(sent()).toEqual(['A.esp']);
