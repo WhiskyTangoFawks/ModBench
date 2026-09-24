@@ -22,7 +22,7 @@ import { setUninstalledInText } from '../mo2Codecs/downloads';
 import {
   downloadFile, downloadSidecarFile, mo2FolderName, modDir, modlistFile, modsDir, separatorDir,
 } from '../instanceAdapter/layout';
-import { ensureDir, exists, get, put, putIfChanged, remove, rename } from '../instanceAdapter/files';
+import { ensureDir, exists, get, put, putIfChanged, rename } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
@@ -241,19 +241,84 @@ async function unmarkDownload(instanceRoot: string, name: string): Promise<void>
   await put(downloadSidecarFile(instanceRoot, name), setUninstalledInText, { ifMissing: '' });
 }
 
-/** Removes the modlist.txt entry and the `mods/<name>/` folder. Refuses only when the modlist
- *  has no entry for `modName`. `archiveFilename` is the mod row's own `installationFile`, handed
- *  in from the value; with none, no download is unmarked. */
-export async function uninstallMod(
-  instanceRoot: string, profile: string, modName: string, archiveFilename?: string,
-): Promise<ModlistCommandResult> {
-  // Bookkeeping over a download that may be long gone — never blocks the uninstall.
-  if (archiveFilename) await unmarkDownload(instanceRoot, archiveFilename).catch(() => undefined);
-  // De-list before deleting: a failed delete leaves a recoverable orphan, not a dangling entry.
-  const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, modName));
-  if (!outcome.applied) return outcome;
-  await remove(modDir(instanceRoot, modName)).catch(() => undefined);
-  return outcome;
+const modNamesIn = (text: string): ReadonlySet<string> =>
+  new Set(parseModlist(text).filter((e) => e.kind === 'mod').map((e) => e.name));
+
+/** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
+ *  when known. With none, no download is marked. */
+export interface ModToUninstall {
+  name: string;
+  archiveFilename?: string;
+}
+
+/** A landed mod. `markRefusal` is set when its `.meta` could not be marked uninstalled — the
+ *  uninstall still stands. */
+export interface UninstalledMod {
+  name: string;
+  markRefusal?: string;
+}
+
+export type UninstallModsResult =
+  | { applied: true; outcome: SelectionOutcome<UninstalledMod> }
+  | { applied: false; refusal: string };
+
+/** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
+ *  then its downloaded file marked (update-load-order-file, mod `uninstall`). */
+export async function uninstallMods(
+  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
+): Promise<UninstallModsResult> {
+  let listed: ReadonlySet<string>;
+  try {
+    listed = modNamesIn(await get(modlistFile(instanceRoot, profile)));
+  } catch (err) {
+    return refuse(err);
+  }
+  const refused: ItemRefusal<UninstalledMod>[] = mods.filter((m) => !listed.has(m.name))
+    .map((m) => ({ item: { name: m.name }, reason: `Mod not found in modlist: ${m.name}` }));
+  const toUnlist: ModToUninstall[] = [];
+  const trashed = new Set<string>();
+  for (const mod of mods.filter((m) => listed.has(m.name))) {
+    const folder = modDir(instanceRoot, mod.name);
+    try {
+      if (await exists(folder)) {
+        await trash(folder);
+        trashed.add(mod.name);
+      }
+      toUnlist.push(mod);
+    } catch (err) {
+      refused.push({ item: { name: mod.name }, reason: errorMessage(err) });
+    }
+  }
+  const lines = await spliceModlist(instanceRoot, profile, (text) => {
+    const stillListed = modNamesIn(text);
+    return toUnlist.filter((m) => stillListed.has(m.name)).reduce((acc, m) => removeModFromText(acc, m.name), text);
+  });
+  if (!lines.applied) {
+    const lineRefusal = (name: string) => trashed.has(name)
+      ? `its folder went to the trash, but its modlist.txt line could not be removed: ${lines.refusal}`
+      : lines.refusal;
+    return {
+      applied: true,
+      outcome: {
+        landed: [],
+        refused: [...refused, ...toUnlist.map((m) => ({ item: { name: m.name }, reason: lineRefusal(m.name) }))],
+      },
+    };
+  }
+  const landed: UninstalledMod[] = [];
+  for (const mod of toUnlist) {
+    if (mod.archiveFilename === undefined) {
+      landed.push({ name: mod.name });
+      continue;
+    }
+    try {
+      await unmarkDownload(instanceRoot, mod.archiveFilename);
+      landed.push({ name: mod.name });
+    } catch (err) {
+      landed.push({ name: mod.name, markRefusal: errorMessage(err) });
+    }
+  }
+  return { applied: true, outcome: { landed, refused } };
 }
 
 /** `lineRefusal` is set only when the folder landed and the line did not: the folder stays, and
