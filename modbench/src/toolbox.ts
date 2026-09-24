@@ -408,7 +408,6 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
-  const modListReporter = reporterFor('modList');
   // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
   // resolver the Instance adapter answers "where is the game" with.
   const instance = own(new Instance({
@@ -430,7 +429,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   void instance.refresh();
   // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
   // this provider builds no index and reads no disk of its own.
-  const modListProvider = own(new ModListProvider({ instance, log, instanceRoot, reporter: modListReporter }));
+  const modListProvider = own(new ModListProvider({ instance, instanceRoot }));
   // Held on the session as well, because the teardown writers outside this file abandon the
   // send in flight through it (ADR-0013).
   const sender = own(createLoadOrderSender(client));

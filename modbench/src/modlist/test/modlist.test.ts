@@ -33,8 +33,6 @@ import {
   moveMods,
   moveSeparators,
   renameSeparator,
-  reorderMod,
-  reorderSeparatorBlock,
   setModsEnabled,
   syncMods,
   uninstallMod,
@@ -143,42 +141,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
     assertRefusal(outcome, 'ENOENT');
     await expect(stat(modlistPath())).rejects.toThrow();
-  });
-
-  it('reorderMod writes the new line order', async () => {
-    const outcome = await reorderMod(dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'winningEnd' });
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    const names = (await readModlist()).map((e) => e.name);
-    expect(names[0]).toBe('Cracked and Smudged Pip-Boy Screen');
-  });
-
-  // The two sides must land one slot apart, or a tree running losing-at-top puts every drop one
-  // row off from where the user let go.
-  it('reorderMod settles a drop before its target', async () => {
-    const outcome = await reorderMod(
-      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'before', name: 'Unofficial Fallout 4 Patch' });
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    const names = (await readModlist()).map((e) => e.name);
-    expect(names.slice(2, 5)).toEqual([
-      '[NODELETE] Radfall', 'Cracked and Smudged Pip-Boy Screen', 'Unofficial Fallout 4 Patch',
-    ]);
-  });
-
-  it('reorderMod settles a drop after its target, one slot further on', async () => {
-    const outcome = await reorderMod(
-      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'after', name: 'Unofficial Fallout 4 Patch' });
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    const names = (await readModlist()).map((e) => e.name);
-    expect(names.slice(2, 5)).toEqual([
-      '[NODELETE] Radfall', 'Unofficial Fallout 4 Patch', 'Cracked and Smudged Pip-Boy Screen',
-    ]);
-  });
-
-  it('reorderMod refuses an unknown mod', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await reorderMod(dir, 'Default', 'No Such Mod', { kind: 'winningEnd' });
-    assertRefusal(outcome);
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
   it('insertSeparator writes a new enabled separator line after the named entry', async () => {
@@ -381,6 +343,15 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
+  it('moveMods beside a mod that has gone refuses the whole move, naming it', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+
+    const outcome = await moveMods(dir, 'Default', ['Harder VATS'], { kind: 'mod', name: 'Gone Mod' }, 'losing');
+
+    assertRefusal(outcome, 'Gone Mod');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+  });
+
   it('moveMods refuses the whole selection once when modlist.txt cannot be read', async () => {
     await rm(modlistPath());
 
@@ -392,7 +363,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators on the losing side lands each separator with its mods directly on the losing side of the chosen one', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
+      dir, 'Default', ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unassigned (Modlist Development)'], refused: [] } });
     expect((await readModlist()).map((e) => e.name)).toEqual([
@@ -409,7 +380,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators to where the separator already is writes nothing', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Radfall - All-In-One Survival Overhaul'], 'Unassigned (Modlist Development)', 'losing');
+      dir, 'Default', ['Radfall - All-In-One Survival Overhaul'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Radfall - All-In-One Survival Overhaul'], refused: [] } });
     expect(await mtime()).toEqual(LONG_AGO);
@@ -417,7 +388,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators refuses a gone separator by name while the others land', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Gone Separator', 'Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
+      dir, 'Default', ['Gone Separator', 'Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
 
     expect(outcome).toEqual({
       applied: true,
@@ -434,28 +405,9 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveSeparators to a separator that has gone refuses the whole move, naming it', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
-    const outcome = await moveSeparators(dir, 'Default', ['Unassigned (Modlist Development)'], 'Gone Separator', 'losing');
+    const outcome = await moveSeparators(dir, 'Default', ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Gone Separator' }, 'losing');
 
     assertRefusal(outcome, 'Gone Separator');
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
-  });
-
-  it('reorderSeparatorBlock moves the separator and its members together', async () => {
-    // Dropped onto the next separator — genuinely moved, not the no-op its current front
-    // position would be.
-    const outcome = await reorderSeparatorBlock(
-      dir, 'Default', 'Unassigned (Modlist Development)',
-      { kind: 'before', name: 'Radfall - All-In-One Survival Overhaul' });
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    const names = (await readModlist()).map((e) => e.name);
-    expect(names[2]).toBe('SKK Fast Start new game (Fallout 4)');
-    expect(names[3]).toBe('Unassigned (Modlist Development)');
-  });
-
-  it('reorderSeparatorBlock refuses an unknown separator', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await reorderSeparatorBlock(dir, 'Default', 'No Such Separator', { kind: 'winningEnd' });
-    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
