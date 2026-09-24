@@ -63,12 +63,13 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
   });
 }
 
-/** The composition root's two answers, which is what lets this view call install itself: the
- *  name only the user can give a new mod, and the FOMOD notice. */
+/** The composition root's answers, which is what lets this view call install itself: the name
+ *  only the user can give a new mod, the FOMOD notice, and the failed-mark Output line. */
 export interface DownloadInstallDeps {
   /** `undefined` is the user declining to name it, which installs nothing. */
   nameNewMod: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
+  log: (line: string) => void;
 }
 
 // An upgrade arrives already confirmed from the pick above and names its own folder, so only a
@@ -85,7 +86,7 @@ async function resolveTarget(
 // no sidecar; install is called for what it is, and install marks the download installed.
 async function installArchive(
   row: DownloadFile, instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
-  log: (line: string) => void, deps: DownloadInstallDeps,
+  deps: DownloadInstallDeps,
 ): Promise<void> {
   const { name } = row;
   let downloadRefusal: string | undefined;
@@ -113,7 +114,7 @@ async function installArchive(
   if (downloadRefusal === undefined) return;
   // ADR-0019 background/recoverable tier: Installed reads off the mod's own meta.ini, never this
   // sidecar, so the failed mark changes nothing the user sees — one Output line, no notification.
-  log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
+  deps.log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
@@ -156,12 +157,11 @@ async function deleteSelection(
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, log: (line: string) => void,
-  install: DownloadInstallDeps,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, log, install);
+      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = node?.row;

@@ -153,13 +153,8 @@ async function readInstalledInto(
   for (const entry of entries) if (entry.kind === 'mod') knownArchiveFilenames.set(entry.name, entry.archiveFilename);
   const metas = await Promise.all(modFolderNames.map(async (name) => {
     if (knownArchiveFilenames.has(name)) return { name, archiveFilename: knownArchiveFilenames.get(name) };
-    try {
-      const meta = await readMeta(instanceRoot, name);
-      return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
-    } catch {
-      // ADR-0003: recover, don't fail — an off-profile folder's own read failure claims nothing.
-      return { name, archiveFilename: undefined };
-    }
+    const meta = await readMeta(instanceRoot, name);
+    return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
   }));
   return modsByInstallationFile(metas);
 }
