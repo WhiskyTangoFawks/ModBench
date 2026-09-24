@@ -7,7 +7,8 @@ import {
   insertModAtWinningEnd,
   insertSeparatorAtIndexInText,
   moveModInText,
-  moveModToSeparatorEndInText,
+  moveModsInText,
+  moveSeparatorsInText,
   moveSeparatorBlockInText,
   parseModlist,
   removeModFromText,
@@ -15,6 +16,8 @@ import {
   separatorBlockNames,
   setEnabledInText,
   unlistedModNames,
+  type ModsPlace,
+  type OrderEnd,
 } from '../mo2Codecs/modlistText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
@@ -45,29 +48,60 @@ async function spliceModlist(
   }
 }
 
-export type SetModsEnabledResult =
+/** A gesture over a selection, in one splice: each item landed or refused by name, or the whole
+ *  selection refused once when modlist.txt cannot be read or written. */
+export type ModlistSelectionResult =
   | { applied: true; outcome: SelectionOutcome<string> }
   | { applied: false; refusal: string };
 
-/** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one splice. A gone
- *  mod is refused by name; the rest still land in the same write. */
-export async function setModsEnabled(
-  instanceRoot: string, profile: string, modNames: readonly string[], enabled: boolean,
-): Promise<SetModsEnabledResult> {
-  const landed: string[] = [];
-  const refused: ItemRefusal<string>[] = [];
+type EntryKind = 'mod' | 'separator';
+
+// Read inside the write lock, so an item gone since the view last rendered is refused by name
+// while the rest land in the same write.
+async function spliceSelection(
+  instanceRoot: string, profile: string, kind: EntryKind, names: readonly string[],
+  transform: (text: string, found: readonly string[]) => string,
+): Promise<ModlistSelectionResult> {
+  const noun = kind === 'mod' ? 'Mod' : 'Separator';
+  let landed: string[] = [];
+  let refused: ItemRefusal<string>[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, (text) => {
-    const known = new Set(parseModlist(text).filter((e) => e.kind === 'mod').map((e) => e.name));
-    return modNames.reduce((acc, name) => {
-      if (!known.has(name)) {
-        refused.push({ item: name, reason: `Mod not found in modlist: ${name}` });
-        return acc;
-      }
-      landed.push(name);
-      return setEnabledInText(acc, name, enabled);
-    }, text);
+    const known = new Set(parseModlist(text).filter((e) => e.kind === kind).map((e) => e.name));
+    landed = names.filter((name) => known.has(name));
+    refused = names.filter((name) => !known.has(name))
+      .map((name) => ({ item: name, reason: `${noun} not found in modlist: ${name}` }));
+    return transform(text, landed);
   });
   return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
+}
+
+/** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one splice. */
+export function setModsEnabled(
+  instanceRoot: string, profile: string, modNames: readonly string[], enabled: boolean,
+): Promise<ModlistSelectionResult> {
+  return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
+    found.reduce((acc, name) => setEnabledInText(acc, name, enabled), text));
+}
+
+export type { ModsPlace, OrderEnd } from '../mo2Codecs/modlistText';
+
+/** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
+ *  order, at the `end` of the place's mods. A separator that has gone refuses the whole move. */
+export function moveMods(
+  instanceRoot: string, profile: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd,
+): Promise<ModlistSelectionResult> {
+  return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
+    moveModsInText(text, found, place, end));
+}
+
+/** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
+ *  and they land on the `side` of the target and its mods. A target that has gone refuses the
+ *  whole move. */
+export function moveSeparators(
+  instanceRoot: string, profile: string, separatorNames: readonly string[], targetName: string, side: OrderEnd,
+): Promise<ModlistSelectionResult> {
+  return spliceSelection(instanceRoot, profile, 'separator', separatorNames, (text, found) =>
+    moveSeparatorsInText(text, found, targetName, side));
 }
 
 /** Where a drag landed in the Mods tree. Re-exported so the view names the drop without naming
@@ -121,13 +155,6 @@ export function renameSeparator(
 /** Remove a separator's own line; the mods it wrapped join the section above. */
 export function deleteSeparator(instanceRoot: string, profile: string, name: string): Promise<ModlistCommandResult> {
   return spliceModlist(instanceRoot, profile, (text) => deleteSeparatorInText(text, name));
-}
-
-/** Move a mod to the end of `separatorName`'s section, or the ungrouped tail when null. */
-export function moveModToSeparator(
-  instanceRoot: string, profile: string, modName: string, separatorName: string | null,
-): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => moveModToSeparatorEndInText(text, modName, separatorName));
 }
 
 /** Move a separator and every mod it wraps, as one block, to where the drag landed. */
