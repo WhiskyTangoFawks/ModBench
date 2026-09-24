@@ -1,7 +1,9 @@
 // How the Downloads tree presents the rows the Instance publishes. None of it touches a file, so
 // none of it belongs to the codec that parsed one.
 
+import { extname } from 'node:path';
 import type { DownloadRow } from '../instanceLoader/instance';
+import { ARCHIVE_EXTENSIONS } from '../install/install';
 
 /** The columns MO2's own Downloads pane sorts by, each a field of the row itself. */
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
@@ -27,6 +29,14 @@ export function sortDownloadRows<T extends DownloadRow>(
  *  apart. */
 export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], showHidden: boolean): T[] {
   return showHidden ? [...rows] : rows.filter((r) => !r.hidden);
+}
+
+const archiveExtensions: readonly string[] = ARCHIVE_EXTENSIONS;
+
+/** Only the files install can take are rows, by install's own extension list. Unconditional,
+ *  unlike `filterHiddenRows`: no toggle brings a non-archive back. */
+export function filterArchiveRows<T extends DownloadRow>(rows: readonly T[]): T[] {
+  return rows.filter((r) => archiveExtensions.includes(extname(r.name).slice(1).toLowerCase()));
 }
 
 // A space-separated flag string, because `when` clauses match it with

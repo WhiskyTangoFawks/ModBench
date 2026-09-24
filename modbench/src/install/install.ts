@@ -23,10 +23,16 @@ export interface InstallMeta {
   installedFiles?: readonly InstalledFileId[];
 }
 
+/** The archive extensions install can extract — its one export about which files it takes.
+ *  Every picker and the Downloads view read this list, compared case-insensitively. */
+export const ARCHIVE_EXTENSIONS = ['zip', '7z', 'rar'] as const;
+
+const archiveExtensionPattern = new RegExp(String.raw`\.(${ARCHIVE_EXTENSIONS.join('|')})$`, 'i');
+
 /** What a new mod is called before the user says otherwise: the archive's own name, stripped of
  *  the extension install knows how to extract. */
 export function defaultModName(archivePath: string): string {
-  return basename(archivePath).replace(/\.(zip|7z|rar)$/i, '');
+  return basename(archivePath).replace(archiveExtensionPattern, '');
 }
 
 /** Install's refusal when a new mod's folder is already there, shared with the name prompt so
