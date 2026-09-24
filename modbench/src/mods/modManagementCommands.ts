@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
-import { modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from './gestureEntry';
+import {
+  isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
+} from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -70,7 +72,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     let succeeded = false;
     await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
       const outcome = await installFromArchive(
-        instanceRoot, { kind: 'new', name }, archivePath, { gameName: instance.value.gameRelease });
+        instanceRoot, { kind: 'new', name }, archivePath, instance.value.paths.downloadsDir,
+        { gameName: instance.value.gameRelease });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;
@@ -217,7 +220,7 @@ export function registerModContextCommands(
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
         const profile = instance.value.activeProfile;
-        const result = await uninstallMods(instanceRoot, profile, mods, trash);
+        const result = await uninstallMods(instanceRoot, profile, mods, instance.value.paths.downloadsDir, trash);
         if (!result.applied) {
           reporter.report('error', 'Failed to uninstall mods.', result.refusal);
           return;
@@ -366,13 +369,13 @@ function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
   return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
 }
 
-/** Mods' own text for the catalog's one copy value id (mods.md, Menus and keys, story 7).
- *  `undefined` unless `clicked` is a mod or separator row — a keyless invocation defers to the
- *  next adapter. */
+/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a mod or
+ *  separator row or the Mods key's args, so the palette and another view's key defer. */
 export function modsCopyValueText(
   viewSelection: () => readonly ModlistNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
   return (clicked, allSelected) => {
+    if (isModsKeyArgs(clicked)) return copyValueRowNames(selectionArgument({ selection: viewSelection() }, 'mod', 'separator'));
     if (!isModlistEntryNode(clicked)) return undefined;
     const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
     return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));

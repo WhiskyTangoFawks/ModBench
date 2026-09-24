@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   reveals: [] as { label: unknown; options: unknown }[],
   visible: { value: true },
   visibilityListeners: [] as ((e: { visible: boolean }) => void)[],
+  selectionListeners: [] as ((e: { selection: readonly unknown[] }) => void)[],
   revealRefusal: { value: undefined as Error | undefined },
   decorationProviders: [] as vscode.FileDecorationProvider[],
 }));
@@ -40,7 +41,11 @@ vi.mock('vscode', () => ({
     ...filterBoxWindowMock(h.state),
     createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
       const view = {
-        ...options, description: undefined, message: undefined,
+        ...options, description: undefined, message: undefined, selection: [] as readonly unknown[],
+        onDidChangeSelection: (listener: (e: { selection: readonly unknown[] }) => void) => {
+          h.selectionListeners.push(listener);
+          return { dispose() { /* no-op */ } };
+        },
         get visible() { return h.visible.value; },
         onDidChangeVisibility: (listener: (e: { visible: boolean }) => void) => {
           h.visibilityListeners.push(listener);
@@ -70,12 +75,13 @@ vi.mock('vscode', () => ({
 }));
 
 import { Instance } from '../instanceLoader/instance';
-import { ModListProvider } from '../mods/ModListProvider';
+import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
 import { createModListView, registerDownloadsView } from '../mo2TreeViews';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 import { resolvesNotFound } from './mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 const command = commandInvoker(h.state);
@@ -85,6 +91,7 @@ async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: resolvesNotFound,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });
@@ -98,6 +105,8 @@ beforeEach(() => {
   h.reveals.length = 0;
   h.visible.value = true;
   h.visibilityListeners.length = 0;
+  h.selectionListeners.length = 0;
+  h.state.contextKeys.clear();
   h.revealRefusal.value = undefined;
   h.decorationProviders.length = 0;
 });
@@ -153,6 +162,53 @@ describe('the Mods view\'s description counts the mods', () => {
     await instance.refresh();
 
     expect(modListView.description).toBe('7 / 9');
+  });
+});
+
+// mods.md, Menus and keys: a key is handed no row, so its `when` clause reads the selection.
+describe('the Mods view tells its keys what the selection holds', () => {
+  const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
+    view.selection = rows;
+    for (const listener of h.selectionListeners) listener({ selection: rows });
+  };
+
+  it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const { modListView } = createModListView(own, provider, () => { /* no-op */ });
+
+    const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
+      .map((name) => `modbench.mod.${name}`);
+    const keys = () => Object.fromEntries(SELECTION_KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
+    const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
+    const separator = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
+
+    select(modListView, [harderVats]);
+    expect(keys()).toEqual({
+      'modbench.mod.selectionToggle': 'enable', 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true,
+      'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': true,
+    });
+
+    select(modListView, [separator('Radfall - All-In-One Survival Overhaul'), separator('Unassigned (Modlist Development)')]);
+    expect(keys()).toEqual({
+      'modbench.mod.selectionToggle': undefined, 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': false,
+      'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': false,
+    });
+  });
+
+  it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const { modListView } = createModListView(own, provider, () => { /* no-op */ });
+    select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
+
+    const modlistPath = join(root, DEFAULT_MODLIST);
+    await writeFile(modlistPath, (await readFile(modlistPath, 'utf8')).replace('-Harder VATS', '+Harder VATS'));
+    await instance.refresh();
+
+    expect(h.state.contextKeys.get('modbench.mod.selectionToggle')).toBe('disable');
   });
 });
 

@@ -10,6 +10,7 @@ import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
 import { isRecord } from '../manifest';
+import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -705,6 +706,78 @@ describe('modbench.downloads tree', () => {
     }, 10000);
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
+
+  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
+  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
+    this.timeout(40000);
+    if (!root) throw new Error('no open workspace');
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
+    const iniPath = path.join(root, 'ModOrganizer.ini');
+    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    try {
+      fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
+      await writeAndAwaitInstance(() => {
+        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`);
+      });
+
+      const scanned = await provider().getChildren();
+      assert.ok(
+        scanned.some((r) => archiveNameOf(r) === 'external-preexisting.zip'),
+        'expected the file already in the external folder to be scanned once the ini named it',
+      );
+
+      // A freshly (re)bound watcher's arm lags its JS creation. Writing a new file each poll
+      // attempt, not one file after a fixed sleep, means some attempt lands after it is armed.
+      const written = new Set<string>();
+      const watched = await waitFor('a file written after the external watcher has had a chance to arm', async () => {
+        const name = `external-new-${written.size}.zip`;
+        written.add(name);
+        fs.writeFileSync(path.join(external, name), 'data');
+        const found = await provider().getChildren();
+        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
+      }, 35000);
+      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')), 'expected the watcher on the external folder to fire with no manual refresh');
+    } finally {
+      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      fs.rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  // The ruling's own ENOENT-is-empty state applies before the folder exists at all, not only
+  // once MO2 has created it — this proves the watch survives that gap too.
+  it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
+    this.timeout(40000);
+    if (!root) throw new Error('no open workspace');
+    const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
+    const notYetCreated = path.join(container, 'NotYetCreated');
+    const iniPath = path.join(root, 'ModOrganizer.ini');
+    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    try {
+      await writeAndAwaitInstance(() => {
+        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`);
+      });
+
+      const beforeCreate = await provider().getChildren();
+      assert.strictEqual(beforeCreate.filter((r) => archiveNameOf(r) !== undefined).length, 0,
+        'expected no rows before the configured folder even exists');
+
+      const written = new Set<string>();
+      const watched = await waitFor('a file written after the not-yet-existing folder is created and the watcher has had a chance to arm', async () => {
+        fs.mkdirSync(notYetCreated, { recursive: true });
+        const name = `created-${written.size}.zip`;
+        written.add(name);
+        fs.writeFileSync(path.join(notYetCreated, name), 'data');
+        const found = await provider().getChildren();
+        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
+      }, 35000);
+      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')),
+        'expected the watcher to fire once the configured folder was created, with no manual refresh');
+    } finally {
+      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      fs.rmSync(container, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Overwrite row ──────────────────────────────────────────────────────────────
@@ -894,6 +967,67 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
 
     await renderAfter(() => provider().setFilter('weap', true));
     assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+  });
+});
+
+// ── The Mods palette and Space in a running host ─────────────────────────────
+
+// mods.md, Menus and keys. A test cannot press a key, so Space is checked as the command VS Code
+// runs for it on a focused row with no Modbench binding: `list.toggleExpand`.
+describe('The Mods view\'s palette entries and Space, as VS Code runs them', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
+  const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
+  let original = '';
+
+  // The folder's own arrival can land a sync that adds its line disabled, so each test enables
+  // the mod itself once the folder is known. Mods' own Ctrl+C copy value names what is selected.
+  const enabledAndSelected = async () => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '+Palette Mod\r\n'));
+    await waitFor('the mod row to be focused and selected', async () => {
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('modbench.modList.focus');
+      await vscode.commands.executeCommand('list.focusFirst');
+      await vscode.commands.executeCommand('list.select');
+      await vscode.commands.executeCommand('modbench.record.copyValue', MODS_KEY_ARGS);
+      return (await vscode.env.clipboard.readText()) === 'Palette Mod';
+    });
+  };
+
+  before(async () => {
+    if (!root) return;
+    original = fs.readFileSync(modlistPath, 'utf8');
+    await writeAndAwaitInstance(() => fs.mkdirSync(modDir, { recursive: true }));
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    if (!root) return;
+    await writeAndAwaitInstance(() => {
+      fs.writeFileSync(modlistPath, original);
+      fs.rmSync(modDir, { recursive: true, force: true });
+    });
+  });
+
+  it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
+    if (!root) this.skip();
+    await enabledAndSelected();
+    await vscode.commands.executeCommand('list.toggleExpand');
+    await new Promise((r) => setTimeout(r, 750));
+    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+  });
+
+  it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
+    if (!root) this.skip();
+    this.timeout(30_000);
+    await enabledAndSelected();
+    // The API shows no palette item, so each try reopens it and accepts its top item until the
+    // disable lands; a try made before the item is listed accepts nothing.
+    await waitFor('the palette\'s disable to land in the Instance', async () => {
+      await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      return instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled);
+    });
   });
 });
 

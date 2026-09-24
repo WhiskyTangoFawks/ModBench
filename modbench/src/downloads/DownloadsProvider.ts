@@ -142,8 +142,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   /** The all-excluded empty state (downloads.md, States, story 2), distinct from the name
    *  filter's own no-match state. */
   allExcluded(): boolean {
-    if (this.showHidden) return false;
-    const archives = filterArchiveRows(this.instanceValue.downloads);
+    if (this.showHidden || this.instanceValue.downloads.kind !== 'listed') return false;
+    const archives = filterArchiveRows(this.instanceValue.downloads.rows);
     return archives.length > 0 && archives.every((row) => row.hidden);
   }
 
@@ -169,15 +169,18 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     if (element) return []; // flat list — no row has children
     await this.firstRead.settled; // never claim "no downloads" before the Instance has actually read one
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
-    this.cache ??= this.build();
+    // A folder Modbench cannot resolve is not the folder MO2 names — no rows, so no command has
+    // anything to act on (common.md, States, story 2; scoped to this view alone).
+    if (this.instanceValue.downloads.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloads.reason)];
+    this.cache ??= this.build(this.instanceValue.downloads.rows);
     if (!this.filterLower) return this.cache;
     return this.cache.filter((n) => n.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
-  private build(): DownloadNode[] {
+  private build(downloads: readonly DownloadFile[]): DownloadNode[] {
     // Archive-filtering applies first — a non-archive is never a row, toggle or not — then
     // hidden-filtering, then sort — the acceptance criterion the three compose by.
-    const archives = filterArchiveRows(this.instanceValue.downloads);
+    const archives = filterArchiveRows(downloads);
     const filtered = filterHiddenRows(archives, this.showHidden);
     const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row));
