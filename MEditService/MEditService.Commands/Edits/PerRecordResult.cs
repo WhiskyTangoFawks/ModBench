@@ -10,9 +10,26 @@ public readonly record struct RecordAt(PluginCopyKey Plugin, string FormKey);
 /// naming the way out.</summary>
 public sealed record RecordRefused(RecordAt Record, RecordEditRefusal Refusal, string Message);
 
-/// <summary>A gesture over several records answers per record: each one applied or refused on its
-/// own, never the whole batch for one (ADR-0019 invariant 4).</summary>
-public sealed record PerRecordResult(IReadOnlyList<RecordAt> Applied, IReadOnlyList<RecordRefused> Refused)
+/// <summary>A gesture over several records answers per record, never the whole batch for one
+/// (ADR-0019 invariant 4), except for a cause no record escapes: <see cref="SelectionRefusal"/> names
+/// it, and no record was written.</summary>
+public sealed class PerRecordResult
 {
-    public bool AllApplied => Refused.Count == 0;
+    private PerRecordResult(
+        IReadOnlyList<RecordAt> applied, IReadOnlyList<RecordRefused> refused, RecordEditResult? selectionRefusal) =>
+        (Applied, Refused, SelectionRefusal) = (applied, refused, selectionRefusal);
+
+    public static PerRecordResult PerRecord(IReadOnlyList<RecordAt> applied, IReadOnlyList<RecordRefused> refused) =>
+        new(applied, refused, selectionRefusal: null);
+
+    public static PerRecordResult WholeSelectionRefused(RecordEditRefusal refusal, string message) =>
+        new([], [], RecordEditResult.Refused(refusal, message));
+
+    public IReadOnlyList<RecordAt> Applied { get; }
+
+    public IReadOnlyList<RecordRefused> Refused { get; }
+
+    public RecordEditResult? SelectionRefusal { get; }
+
+    public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }

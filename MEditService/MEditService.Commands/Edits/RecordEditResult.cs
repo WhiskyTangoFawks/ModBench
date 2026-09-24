@@ -118,6 +118,10 @@ public enum RecordEditRefusal
     /// <summary>The record's own document could not be produced at index time; the diagnosis is the
     /// reason, and repairing it is not a field edit.</summary>
     RecordParseFailed,
+
+    /// <summary>git cannot be run, which no record of a selection escapes, so the whole selection is
+    /// refused once; the way out is putting git on the PATH (ADR-0007).</summary>
+    GitUnavailable,
 }
 
 /// <summary><see cref="Message"/> names the way out; a refusal the user cannot act on is dead UI.
