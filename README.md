@@ -28,7 +28,7 @@ treats a plugin the way an IDE treats a program:
   are detected and handled through one dialog (upstream update, or your own edit).
 
 The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md)
-and [ADR-0006](docs/adr/0006-the-plugin-is-the-source-of-truth.md).
+and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).
 
 ## What works today
 

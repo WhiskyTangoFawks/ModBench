@@ -4,7 +4,7 @@ Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit fiel
 `remove element`, `move element`, `create`, `delete` and `copy`, in
 [commands.md](../commands.md). Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
-[ADR-0006](../../adr/0006-the-plugin-is-the-source-of-truth.md),
+[ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
 [ADR-0008](../../adr/0008-masters-are-derived-from-content.md),
 [ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),

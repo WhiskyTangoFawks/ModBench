@@ -5,7 +5,7 @@
 1. **The document is the model, on the wire and on disk.** A record is a JSON document reflected
    from Mutagen's own record types, carrying every member the assembly declares at the record's
    own nesting. The wire carries that document and the source tree stores it
-   ([ADR-0006](0006-the-plugin-is-the-source-of-truth.md)). There is no second
+   ([ADR-0006](0006-decompilation-is-provably-faithful.md)). There is no second
    model: no parsed struct for a special concern, no DTO beside the document, no member the codec
    never wrote, no new wire shape for a new concern. A concern that looks special is a field,
    with a field's gestures.

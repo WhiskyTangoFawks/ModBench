@@ -32,7 +32,8 @@ This flow waits for no hand-off.
   flow is plugin sync in [update-load-order-file](update-load-order-file.d2), which adds the line
   at the end, disabled. Then [index-load-order](index-load-order.d2) indexes the plugin.
 - In a tracked mod, the Mod watcher finds a plugin that the mod's repository does not track. From
-  there the flow is the trigger of [decompile-plugin](decompile-plugin.d2), which offers Track.
+  there the flow is the trigger of [decompile-plugin](decompile-plugin.d2), which warns. Tracking
+  it is the user's gesture.
 
 ## Refusals
 

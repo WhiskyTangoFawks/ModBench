@@ -3,9 +3,10 @@
 Version control is foundational to working with an agent in a domain where automated validation
 is next to impossible: the user needs oversight of what the agent did and an easy roll-back of
 what it did wrong. Git gives both, and VS Code's Source Control panel shows them. So a tracked
-mod's source ([ADR-0006](0006-the-plugin-is-the-source-of-truth.md)) lives in a git
+mod's source ([ADR-0006](0006-decompilation-is-provably-faithful.md)) lives in a git
 working tree inside the mod folder, every edit is a change to that tree, and Save & Compile writes
-the binary from it.
+the binary from it. Tracking adopts the standard software lifecycle: the source is the truth, and
+the binary is a build artifact that compile regenerates from it.
 
 ## Strategic invariants
 
@@ -28,7 +29,7 @@ the binary from it.
    ([ADR-0008](0008-masters-are-derived-from-content.md)) and the header's counters, refuses
    only what it structurally cannot emit, and reports the rest as
    Problems-panel diagnostics. The binary it writes is the plugin's meaning, not its old bytes
-   ([ADR-0006](0006-the-plugin-is-the-source-of-truth.md)). Commit is
+   ([ADR-0006](0006-decompilation-is-provably-faithful.md)). Commit is
    git's own gesture, ungated; history may hold states that do not build.
 5. **The native git UI is the review surface.** One Source Control group per tracked mod, native
    diffs, native commit. Git on PATH is a product requirement.

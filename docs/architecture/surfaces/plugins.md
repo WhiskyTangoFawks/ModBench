@@ -238,10 +238,12 @@ As a user, I want:
 1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
    truth and the plugin a projection of it, so compile destroys nothing. *ruling*
 2. `compile from main…` to confirm first, saying my edit branch and working tree stay as they are.
-   *catalog `compile`, source Option; compile-plugin contract, story 13*
+   *catalog `compile`, source Option; compile-plugin, The flow*
 3. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
-4. A plugin whose records do not fit ESL to ask whether to remove the flag and compile.
+4. A warning when a compile did not finish, naming the plugin and saying to compile it again.
+   *compile-plugin, Failure*
+5. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
 
 ### Create record
 
@@ -298,8 +300,8 @@ open the native merge editor. *decompile-plugin, rebase edit branch*
 
 ### Other dialogs
 
-There is no offer to rebuild a binary after an interrupted compile: the compile contract's question 6 cuts it, and tracking again is
-the recovery (ADR-0007).
+There is no offer to rebuild a binary after an interrupted compile: #977 cuts it. Compiling again
+is the recovery (compile-plugin, Failure).
 
 ## Reporting
 

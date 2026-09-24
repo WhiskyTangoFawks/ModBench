@@ -35,7 +35,7 @@ mo2 -> instanceloader: watch {class: signal}
 instanceloader."a plugin on disk with no plugins.txt line"
 instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 plugin -> watcher: changed paths {class: signal}
-watcher."a tracked mod: decompile-plugin from here, offering Track"
+watcher."a tracked mod: decompile-plugin from here, which warns of the untracked plugin"
 
 refused: "refused, before any write" {
   commands -> http: "no load order held · the folder has gone · the file exists · a light plugin the game does not have" {class: edit}

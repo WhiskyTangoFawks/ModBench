@@ -52,7 +52,7 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
   class: band; grid-rows: 1
   loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: kernel}
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
-  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default · untracked plugins in a tracked mod\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
+  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default · untracked plugins in a tracked mod\n· compile unfinished\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
