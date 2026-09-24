@@ -9,13 +9,13 @@ import {
 } from './vscodeMock';
 
 // Only the Mods and Downloads row menus' own contextValue-vs-when tests below need a live
-// ModNode/DownloadNode.
+// ModNode, SeparatorNode, OverwriteNode or DownloadNode.
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile },
 }));
 
-import { ModNode } from '../mods/ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -828,6 +828,41 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
     expect(matches(flagsOf(enable.when), enabledRow.contextValue)).toBe(false);
     expect(matches(flagsOf(disable.when), enabledRow.contextValue)).toBe(true);
     expect(matches(flagsOf(disable.when), disabledRow.contextValue)).toBe(false);
+  });
+});
+
+// mods.md, Menus and keys: "Mod menu: … move… …" and "Separator menu: move… · add separator · …".
+describe('package.json Move on the mod menu and the separator menu', () => {
+  const modsViewMenu = (): MenuEntry[] =>
+    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => e.when.includes('view == modbench.modList'));
+  const moveEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.mod.move');
+  const rowMatches = (when: string, contextValue: string | undefined): boolean => {
+    const tokens = present(contextValue, "the row's own contextValue").split(' ');
+    const exact = /viewItem == (\w+)/.exec(when)?.[1];
+    if (exact !== undefined) return contextValue === exact;
+    return [...when.matchAll(/\\b(\w+)\\b/g)].every((m) => tokens.includes(present(m[1], 'a \\b...\\b flag name')));
+  };
+
+  it('offers move on every mod row, enabled or not, and on every separator row', () => {
+    const offeredOn = (contextValue: string | undefined): boolean =>
+      moveEntries().some((e) => rowMatches(e.when, contextValue));
+
+    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
+    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
+    expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
+    expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
+  });
+
+  it('puts move first on the separator menu', () => {
+    const separatorMenu = modsViewMenu().filter((e) => e.when.includes('viewItem == separator'));
+    const slotOf = (entry: MenuEntry): number =>
+      Number(present(/@(\d+)$/.exec(entry.group ?? '')?.[1], `a numbered group for ${entry.command}`));
+    const move = present(separatorMenu.find((e) => e.command === 'modbench.mod.move'), 'a separator-menu move entry');
+
+    const others = separatorMenu.filter((e) => e !== move);
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.every((e) => e.group?.split('@')[0] === move.group?.split('@')[0] && slotOf(e) > slotOf(move))).toBe(true);
   });
 });
 

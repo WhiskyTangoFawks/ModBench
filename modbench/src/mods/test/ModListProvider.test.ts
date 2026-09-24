@@ -12,7 +12,7 @@ import {
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import type {
-  setModsEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
+  setModsEnabled, reorderMod, moveMods, reorderSeparatorBlock,
 } from '../../modlist/modlist';
 
 vi.mock('vscode', () => ({
@@ -25,17 +25,17 @@ vi.mock('vscode', () => ({
 // point 6) rather than an injected source — mocked at the module boundary, in the style already
 // established by recordPanelContextCommands.test.ts.
 const {
-  setModsEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock,
+  setModsEnabledMock, reorderModMock, moveModsMock, reorderSeparatorBlockMock,
 } = vi.hoisted(() => ({
   setModsEnabledMock: vi.fn<typeof setModsEnabled>(),
   reorderModMock: vi.fn<typeof reorderMod>(),
-  moveModToSeparatorMock: vi.fn<typeof moveModToSeparator>(),
+  moveModsMock: vi.fn<typeof moveMods>(),
   reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
 vi.mock('../../modlist/modlist', () => ({
   setModsEnabled: (...args: Parameters<typeof setModsEnabledMock>) => setModsEnabledMock(...args),
   reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
-  moveModToSeparator: (...args: Parameters<typeof moveModToSeparatorMock>) => moveModToSeparatorMock(...args),
+  moveMods: (...args: Parameters<typeof moveModsMock>) => moveModsMock(...args),
   reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
 }));
 
@@ -54,7 +54,9 @@ const ACTIVE_PROFILE = 'Default';
 beforeEach(() => {
   setModsEnabledMock.mockReset();
   setModsEnabledMock.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
-  for (const m of [reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock]) {
+  moveModsMock.mockReset();
+  moveModsMock.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
+  for (const m of [reorderModMock, reorderSeparatorBlockMock]) {
     m.mockReset();
     m.mockResolvedValue({ applied: true, wrote: true });
   }
@@ -638,14 +640,27 @@ describe('ModListProvider', () => {
       expect(got?.value).toEqual({ kind: 'mod', name: 'Alpha' });
     });
 
-    it('drop mod onto separator → moveModToSeparator', async () => {
+    it('drop mod onto separator → moveMods, as the separator\'s first mod', async () => {
       const { provider } = makeDndProvider();
       const roots = await provider.getChildren();
       const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
       const dt = new DataTransfer();
       dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
       await provider.handleDrop(sepNode, dt, token);
-      expect(moveModToSeparatorMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'Alpha', 'Group A');
+      expect(moveModsMock).toHaveBeenCalledWith(
+        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'losing');
+    });
+
+    it('winning at the top, a mod dropped on a separator becomes its first mod as shown, at the winning end', async () => {
+      const { provider } = makeDndProvider();
+      provider.setViewDirection('winningAtTop');
+      const roots = await provider.getChildren();
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
+      const dt = new DataTransfer();
+      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
+      await provider.handleDrop(sepNode, dt, token);
+      expect(moveModsMock).toHaveBeenCalledWith(
+        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'winning');
     });
 
     it('winning-at-top down-drag: asks for the block before the row it landed on', async () => {
@@ -782,14 +797,27 @@ describe('ModListProvider', () => {
     });
 
     // A refusal (`{ applied: false }`), not a throw, must report the same way.
-    it('a refusal from the moveModToSeparator command reports an error and logs the specific operation', async () => {
-      moveModToSeparatorMock.mockResolvedValue({ applied: false, refusal: 'disk full' });
+    it('a refusal from the moveMods command reports an error and logs the specific operation', async () => {
+      moveModsMock.mockResolvedValue({ applied: false, refusal: 'disk full' });
       const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
       const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
       await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('moveModToSeparator failed: disk full'))).toBe(true);
+      expect(logs.some((l) => l.includes('moveMods failed: disk full'))).toBe(true);
+    });
+
+    it('a dragged mod the moveMods command refuses as gone reports that refusal', async () => {
+      moveModsMock.mockResolvedValue({
+        applied: true, outcome: { landed: [], refused: [{ item: 'Alpha', reason: 'Mod not found in modlist: Alpha' }] },
+      });
+      const { provider, reports } = makeFailingProvider();
+      const roots = await provider.getChildren();
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
+      await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
+      expect(reports).toEqual([
+        { severity: 'error', message: 'Failed to reorder mods.', detail: 'Mod not found in modlist: Alpha' },
+      ]);
     });
 
     it('a throw from the reorderSeparatorBlock command reports an error and logs the specific operation', async () => {

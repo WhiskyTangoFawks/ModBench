@@ -793,6 +793,11 @@
           "group": "modActions@6"
         },
         {
+          "command": "modbench.mod.move",
+          "when": "view == modbench.modList && viewItem == separator",
+          "group": "sepActions@0"
+        },
+        {
           "command": "modbench.separator.rename",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@1"
