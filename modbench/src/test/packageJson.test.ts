@@ -547,6 +547,8 @@ describe('package.json command titles and categories', () => {
     // Absent when the file has no .meta (its own context-menu `when`), and even offered it still
     // needs the clicked row's own identity — no ambient fallback.
     'modbench.downloadedFile.openMeta',
+    // Has the Delete key's own ambient selection fallback; still gated here, as mod.enable below
+    // is, because no palette entry names it.
     'modbench.downloadedFile.delete',
     'modbench.downloadedFile.exclude',
     'modbench.downloadedFile.include',
@@ -737,6 +739,20 @@ describe('package.json Downloads row menu order', () => {
     expect(satisfies(include.when, includedRow.contextValue)).toBe(false);
     expect(satisfies(exclude.when, includedRow.contextValue)).toBe(true);
     expect(satisfies(exclude.when, excludedRow.contextValue)).toBe(false);
+  });
+});
+
+// downloads.md, Menus and keys: "Keys | Delete: delete."
+describe('package.json Downloads delete key', () => {
+  it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view', () => {
+    const keybindings: { command: string; key: string; mac?: string; when: string }[] = pkg.contributes.keybindings;
+    const entry = present(
+      keybindings.find((k) => k.command === 'modbench.downloadedFile.delete'),
+      'a Delete-key binding for modbench.downloadedFile.delete',
+    );
+    expect(entry.key).toBe('Delete');
+    expect(entry.mac).toBe('cmd+backspace');
+    expect(entry.when).toBe(`focusedView == modbench.downloads && ${IN_AN_INSTANCE}`);
   });
 });
 

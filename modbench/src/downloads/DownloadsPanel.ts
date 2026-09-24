@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownloads, excludeDownloads, includeDownloads } from '../downloadsCommands/downloads';
+import { deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload } from '../downloadsCommands/downloads';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
@@ -64,11 +64,12 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
 }
 
 /** The composition root's answers, which is what lets this view call install itself: the name
- *  only the user can give a new mod, the FOMOD notice, and the failed-mark Output line. */
+ *  only the user can give a new mod, the FOMOD notice, and an Output line. */
 export interface DownloadInstallDeps {
   /** `undefined` is the user declining to name it, which installs nothing. */
   nameNewMod: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
+  /** Install's failed-mark line, and delete's left-behind `.meta` line — no notification either way. */
   log: (line: string) => void;
 }
 
@@ -136,20 +137,28 @@ async function runRowAction(
 async function confirmDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
   const [only] = names;
   const question = names.length === 1 && only !== undefined
-    ? `Delete "${only}"? The archive and its .meta file (if any) will be moved to the system trash.`
-    : `Delete ${names.length} items? Each archive and its .meta file (if any) will be moved to the system trash.`;
+    ? `Delete "${only}"? It will be moved to the system trash. The installed mod, if any, is untouched.`
+    : `Delete ${names.length} items? They will be moved to the system trash. The installed mod, if any, is untouched.`;
   return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
 }
 
 const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 
+// A `.meta` left behind is not a failure (downloads.md, Reporting story 2): the delete already
+// applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
   instanceRoot: string, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-): Promise<SelectionOutcome<string>> {
-  if (names.length === 0 || !(await confirmDelete(names, ask))) return NOTHING_CHANGED;
+  log: (line: string) => void,
+): Promise<SelectionOutcome<DeletedDownload>> {
+  if (names.length === 0 || !(await confirmDelete(names, ask))) return { landed: [], refused: [] };
   const outcome = await deleteDownloads(instanceRoot, names, trash);
   reporter.selectionOutcome(
-    `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
+    `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (item) => item.name);
+  for (const item of outcome.landed) {
+    if (item.metaLeftBehind !== undefined) {
+      log(`"${item.name}" was deleted, but its ".meta" could not be moved to the trash and was left behind: ${item.metaLeftBehind}`);
+    }
+  }
   return outcome;
 }
 
@@ -209,14 +218,19 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
   return clicked ? [clicked.row.name] : [];
 }
 
-/** Acts on the whole selection. The `when` clause can only inspect the clicked row, so a mixed
- *  selection applies that row's action to all of them, as MO2's "Hide All" does. */
+/** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
+ *  All). `viewSelection` backs the Delete key, which gets no row argument. */
 export function registerDownloadsMultiRowCommands(
   instanceRoot: string, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  log: (line: string) => void, viewSelection: () => readonly DownloadNode[],
 ): vscode.Disposable[] {
+  const deleteNames = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+    const explicit = selectionNames(clicked, selected);
+    return explicit.length > 0 ? explicit : viewSelection().map((n) => n.row.name);
+  };
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(instanceRoot, selectionNames(clicked, selected), reporter, ask, trash)),
+      deleteSelection(instanceRoot, deleteNames(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
       excludeSelection(instanceRoot, selectionNames(clicked, selected), reporter)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>

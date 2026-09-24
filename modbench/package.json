@@ -966,6 +966,12 @@
         "when": "focusedView == modbench.downloads && modbench.folder == instance"
       },
       {
+        "command": "modbench.downloadedFile.delete",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == modbench.downloads && modbench.folder == instance"
+      },
+      {
         "command": "modbench.record.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
