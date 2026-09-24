@@ -1615,16 +1615,35 @@ describe('Refresh rebuilds the index, then resends the load order', () => {
       requestLog.filter((l) => l === 'PUT /load-order').length >= 2);
   });
 
-  it('sends no load order when the rebuild is refused (the index held elsewhere)', async () => {
+  // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,
+  // naming this instance — never the backend's raw 423 detail.
+  it('reports the second-window refusal in toolbox.md\'s words, naming this instance', async () => {
     rebuildIndexShouldFail = true;
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const errors: string[] = [];
+    const realShowError = vscode.window.showErrorMessage;
+    Object.defineProperty(vscode.window, 'showErrorMessage', {
+      configurable: true,
+      value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
+    });
+    try {
+      await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    await vscode.commands.executeCommand('modbench.instance.refresh');
-
-    assert.ok(requestLog.some((l) => l === 'POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
-    assert.ok(
-      !requestLog.some((l) => l === 'PUT /load-order'),
-      'a refused rebuild must not be followed by a load-order send',
-    );
+      assert.ok(requestLog.some((l) => l === 'POST /index/rebuild'), 'sanity: the rebuild must still be attempted');
+      assert.ok(
+        !requestLog.some((l) => l === 'PUT /load-order'),
+        'a refused rebuild must not be followed by a load-order send',
+      );
+      assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
+      const [toast] = errors;
+      assert.ok(
+        toast?.includes("This instance's index is open in another Modbench window"),
+        `expected toolbox.md's own words, got: ${toast}`,
+      );
+      assert.ok(root !== undefined && toast?.includes(root), `expected the instance named, got: ${toast}`);
+    } finally {
+      Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
+    }
   });
 });
 

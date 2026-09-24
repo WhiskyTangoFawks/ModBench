@@ -11,7 +11,7 @@ import {
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
-  type RebaseResult, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
+  type RebaseResult, type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -142,20 +142,24 @@ export class HttpMEditClient implements MEditClient {
     return data ?? { name, path, origin, slot: null, version: 0 };
   }
 
-  /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty,
-   *  refusing (423) exactly as `putLoadOrder` does when another window holds it. `onFailure` is
-   *  the caller's report, never a bare toast (modbench/CLAUDE.md). */
-  async rebuildIndex(
-    instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
-  ): Promise<boolean> {
-    const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[HttpMEditClient] rebuildIndex failed (${response.status}): ${text}`);
-      onFailure('mEdit: Could not rebuild the index', text);
-      return false;
+  /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty.
+   *  ADR-0009 invariant 5: a 423 is `heldElsewhere`, apart from every other failure — never a
+   *  rejection. */
+  async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
+    try {
+      const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[HttpMEditClient] rebuildIndex failed (${response.status}): ${text}`);
+        if (response.status === 423) return { rebuilt: false, heldElsewhere: true };
+        return { rebuilt: false, heldElsewhere: false, detail: text };
+      }
+      return { rebuilt: true };
+    } catch (e) {
+      const message = errorMessage(e);
+      this.log(`[HttpMEditClient] rebuildIndex threw: ${message}`);
+      return { rebuilt: false, heldElsewhere: false, detail: message };
     }
-    return true;
   }
 
   /** `gameDirectory` must be the resolved Data folder — the backend prepends implicit masters

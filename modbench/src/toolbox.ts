@@ -493,7 +493,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     warnIfFomod,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
-  own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh') }));
+  own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh'), instanceRoot }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
     modListSelection: () => modListView.selection,

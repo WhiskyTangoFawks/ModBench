@@ -256,6 +256,52 @@ describe('HttpMEditClient — the not-OK response text', () => {
   });
 });
 
+// ADR-0009 invariant 5: a 423 is refused by name, apart from every other failure — the rival is
+// a client that folds it into the same generic-failure shape every other non-ok response gets.
+describe('HttpMEditClient — rebuildIndex', () => {
+  it('POSTs the instance root and game release, and resolves rebuilt on success', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
+
+    expect(outcome).toEqual({ rebuilt: true });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/index\/rebuild$/);
+    expect(await request?.json()).toEqual({ instanceRoot: '/instance', gameRelease: 'Fallout4' });
+  });
+
+  it('answers a 423 as heldElsewhere, apart from every other failure', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(423, {
+      detail: 'This instance\'s index is open in another Modbench window (/instance/modbench/index.duckdb). '
+        + 'Close mEdit there first, or open a different instance here.',
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
+
+    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: true });
+  });
+
+  it('answers any other non-ok response as a plain failure, carrying the backend detail', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'Failed to rebuild the store.' })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
+
+    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
+  });
+
+  it('answers a thrown request as a plain failure, never a rejection', async () => {
+    const fetch = vi.fn(() => Promise.reject(new Error('fetch failed')));
+    const client = makeClient(fetch);
+
+    const outcome = await client.rebuildIndex('/instance', 'Fallout4');
+
+    expect(outcome).toEqual({ rebuilt: false, heldElsewhere: false, detail: 'fetch failed' });
+  });
+});
+
 // putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
 // lifetime, and the deliberate-abort outcome ('abandoned') that is not a WriteRefused-shaped
 // failure.
