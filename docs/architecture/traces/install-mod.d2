@@ -1,12 +1,4 @@
-# Install, both targets. One command: a new mod stages and renames into mods/, an upgrade
-# replaces the folder's contents in place around .git so the repository and the watchers
-# survive. The target is stated by the caller and never inferred from disk; Downloads picks it
-# and always confirms. No modlist.txt line is written here: the folder appears, and mod sync and
-# plugin sync pick it up (update-load-order-file). A downloaded file is marked installed in its .meta
-# for MO2's sake; the Instance loader reads Installed from the mods, so a failed mark fails nothing.
-# A tracked mod goes on to decompile-plugin, with the moved meta.ini version pre-selecting the
-# new baseline.
-# Governed by ADR-0003, ADR-0007, ADR-0015 and ADR-0017. Contract: install-mod.md.
+# Install, both targets. Contract: install-mod.md.
 ...@../styles
 shape: sequence_diagram
 downloads: @../target-architecture.modbench_driving.downloads
@@ -54,5 +46,5 @@ mo2 -> watcher: changed paths {class: signal}
 watcher."a tracked mod: decompile-plugin from here, the moved version pre-selecting the new baseline"
 
 refused: "refused, before any write" {
-  install -> downloads: "a new mod whose folder exists, naming it · an upgrade whose folder has gone" {class: loadorder}
+  install -> downloads: "a new mod whose folder exists · an upgrade whose folder has gone · mods/ on another volume · the archive cannot be extracted" {class: loadorder}
 }
