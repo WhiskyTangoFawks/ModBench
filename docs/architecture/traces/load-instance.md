@@ -38,8 +38,9 @@ change normally arrives.
 
 1. The Toolbox fires `refresh`. Instance commands ask mEdit, through the mEdit client, to drop and
    rebuild the index.
-2. Once the rebuild lands, instance commands send the load order snapshot, and mEdit reads every
-   copy again.
+2. Once the rebuild lands, mEdit reads every copy again against the load order it holds, as a cold
+   load does ([ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md), invariant 5).
+   Nothing is sent.
 3. The Toolbox then asks the Instance loader to read every file again, as flow step 2 does.
 
 A refused or failed rebuild stops there: nothing is sent, and nothing is read again.
