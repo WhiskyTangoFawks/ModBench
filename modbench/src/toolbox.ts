@@ -11,7 +11,7 @@ import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
-import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
+import { ModListProvider } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
@@ -29,7 +29,7 @@ import { syncMods } from './modlist/modlist';
 import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, reportFailure } from './mods/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
@@ -77,6 +77,9 @@ export interface ToolboxDeps {
   trash: MoveToTrash;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
+  /** Referenced By's own text for the catalog's one copy value id (Editor's own adapter,
+   *  `referencedByCopyValueText`): copy value's Mods adapter is this file's own. */
+  referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string;
 }
 
 /** The MO2 side's wiring, which the activation file calls: the Toolbox view and everything below
@@ -93,9 +96,34 @@ export interface Toolbox extends vscode.Disposable {
   pluginsTree?: PluginsTreeProvider;
   instance?: Instance;
   enterEditing?: () => Promise<void>;
-  /** The Mods view's current selection, empty on the paths with no instance. The composition
-   *  root's copy value dispatch is its one caller outside this file. */
-  modListSelection: () => readonly ModlistNode[];
+}
+
+/** One surface's contribution to the catalog's one copy value id (commands.md, Record: copy
+ *  value): its own text for this invocation, or `undefined` to defer to the next adapter. */
+export interface CopyValueAdapter {
+  text: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
+  reporterTag: string;
+}
+
+// Every surface the catalog names contributes an adapter, tried in order, so no surface's module
+// needs to know another surface exists.
+export function registerCopyValueCommand(
+  adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.record.copyValue',
+    async (clicked?: unknown, allSelected?: unknown[]) => {
+      for (const adapter of adapters) {
+        const text = adapter.text(clicked, allSelected);
+        if (text === undefined) continue;
+        if (!text) return;
+        try {
+          await vscode.env.clipboard.writeText(text);
+        } catch (err) {
+          reporterFor(adapter.reporterTag).report('error', 'Could not copy to the clipboard.', errorMessage(err));
+        }
+        return;
+      }
+    });
 }
 
 
@@ -368,7 +396,6 @@ interface Mo2Side {
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
-  modListSelection: () => readonly ModlistNode[];
 }
 
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
@@ -482,6 +509,13 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
+  own(registerCopyValueCommand(
+    [
+      { text: modsCopyValueText(() => modListView.selection), reporterTag: 'mod.copyValue' },
+      { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
+    ],
+    reporterFor,
+  ));
   const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
     syncMods(instanceRoot, profile, modFolders);
   own(registerModSync(instance, runModSync, outputChannel));
@@ -494,10 +528,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
   own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh'), instanceRoot }));
-  return {
-    instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
-    modListSelection: () => modListView.selection,
-  };
+  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
@@ -541,7 +572,6 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     pluginsTree: mo2?.pluginsTree,
     instance: mo2?.instance,
     enterEditing: mo2?.enterEditing,
-    modListSelection: () => mo2?.modListSelection() ?? [],
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
 
 const { registerCommand, writeText } = vi.hoisted(() => ({
@@ -6,16 +7,20 @@ const { registerCommand, writeText } = vi.hoisted(() => ({
   writeText: vi.fn<(value: string) => unknown>(),
 }));
 
+// `../toolbox` (this file's own module under test) wires every MO2-side view, so its own vscode
+// surface is wide — `fakeVscodeModule()` covers the rest, as `toolboxPluginsNameFilter.test.ts`
+// already establishes for the same module.
 vi.mock('vscode', () => ({
+  ...fakeVscodeModule(),
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
   commands: { registerCommand },
   env: { clipboard: { writeText } },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
 }));
 
-import { registerCopyValueCommand, type CopyValueAdapter } from '../copyValueCommand';
+import { registerCopyValueCommand, type CopyValueAdapter } from '../toolbox';
 import { modsCopyValueText } from '../mods/modManagementCommands';
 import { ModNode, type ModlistNode } from '../mods/ModListProvider';
-import { recordingReporter, type RecordingReporter } from '../test/surfacingDoubles';
+import { recordingReporter, type RecordingReporter } from './surfacingDoubles';
 
 function invokeCommand(...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.record.copyValue');
