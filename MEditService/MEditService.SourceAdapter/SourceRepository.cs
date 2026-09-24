@@ -112,7 +112,7 @@ public sealed partial class SourceRepository
         if (unit.IsDirectoryPerRecord)
         {
             var directory = PathShape.DirectoryOf(unit.FullPath);
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory)) DeleteWholeOrNotAtAll(directory);
             Forget();
             return SourceRemoval.Removed;
         }
@@ -120,6 +120,30 @@ public sealed partial class SourceRepository
         if (File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
         Forget();
         return SourceRemoval.Removed;
+    }
+
+    // A failed recursive delete goes on past the entry it could not take, so it stops partway. The
+    // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
+    private static void DeleteWholeOrNotAtAll(string directory)
+    {
+        var directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
+        var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
+            .ToList();
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Directory.CreateDirectory(directory);
+            foreach (var level in directories) Directory.CreateDirectory(level);
+            foreach (var (path, bytes) in files)
+            {
+                if (!File.Exists(path)) File.WriteAllBytes(path, bytes);
+            }
+            throw;
+        }
     }
 
     /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>

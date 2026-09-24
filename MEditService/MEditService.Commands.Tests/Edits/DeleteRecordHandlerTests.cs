@@ -5,7 +5,10 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -74,6 +77,81 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(npcFile), "the refused record's document must survive");
+    }
+
+    // A cell directory nothing may write to stops the worldspace's removal partway: its own document
+    // and the other block's whole subtree are gone by then, the locked cell's document is not.
+    [Fact]
+    public void DeleteRecords_WhenAContainersRemovalFailsPartway_PutsItsWholeTreeBack_RefusesIt_AndLandsTheRest()
+    {
+        var (npc, worldspace, otherNpc) = (FormKey.Null, FormKey.Null, FormKey.Null);
+        using var mod = SourceModFixture.Tracked("PartwayContainer.esp", "PartwayContainerMod", plugin =>
+        {
+            npc = plugin.Npcs.AddNew("FirstNpc").FormKey;
+            var world = plugin.Worldspaces.AddNew("LockedWorld");
+            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "LockedCell" }, x: 0, y: 0));
+            world.SubCells.Add(BlockHolding(new Cell(plugin) { EditorID = "FreeCell" }, x: 1, y: 1));
+            worldspace = world.FormKey;
+            otherNpc = plugin.Npcs.AddNew("SecondNpc").FormKey;
+        });
+        var worldDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedWorld\"")).Require();
+        var cellDirectory = Path.GetDirectoryName(DocumentCarrying(mod, "\"LockedCell\"")).Require();
+        var before = FilesUnder(worldDirectory);
+        var (npcAt, worldAt, otherNpcAt) = (
+            new RecordAt(mod.Plugin, npc.ToString()), new RecordAt(mod.Plugin, worldspace.ToString()),
+            new RecordAt(mod.Plugin, otherNpc.ToString()));
+
+        PerRecordResult result;
+        Chmod(cellDirectory, "500");
+        try
+        {
+            result = mod.DeleteHandler.DeleteRecords([npcAt, worldAt, otherNpcAt]);
+        }
+        finally
+        {
+            Chmod(cellDirectory, "700");
+        }
+
+        Assert.Equal([npcAt, otherNpcAt], result.Applied);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal(worldAt, refused.Record);
+        Assert.Equal(RecordEditRefusal.SourceWriteFailed, refused.Refusal);
+        Assert.Contains(worldspace.ToString(), refused.Message, StringComparison.Ordinal);
+        Assert.Equal(before, FilesUnder(worldDirectory));
+    }
+
+    // One block, one sub-block and one cell, all at the block's own coordinates.
+    private static WorldspaceBlock BlockHolding(Cell cell, short x, short y)
+    {
+        cell.Grid = new CellGrid { Point = new P2Int(x * 32, y * 32) };
+        var subBlock = new WorldspaceSubBlock { BlockNumberX = (short)(x * 4), BlockNumberY = (short)(y * 4) };
+        subBlock.Items.Add(cell);
+        var block = new WorldspaceBlock { BlockNumberX = x, BlockNumberY = y };
+        block.Items.Add(subBlock);
+        return block;
+    }
+
+    private static string DocumentCarrying(SourceModFixture mod, string text) =>
+        Directory.EnumerateFiles(
+                Path.Combine(mod.ModFolder, SourceRepository.RootFor(mod.Plugin.Name)), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains(text, StringComparison.Ordinal));
+
+    private static SortedDictionary<string, string> FilesUnder(string directory) =>
+        Directory.Exists(directory)
+            ? new(Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                .ToDictionary(file => Path.GetRelativePath(directory, file), File.ReadAllText), StringComparer.Ordinal)
+            : new(StringComparer.Ordinal);
+
+    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
+    // Linux-only runtime.
+    private static void Chmod(string path, string mode)
+    {
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "chmod", [mode, path])
+        { RedirectStandardError = true }).Require();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
     }
 
     [Fact]
