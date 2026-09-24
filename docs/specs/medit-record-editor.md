@@ -556,7 +556,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   There is no free drag-reorder and no auto-sort.
 - **A container's children keep their positions across every edit.** A parent record's document
   holds its own fields and its embedded child slots inline, in Mutagen's list order
-  ([ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) decision 4), and
+  ([ADR-0006](../adr/0006-decompilation-is-provably-faithful.md) decision 4), and
   `DocumentEdit` patches exactly the edited path, so an ordinary field edit never reorders or drops
   a sibling — the same byte parity the whole-plugin writer holds survives an edit through this
   path too.

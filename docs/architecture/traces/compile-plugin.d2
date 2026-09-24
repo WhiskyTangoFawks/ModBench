@@ -1,9 +1,7 @@
-# Compile, orange. Compile writes the source tree's documents back as bytes. It is the
-# inverse of decompile plugin (decompile-plugin).
+# Compile, orange. Contract: compile-plugin_draft.md.
 ...@../styles
 shape: sequence_diagram
-plugins: @../target-architecture.modbench_driving.plugins
-plugins.label: Plugins
+plugins: "Plugins · Editor" {class: driving}
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -20,13 +18,39 @@ watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 
-plugins -> client: compile {class: edit}
+plugins -> client: "compile: the plugins · the working tree or main" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: compile}
 sourceadapter -> commands: documents {class: compile}
+commands."check the documents; derive the masters and the header's counters"
+commands -> sourceadapter: "mark: a compile has begun" {class: compile}
 commands -> pluginadapter: bytes {class: compile}
-pluginadapter -> plugin: bytes {class: compile}
+pluginadapter -> plugin: "bytes, and a localized plugin's strings" {class: compile}
+commands -> sourceadapter: "what Modbench last wrote: the tree and the hash · clear the mark" {class: compile}
+sourceadapter -> source: "the parked ref · the mark" {class: compile}
+commands -> http: "applied, with the masters and the diagnostics, or refusal, per item" {class: edit}
+http -> client: "applied or refusal, per item" {class: edit}
+client -> plugins: the outcome {class: edit}
+plugins."the diagnostics in the Problems panel, on the source files"
 plugin -> watcher: bytes {class: signal}
 watcher -> indexer: "plugin changed: validate by hash" {class: signal}
+
+interrupted: "an interrupted compile, at the next settle or load-time check" {
+  watcher -> commands: a tracked mod settled {class: signal}
+  commands."the mark is still there"
+  commands -> port: "compile unfinished: the plugin" {class: push}
+  port -> http: publish {class: push}
+  http -> client: stream {class: push}
+  client -> plugins: compile unfinished {class: push}
+  plugins."a warning: compile it again"
+}
+
+refused: "refused, before any write" {
+  commands -> http: "a question is open on the mod · not tracked · no tree at the source · a file cannot be opened · a document the codec cannot reproduce · two documents claim one FormKey · a light plugin outside the light range · a record the format cannot write" {class: edit}
+  http -> client: the refusal {class: edit}
+  client -> plugins: the refusal {class: edit}
+}

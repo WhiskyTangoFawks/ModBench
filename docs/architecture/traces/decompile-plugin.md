@@ -5,7 +5,7 @@ Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin
 [commands.md](../commands.md). What the user picks and answers is in
 [plugins.md](../surfaces/plugins.md): Track, External change and Rebase edit branch. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
-[ADR-0006](../../adr/0006-the-plugin-is-the-source-of-truth.md),
+[ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
 [ADR-0008](../../adr/0008-masters-are-derived-from-content.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).

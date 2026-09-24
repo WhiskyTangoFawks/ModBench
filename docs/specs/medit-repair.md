@@ -1,6 +1,6 @@
 # Repair — Surface Specification (malformed-plugin repair)
 
-**Status: Specced — not built.** The ruling is [ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) invariant 7; the engine's design is this spec. Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Codec.Tests/RealData/RoundTripSurvey.cs`.
+**Status: Specced — not built.** The ruling is [ADR-0006](../adr/0006-decompilation-is-provably-faithful.md) invariant 7; the engine's design is this spec. Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Codec.Tests/RealData/RoundTripSurvey.cs`.
 
 Editing context — operates on plugins, records and subrecords; never on mods or downloads
 ([CONTEXT.md](../../CONTEXT.md)). Vocabulary: **Diagnosis**, **Malformed plugin**,

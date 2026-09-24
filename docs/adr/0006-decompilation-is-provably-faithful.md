@@ -1,10 +1,10 @@
-# The plugin is the source of truth
+# Decompilation is provably faithful
 
 Software compiles source into a binary. Modding runs the other way: the plugin is what the game
-loads and what every other tool reads and writes, so Modbench decompiles it into a source it can
-edit in a git working tree ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)) and
-recompiles, and the plugin stays the truth. That only works if the decompilation is provably
-faithful.
+loads and what every other tool reads and writes, so an untracked plugin is the truth. Track
+decompiles it into a source that Modbench edits in a git working tree and recompiles, and from
+then on the source is the truth ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
+That hand-over only works if the decompilation is provably faithful.
 
 ## Strategic invariants
 
