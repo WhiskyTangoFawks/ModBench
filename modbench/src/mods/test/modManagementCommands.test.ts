@@ -616,7 +616,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', groupB, [modA, groupB]);
 
     expect(pickedLabels()).toEqual(['Group A']);
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'losing');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'losing');
     expect(moveMods).not.toHaveBeenCalled();
   });
 
@@ -632,7 +632,20 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', groupB);
 
     expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'winning');
+  });
+
+  it('handed a target, as a drop hands one, moves there without a pick', async () => {
+    moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod C'], refused: [] } });
+    moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
+
+    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', modC, [modC], { place: { kind: 'mod', name: 'Mod A' }, end: 'winning' });
+    await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'modOrder' }, end: 'winning' });
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'modOrder' }, 'winning');
   });
 
   it('offers the places in the order the view shows them', async () => {

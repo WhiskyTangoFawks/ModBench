@@ -6,20 +6,17 @@ import {
   deleteSeparatorInText,
   insertModAtWinningEnd,
   insertSeparatorAtIndexInText,
-  moveModInText,
   moveModsInText,
   moveSeparatorsInText,
-  moveSeparatorBlockInText,
   parseModlist,
   removeModFromText,
   renameSeparatorInText,
-  separatorBlockNames,
   setEnabledInText,
   unlistedModNames,
   type ModsPlace,
   type OrderEnd,
+  type SeparatorsPlace,
 } from '../mo2Codecs/modlistText';
-import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile, modDir, modlistFile, modsDir } from '../instanceAdapter/layout';
 import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
@@ -83,10 +80,10 @@ export function setModsEnabled(
     found.reduce((acc, name) => setEnabledInText(acc, name, enabled), text));
 }
 
-export type { ModsPlace, OrderEnd } from '../mo2Codecs/modlistText';
+export type { ModsPlace, OrderEnd, SeparatorsPlace } from '../mo2Codecs/modlistText';
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
- *  order, at the `end` of the place's mods. A separator that has gone refuses the whole move. */
+ *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
 export function moveMods(
   instanceRoot: string, profile: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
@@ -95,30 +92,12 @@ export function moveMods(
 }
 
 /** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
- *  and they land on the `side` of the target and its mods. A target that has gone refuses the
- *  whole move. */
+ *  and they land on the `side` of the place. A target that has gone refuses the whole move. */
 export function moveSeparators(
-  instanceRoot: string, profile: string, separatorNames: readonly string[], targetName: string, side: OrderEnd,
+  instanceRoot: string, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, side: OrderEnd,
 ): Promise<ModlistSelectionResult> {
   return spliceSelection(instanceRoot, profile, 'separator', separatorNames, (text, found) =>
-    moveSeparatorsInText(text, found, targetName, side));
-}
-
-/** Where a drag landed in the Mods tree. Re-exported so the view names the drop without naming
- *  the codec that settles it into an index. */
-export type { Drop as ModlistDrop } from '../mo2Codecs/dropIndex';
-
-// Settled against the text the splice is about to rewrite, so a tree a generation behind
-// modlist.txt cannot land the block at a stale index.
-const entryIndexOf = (text: string, movedNames: readonly string[], drop: Drop): number =>
-  dropIndexIn(parseModlist(text).map((e) => e.name), movedNames, drop);
-
-/** Move a mod to where the drag landed. */
-export function reorderMod(
-  instanceRoot: string, profile: string, modName: string, drop: Drop,
-): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) =>
-    moveModInText(text, modName, entryIndexOf(text, [modName], drop)));
+    moveSeparatorsInText(text, found, place, side));
 }
 
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
@@ -155,14 +134,6 @@ export function renameSeparator(
 /** Remove a separator's own line; the mods it wrapped join the section above. */
 export function deleteSeparator(instanceRoot: string, profile: string, name: string): Promise<ModlistCommandResult> {
   return spliceModlist(instanceRoot, profile, (text) => deleteSeparatorInText(text, name));
-}
-
-/** Move a separator and every mod it wraps, as one block, to where the drag landed. */
-export function reorderSeparatorBlock(
-  instanceRoot: string, profile: string, separatorName: string, drop: Drop,
-): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => moveSeparatorBlockInText(
-    text, separatorName, entryIndexOf(text, separatorBlockNames(parseModlist(text), separatorName), drop)));
 }
 
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no

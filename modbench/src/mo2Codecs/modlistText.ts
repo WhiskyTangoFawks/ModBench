@@ -3,7 +3,7 @@
 // The top of the file is the winning end. Mutations splice the raw string.
 
 import type { InstalledFileId } from './metaIni';
-import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
@@ -196,13 +196,8 @@ const firstEntryLineAt = (lines: readonly string[]): number => {
   return first === -1 ? lines.length : first;
 };
 
-// The ungrouped mods follow the last separator line, so their losing end is the tail of the
-// entry lines.
-function ungroupedInsertAt(lines: readonly string[], end: OrderEnd): number {
-  if (end === 'losing') {
-    const lastEntry = [...lines.entries()].findLast(([, line]) => isEntryLine(line));
-    return lastEntry === undefined ? lines.length : lastEntry[0] + 1;
-  }
+// The ungrouped mods follow the last separator line, so their winning end is directly after it.
+function ungroupedWinningEndAt(lines: readonly string[]): number {
   const lastSeparator = [...lines.entries()].findLast(([, line]) => isSeparatorLine(line));
   return lastSeparator === undefined ? firstEntryLineAt(lines) : lastSeparator[0] + 1;
 }
@@ -239,20 +234,45 @@ function moveBlock(
   return rest.map((line, i) => (i < rest.length - 1 && lineContent(line) === line ? line + eol : line)).join('');
 }
 
-/** Where moved mods land: among a separator's mods, or among the ungrouped mods. */
-export type ModsPlace = { kind: 'ungrouped' } | { kind: 'separator'; name: string };
+/** Where moved mods land: among a separator's mods, among the ungrouped mods, beside a mod, or
+ *  at an end of the whole mod order. */
+export type ModsPlace =
+  | { kind: 'ungrouped' }
+  | { kind: 'separator'; name: string }
+  | { kind: 'mod'; name: string }
+  | { kind: 'modOrder' };
 
-/** The mods land as one block, in their own order, at the `end` of the place's mods. Throws if
- *  the separator is absent. */
+/** Where moved separators land: beside a separator and its mods, or at an end of mod order. */
+export type SeparatorsPlace = Extract<ModsPlace, { kind: 'separator' | 'modOrder' }>;
+
+function modLineAt(lines: readonly string[], modName: string): number {
+  const modIdx = lines.findIndex((l) => matchesModLine(l, modName));
+  if (modIdx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+  return modIdx;
+}
+
+const lastEntryLineAt = (lines: readonly string[]): number => {
+  const lastEntry = [...lines.entries()].findLast(([, line]) => isEntryLine(line));
+  return lastEntry === undefined ? lines.length : lastEntry[0] + 1;
+};
+
+function modsInsertAt(lines: readonly string[], place: ModsPlace, end: OrderEnd): number {
+  switch (place.kind) {
+    case 'ungrouped': return end === 'losing' ? lastEntryLineAt(lines) : ungroupedWinningEndAt(lines);
+    // A separator's line trails the mods it holds, so its losing end is directly above its line.
+    case 'separator': return end === 'losing' ? separatorLineAt(lines, place.name) : separatorBlockStartAt(lines, place.name);
+    case 'mod': return modLineAt(lines, place.name) + (end === 'losing' ? 1 : 0);
+    case 'modOrder': return end === 'losing' ? lastEntryLineAt(lines) : firstEntryLineAt(lines);
+  }
+}
+
+/** The mods land as one block, in their own order, at the `end` of the place's mods, or on the
+ *  `end` side of the place's mod. Throws if the separator or the mod is absent. */
 export function moveModsInText(text: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd): string {
   return withBomPreserved(text, (bomless) => moveBlock(
     bomless,
     (line) => modNames.some((name) => matchesModLine(line, name)),
-    (rest) => {
-      if (place.kind === 'ungrouped') return ungroupedInsertAt(rest, end);
-      // A separator's line trails the mods it holds, so its losing end is directly above its line.
-      return end === 'losing' ? separatorLineAt(rest, place.name) : separatorBlockStartAt(rest, place.name);
-    },
+    (rest) => modsInsertAt(rest, place, end),
   ));
 }
 
@@ -265,58 +285,21 @@ function separatorBlockLineIndices(lines: readonly string[], separatorNames: rea
   return inBlock;
 }
 
+// A separator block landing at the losing end would take the ungrouped mods, so it stops on their
+// winning side.
+function separatorsInsertAt(lines: readonly string[], place: SeparatorsPlace, side: OrderEnd): number {
+  if (place.kind === 'modOrder') return side === 'losing' ? ungroupedWinningEndAt(lines) : firstEntryLineAt(lines);
+  return side === 'losing' ? separatorLineAt(lines, place.name) + 1 : separatorBlockStartAt(lines, place.name);
+}
+
 /** Each separator and the mods it holds land as one block, in their own order, directly on the
- *  `side` of the target separator and its mods. Throws if the target is absent. */
+ *  `side` of the place's separator and its mods, or at that end of mod order. Throws if the
+ *  separator is absent. */
 export function moveSeparatorsInText(
-  text: string, separatorNames: readonly string[], targetName: string, side: OrderEnd,
+  text: string, separatorNames: readonly string[], place: SeparatorsPlace, side: OrderEnd,
 ): string {
   return withBomPreserved(text, (bomless) => {
     const inBlock = separatorBlockLineIndices(splitLinesKeepEol(bomless), separatorNames);
-    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) =>
-      (side === 'losing' ? separatorLineAt(rest, targetName) + 1 : separatorBlockStartAt(rest, targetName)));
-  });
-}
-
-/** The entries one separator wraps, itself last — the same block
- *  {@link moveSeparatorBlockInText} splices, named rather than moved. */
-export function separatorBlockNames(entries: readonly ModlistEntry[], separatorName: string): string[] {
-  const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === separatorName);
-  if (sepIdx < 0) return [separatorName];
-  const blockStart = blockStartOf(entries, sepIdx, (e) => e.kind === 'separator', 0);
-  return [...entries.slice(blockStart, sepIdx).map((e) => e.name), separatorName];
-}
-
-export function moveSeparatorBlockInText(
-  text: string,
-  separatorName: string,
-  toIndex: number,
-): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-
-    const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
-    if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
-
-    const blockStart = lineBlockStartAt(lines, sepIdx);
-    const block = lines.splice(blockStart, sepIdx - blockStart + 1);
-
-    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
-    lines.splice(insertAt, 0, ...block);
-    return lines.join('');
-  });
-}
-
-/** `toIndex` counts the entry lines with the moved mod already removed, and
- *  clamps to the last slot. Non-entry lines keep their relative positions. */
-export function moveModInText(text: string, modName: string, toIndex: number): string {
-  return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-    const moved = lines.find((l) => matchesModLine(l, modName));
-    if (moved === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
-    lines.splice(lines.indexOf(moved), 1);
-
-    const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
-    lines.splice(insertAt, 0, moved);
-    return lines.join('');
+    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) => separatorsInsertAt(rest, place, side));
   });
 }
