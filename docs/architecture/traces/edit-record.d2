@@ -1,9 +1,7 @@
-# Edit gesture, both processes. Blue carries the edit down to the source tree; purple carries the
-# re-index back up. The editor re-reads on the push.
+# Edit a record, blue. Contract: edit-record_draft.md.
 ...@../styles
 shape: sequence_diagram
-editor: @../target-architecture.modbench_driving.editor
-editor.label: Editor
+editor: "Plugins · Editor" {class: driving}
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -22,7 +20,7 @@ store.label: Store
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 
-editor -> client: "edit: one path" {class: edit}
+editor -> client: "the gesture: the records and its Options" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: edit}
@@ -40,3 +38,9 @@ store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> editor: rows changed (push), then re-read {class: push}
+
+refused: "refused, nothing written for that record" {
+  commands -> http: "untracked · in no mod · a losing copy · a question open on the mod · the record has gone · a path not there · a value the codec rejects · a duplicate key · a read-only field · no free FormID · the destination holds the record, with no replace" {class: edit}
+  http -> client: the refusal {class: edit}
+  client -> editor: the refusal {class: edit}
+}
