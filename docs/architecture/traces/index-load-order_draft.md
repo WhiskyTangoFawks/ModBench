@@ -36,13 +36,10 @@ The commands, from the HTTP `put load order` to the Store's published change, as
 
 ## Open Questions
 
-1. **Story 9.** ADR-0009 says a second window fails with an error the client can tell apart. The old
-   spec gives the words: "this instance's index is open in another Modbench window". Do you want
-   those words fixed?
-2. **A failed put.** The old spec says nothing is torn down, the error is shown, and the next snapshot
+1. **A failed put.** The old spec says nothing is torn down, the error is shown, and the next snapshot
    retries. Which principle says so? ADR-0019 covers the error only.
-3. **Progress.** The old spec shows one progress indicator in the Plugins view header while plugins
+2. **Progress.** The old spec shows one progress indicator in the Plugins view header while plugins
    index, and withholds master issues until loading ends. Accept?
-4. **A closed mEdit mid-load.** The old spec calls it abandonment, not a failure. Accept?
-5. **The status bar.** The old spec has five status-bar texts for the backend. That is a surface
+3. **A closed mEdit mid-load.** The old spec calls it abandonment, not a failure. Accept?
+4. **The status bar.** The old spec has five status-bar texts for the backend. That is a surface
    document, not this contract.

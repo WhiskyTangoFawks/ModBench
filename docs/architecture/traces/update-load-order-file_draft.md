@@ -46,6 +46,9 @@ As a user, I want:
 8. Esc on any picker or prompt to change nothing. *Esc changes nothing*
 9. No Core box to read the Instance loader. A value a command needs arrives as its argument. *the
    architecture: "No command reads the Instance loader"*
+10. A system command's failure reported once when it begins, and again only when its reason
+    changes. A recompute that meets the same failure adds nothing. *One failure is one line,
+    [common.md](../surfaces/common.md#states), story 2*
 
 ## mod enable / disable
 
@@ -99,6 +102,9 @@ a line whose folder is gone. Both directions land in one write.
 3. The same path for a folder added or removed by hand, by MO2 or by any other tool. *ADR-0015,
    invariant 2*
 4. No prompt and no notification when it works. The rows are the result. *ADR-0019*
+5. When `mods/` cannot be listed, nothing added and nothing removed, and the reason in the Mods
+   view's message line and in the Output. *A failed gesture writes nothing; ADR-0019, the background
+   tier*
 
 ## plugin enable / disable
 
@@ -118,7 +124,8 @@ a line whose folder is gone. Both directions land in one write.
 ## plugin sync
 
 The trigger is `plugins.txt` disagreeing with the plugins provided: a plugin on disk with no line, or
-a line that nothing provides. Both directions land in one write.
+a line that nothing provides. Both directions land in one write. It runs on each new instance value,
+and again when mEdit connects, so a value that arrived before mEdit could answer is still synced.
 
 1. A plugin found on disk with no line added at the end, disabled. *ADR-0017; MO2's plugin list adds a
    plugin it has not seen as not enabled, at the end*
@@ -128,7 +135,8 @@ a line that nothing provides. Both directions land in one write.
    `overwrite/`, or the game folder's copy. *ADR-0003; ADR-0013*
 4. When mEdit cannot answer, or a folder cannot be listed, nothing added and nothing removed, and the
    reason in the Plugins view's message line and in the Output. *A failed gesture writes nothing;
-   ADR-0019, the background tier; [plugins.md](../surfaces/plugins.md), Reporting*
+   ADR-0019, the background tier; [plugins.md](../surfaces/plugins.md), Reporting* A game folder
+   that is not found is a folder that cannot be listed.
 5. No prompt and no notification when it works. The new rows are the result. *ADR-0019*
 
 ## profile switch
@@ -173,11 +181,9 @@ Two seams, one per side of the driving boundary.
 5. **`.mohidden` files.** The old spec says they do not count as provided. MO2 ships `.mohidden` in a
    list of suffixes it skips. I could not confirm what consumes that setting, so I left it out.
 6. **Order among several new plugins.** Not specified anywhere. No test may assert one.
-7. **An unresolved game folder.** The old spec appends and never removes. Shared story 5 and the
-   principle refuse the whole run instead. Agree?
-8. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
+7. **Vanilla plugins with a line.** The old spec says such a line toggles like any other, with no
    guard-rail, and the badge reports the fallout. `mo2.md` has no row for it. Add one?
-9. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
-    diagrams draw no check.
-10. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
-    `plugins.txt` line for `plugin sync` to remove. Is that intended?
+8. **Which box refuses a gone object.** I assumed the Core box checks, because it holds the file. The
+   diagrams draw no check.
+9. **Uninstall and the plugin line.** Uninstalling the only provider of a plugin leaves its
+   `plugins.txt` line for `plugin sync` to remove. Is that intended?

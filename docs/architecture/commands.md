@@ -23,7 +23,8 @@ A gesture this file has and the model cannot hold is a ticket.
   entry points are `context menu`, `title icon`, `title overflow`, `inline button`, `row click`, `key`
   (a default chord goes in brackets), `drag`, `check box`, `webview message`, `dialog answer`, `code
   action` and `automatic`. A gesture is absent, not refused, where its condition is false. Every
-  gesture is also in the command palette, unless it is marked internal.
+  gesture is also in the command palette, unless it is marked internal. An **internal** command is
+  registered under its Command ID and has no entry point and no palette entry.
 - **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
   or a folder. `reads` when it only changes what the surface shows, or opens something. `runs`
   when it starts another program and writes nothing itself.
@@ -103,7 +104,8 @@ ticket names the fix).
   one command with the whole selection as its Argument, asked once. An item that cannot proceed
   writes nothing and is refused, naming why; the others land. The result names both
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md),
-  invariant 4).
+  invariant 4). A cause that no item can escape, such as git missing from the PATH or mEdit not
+  answering, refuses the whole selection once, before any item is written.
 - **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
   message.
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
@@ -303,7 +305,8 @@ Offered on Downloads.
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | update-load-order-file |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
 | pause / resume | writes | Downloads: context menu, key | - | downloaded files (running downloads) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
-| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | target: the file, or its `.meta` (offered when a `.meta` exists) | MO2 Downloads | Open a downloaded file, or its `.meta` sidecar. | debt #967 | none |
+| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | debt #991 | none |
+| open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | debt #991 | none |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | planned | - |
 | filter | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | none |
 | sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | debt #967 | none |
@@ -314,7 +317,8 @@ Offered on Downloads.
 
 Commands Modbench runs itself. No user starts them and no surface owns them, so they have no
 gesture and sit outside the object tables. The first column is the trigger that fires each one.
-Each is a command for the same reason a gesture is: one handler, and one identity. A system command
+Each is a command for the same reason a gesture is: one handler, and one identity. Each is
+registered under its Command ID, internal. A system command
 keeps one file in line with what is on disk. Its trigger is the instance value disagreeing with the
 disk, it takes the value as its Argument, and it writes the file once, in every direction the
 disagreement needs.
