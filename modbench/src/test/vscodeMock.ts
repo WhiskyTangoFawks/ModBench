@@ -57,7 +57,13 @@ export class Diagnostic {
   constructor(public range: Range, public message: string, public severity: number = DiagnosticSeverity.Error) {}
 }
 
-export const uriFile = (p: string) => ({ fsPath: p, toString: () => `file://${p}` });
+// Real `Uri.file` forward-slashes a backslash path only on Windows (`isWindows` at load time);
+// this always does, so a test on any host can still exercise a decoration provider that compares
+// by `.path`.
+export const uriFile = (p: string) => {
+  const path = p.replaceAll('\\', '/');
+  return { fsPath: p, path, toString: () => `file://${path}` };
+};
 
 // PluginsTreeProvider.test.ts's resourceUri assertion (`toEqual({ fsPath })`) fails against the
 // richer `uriFile` above: `toEqual` does not ignore an extra defined `toString`. Real drift, so

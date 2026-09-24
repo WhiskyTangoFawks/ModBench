@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type * as vscode from 'vscode';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
@@ -28,6 +29,7 @@ const h = vi.hoisted(() => ({
   visible: { value: true },
   visibilityListeners: [] as ((e: { visible: boolean }) => void)[],
   revealRefusal: { value: undefined as Error | undefined },
+  decorationProviders: [] as vscode.FileDecorationProvider[],
 }));
 
 vi.mock('vscode', () => ({
@@ -53,7 +55,10 @@ vi.mock('vscode', () => ({
       h.trees.set(id, view);
       return view;
     },
-    registerFileDecorationProvider: () => ({ dispose() { /* no-op */ } }),
+    registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
+      h.decorationProviders.push(provider);
+      return { dispose() { /* no-op */ } };
+    },
   },
   commands: {
     ...filterBoxCommandsMock(h.state),
@@ -93,6 +98,7 @@ beforeEach(() => {
   h.visible.value = true;
   h.visibilityListeners.length = 0;
   h.revealRefusal.value = undefined;
+  h.decorationProviders.length = 0;
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {
@@ -315,5 +321,26 @@ describe('the Downloads view sets the all-excluded context key', () => {
 
     await vi.waitFor(() => expect(h.trees.get('modbench.downloads')).toBeDefined());
     expect(contextValue()).not.toBe(true);
+  });
+});
+
+// downloads.md, A row, "Excluded": the dim follows exclude and include at once — VS Code never
+// re-queries a FileDecorationProvider on its own.
+describe('the Downloads decoration provider follows a rows change', () => {
+  it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
+    });
+    const [provider] = h.decorationProviders;
+    const fired = vi.fn();
+    present(provider, 'the registered decoration provider').onDidChangeFileDecorations?.(fired);
+
+    await writeFile(join(root, 'downloads', 'zzznew.7z'), '');
+    await instance.refresh();
+
+    await vi.waitFor(() => expect(fired).toHaveBeenCalled());
   });
 });
