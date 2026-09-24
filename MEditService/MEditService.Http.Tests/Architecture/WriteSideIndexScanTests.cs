@@ -138,7 +138,7 @@ public sealed class WriteSideIndexScanTests
     // answers the 404 before validate is asked for a copy nobody holds.
     private static readonly string[] IndexDoors =
     [
-        "Status", "RequireReads", "FilterSql", "SetFilter", "ClearFilter", "Sequence",
+        "Status", "RequireReads", "ActiveFilter", "SetFilter", "ClearFilter", "Sequence",
         "AwaitSequenceAsync", "Registers", "ValidateIndex", "RebuildStore",
     ];
 

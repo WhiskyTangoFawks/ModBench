@@ -748,9 +748,11 @@ export interface components {
         };
         FilterRequest: {
             sql: string;
+            source: string;
         };
         FilterResponse: {
             sql?: string | null;
+            source?: string | null;
         };
         FormKeyResolution: {
             state: components["schemas"]["FormKeyResolutionState"];
