@@ -602,7 +602,37 @@ describe('Instance — downloads, profile and game directory', () => {
     await rm(join(root, 'mods', 'Unofficial Fallout 4 Patch'), { recursive: true, force: true });
     await instance.refresh();
 
-    expect(statusOf()).toBe('Downloaded');
+    expect(statusOf()).toBe('Uninstalled');
+  });
+
+  it('reads a download as Installed from a mod folder with no line in the active profile\u2019s modlist', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'downloads'), { recursive: true });
+    await writeFile(join(root, 'downloads', 'Off-Profile-1.7z'), 'archive bytes');
+    await writeModFile(root, 'Off Profile Mod', 'meta.ini', '[General]\r\ninstallationFile=Off-Profile-1.7z\r\n');
+
+    await instance.refresh();
+
+    expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
+    expect(instance.value.modFolders).toContain('Off Profile Mod');
+    const download = instance.value.downloads.find((d) => d.name === 'Off-Profile-1.7z');
+    expect(download?.status).toBe('Installed');
+  });
+
+  // Same rule as the active-profile "Harder VATS" case above: only ENOENT reads as empty, so an
+  // off-profile folder's own unreadable meta.ini still fails the whole recompute.
+  it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable', async () => {
+    const { root, instance, readFailureLines } = await realInstance();
+    await instance.refresh();
+    const value = instance.value;
+    const before = instance.sequence;
+
+    await mkdir(join(root, 'mods', 'Off Profile Mod', 'meta.ini'), { recursive: true }); // present but unreadable (EISDIR)
+    await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(before);
+    expect(readFailureLines).toHaveLength(1);
   });
 
   it('reflects a profile switch made outside Modbench in the next value', async () => {
