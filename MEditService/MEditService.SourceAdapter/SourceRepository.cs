@@ -188,8 +188,8 @@ public sealed partial class SourceRepository
         new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
 
     /// <summary>Throws <see cref="GitUnavailableException"/> when no repository can be made here at
-    /// all. Track's own check before the parse loop a failure would waste; the track below makes it
-    /// again for a caller that skipped it.</summary>
+    /// all: a gesture's one check before its first write, or the parse loop a failure would waste.
+    /// The track below checks again.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park

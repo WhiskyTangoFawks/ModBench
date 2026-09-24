@@ -20,11 +20,19 @@ public sealed class DeleteRecordHandler
         (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
 
     /// <summary>Each record is deleted or refused on its own, so one refusal leaves the rest of the
-    /// selection to land. Throws <see cref="NoLoadOrderException"/> when none is held at all
-    /// (ADR-0013 invariant 4).</summary>
+    /// selection to land. git missing refuses the whole selection once, before any record. Throws
+    /// <see cref="NoLoadOrderException"/> when no load order is held at all (ADR-0013 invariant 4).</summary>
     public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();
+        try
+        {
+            SourceRepository.EnsureTrackable();
+        }
+        catch (GitUnavailableException ex)
+        {
+            return PerRecordResult.WholeSelectionRefused(RecordEditRefusal.GitUnavailable, ex.Message);
+        }
 
         var applied = new List<RecordAt>();
         var refused = new List<RecordRefused>();

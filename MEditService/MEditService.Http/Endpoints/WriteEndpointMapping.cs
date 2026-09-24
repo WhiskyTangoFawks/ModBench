@@ -39,6 +39,8 @@ internal static class WriteEndpointMapping
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
             // The envelope itself could not be read as a write: the request is malformed.
             RecordEditRefusal.InvalidEnvelope => 400,
+            // Track's own status for the same cause.
+            RecordEditRefusal.GitUnavailable => 500,
             // Well-formed, addressed at something real, and still not something we will write.
             _ => 422,
         },

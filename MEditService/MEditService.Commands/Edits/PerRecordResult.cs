@@ -11,8 +11,13 @@ public readonly record struct RecordAt(PluginCopyKey Plugin, string FormKey);
 public sealed record RecordRefused(RecordAt Record, RecordEditRefusal Refusal, string Message);
 
 /// <summary>A gesture over several records answers per record: each one applied or refused on its
-/// own, never the whole batch for one (ADR-0019 invariant 4).</summary>
-public sealed record PerRecordResult(IReadOnlyList<RecordAt> Applied, IReadOnlyList<RecordRefused> Refused)
+/// own, never the whole batch for one (ADR-0019 invariant 4). A cause no record can escape is the one
+/// exception: <see cref="SelectionRefusal"/> names it, and no record was written.</summary>
+public sealed record PerRecordResult(
+    IReadOnlyList<RecordAt> Applied, IReadOnlyList<RecordRefused> Refused, RecordEditResult? SelectionRefusal = null)
 {
-    public bool AllApplied => Refused.Count == 0;
+    public static PerRecordResult WholeSelectionRefused(RecordEditRefusal refusal, string message) =>
+        new([], [], RecordEditResult.Refused(refusal, message));
+
+    public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }
