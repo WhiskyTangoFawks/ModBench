@@ -74,6 +74,27 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
+    // ADR-0003: a repository with history but no main is someone else's; Track throws before writing.
+    [Fact]
+    public void Track_IntoARepositoryWithHistoryButNoMain_ThrowsAndChangesNothingOfIt()
+    {
+        Git("init", "-q", "-b", "master");
+        File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
+        Git("add", ".gitignore");
+        Git("-c", "user.name=Them", "-c", "user.email=them@localhost", "commit", "-q", "-m", "Their own commit");
+        var logBefore = Git("log", "--all", "--format=%H %s");
+        var configBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config"));
+
+        Assert.True(SourceRepository.HoldsAnotherRepository(_modFolder));
+        Assert.Throws<InvalidOperationException>(
+            () => SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline("A.esp")]));
+
+        Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
+        Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
+        Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "source")));
+    }
+
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
         ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null, null));
 

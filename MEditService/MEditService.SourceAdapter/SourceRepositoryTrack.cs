@@ -42,6 +42,8 @@ public sealed partial class SourceRepository
         GitCli.EnsureOnPath();
         var gitDir = Path.Combine(modFolder, ".git");
         if (IsTracked(modFolder)) return JoinRepository(gitDir, baselines);
+        if (HoldsAnotherRepository(modFolder))
+            throw new InvalidOperationException($"'{modFolder}' holds a repository with history but no main branch.");
 
         CreateRepository(gitDir, modFolder, preset);
         var refused = CommitEachBaseline(gitDir, modFolder, baselines);

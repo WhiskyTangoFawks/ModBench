@@ -35,22 +35,43 @@ public sealed partial class SourceRepository
     public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
-    /// exists. A <c>.git</c> with no <c>main</c> is a Track that failed before its first commit,
-    /// which Track creates again.</summary>
+    /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
+    /// <see cref="HoldsAnotherRepository"/>.</summary>
     public static bool IsTracked(string modFolder)
     {
         var gitDir = Path.Combine(modFolder, ".git");
         return Directory.Exists(gitDir) && HasMainBranch(gitDir);
     }
 
+    /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
+    /// writes to (ADR-0003). A <c>.git</c> with no branch at all is Track's own, half made.</summary>
+    public static bool HoldsAnotherRepository(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
+    }
+
     // Read off the ref store's files, not by running git: every read of a tracked copy asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
-    private static bool HasMainBranch(string gitDir)
+    private static bool HasMainBranch(string gitDir) =>
+        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
+
+    private static bool HasAnyBranch(string gitDir)
     {
-        if (File.Exists(Path.Combine(gitDir, "refs", "heads", "main"))) return true;
+        var heads = Path.Combine(gitDir, "refs", "heads");
+        // A .lock file is a ref being written, never a ref.
+        return (Directory.Exists(heads) && Directory.EnumerateFiles(heads, "*", SearchOption.AllDirectories).Any(file => !file.EndsWith(".lock", StringComparison.Ordinal)))
+            || PackedBranches(gitDir).Count > 0;
+    }
+
+    private static HashSet<string> PackedBranches(string gitDir)
+    {
+        const string prefix = " refs/heads/";
         var packedRefs = Path.Combine(gitDir, "packed-refs");
-        return File.Exists(packedRefs)
-            && File.ReadLines(packedRefs).Any(line => line.EndsWith(" refs/heads/main", StringComparison.Ordinal));
+        if (!File.Exists(packedRefs)) return [];
+        return [.. File.ReadLines(packedRefs)
+            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
+            .OfType<string>()];
     }
 
     /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a copy's origin

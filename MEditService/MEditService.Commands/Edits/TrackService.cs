@@ -154,6 +154,10 @@ public sealed class TrackService(
         if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))
             return Refuse(TrackRefusal.AlreadyTracked, $"{plugin.Name} is already tracked in '{modFolder}'.");
 
+        // ADR-0003: a repository with history but no main is someone else's, never written to.
+        if (SourceRepository.HoldsAnotherRepository(modFolder))
+            return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
+
         if (WriteTargets.BlockingQuestion(loadOrder, modFolder) is { } question)
             return Refuse(TrackRefusal.ExternalChangeUnanswered, question);
 

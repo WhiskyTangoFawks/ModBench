@@ -146,21 +146,44 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     // decompile-plugin, The command, step 9: a failure after a plugin's commit landed does not
-    // report that plugin refused. A file beneath the edit branch's name holds it, so its checkout
-    // fails after every baseline is on main.
+    // report that plugin refused. A lock another git holds on the edit branch makes its checkout
+    // fail after every baseline is on main.
     [Fact]
     public async Task Track_WhoseEditBranchCheckoutFails_ReportsThePluginsWhoseBaselinesLandedAsLanded()
     {
         WritePlugin("First.esp", "FirstNpc");
         Git("init", "-q", "-b", "main");
-        Directory.CreateDirectory(Path.Combine(_modFolder, ".git", "refs", "heads", "edit"));
-        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "heads", "edit", "held"), "not a ref\n");
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "heads", "edit.lock"), "");
 
         var result = await Track("First.esp");
 
         Assert.Equal([Key("First.esp")], result.Landed);
         Assert.Empty(result.Refused);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
+    }
+
+    // ADR-0003: a repository with history but no main is someone else's, and Track writes nothing to it.
+    [Fact]
+    public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesThePlugin_AndChangesNothingOfTheRepository()
+    {
+        WritePlugin("First.esp", "FirstNpc");
+        Git("init", "-q", "-b", "master");
+        File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
+        Git("add", ".gitignore");
+        Git("-c", "user.name=Them", "-c", "user.email=them@localhost", "commit", "-q", "-m", "Their own commit");
+        var logBefore = Git("log", "--all", "--format=%H %s");
+        var gitignoreBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore"));
+        var configBefore = File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config"));
+
+        var result = await Track("First.esp");
+
+        Assert.Empty(result.Landed);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((Key("First.esp"), TrackRefusal.AlreadyTracked), (refused.Plugin, refused.Refusal));
+        Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
+        Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
+        Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
+        Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
     }
 
     // decompile-plugin, Refusals: a question open on the mod refuses the repository destination.
