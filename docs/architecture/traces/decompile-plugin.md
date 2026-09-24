@@ -1,4 +1,4 @@
-# decompile-plugin: contract (draft)
+# decompile-plugin: contract
 
 Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod and under
 Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
