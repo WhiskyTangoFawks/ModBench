@@ -1,9 +1,4 @@
-# Index the load order, purple. The whole load order arrives from Modbench. For each copy the
-# Indexer reads the mod's source when it is tracked and the plugin's bytes when it is not, asks
-# the kernel which copy wins and what the schema is, and writes rows into the record index. It
-# decides nothing itself. The Store then announces which keys changed, and every subscriber
-# re-reads: that tail is the same one edit-record ends with.
-# Governed by ADR-0009, ADR-0012, ADR-0013 and ADR-0015. Contract: index-load-order.md.
+# Index the load order, purple. Contract: index-load-order_draft.md.
 ...@../styles
 shape: sequence_diagram
 instanceloader: @../target-architecture.modbench_driven.instanceloader
@@ -18,6 +13,8 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
@@ -37,13 +34,20 @@ instancecommands -> client: load order snapshot {class: loadorder}
 client -> http: load order snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
 commands -> loadorder: load order snapshot {class: query}
-http -> indexer: "reconcile: validate by hash" {class: signal}
-loadorder -> indexer: winners {class: query}
+commands -> http: "applied: the version" {class: loadorder}
+http -> client: the version {class: loadorder}
+loadorder -> watcher: the load order changed {class: signal}
+watcher."arm one watch per mod folder"
+watcher -> indexer: "reconcile: validate by hash" {class: signal}
+indexer."a copy that left or moved: its registration only · read only content the index has not seen"
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
 indexer -> store: rows {class: query}
+loadorder -> indexer: the participating copies {class: query}
+indexer."winners and conflicts, once"
+indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: rows changed (push), then re-read {class: push}
+client -> views: "index status · rows changed, then re-read" {class: push}

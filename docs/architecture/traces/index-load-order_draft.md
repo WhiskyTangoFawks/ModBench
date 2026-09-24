@@ -1,45 +1,63 @@
 # index-load-order: contract (draft)
 
-Diagram: [index-load-order.d2](index-load-order.d2). Catalog row: the system command `put load order` in
-[commands.md](../commands.md). Governed by
+Diagram: [index-load-order.d2](index-load-order.d2). Catalog row: the system command `put load
+order` in [commands.md](../commands.md). What the views show while it runs is in
+[plugins.md](../surfaces/plugins.md), States. Governed by
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
 [ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-Each story cites its source. The trigger is a change to the load order. No user starts it, so
-this file has no driving-box seam.
+A file changing and a load order changing are two events (ADR-0009, invariant 1). This flow is the
+second: the registration changes, and rows are read only for content the index has never seen. The
+first is the Mod watcher's, and it ends in the same tail.
 
-## put load order
+## The flow
 
-As a user, I want:
+1. Instance commands send the whole load order snapshot to Commands, through the mEdit client and
+   the HTTP endpoints: every physical copy, as origin, file name and path, with its slot, whether
+   it is enabled and whether it wins, and the game release (ADR-0013, invariant 2). The mEdit
+   client sends one snapshot at a time, and a newer one replaces a snapshot still waiting.
+2. Commands puts the snapshot in Load order state, and answers at once with its version. The index
+   follows.
+3. Load order state tells the Mod watcher that the load order changed. The watcher arms one watch
+   per mod folder the snapshot names, and asks the Indexer to reconcile.
+4. The Indexer compares the snapshot with the one it last reconciled. An identical snapshot does
+   nothing (ADR-0013, invariant 1). Otherwise:
+   - A copy that left is unregistered. Its rows stay, and no read sees them.
+   - A copy that moved, or whose enabled or winning fact changed, updates its registration only.
+   - A copy that arrived is registered. The Indexer reads it only when the index holds no rows for
+     its content, by hash (ADR-0009, invariant 4).
+   - A copy that became tracked or untracked is read again, from its new source.
+5. For each copy it reads, one at a time, the Indexer reads the documents through the Source
+   adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
+   not. It takes the schema from the Codec, and writes the copy's rows to the Store.
+6. After the last copy, the Indexer takes the participating copies from Load order state, enabled,
+   listed and winning (ADR-0013, invariant 3), and computes the winners and the conflicts once.
+7. Through Ports, the Indexer publishes the index status at each copy: reconciling, with the count
+   done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
+   The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3).
 
-1. mEdit to receive the whole load order every time it changes. *catalog Meaning; ADR-0013,
-   invariant 1*
-2. A load order that has not changed to do nothing. *ADR-0013, invariant 1; Doing nothing is not an
-   error*
-3. Every copy of a plugin indexed, not only the winner. *ADR-0012*
-4. A plugin that is new to the load order indexed, and one that is gone removed. A plugin that only
-   moved keeps its rows. *ADR-0013, invariant 1; ADR-0009, invariant 1*
-5. A plugin whose file changed re-indexed. *ADR-0009, invariant 4*
-6. A plugin that fails to parse listed and flagged, never dropped. *ADR-0005, invariant 5; ADR-0012*
-7. Only enabled, listed, winning copies to compete for a record. *ADR-0013, invariant 3*
-8. The views to re-read when the rows change, and not before. *ADR-0015, invariant 3; diagram*
-9. A second window on the same instance to be refused by name. *ADR-0009, invariant 5*
+## Hand-off
+
+The views read again on the rows that changed, and not before. The index status drives each
+view's progress and states (plugins.md, States).
+
+## Refusals and failures
+
+Nothing here refuses a gesture: no user starts this flow. Each outcome is the index status's.
+
+| Outcome | What the status says | What stays |
+|---|---|---|
+| Another window holds the instance's index | held elsewhere, naming the index file and saying to close mEdit there | Nothing is read (ADR-0009, invariant 5). |
+| A copy cannot be read or parsed | ready, with the copy flagged and its reason | The copy stays registered, never dropped (ADR-0013, invariant 4). It is read again only when its bytes change. |
+| The reconcile fails | failed, with the reason | The snapshot stays held. Each copy is read in its own transaction, so the copies read before the failure stand. The next snapshot tries again. |
+| mEdit stops before the reconcile ends | nothing | The next start's snapshot finds the copies already read, by their hashes, and reads the rest. |
 
 ## Test seam
 
-The commands, from the HTTP `put load order` to the Store's published change, as the diagram draws it.
+From the HTTP `put load order` to the published status and rows, as the diagram draws it.
 
-- **In:** a load order snapshot, and the files it names.
-- **Observed:** the Store's rows, and the published keys and sequence.
-
-## Open Questions
-
-1. **A failed put.** The old spec says nothing is torn down, the error is shown, and the next snapshot
-   retries. Which principle says so? ADR-0019 covers the error only.
-2. **Progress.** The old spec shows one progress indicator in the Plugins view header while plugins
-   index, and withholds master issues until loading ends. Accept?
-3. **A closed mEdit mid-load.** The old spec calls it abandonment, not a failure. Accept?
-4. **The status bar.** The old spec has five status-bar texts for the backend. That is a surface
-   document, not this contract.
+- **In:** a snapshot, the snapshot before it, and the files and repositories it names.
+- **Observed:** the registrations, the Store's rows, the sequence of index statuses, and the
+  published keys and sequence.
