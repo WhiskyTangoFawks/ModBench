@@ -292,9 +292,9 @@ function separatorsInsertAt(lines: readonly string[], place: SeparatorsPlace, en
   return end === 'losing' ? separatorLineAt(lines, place.name) + 1 : separatorBlockStartAt(lines, place.name);
 }
 
-/** Each separator and the mods it holds land as one block, in their own order, directly on the
- *  `end` side of the place's separator and its mods, or at that end of mod order. Throws if the
- *  separator is absent. */
+/** Each separator and its mods land as one block, in their own order, directly on the `end` side
+ *  of the place's separator and its mods, or at that end of mod order. Throws if the separator is
+ *  absent. */
 export function moveSeparatorsInText(
   text: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): string {
