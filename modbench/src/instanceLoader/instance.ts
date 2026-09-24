@@ -55,6 +55,12 @@ export interface DownloadFile extends DownloadRow {
   readonly sidecarPath: string;
 }
 
+/** The rows MO2's configured downloads folder holds, or why Modbench could not resolve that
+ *  folder at all — never rows from a folder MO2 is not using (downloads.md, story 1). */
+export type DownloadsResult =
+  | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
+  | { readonly kind: 'unresolved'; readonly reason: string };
+
 /** The instance paths a view renders or opens: the Instance adapter owns every path function, and
  *  a view reads the answer here. Filled from the instance directory alone, so they stand at
  *  sequence 0. */
@@ -84,8 +90,9 @@ export interface InstanceValue {
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  /** downloads/ rows, `.meta` sidecars folded in — status and hidden included. */
-  readonly downloads: readonly DownloadFile[];
+  /** downloads/ rows, `.meta` sidecars folded in — status and hidden included; or the reason
+   *  MO2's configured folder could not be resolved. */
+  readonly downloads: DownloadsResult;
   /** ModOrganizer.ini's `selected_profile`. */
   readonly activeProfile: string;
   /** ModOrganizer.ini's `gameName`. */
@@ -199,7 +206,7 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   plugins: [],
-  downloads: [],
+  downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
   gameRelease: '',
   nexusSlug: '',
@@ -337,18 +344,23 @@ export class Instance implements vscode.Disposable {
     this.current = next;
     this.failure = undefined;
     this.seq++;
-    this.rebindDownloadsWatcherIfMoved(next.paths.downloadsDir);
+    this.rebindDownloadsWatcherIfMoved(next.downloads.kind === 'listed' ? next.paths.downloadsDir : undefined);
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
     return undefined;
   }
 
   // A watcher just bound is not yet armed at the OS level (ADR-0003); one more recompute against
   // the same folder catches a file that landed in that gap — a no-op the second time, no loop.
-  private rebindDownloadsWatcherIfMoved(downloadsDir: string): void {
+  private rebindDownloadsWatcherIfMoved(downloadsDir: string | undefined): void {
     if (this.disposed || this.downloadsWatcherDir === downloadsDir) return;
     this.downloadsWatcher?.dispose();
-    this.downloadsWatcher = createDownloadsWatcher(downloadsDir, () => this.schedule(), 0);
     this.downloadsWatcherDir = downloadsDir;
+    if (downloadsDir === undefined) {
+      // Unresolved: nothing to watch.
+      this.downloadsWatcher = undefined;
+      return;
+    }
+    this.downloadsWatcher = createDownloadsWatcher(downloadsDir, () => this.schedule(), 0);
     this.schedule();
   }
 
@@ -386,14 +398,16 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloads, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
+    const [index, pluginLines, downloadsOutcome, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
       // generations in one value; the scan runs against the same generation's own resolution.
-      resolveDownloadsDirectory(instanceRoot, iniText).then(async (downloadsDir) => ({
-        downloadsDir, downloadEntries: await scanDownloads(downloadsDir),
-      })),
+      resolveDownloadsDirectory(instanceRoot, iniText).then(async (resolution) => {
+        if (resolution.kind === 'unresolved') return resolution;
+        const { downloadsDir } = resolution;
+        return { kind: 'listed' as const, downloadsDir, downloadEntries: await scanDownloads(downloadsDir) };
+      }),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
       readProfileNames(instanceRoot),
@@ -402,9 +416,13 @@ export class Instance implements vscode.Disposable {
         gameFolder, dataFolderPlugins: await readDataFolderPlugins(dataFolderOf(gameFolder), log),
       })),
     ]);
-    const { downloadsDir, downloadEntries } = downloads;
     const { gameFolder, dataFolderPlugins } = game;
-    const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? []) : undefined;
+    // Never a scan of some other folder standing in (downloads.md, story 1); unreached by any
+    // command, since an unresolved value carries no rows to select one from.
+    const downloadsDir = downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : defaultDownloadsDir(instanceRoot);
+    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.downloadEntries
+      ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? [])
+      : undefined;
     const gameName = readGameName(iniText);
     // A game folder not found loses only the Data-folder copies' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
@@ -429,13 +447,18 @@ export class Instance implements vscode.Disposable {
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
-      downloads: downloadEntries && installedInto
-        ? buildDownloadRows(downloadEntries, installedInto).map((row) => ({
-          ...row,
-          path: downloadFile(downloadsDir, row.name),
-          sidecarPath: downloadSidecarFile(downloadsDir, row.name),
-        }))
-        : [],
+      downloads: downloadsOutcome.kind === 'unresolved'
+        ? { kind: 'unresolved', reason: downloadsOutcome.reason }
+        : {
+          kind: 'listed',
+          rows: downloadsOutcome.downloadEntries && installedInto
+            ? buildDownloadRows(downloadsOutcome.downloadEntries, installedInto).map((row) => ({
+              ...row,
+              path: downloadFile(downloadsDir, row.name),
+              sidecarPath: downloadSidecarFile(downloadsDir, row.name),
+            }))
+            : [],
+        },
       activeProfile: profile,
       gameRelease: gameName,
       nexusSlug: nexusSlugForGame(gameName),

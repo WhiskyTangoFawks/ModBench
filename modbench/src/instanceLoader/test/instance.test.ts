@@ -8,7 +8,7 @@ import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
-import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
+import { downloadsDirectoryResolver, type DownloadsDirectoryResolution } from '../../instanceAdapter/downloadsDirectory';
 import { GAME_FOLDER_NOT_FOUND, resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -60,7 +60,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
       iniTextsResolved.push(iniText);
       return resolve(iniText);
     },
-    resolveDownloadsDirectory: downloadsDirectoryResolver(undefined, (msg) => logs.push(msg)),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
@@ -125,6 +125,10 @@ async function enableOutsideModbench(root: string, modName: string): Promise<voi
 }
 
 const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
+
+// Every existing test builds a real, resolvable instance root, so its downloads are always
+// listed; only the dedicated unresolved tests above name that kind directly.
+const downloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
 
 describe('Instance — the value', () => {
   it('starts empty at sequence 0, before anything has been read', async () => {
@@ -336,14 +340,14 @@ describe('Instance — built by watching', () => {
     await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
 
     const after = await pastSequence(instance, before);
-    expect(after.downloads.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
+    expect(after.downloads.kind === 'listed' && after.downloads.rows.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
   });
 
   it('a rebind that lands after dispose() creates no orphan downloads watcher', async () => {
     const root = await cloneCorpusFixture();
     roots.push(root);
-    let resolveDownloadsDir: ((dir: string) => void) | undefined;
-    const pending = new Promise<string>((resolve) => { resolveDownloadsDir = resolve; });
+    let resolveDownloadsDir: ((resolution: DownloadsDirectoryResolution) => void) | undefined;
+    const pending = new Promise<DownloadsDirectoryResolution>((resolve) => { resolveDownloadsDir = resolve; });
     const instance = new Instance({
       instanceRoot: root,
       resolveGameDirectory: resolvesDataFolder,
@@ -354,7 +358,7 @@ describe('Instance — built by watching', () => {
 
     const refreshed = instance.refresh(); // recompute begins, blocked on the pending resolver
     instance.dispose();
-    present(resolveDownloadsDir, 'the captured resolver')(join(root, 'downloads'));
+    present(resolveDownloadsDir, 'the captured resolver')({ kind: 'resolved', downloadsDir: join(root, 'downloads') });
     await refreshed;
 
     expect(watchers.some((w) => !w.disposed)).toBe(false);
@@ -380,7 +384,7 @@ describe('Instance — built by watching', () => {
   // An untranslatable download_directory must not fail the whole recompute — Mods and Plugins do
   // not depend on downloads/, so a folder Modbench cannot resolve loses only the downloads rows.
   it('lands mods and plugins even when download_directory names an untranslatable drive letter', async () => {
-    const { root, instance, logs } = await realInstance();
+    const { root, instance } = await realInstance();
     await instance.refresh();
     const before = instance.sequence;
     const iniPath = join(root, 'ModOrganizer.ini');
@@ -392,8 +396,27 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBeGreaterThan(before);
     expect(instance.readFailure).toBeUndefined();
     expect(instance.value.mods.length).toBeGreaterThan(0);
-    expect(instance.value.paths.downloadsDir).toBe(join(root, 'downloads'));
-    expect(logs.some((l) => l.includes('could not be resolved'))).toBe(true);
+    expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
+    if (instance.value.downloads.kind !== 'unresolved') throw new Error('unreachable');
+    expect(instance.value.downloads.reason).toMatch(/download_directory/);
+  });
+
+  // Rival: falling back to the default downloads/ folder's own contents, which downloads.md,
+  // story 1 forbids — nothing there may leak into rows, or be watched, while unresolved.
+  it('lists and watches nothing from the default downloads/ folder while download_directory is unresolved', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'downloads'), { recursive: true });
+    await writeFile(join(root, 'downloads', 'RealArchive.7z'), 'bytes');
+    await instance.refresh();
+    expect(downloadsOf(instance.value)).toContainEqual(expect.objectContaining({ name: 'RealArchive.7z' }));
+    const iniPath = join(root, 'ModOrganizer.ini');
+    const originalIni = await readFile(iniPath, 'utf8');
+
+    await writeFile(iniPath, `${originalIni}download_directory=D:\\Games\\downloads\r\n`);
+    await instance.refresh();
+
+    expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
+    expect(watchers.filter((w) => w.base === join(root, 'downloads') && !w.disposed)).toHaveLength(0);
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
@@ -659,7 +682,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     await instance.refresh();
 
-    expect(instance.value.downloads).toContainEqual(
+    expect(downloadsOf(instance.value)).toContainEqual(
       expect.objectContaining({
         name: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
         status: 'Installed',
@@ -686,7 +709,7 @@ describe('Instance — downloads, profile and game directory', () => {
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
     const { root, instance } = await realInstance();
     const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
-    const statusOf = () => instance.value.downloads.find((d) => d.name === archive)?.status;
+    const statusOf = () => downloadsOf(instance.value).find((d) => d.name === archive)?.status;
     await instance.refresh();
     expect(statusOf()).toBe('Installed');
 
@@ -706,7 +729,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
     expect(instance.value.modFolders).toContain('Off Profile Mod');
-    const download = instance.value.downloads.find((d) => d.name === 'Off-Profile-1.7z');
+    const download = downloadsOf(instance.value).find((d) => d.name === 'Off-Profile-1.7z');
     expect(download?.status).toBe('Installed');
   });
 
@@ -752,20 +775,19 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.activeProfile).toBe('Secondary');
   });
 
-  // The empty value before any read already has `downloads: []`, so the assertion alone cannot
-  // tell a tolerated absence from a swallowed throw that never landed a new value at all — the
-  // sequence bump is what proves the recompute actually completed.
+  // The empty value already has empty `downloads`, so the assertion alone cannot tell a
+  // tolerated absence from a swallowed throw — the sequence bump proves the recompute landed.
   it('yields a value with no downloads, rather than a failure, when downloads/ is absent', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
-    expect(instance.value.downloads.length).toBeGreaterThan(0); // the fixture starts with one
+    expect(downloadsOf(instance.value).length).toBeGreaterThan(0); // the fixture starts with one
     const before = instance.sequence;
 
     await rm(join(root, 'downloads'), { recursive: true, force: true });
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.downloads).toEqual([]);
+    expect(instance.value.downloads).toEqual({ kind: 'listed', rows: [] });
   });
 
   // A workspace before its first install has no mods/, and the sequence bump proves the
@@ -1083,7 +1105,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
 
     await instance.refresh();
 
-    const download = instance.value.downloads.find((d) => d.name === 'Consumer-1-2-3.7z');
+    const download = downloadsOf(instance.value).find((d) => d.name === 'Consumer-1-2-3.7z');
     expect(download?.fileID).toBe('2000');
 
     const mod = instance.value.mods.find((m) => m.name === 'Consumer');
@@ -1099,7 +1121,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
 
     await instance.refresh();
 
-    const download = instance.value.downloads.find((d) => d.name === 'Plain-1.7z');
+    const download = downloadsOf(instance.value).find((d) => d.name === 'Plain-1.7z');
     expect(download?.fileID).toBeUndefined();
 
     const mod = instance.value.mods.find((m) => m.name === 'Consumer');

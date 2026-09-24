@@ -53,7 +53,7 @@ import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
 import type { DownloadRow } from '../../mo2Codecs/downloads';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
-import type { Instance, InstanceValue } from '../../instanceLoader/instance';
+import type { DownloadFile, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -66,11 +66,12 @@ const node = (root: string, name: string, row: Partial<DownloadRow> = {}): Downl
 // No installed mods by default, so `selectUpgradeCandidates` finds none and the pick never
 // shows — the shape every install test not about the pick itself relies on.
 const fakeInstance = (
-  mods: InstanceValue['mods'] = [], downloads: InstanceValue['downloads'] = [], gameRelease = 'Fallout4',
+  mods: InstanceValue['mods'] = [], downloads: readonly DownloadFile[] = [], gameRelease = 'Fallout4',
   downloadsDir = '',
 ): Pick<Instance, 'value'> => ({
   value: instanceValueFixture({
-    mods, downloads, gameRelease, paths: { overwriteDir: '', downloadsDir, modDirs: new Map() },
+    mods, downloads: { kind: 'listed', rows: downloads }, gameRelease,
+    paths: { overwriteDir: '', downloadsDir, modDirs: new Map() },
   }),
 });
 
