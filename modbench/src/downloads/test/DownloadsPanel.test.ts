@@ -315,8 +315,6 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(openExternal).not.toHaveBeenCalled();
   });
 
-  // runRowAction's catch -> log + error-notification path is shared by both open and open .meta,
-  // so proving it once here, on open, covers both.
   it('open: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');

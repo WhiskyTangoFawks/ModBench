@@ -572,7 +572,12 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates every internal system command out of the palette too', () => {
-    expect(INTERNAL_COMMANDS).toHaveLength(3);
+    const systemCommandIds = catalogCommandIds(commandsMarkdown.slice(commandsMarkdown.indexOf('## System commands')));
+    const notASystemCommand = INTERNAL_COMMANDS.filter((c) => !systemCommandIds.has(c));
+    expect(
+      notASystemCommand,
+      notASystemCommand.map((c) => `${c} is not a Command ID in commands.md's System commands table.`).join('\n'),
+    ).toEqual([]);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = INTERNAL_COMMANDS.filter((c) => !gatedFalse.has(c));
     expect(missingGate).toEqual([]);
