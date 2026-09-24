@@ -54,7 +54,7 @@ import type { DownloadRow } from '../../mo2Codecs/downloads';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
 import type { Instance, InstanceValue } from '../../instanceLoader/instance';
-import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
@@ -625,6 +625,8 @@ describe('registerDownloadsMultiRowCommands', () => {
 
   it('hide applies to the whole selection, not just the clicked row', async () => {
     const root = await makeInstanceRoot();
+    await writeArchive(root, 'a.7z');
+    await writeArchive(root, 'b.7z');
     const metaA = await writeMeta(root, 'a.7z');
     const metaB = await writeMeta(root, 'b.7z');
 
@@ -639,6 +641,8 @@ describe('registerDownloadsMultiRowCommands', () => {
 
   it('is idempotent over a mixed hidden/visible selection — hide leaves both hidden, no error', async () => {
     const root = await makeInstanceRoot();
+    await writeArchive(root, 'already-hidden.7z');
+    await writeArchive(root, 'visible.7z');
     const already = await writeMeta(root, 'already-hidden.7z', '[General]\r\nremoved=true\r\n');
     const visible = await writeMeta(root, 'visible.7z');
 
@@ -652,34 +656,37 @@ describe('registerDownloadsMultiRowCommands', () => {
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
-  it('is idempotent over a mixed selection for unhide too — both end up unhidden, no error', async () => {
+  it('is idempotent over a mixed selection for unhide too — both end up visible, no error, the already-visible one untouched', async () => {
     const root = await makeInstanceRoot();
+    await writeArchive(root, 'hidden.7z');
+    await writeArchive(root, 'already-visible.7z');
     const hidden = await writeMeta(root, 'hidden.7z', '[General]\r\nremoved=true\r\n');
     const already = await writeMeta(root, 'already-visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog(), trash);
-    invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
+    await invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
 
-    await vi.waitFor(async () => {
-      expect(await readFile(hidden, 'utf8')).toContain('removed=false');
-      expect(await readFile(already, 'utf8')).toContain('removed=false');
-    });
+    expect(await readFile(hidden, 'utf8')).toContain('removed=false');
+    // Already visible by default: nothing to clear, so its `.meta` gains no `removed` line.
+    expect(await readFile(already, 'utf8')).toBe('[General]\r\n');
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
-  it('exclude: a refused write is reported under the gesture\'s own verb', async () => {
+  it('exclude: a refused write is reported once as the selection outcome', async () => {
     const root = await makeInstanceRoot();
     const report = recordingReporter();
 
-    registerDownloadsMultiRowCommands(join(root, 'gone'), report, scriptedDialog(), trash);
+    // No archive on disk: the row is stale, so every name in the (one-item) selection refuses.
+    registerDownloadsMultiRowCommands(root, report, scriptedDialog(), trash);
     invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    expect(present(report.reports[0], 'the one report').message).toBe('Exclude for "foo.7z" failed.');
+    expect(present(report.reports[0], 'the one report').message).toBe('Could not exclude 1 of 1 downloaded files.');
   });
 
   it('exclude: sets removed=true on the .meta sidecar (clicked row alone, no selection array)', async () => {
     const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog(), trash);
@@ -692,6 +699,7 @@ describe('registerDownloadsMultiRowCommands', () => {
 
   it('include: clears removed to false on the .meta sidecar (clicked row alone, no selection array)', async () => {
     const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog(), trash);
@@ -738,6 +746,74 @@ describe('registerDownloadsMultiRowCommands', () => {
 
     await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(2));
     expect(trashedPaths()).toEqual(expect.arrayContaining([archive, meta]));
+  });
+});
+
+// ── modbench.downloadedFile.exclude / include over a selection ──────────────
+describe('modbench.downloadedFile.exclude / include — a multi-name selection', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('given the right-clicked row and the selection, excludes the whole selection, refuses the gone file, and reports once', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'a.7z');
+    await writeArchive(root, 'b.7z');
+    // No archive for 'gone.7z': a stale row in the selection.
+    const reporter = recordingReporter();
+
+    registerDownloadsMultiRowCommands(root, reporter, scriptedDialog(), trash);
+    const outcome = await invoke(
+      'modbench.downloadedFile.exclude',
+      node(root, 'b.7z'),
+      [node(root, 'a.7z'), node(root, 'b.7z'), node(root, 'gone.7z')],
+    );
+
+    const recordedCall = present(reporter.selectionOutcomeCalls[0], 'the one selection-outcome call');
+    assertSelectionOutcome(recordedCall.outcome, {
+      landed: ['a.7z', 'b.7z'],
+      refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
+    });
+    expect(outcome).toEqual(recordedCall.outcome);
+    expect(recordedCall.message).toBe('Could not exclude 1 of 3 downloaded files.');
+    expect(await readFile(join(root, 'downloads', 'a.7z.meta'), 'utf8')).toContain('removed=true');
+    expect(await readFile(join(root, 'downloads', 'b.7z.meta'), 'utf8')).toContain('removed=true');
+  });
+
+  it('given the right-clicked row and the selection, includes the whole selection, refuses the gone file, and reports once', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'a.7z');
+    await writeMeta(root, 'a.7z', '[General]\r\nremoved=true\r\n');
+    await writeArchive(root, 'b.7z');
+    await writeMeta(root, 'b.7z', '[General]\r\nremoved=true\r\n');
+    const reporter = recordingReporter();
+
+    registerDownloadsMultiRowCommands(root, reporter, scriptedDialog(), trash);
+    const outcome = await invoke(
+      'modbench.downloadedFile.include',
+      node(root, 'b.7z'),
+      [node(root, 'a.7z'), node(root, 'b.7z'), node(root, 'gone.7z')],
+    );
+
+    const recordedCall = present(reporter.selectionOutcomeCalls[0], 'the one selection-outcome call');
+    assertSelectionOutcome(recordedCall.outcome, {
+      landed: ['a.7z', 'b.7z'],
+      refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
+    });
+    expect(outcome).toEqual(recordedCall.outcome);
+    expect(recordedCall.message).toBe('Could not include 1 of 3 downloaded files.');
+    expect(await readFile(join(root, 'downloads', 'a.7z.meta'), 'utf8')).toContain('removed=false');
+    expect(await readFile(join(root, 'downloads', 'b.7z.meta'), 'utf8')).toContain('removed=false');
+  });
+
+  it('an empty selection excludes nothing and reports nothing', async () => {
+    const root = await makeInstanceRoot();
+    const reporter = recordingReporter();
+
+    registerDownloadsMultiRowCommands(root, reporter, scriptedDialog(), trash);
+    const outcome = await invoke('modbench.downloadedFile.exclude', undefined, []);
+
+    expect(outcome).toEqual({ landed: [], refused: [] });
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.selectionOutcomeCalls).toEqual([]);
   });
 });
 

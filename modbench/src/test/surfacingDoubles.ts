@@ -65,3 +65,16 @@ export function assertAskedOnce(
   expect(call.detail).toBeUndefined();
   expect(call.buttons).toEqual(expected.buttons);
 }
+
+// Same reason as assertAskedOnce: a refusal's exact wording is not the contract, only that it
+// names the item, so this checks `reason` by hand instead of embedding a matcher in `toEqual`.
+export function assertSelectionOutcome<T>(
+  outcome: SelectionOutcome<T>,
+  expected: { landed: readonly T[]; refused: readonly { item: T; reasonContains: string }[] },
+): void {
+  expect(outcome.landed).toEqual(expected.landed);
+  expect(outcome.refused.map((r) => r.item)).toEqual(expected.refused.map((r) => r.item));
+  outcome.refused.forEach((refusal, i) => {
+    expect(refusal.reason).toContain(present(expected.refused[i], 'the matching expected refusal').reasonContains);
+  });
+}

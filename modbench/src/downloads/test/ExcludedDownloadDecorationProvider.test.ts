@@ -1,9 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
+import { EventEmitter } from '../../test/vscodeMock';
 
+// Real `Uri.file` forward-slashes a backslash path only on Windows; this always does, so a
+// Windows-style fixture below exercises that conversion on any host.
 vi.mock('vscode', () => ({
   ThemeColor: class { constructor(public id: string) {} },
-  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
+  EventEmitter,
+  Uri: {
+    file: (p: string) => {
+      const path = p.replaceAll('\\', '/');
+      return { fsPath: p, path, toString: () => `file://${path}` };
+    },
+  },
 }));
 
 import * as vscode from 'vscode';
@@ -42,5 +51,29 @@ describe('ExcludedDownloadDecorationProvider', () => {
     const uri = fakeUri(`${downloadsDir}Xevil.zip`);
 
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
+  });
+
+  // Rival this rules out: comparing by `.fsPath` with a hardcoded `/` join, which never matches a
+  // real Windows `fsPath` (backslash-separated) against a POSIX-style literal.
+  it('dims a download row given a Windows-style downloads dir and file path', () => {
+    const winDownloadsDir = String.raw`C:\Instance\downloads`;
+    const provider = new ExcludedDownloadDecorationProvider(winDownloadsDir, () => new Set(['excluded.zip']));
+    const uri = vscode.Uri.file(String.raw`C:\Instance\downloads\excluded.zip`);
+
+    const decoration = present(provider.provideFileDecoration(uri), 'the decoration for the Windows-style row');
+
+    expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
+  });
+
+  describe('onDidChangeFileDecorations', () => {
+    it('fires when refresh() is called, so the dim follows a rows change', () => {
+      const provider = new ExcludedDownloadDecorationProvider(downloadsDir, () => new Set());
+      const listener = vi.fn();
+      provider.onDidChangeFileDecorations(listener);
+
+      provider.refresh();
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
   });
 });
