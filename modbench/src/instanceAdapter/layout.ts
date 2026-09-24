@@ -25,7 +25,9 @@ export const modDir = (instanceRoot: string, modName: string): string =>
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
-export const downloadsDir = (instanceRoot: string): string => join(instanceRoot, DOWNLOADS);
+/** MO2's own default when `download_directory` is unset. Every other download path function
+ *  below takes the resolved folder directly, wherever it actually is. */
+export const defaultDownloadsDir = (instanceRoot: string): string => join(instanceRoot, DOWNLOADS);
 
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
@@ -38,11 +40,10 @@ export const modlistFile = (instanceRoot: string, profile: string): string =>
 export const pluginsFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PLUGINS_FILE_NAME);
 
-export const downloadFile = (instanceRoot: string, name: string): string =>
-  join(downloadsDir(instanceRoot), name);
+export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
-export const downloadSidecarFile = (instanceRoot: string, name: string): string =>
-  join(downloadsDir(instanceRoot), name + DOWNLOAD_SIDECAR_SUFFIX);
+export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
+  join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const modGitDir = (modFolder: string): string => join(modFolder, '.git');
@@ -51,6 +52,5 @@ export const modGitDir = (modFolder: string): string => join(modFolder, '.git');
 // glob, never a platform path, so these are built as text rather than with `join`.
 export const MODS_GLOB = `${MODS}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
-export const DOWNLOADS_GLOB = `${DOWNLOADS}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;

@@ -705,6 +705,37 @@ describe('modbench.downloads tree', () => {
     }, 10000);
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
+
+  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
+  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async () => {
+    if (!root) throw new Error('no open workspace');
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
+    const iniPath = path.join(root, 'ModOrganizer.ini');
+    const originalIni = fs.readFileSync(iniPath, 'utf8');
+    try {
+      fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
+      await writeAndAwaitInstance(() => {
+        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`);
+      });
+
+      const scanned = await provider().getChildren();
+      assert.ok(
+        scanned.some((r) => archiveNameOf(r) === 'external-preexisting.zip'),
+        'expected the file already in the external folder to be scanned once the ini named it',
+      );
+
+      fs.writeFileSync(path.join(external, 'external-new.zip'), 'data');
+      const watched = await waitFor('external-new.zip via the watcher', async () => {
+        const found = await provider().getChildren();
+        return found.some((r) => archiveNameOf(r) === 'external-new.zip') ? found : undefined;
+      }, 10000);
+      assert.ok(watched.some((r) => archiveNameOf(r) === 'external-new.zip'), 'expected the watcher on the external folder to fire with no manual refresh');
+    } finally {
+      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      fs.rmSync(external, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Overwrite row ──────────────────────────────────────────────────────────────

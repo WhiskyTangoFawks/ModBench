@@ -10,6 +10,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
@@ -414,6 +415,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const instance = own(new Instance({
     instanceRoot, log, logReadFailure: (line) => outputChannel.error(line),
     resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));

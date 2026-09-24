@@ -58,7 +58,7 @@ export interface GameDetectors {
   winePrefix: (steamAppId: string) => Promise<string | null>;
 }
 
-const STEAM: GameDetectors = {
+export const STEAM: GameDetectors = {
   paths: (game) => detectGamePaths(process.platform, game),
   winePrefix: detectWinePrefix,
 };
@@ -115,6 +115,14 @@ function autodetectFacts(iniText: string): GameAutodetect | undefined {
   return { steamAppId: paths.steamAppId, steamFolderName: paths.steamFolderName };
 }
 
+/** The Wine prefix detector for the game the ini names — `normalizeGamePath`'s own translation,
+ *  shared so a path other than `gamePath` (`download_directory`, set through the same native
+ *  dialog under Wine) translates a `C:` drive the same way. */
+export function winePrefixDetectorFor(iniText: string, detectors: GameDetectors = STEAM): DetectWinePrefix {
+  const facts = autodetectFacts(iniText);
+  return () => (facts ? detectors.winePrefix(facts.steamAppId) : Promise.resolve(null));
+}
+
 // A setting left at its empty default is not set: every branch below reads absence as undefined.
 function set(value: string | undefined): string | undefined {
   const trimmed = (value ?? '').trim();
@@ -133,19 +141,16 @@ const noDataFolder = (place: string, root: string): Looked =>
 
 // A translation failure refuses to fall through to Steam: resolving a different game folder
 // entirely would hide the real problem.
-async function iniGamePath(
-  iniText: string, facts: GameAutodetect | undefined, detectors: GameDetectors,
-): Promise<Looked> {
+async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<Looked> {
   let raw: string;
   try {
     raw = readGamePath(iniText);
   } catch {
     return { look: { place: GAME_PATH_PLACE, answer: NOT_SET }, fallThrough: true };
   }
-  const prefix: DetectWinePrefix = () => (facts ? detectors.winePrefix(facts.steamAppId) : Promise.resolve(null));
   let root: string;
   try {
-    root = await normalizeGamePath(raw, process.platform, prefix);
+    root = await normalizeGamePath(raw, process.platform, winePrefixDetectorFor(iniText, detectors));
   } catch (err) {
     return { look: { place: GAME_PATH_PLACE, answer: errorMessage(err) }, fallThrough: false };
   }
@@ -171,7 +176,7 @@ export function gameDirectoryResolver(
     }
     looked.push({ place: SETTING_PLACE, answer: NOT_SET });
 
-    const fromIni = await iniGamePath(iniText, facts, detectors);
+    const fromIni = await iniGamePath(iniText, detectors);
     if ('found' in fromIni) return at(fromIni.found);
     looked.push(fromIni.look);
     if (!fromIni.fallThrough) return notFound();

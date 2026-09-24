@@ -9,7 +9,10 @@ export class FakeWatcher {
   private createHandlers: ((uri: { fsPath: string }) => void)[] = [];
   private changeHandlers: ((uri: { fsPath: string }) => void)[] = [];
   private deleteHandlers: ((uri: { fsPath: string }) => void)[] = [];
-  constructor(public pattern: string) {}
+  // `base` is the `RelativePattern`'s own base folder — distinguishes a watcher whose base is a
+  // dynamically resolved folder (downloads) from every other watcher's fixed instance-root base,
+  // even when two watchers share the same glob.
+  constructor(public pattern: string, public base: string) {}
   onDidCreate = (h: (uri: { fsPath: string }) => void) => { this.createHandlers.push(h); };
   onDidChange = (h: (uri: { fsPath: string }) => void) => { this.changeHandlers.push(h); };
   onDidDelete = (h: (uri: { fsPath: string }) => void) => { this.deleteHandlers.push(h); };
@@ -25,11 +28,11 @@ export const watchers: FakeWatcher[] = [];
 /** A factory, not a shared instance, so `vi.mock`'s hoisting rules are respected. */
 export function fakeVscodeModule() {
   return {
-    RelativePattern: class { constructor(public base: unknown, public pattern: string) {} },
+    RelativePattern: class { constructor(public base: { fsPath: string }, public pattern: string) {} },
     Uri: { file: (p: string) => ({ fsPath: p }) },
     workspace: {
-      createFileSystemWatcher: (pattern: { pattern: string }) => {
-        const w = new FakeWatcher(pattern.pattern);
+      createFileSystemWatcher: (pattern: { pattern: string; base: { fsPath: string } }) => {
+        const w = new FakeWatcher(pattern.pattern, pattern.base.fsPath);
         watchers.push(w);
         return w;
       },

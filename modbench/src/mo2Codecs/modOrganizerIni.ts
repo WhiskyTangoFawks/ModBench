@@ -10,6 +10,7 @@ export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
 const KEY = 'selected_profile';
 const GAME_KEY = 'gameName';
 const GAME_PATH_KEY = 'gamePath';
+const DOWNLOAD_DIRECTORY_KEY = 'download_directory';
 
 function valueSpan(text: string, key: string): { start: number; end: number } | null {
   for (const { start, contentEnd } of lineRanges(text)) {
@@ -43,6 +44,12 @@ export function readGamePath(text: string): string {
   const span = valueSpan(text, GAME_PATH_KEY);
   if (!span) throw new Error('ModOrganizer.ini: missing gamePath');
   return unwrap(text.slice(span.start, span.end));
+}
+
+/** `[Settings] download_directory`, undefined when unset — MO2's own default then applies. */
+export function readDownloadDirectory(text: string): string | undefined {
+  const span = valueSpan(text, DOWNLOAD_DIRECTORY_KEY);
+  return span ? unwrap(text.slice(span.start, span.end)) : undefined;
 }
 
 export function setSelectedProfileInText(text: string, profile: string): string {

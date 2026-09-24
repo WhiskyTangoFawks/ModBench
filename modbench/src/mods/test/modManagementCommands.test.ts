@@ -73,11 +73,19 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 // Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
 // against Fallout 4 and reach meta.ini wrong for every other install.
 const GAME_RELEASE = 'Skyrim Special Edition';
+// Deliberately not the naive '/instance/downloads' join: a call site that re-derives the folder
+// instead of reading the value's own `paths.downloadsDir` would pass against that guess too.
+const DOWNLOADS_DIR = '/elsewhere/MyDownloads';
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     instanceRoot: '/instance',
-    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE }) },
+    instance: {
+      value: instanceValueFixture({
+        gameRelease: GAME_RELEASE,
+        paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
+      }),
+    },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -184,7 +192,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_RELEASE },
+      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', DOWNLOADS_DIR, { gameName: GAME_RELEASE },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -308,7 +316,12 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
 describe('registerModContextCommands: the uninstall confirmation', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const instance = {
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
+    }),
+  };
   const modNode = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, archiveFilename: 'my-mod.7z' });
   const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
 
@@ -324,7 +337,7 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
       detail: undefined,
       buttons: ['Uninstall'],
     }]);
-    expect(uninstallMod).toHaveBeenCalledWith('/instance', 'Default', 'My Mod', 'my-mod.7z');
+    expect(uninstallMod).toHaveBeenCalledWith('/instance', 'Default', 'My Mod', DOWNLOADS_DIR, 'my-mod.7z');
   });
 
   it('uninstalls nothing when the modal is dismissed', async () => {
@@ -342,7 +355,12 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
 describe('the destructive Mods row gestures take the right-clicked row, not the selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const instance = {
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
+    }),
+  };
   const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
 
   it('uninstall asks about and uninstalls the right-clicked mod alone', async () => {
@@ -357,7 +375,7 @@ describe('the destructive Mods row gestures take the right-clicked row, not the 
     expect(ask.asked.map((q) => q.message)).toEqual([
       'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
     ]);
-    expect(uninstallMod.mock.calls).toEqual([['/instance', 'Default', 'My Mod', 'my-mod.7z']]);
+    expect(uninstallMod.mock.calls).toEqual([['/instance', 'Default', 'My Mod', DOWNLOADS_DIR, 'my-mod.7z']]);
   });
 
   it('delete separator deletes the right-clicked separator alone', async () => {

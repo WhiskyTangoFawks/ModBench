@@ -111,7 +111,7 @@
       },
       {
         "view": "modbench.downloads",
-        "contents": "No downloads yet. Copy archives into `downloads/` to see them here.",
+        "contents": "No downloads yet. Copy archives into the downloads folder to see them here.",
         "when": "modbench.folder == instance && modbench.instanceRead && !modbench.downloadedFile.allExcluded"
       },
       {

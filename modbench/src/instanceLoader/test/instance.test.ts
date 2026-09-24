@@ -8,6 +8,7 @@ import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 import { GAME_FOLDER_NOT_FOUND, resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -59,6 +60,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
       iniTextsResolved.push(iniText);
       return resolve(iniText);
     },
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
@@ -105,6 +107,15 @@ const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
   return present(found[0], `the sole watcher for ${glob}`);
+};
+
+// Downloads' own watcher is based at the resolved folder itself (glob `**`), never a fixed
+// instance-relative glob, so it is found by base rather than by `watcherFor`'s glob lookup.
+const downloadsWatcherFor = (instance: Instance): FakeWatcher => {
+  const dir = instance.value.paths.downloadsDir;
+  const found = watchers.filter((w) => w.base === dir && w.pattern === '**');
+  expect(found).toHaveLength(1);
+  return present(found[0], `the sole downloads watcher for ${dir}`);
 };
 
 // MO2, xEdit or the user rewriting the file, with Modbench none the wiser.
@@ -288,20 +299,48 @@ describe('Instance — the overwrite folder', () => {
 });
 
 describe('Instance — built by watching', () => {
-  it('owns a watcher for every MO2 file the value is read from', async () => {
+  it('owns a watcher for every MO2 file fixed at the instance root, before any read has landed', async () => {
     await realInstance();
 
     expect(watchers.map((w) => w.pattern).sort()).toEqual(
-      ['ModOrganizer.ini', 'downloads/**', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
+      ['ModOrganizer.ini', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
     );
   });
 
-  it('disposes every watcher it owns', async () => {
+  // Downloads' own watcher cannot exist before its base is known — resolving it is an async read
+  // of ModOrganizer.ini — so it joins the rest only once the first recompute lands.
+  it('adds the downloads watcher, based at the resolved folder, once the first read lands', async () => {
+    const { root, instance } = await realInstance();
+
+    await instance.refresh();
+
+    expect(downloadsWatcherFor(instance).base).toBe(join(root, 'downloads'));
+  });
+
+  it('disposes every watcher it owns, the downloads one included', async () => {
     const { instance } = await realInstance();
+    await instance.refresh();
 
     instance.dispose();
 
     expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true, true]);
+  });
+
+  // download_directory itself can move — the settings-file watcher is what notices the ini
+  // rewrite — so the watcher aimed at the old folder must not linger once a newer one replaces it.
+  it('rebinds the downloads watcher to the newly resolved folder when download_directory moves, disposing the old one', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const originalWatcher = downloadsWatcherFor(instance);
+    const iniPath = join(root, 'ModOrganizer.ini');
+    const originalIni = await readFile(iniPath, 'utf8');
+
+    await writeFile(iniPath, `${originalIni}download_directory=MovedDownloads\r\n`);
+    await instance.refresh();
+
+    expect(instance.value.paths.downloadsDir).toBe(join(root, 'MovedDownloads'));
+    expect(originalWatcher.disposed).toBe(true);
+    expect(downloadsWatcherFor(instance).base).toBe(join(root, 'MovedDownloads'));
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
@@ -327,7 +366,7 @@ describe('Instance — built by watching', () => {
     watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
     watcherFor('profiles/*/plugins.txt').fireChange(join(root, DEFAULT_PLUGINS));
     watcherFor('overwrite/**').fireCreate(join(root, 'overwrite', 'stray.esp'));
-    watcherFor('downloads/**').fireCreate(join(root, 'downloads', 'New.7z'));
+    downloadsWatcherFor(instance).fireCreate(join(root, 'downloads', 'New.7z'));
 
     await pastSequence(instance, before);
     // Chains behind anything the burst still had queued, so a per-event recompute would be
@@ -817,7 +856,8 @@ describe('Instance — downloads, profile and game directory', () => {
   // activation joining its own.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNotFound, log: () => {}, logReadFailure: () => {},
+      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNotFound,
+      resolveDownloadsDirectory: downloadsDirectoryResolver(), log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
@@ -846,6 +886,7 @@ async function minimalInstance(): Promise<{
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: (iniText) => resolve(iniText),
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });

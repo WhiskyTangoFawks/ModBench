@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readGameName, readGamePath, readSelectedProfile, setSelectedProfileInText } from '../modOrganizerIni';
+import {
+  readDownloadDirectory, readGameName, readGamePath, readSelectedProfile, setSelectedProfileInText,
+} from '../modOrganizerIni';
 
 const iniPath = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance', 'ModOrganizer.ini');
 const ini = () => readFileSync(iniPath, 'utf8');
@@ -47,6 +49,21 @@ describe('readGamePath', () => {
 
   it('throws a message naming the missing key when the key is absent', () => {
     expect(() => readGamePath('[General]\r\ngameName=Fallout 4\r\n')).toThrow(/missing gamePath/);
+  });
+});
+
+describe('readDownloadDirectory', () => {
+  it('answers undefined when the key is absent, so MO2\'s own default applies', () => {
+    expect(readDownloadDirectory(ini())).toBeUndefined();
+  });
+
+  it('reads a plain (non-@ByteArray) value', () => {
+    expect(readDownloadDirectory('[Settings]\r\ndownload_directory=D:\\Downloads\r\n')).toBe('D:\\Downloads');
+  });
+
+  it('unwraps an @ByteArray(...) value', () => {
+    expect(readDownloadDirectory('[Settings]\r\ndownload_directory=@ByteArray(%BASE_DIR%/downloads)\r\n'))
+      .toBe('%BASE_DIR%/downloads');
   });
 });
 

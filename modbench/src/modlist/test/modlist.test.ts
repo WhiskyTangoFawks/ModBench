@@ -460,7 +460,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   it('uninstallMod removes the modlist entry and deletes the mod folder', async () => {
-    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS');
+    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS', join(dir, 'downloads'));
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
     await expect(stat(join(dir, 'mods', 'Harder VATS'))).rejects.toThrow();
@@ -469,7 +469,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('uninstallMod refuses an unknown mod, leaving the modlist and mods/ untouched', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const beforeDirs = await readdir(join(dir, 'mods'));
-    const outcome = await uninstallMod(dir, 'Default', 'No Such Mod');
+    const outcome = await uninstallMod(dir, 'Default', 'No Such Mod', join(dir, 'downloads'));
     assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect(await readdir(join(dir, 'mods'))).toEqual(beforeDirs);
@@ -477,7 +477,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('uninstallMod marks the download it is handed uninstalled, without failing the uninstall itself', async () => {
     await uninstallMod(
-      dir, 'Default', 'Unofficial Fallout 4 Patch', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z');
+      dir, 'Default', 'Unofficial Fallout 4 Patch', join(dir, 'downloads'),
+      'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z');
     const meta = await readFile(
       join(dir, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta'), 'utf8',
     );
@@ -488,7 +489,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
   // and a sidecar beside no archive is a file MO2 would never write.
   it('uninstallMod writes no sidecar for an archive that is absent from downloads/', async () => {
-    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS', 'Long Gone-1-0.7z');
+    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS', join(dir, 'downloads'), 'Long Gone-1-0.7z');
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     await expect(stat(join(dir, 'downloads', 'Long Gone-1-0.7z.meta'))).rejects.toThrow();

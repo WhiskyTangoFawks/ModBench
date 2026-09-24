@@ -6,14 +6,13 @@ import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../../mo2Codecs/modlistTe
 import { SETTINGS_FILE_NAME } from '../../mo2Codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../../mo2Codecs/pluginsText';
 import {
-  DOWNLOADS_GLOB,
   MODLIST_GLOB,
   MODS_GLOB,
   OVERWRITE_GLOB,
   PLUGINS_GLOB,
+  defaultDownloadsDir,
   downloadFile,
   downloadSidecarFile,
-  downloadsDir,
   modDir,
   modGitDir,
   modMetaFile,
@@ -33,7 +32,7 @@ describe('MO2 layout', () => {
     expect(profilesDir(ROOT)).toBe(join(ROOT, 'profiles'));
     expect(modsDir(ROOT)).toBe(join(ROOT, 'mods'));
     expect(overwriteDir(ROOT)).toBe(join(ROOT, 'overwrite'));
-    expect(downloadsDir(ROOT)).toBe(join(ROOT, 'downloads'));
+    expect(defaultDownloadsDir(ROOT)).toBe(join(ROOT, 'downloads'));
   });
 
   it('names the settings file', () => {
@@ -58,9 +57,10 @@ describe('MO2 layout', () => {
     expect(MOD_META_FILE_NAME).toBe('meta.ini');
   });
 
-  it('names a download and its sidecar', () => {
-    expect(downloadFile(ROOT, 'Pack.7z')).toBe(join(ROOT, 'downloads', 'Pack.7z'));
-    expect(downloadSidecarFile(ROOT, 'Pack.7z')).toBe(join(ROOT, 'downloads', 'Pack.7z.meta'));
+  it('names a download and its sidecar under the downloads folder it is given, not the instance root', () => {
+    const downloadsDir = join('/mnt', 'elsewhere', 'MyDownloads'); // outside any instance
+    expect(downloadFile(downloadsDir, 'Pack.7z')).toBe(join(downloadsDir, 'Pack.7z'));
+    expect(downloadSidecarFile(downloadsDir, 'Pack.7z')).toBe(join(downloadsDir, 'Pack.7z.meta'));
     expect(DOWNLOAD_SIDECAR_SUFFIX).toBe('.meta');
   });
 
@@ -74,7 +74,6 @@ describe('MO2 layout', () => {
   it('names the watch patterns relative to the instance root', () => {
     expect(MODS_GLOB).toBe('mods/**');
     expect(OVERWRITE_GLOB).toBe('overwrite/**');
-    expect(DOWNLOADS_GLOB).toBe('downloads/**');
     expect(MODLIST_GLOB).toBe('profiles/*/modlist.txt');
     expect(PLUGINS_GLOB).toBe('profiles/*/plugins.txt');
   });

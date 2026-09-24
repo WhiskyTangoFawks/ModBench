@@ -25,7 +25,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMod deletes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch', ARCHIVE);
+    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch', join(dir, 'downloads'), ARCHIVE);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -41,7 +41,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMod marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch');
+    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch', join(dir, 'downloads'));
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
@@ -52,7 +52,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   // or writes somewhere unexpected with none named, instead of skipping silently.
   it('uninstallMod on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await uninstallMod(dir, PROFILE, 'Harder VATS');
+    await uninstallMod(dir, PROFILE, 'Harder VATS', join(dir, 'downloads'));
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));

@@ -24,12 +24,13 @@ import { parseModlist } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
-  downloadFile, downloadSidecarFile, downloadsDir, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
+  defaultDownloadsDir, downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
   pluginsFile, profilesDir, settingsFile,
 } from '../instanceAdapter/layout';
 import {
   GAME_FOLDER_SETTING, dataFolderOf, type GameFolder, type GameDirectoryResolver,
 } from '../instanceAdapter/gameDirectory';
+import type { DownloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { get, listDir } from '../instanceAdapter/files';
@@ -116,9 +117,10 @@ export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' |
 
 export interface InstanceOptions {
   instanceRoot: string;
-  /** Where the game is, answered by the Instance adapter for the ini text this recompute read.
-   *  The only input besides the instance directory itself. */
+  /** Where the game is, answered by the Instance adapter for the ini text this recompute read. */
   resolveGameDirectory: GameDirectoryResolver;
+  /** Where downloads/ resolves to, answered by the Instance adapter the same way. */
+  resolveDownloadsDirectory: DownloadsDirectoryResolver;
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
@@ -184,9 +186,9 @@ async function readProfileNames(instanceRoot: string): Promise<string[]> {
   }
 }
 
-const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePaths => ({
+const pathsOf = (instanceRoot: string, downloadsDir: string, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
-  downloadsDir: downloadsDir(instanceRoot),
+  downloadsDir,
   modDirs: new Map(modNames.map((name) => [name, modDir(instanceRoot, name)])),
 });
 
@@ -206,7 +208,9 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   dataFolderPlugins: { kind: 'unresolved' },
   modStatuses: new Map(),
   overwriteFileCount: 0,
-  paths: pathsOf(instanceRoot, []),
+  // Not read yet, so no resolution has happened either — the Instance adapter's own default
+  // stands in until the first recompute lands.
+  paths: pathsOf(instanceRoot, defaultDownloadsDir(instanceRoot), []),
 });
 
 export class Instance implements vscode.Disposable {
@@ -227,6 +231,13 @@ export class Instance implements vscode.Disposable {
 
   private readonly watchers: vscode.Disposable[];
 
+  // Downloads is the one watcher whose base moves — resolved from the ini, not fixed at the
+  // instance root — so it is rebuilt in `recompute()` against each generation's own folder,
+  // never listed in `watchers` above alongside every fixed-base one.
+  private downloadsWatcher: vscode.Disposable | undefined;
+
+  private downloadsWatcherDir: string | undefined;
+
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.instanceRoot);
     const schedule = () => this.schedule();
@@ -237,7 +248,6 @@ export class Instance implements vscode.Disposable {
       createModlistWatcher(options.instanceRoot, schedule, 0),
       createPluginsTxtWatcher(options.instanceRoot, schedule, 0),
       createOverwriteWatcher(options.instanceRoot, schedule, 0),
-      createDownloadsWatcher(options.instanceRoot, schedule, 0),
       // A profile switch rewrites this file and nothing else, so without it the value keeps
       // naming the profile the user left — and a write verb would edit that profile's files.
       createDebouncedFsWatcher(options.instanceRoot, SETTINGS_FILE_NAME, schedule, 0),
@@ -293,6 +303,7 @@ export class Instance implements vscode.Disposable {
   dispose(): void {
     clearTimeout(this.timer);
     for (const watcher of this.watchers) watcher.dispose();
+    this.downloadsWatcher?.dispose();
     this.subscribers = [];
     this.failureListeners = [];
   }
@@ -324,8 +335,19 @@ export class Instance implements vscode.Disposable {
     this.current = next;
     this.failure = undefined;
     this.seq++;
+    this.rebindDownloadsWatcherIfMoved(next.paths.downloadsDir);
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
     return undefined;
+  }
+
+  // The resolved folder can change generation to generation — a `download_directory` edit is
+  // itself a recompute trigger (the settings-file watcher) — so the watcher aimed at it is
+  // rebuilt here rather than fixed once at construction, alongside every instance-relative one.
+  private rebindDownloadsWatcherIfMoved(downloadsDir: string): void {
+    if (this.downloadsWatcherDir === downloadsDir) return;
+    this.downloadsWatcher?.dispose();
+    this.downloadsWatcher = createDownloadsWatcher(downloadsDir, () => this.schedule(), 0);
+    this.downloadsWatcherDir = downloadsDir;
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
@@ -355,26 +377,30 @@ export class Instance implements vscode.Disposable {
   }
 
   private async read(): Promise<InstanceValue> {
-    const { instanceRoot, resolveGameDirectory, log } = this.options;
+    const { instanceRoot, resolveGameDirectory, resolveDownloadsDirectory, log } = this.options;
     // The ini is read first and every later read is against the profile it names, so a profile
     // switch mid-recompute cannot mix one profile's modlist with another's plugins.txt.
     const iniText = await get(settingsFile(instanceRoot));
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloadEntries, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
+    const [index, pluginLines, downloads, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
-      scanDownloads(instanceRoot),
+      // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
+      // generations in one value; the scan runs against the same generation's own resolution.
+      resolveDownloadsDirectory(instanceRoot, iniText).then(async (downloadsDir) => ({
+        downloadsDir, downloadEntries: await scanDownloads(downloadsDir),
+      })),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
       readProfileNames(instanceRoot),
-      // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
-      // generations in one value; beside the reads above, the game side costs no round trip.
+      // Same reasoning as downloads above; beside the reads above, the game side costs no round trip.
       resolveGameDirectory(iniText).then(async (gameFolder) => ({
         gameFolder, dataFolderPlugins: await readDataFolderPlugins(dataFolderOf(gameFolder), log),
       })),
     ]);
+    const { downloadsDir, downloadEntries } = downloads;
     const { gameFolder, dataFolderPlugins } = game;
     const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? []) : undefined;
     const gameName = readGameName(iniText);
@@ -404,8 +430,8 @@ export class Instance implements vscode.Disposable {
       downloads: downloadEntries && installedInto
         ? buildDownloadRows(downloadEntries, installedInto).map((row) => ({
           ...row,
-          path: downloadFile(instanceRoot, row.name),
-          sidecarPath: downloadSidecarFile(instanceRoot, row.name),
+          path: downloadFile(downloadsDir, row.name),
+          sidecarPath: downloadSidecarFile(downloadsDir, row.name),
         }))
         : [],
       activeProfile: profile,
@@ -415,7 +441,7 @@ export class Instance implements vscode.Disposable {
       dataFolderPlugins,
       modStatuses,
       overwriteFileCount,
-      paths: pathsOf(instanceRoot, entries.filter((e) => e.kind === 'mod').map((e) => e.name)),
+      paths: pathsOf(instanceRoot, downloadsDir, entries.filter((e) => e.kind === 'mod').map((e) => e.name)),
     };
   }
 }

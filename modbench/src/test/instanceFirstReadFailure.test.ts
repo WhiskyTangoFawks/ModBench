@@ -34,6 +34,7 @@ import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
 import { resolvesNotFound } from './mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 
 const roots: string[] = [];
 const disposables: { dispose(): void }[] = [];
@@ -59,6 +60,7 @@ async function fourViewsOverOneInstance() {
   const instance = new Instance({
     instanceRoot: root, log, logReadFailure: (line) => { channel.error(line); },
     resolveGameDirectory: resolvesNotFound,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
   });
   const mods = new ModListProvider({ instance, log, instanceRoot: root, reporter: makeReporter(channel, 'modList') });
   const plugins = new PluginsTreeProvider({

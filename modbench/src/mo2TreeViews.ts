@@ -109,7 +109,7 @@ export function registerDownloadsView(
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
     ...registerDownloadsMultiRowCommands(
-      instanceRoot, reporter, ask, trash, install.log,
+      instance, reporter, ask, trash, install.log,
       () => downloadsView.selection.filter((row): row is DownloadNode => row.kind === 'download'),
     ),
   ]) own(disposable);

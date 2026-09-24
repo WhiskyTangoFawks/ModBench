@@ -67,7 +67,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     let succeeded = false;
     await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
       const outcome = await installFromArchive(
-        instanceRoot, { kind: 'new', name }, archivePath, { gameName: instance.value.gameRelease });
+        instanceRoot, { kind: 'new', name }, archivePath, instance.value.paths.downloadsDir,
+        { gameName: instance.value.gameRelease });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;
@@ -201,7 +202,8 @@ export function registerModContextCommands(
           const profile = instance.value.activeProfile;
           // The download to mark comes off the row the tree already holds, so the command walks
           // nothing to find it.
-          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name, node.mod.archiveFilename));
+          applyOrThrow(await uninstallMod(
+            instanceRoot, profile, node.mod.name, instance.value.paths.downloadsDir, node.mod.archiveFilename));
         });
       }),
   ];

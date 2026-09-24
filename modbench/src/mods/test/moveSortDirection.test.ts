@@ -28,6 +28,7 @@ import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } 
 import { registerModMoveCommand } from '../modManagementCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 
 type RowName = { kind: 'mod' | 'separator'; name: string };
 
@@ -52,6 +53,7 @@ async function moveFrom(direction: SortDirection, selected: readonly RowName[], 
   const instance = new Instance({
     instanceRoot: root, log: () => {}, logReadFailure: () => {},
     resolveGameDirectory: resolvesNotFound,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
   });
   const provider = new ModListProvider({ instance, instanceRoot: root });
   try {

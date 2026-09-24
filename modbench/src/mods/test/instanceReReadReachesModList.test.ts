@@ -20,12 +20,14 @@ vi.mock('vscode', () => ({
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, ModNode } from '../ModListProvider';
 import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 
 async function setup() {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: resolvesNotFound,
+    resolveDownloadsDirectory: downloadsDirectoryResolver(),
     log: () => {},
     logReadFailure: () => {},
   });

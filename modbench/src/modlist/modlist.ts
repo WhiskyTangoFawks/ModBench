@@ -168,19 +168,19 @@ export function reorderSeparatorBlock(
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no
 // archive is one MO2 never writes. `installed` stays, as MO2 leaves it — the codec resolves the
 // keys' precedence.
-async function unmarkDownload(instanceRoot: string, name: string): Promise<void> {
-  if (!(await exists(downloadFile(instanceRoot, name)))) return;
-  await put(downloadSidecarFile(instanceRoot, name), setUninstalledInText, { ifMissing: '' });
+async function unmarkDownload(downloadsDir: string, name: string): Promise<void> {
+  if (!(await exists(downloadFile(downloadsDir, name)))) return;
+  await put(downloadSidecarFile(downloadsDir, name), setUninstalledInText, { ifMissing: '' });
 }
 
 /** Removes the modlist.txt entry and the `mods/<name>/` folder. Refuses only when the modlist
- *  has no entry for `modName`. `archiveFilename` is the mod row's own `installationFile`, handed
- *  in from the value; with none, no download is unmarked. */
+ *  has no entry for `modName`. `archiveFilename` is the mod row's own `installationFile`; with
+ *  none, no download is unmarked. `downloadsDir` is the resolved folder. */
 export async function uninstallMod(
-  instanceRoot: string, profile: string, modName: string, archiveFilename?: string,
+  instanceRoot: string, profile: string, modName: string, downloadsDir: string, archiveFilename?: string,
 ): Promise<ModlistCommandResult> {
   // Bookkeeping over a download that may be long gone — never blocks the uninstall.
-  if (archiveFilename) await unmarkDownload(instanceRoot, archiveFilename).catch(() => undefined);
+  if (archiveFilename) await unmarkDownload(downloadsDir, archiveFilename).catch(() => undefined);
   // De-list before deleting: a failed delete leaves a recoverable orphan, not a dangling entry.
   const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, modName));
   if (!outcome.applied) return outcome;
