@@ -393,7 +393,7 @@ describe('Instance — built by watching', () => {
     expect(instance.readFailure).toBeUndefined();
     expect(instance.value.mods.length).toBeGreaterThan(0);
     expect(instance.value.paths.downloadsDir).toBe(join(root, 'downloads'));
-    expect(logs.some((l) => l.includes('download_directory'))).toBe(true);
+    expect(logs.some((l) => l.includes('could not be resolved'))).toBe(true);
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
