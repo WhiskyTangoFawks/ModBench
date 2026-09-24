@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
-import { registerModsGesture, singularArgument } from './gestureEntry';
+import { pluralArgument, registerModsGesture, singularArgument, type GestureEntry } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -11,6 +11,7 @@ import {
   insertSeparator,
   moveModToSeparator,
   renameSeparator,
+  setModsEnabled,
   uninstallMod,
 } from '../modlist/modlist';
 import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
@@ -110,6 +111,32 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       const folder = folderPicked?.[0]?.fsPath;
       return folder ? installFolder(folder) : NOT_INSTALLED;
     }),
+  ];
+}
+// modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
+// Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
+export function registerModEnableCommands(
+  instanceRoot: string, instance: Pick<Instance, 'value'>,
+  viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+): vscode.Disposable[] {
+  const run = (enabled: boolean) => async (entry: GestureEntry) => {
+    const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
+    if (modNames.length === 0) return;
+    const verb = enabled ? 'enable' : 'disable';
+    const profile = instance.value.activeProfile;
+    const result = await setModsEnabled(instanceRoot, profile, modNames, enabled);
+    if (!result.applied) {
+      reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
+      return;
+    }
+    reporter.selectionOutcome(
+      `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
+      result.outcome, (name) => name,
+    );
+  };
+  return [
+    registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
+    registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
   ];
 }
 export function registerModContextCommands(

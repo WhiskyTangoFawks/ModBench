@@ -10,7 +10,7 @@ import {
   moveModToSeparator as moveModToSeparatorCommand,
   reorderMod as reorderModCommand,
   reorderSeparatorBlock as reorderSeparatorBlockCommand,
-  setModEnabled as setModEnabledCommand,
+  setModsEnabled as setModsEnabledCommand,
   type ModlistCommandResult, type ModlistDrop,
 } from '../modlist/modlist';
 import { errorMessage } from '../ports/errorMessage';
@@ -66,6 +66,13 @@ function rowIdentity(kind: 'mod' | 'separator', name: string): string {
   return `${kind}:${name}`;
 }
 
+// A space-separated flag string, matching `downloadContextValue`'s own pattern: package.json's
+// `when` clauses match a flag with `viewItem =~ /\bflag\b/`.
+function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>): string {
+  const flags = [mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled'];
+  return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
+}
+
 /** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
  *  shows it for them, and then it opens on its own. */
 export class SeparatorNode extends vscode.TreeItem {
@@ -105,7 +112,7 @@ export class ModNode extends vscode.TreeItem {
       this.description = [this.description, label].filter(Boolean).join(' ');
       this.tooltip = [baseTooltip, label, ...status.conflictLines].filter(Boolean).join('\n');
     }
-    this.contextValue = mod.nexusId ? 'modWithNexus' : 'mod';
+    this.contextValue = modContextValue(mod);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -373,9 +380,14 @@ export class ModListProvider
     return name.toLowerCase().includes(this.filterLower);
   }
 
+  // The check box is an entry point to the same command a context menu click or key reaches
+  // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
-    const outcome = await setModEnabledCommand(this.instanceRoot, this.instanceValue.activeProfile, modName, enabled);
-    if (!outcome.applied) throw new Error(outcome.refusal);
+    const profile = this.instanceValue.activeProfile;
+    const result = await setModsEnabledCommand(this.instanceRoot, profile, [modName], enabled);
+    if (!result.applied) throw new Error(result.refusal);
+    const refusal = result.outcome.refused[0];
+    if (refusal) throw new Error(refusal.reason);
   }
 
   /** Presentation only — never changes which mod wins a conflict. */

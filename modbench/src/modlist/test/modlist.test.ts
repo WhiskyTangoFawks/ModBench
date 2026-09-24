@@ -35,6 +35,7 @@ import {
   reorderMod,
   reorderSeparatorBlock,
   setModEnabled,
+  setModsEnabled,
   syncMods,
   uninstallMod,
 } from '../modlist';
@@ -104,6 +105,59 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(outcome).toEqual({ applied: true, wrote: false });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect(await mtime()).toEqual(LONG_AGO);
+  });
+
+  it('setModsEnabled flips only the mods not already in the chosen state, in one write', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    vi.mocked(writeFile).mockClear();
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Harder VATS', 'ENBoost - 12k'], refused: [] } });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
+    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+  });
+
+  it('setModsEnabled to a selection already in the chosen state writes nothing', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+
+    const outcome = await setModsEnabled(
+      dir, 'Default', ['ENBoost - 12k', 'SKK Fast Start new game (Fallout 4)'], true);
+
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: { landed: ['ENBoost - 12k', 'SKK Fast Start new game (Fallout 4)'], refused: [] },
+    });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(await mtime()).toEqual(LONG_AGO);
+  });
+
+  it('setModsEnabled refuses a gone mod by name while the rest land, in one write', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    vi.mocked(writeFile).mockClear();
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'No Such Mod'], true);
+
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: {
+        landed: ['Harder VATS'],
+        refused: [{ item: 'No Such Mod', reason: 'Mod not found in modlist: No Such Mod' }],
+      },
+    });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
+    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+  });
+
+  // Rival: a loop calling setModEnabled per name, each catching its own read failure into a
+  // per-item refusal — that rival still answers applied:true, with one reason repeated per mod.
+  it('refuses the whole selection once, before any write, when modlist.txt cannot be read', async () => {
+    await rm(modlistPath());
+
+    const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
+
+    assertRefusal(outcome, 'ENOENT');
+    await expect(stat(modlistPath())).rejects.toThrow();
   });
 
   it('setModEnabled refuses an unknown mod, leaving the file untouched', async () => {
