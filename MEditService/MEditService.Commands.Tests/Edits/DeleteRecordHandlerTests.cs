@@ -4,6 +4,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -105,6 +106,22 @@ public sealed class DeleteRecordHandlerTests
         // Still served by the last commit until a compile: a working-tree deletion is not a compile.
         Assert.NotNull(
             mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
+    }
+
+    // ADR-0015 invariant 2: the watch over the removed file is how the deletion reaches the views.
+    [Fact]
+    public void DeleteRecords_PublishesNothing()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var holder = new LoadOrderHolder();
+        holder.Apply(mod.LoadOrder);
+        var notifications = new InMemoryNotificationPublisher();
+        var handler = TestEditService.Over(holder, notifications: notifications).GetRequiredService<DeleteRecordHandler>();
+
+        var result = handler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
+
+        Assert.True(result.AllApplied);
+        Assert.Empty(notifications.Notifications);
     }
 
     [Fact]

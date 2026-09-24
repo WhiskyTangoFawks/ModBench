@@ -52,6 +52,15 @@ public sealed partial class SourceRepository
         return FormKeyDeclaredIn(Encoding.UTF8.GetString(StripUtf8Bom(bytes)), filePath, pluginFileName);
     }
 
+    /// <summary>The FormKey the working tree's document at <paramref name="filePath"/> declares, else
+    /// the one HEAD's document at that path declares: a deleted document still names its record. Null
+    /// when neither answers.</summary>
+    public static string? FormKeyFiledAt(string modFolder, string filePath, string pluginFileName) =>
+        FormKeyDeclaredBy(filePath, pluginFileName)
+        ?? (ReadCommittedSourceText(modFolder, Path.GetRelativePath(modFolder, filePath)) is { } committed
+            ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
+            : null);
+
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
     public static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>

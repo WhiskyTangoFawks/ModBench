@@ -35,6 +35,31 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal(index.Sequence, notification.Sequence);
     }
 
+    // Where a deletion lands when the watch could not name its key: a burst of deletes wider than one
+    // batch, an overflow, a ref move in the same window, or a document no commit filed.
+    [Fact]
+    public void ValidatingACopyWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
+    {
+        FormKey npc = default;
+        using var fixture = new PluginFixtureBuilder("rows-changed-delete")
+            .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
+            .BuildScattered()
+            .Tracked();
+        var entry = fixture.Plugins.Single();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(fixture, notifications: notifications);
+        var formKey = npc.ToString();
+        File.Delete(entry.SourceFileOf(index.RequireReads().DocumentOf(formKey, entry.KeyOf())));
+
+        index.ValidateIndex(entry.KeyOf());
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(entry.KeyOf(), notification.Plugin);
+        Assert.Equal([formKey], notification.Keys);
+        Assert.Equal(index.Sequence, notification.Sequence);
+        Assert.Null(index.RequireReads().GetDocument(formKey, entry.KeyOf()));
+    }
+
     // A container's document is one row plus every embedded child's, so naming only the key the
     // Indexer was handed leaves a panel open on a placed reference with nothing to re-read on.
     [Fact]

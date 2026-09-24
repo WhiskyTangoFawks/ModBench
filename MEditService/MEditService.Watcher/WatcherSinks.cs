@@ -132,15 +132,15 @@ internal sealed class WatcherSinks
         }
     }
 
-    // Null when any path in the batch names no key: an unknown layout, a document that has gone or one
-    // that cannot be read is a whole-plugin question, never a guess.
+    // Null when any path in the batch names no key: an unknown layout, a document that cannot be read,
+    // or one gone that no commit filed is a whole-plugin question, never a guess.
     private static List<string>? FormKeysOf(SourceChangeEvent change)
     {
         var formKeys = new List<string>();
         foreach (var path in change.Paths)
         {
             if (SourceRepository.CarriesNoRecord(path)) continue;
-            if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is not { } formKey)
+            if (SourceRepository.FormKeyFiledAt(change.ModFolder, path, change.PluginName) is not { } formKey)
                 return null;
             formKeys.Add(formKey);
         }
