@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>Absorb's handler: re-serializes every plugin of the mod as Track does,
-/// commits the mod's whole tracked-file change to main as a new baseline, then rebases the edit
-/// branch onto it at once.</summary>
+/// <summary>Absorb's handler: re-serializes every plugin of the mod as Track does, commits each
+/// one's new baseline to main and then the mod's tracked-file change, then rebases the edit branch
+/// onto them at once.</summary>
 public sealed class AbsorbExternalChangeHandler
 {
     private readonly IPluginAdapter _adapter;
@@ -43,8 +43,8 @@ public sealed class AbsorbExternalChangeHandler
     private static async Task<AbsorbResult> Run(
         IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
     {
-        var allPristineFiles = new List<TreeFile>();
-        var binarySha256ByPlugin = new Dictionary<string, string>();
+        var meta = SourceRepository.MetaFactsIn(modFolder);
+        var baselines = new List<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)>();
 
         foreach (var plugin in plugins)
         {
@@ -56,7 +56,10 @@ public sealed class AbsorbExternalChangeHandler
                 var tree = await adapter.ReadPristineFilesAsync(
                     new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path),
                     loadOrder.GameRelease, PluginStrings.In(modFolder));
-                allPristineFiles.AddRange(SourceRepository.PristineFilesOf(plugin.Name, tree));
+                baselines.Add((
+                    SourceRepository.PristineFilesOf(plugin.Name, tree),
+                    new BaselineTrailers(
+                        plugin.Name, meta.UpstreamVersion, meta.MetaSha256, PluginBinaryHash.TrailerFormOfFile(plugin.Path))));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -65,17 +68,13 @@ public sealed class AbsorbExternalChangeHandler
                 return AbsorbResult.Refused(
                     $"{plugin.Name} could not be parsed from its own binary: {PluginDiagnosis.FromParseException(ex).Describe()}");
             }
-
-            binarySha256ByPlugin[plugin.Name] = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
         }
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
-        var meta = SourceRepository.MetaFactsIn(modFolder);
-        var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binarySha256ByPlugin);
 
         try
         {
-            SourceRepository.CommitPristineToMain(modFolder, allPristineFiles, trailers, trackedFileChanges);
+            SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges);
         }
         catch (GitUnavailableException ex)
         {

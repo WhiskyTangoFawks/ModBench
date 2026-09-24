@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -15,10 +16,9 @@ public sealed class SourceRepositoryTrackCleanupTests
         var modFolder = NewModFolder();
         try
         {
-            SourceRepository.Track(
+            PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
-                [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
-                new TrackProvenance(null, null, new Dictionary<string, string>()));
+                [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())]);
 
             Assert.True(Directory.Exists(Path.Combine(modFolder, ".git")));
             // A successful Track still lands .gitignore and the pristine source tree —
@@ -39,14 +39,13 @@ public sealed class SourceRepositoryTrackCleanupTests
         var modFolder = NewModFolder();
         try
         {
-            // "Poison" pristine file: its relative path names a directory segment already a plain file on
-            // disk, so Directory.CreateDirectory throws partway through Track's write loop, after `git init`
-            // has run: the half-done state cleanup must undo.
-            File.WriteAllText(Path.Combine(modFolder, "Poison"), "not a directory");
-            var poisonedFile = new TreeFile(Path.Combine("Poison", "record.json"), "{}"u8.ToArray());
+            // The source root is already a plain file on disk, so Directory.CreateDirectory throws in Track's
+            // write loop, after `git init` and the mod's own commit: the half-done state cleanup must undo.
+            File.WriteAllText(Path.Combine(modFolder, "source"), "not a directory");
+            var poisonedFile = new TreeFile(Path.Combine("source", "Test.esp", "record.json"), "{}"u8.ToArray());
 
             Assert.ThrowsAny<IOException>(() =>
-                SourceRepository.Track(modFolder, SourcePreset.Edits, [poisonedFile], new TrackProvenance(null, null, new Dictionary<string, string>())));
+                PluginBaselines.Track(modFolder, SourcePreset.Edits, [poisonedFile]));
 
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
             Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");
@@ -76,7 +75,7 @@ public sealed class SourceRepositoryTrackCleanupTests
             ];
 
             Assert.ThrowsAny<IOException>(() =>
-                SourceRepository.Track(modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>())));
+                PluginBaselines.Track(modFolder, SourcePreset.Edits, pristineFiles));
 
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
             Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");

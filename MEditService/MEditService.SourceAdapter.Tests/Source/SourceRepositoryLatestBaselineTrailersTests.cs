@@ -5,80 +5,66 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryLatestBaselineTrailersTests
+public sealed class SourceRepositoryLatestBaselineTrailersTests : IDisposable
 {
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-baseline-trailers-").FullName;
+    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-baseline-trailers-").FullName;
+
+    public void Dispose() => Directory.Delete(_modFolder, recursive: true);
 
     [Fact]
     public void LatestBaselineTrailers_ReadsBackTracksOwnTrailers()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            var trailers = new TrackProvenance(
-                UpstreamVersion: "1.2.3",
-                MetaSha256: "META0001",
-                BinarySha256ByPlugin: new Dictionary<string, string> { ["Test.esp"] = "BIN0001" });
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+        SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline(new BaselineTrailers("Test.esp", "1.2.3", "META0001", "BIN0001"))]);
 
-            var read = SourceRepository.LatestBaselineTrailers(modFolder, "Test.esp");
-
-            Assert.NotNull(read);
-            Assert.Equal("1.2.3", read.UpstreamVersion);
-            Assert.Equal("META0001", read.MetaSha256);
-            Assert.Equal("BIN0001", read.BinarySha256);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(
+            new BaselineTrailers("Test.esp", "1.2.3", "META0001", "BIN0001"),
+            SourceRepository.LatestBaselineTrailers(_modFolder, "Test.esp"));
     }
 
     [Fact]
-    public void LatestBaselineTrailers_PicksTheRightPluginsOwnBinaryHash_WhenTheFolderHoldsMoreThanOne()
+    public void LatestBaselineTrailers_ReadsEachPluginsOwnBaseline_WhenTwoShareTheRepository()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            var files = new[]
-            {
-                new TreeFile("source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray()),
-                new TreeFile("source/B.esp/npc_/B.esp/000001.json", "{}"u8.ToArray()),
-            };
-            var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { ["A.esp"] = "AAAA", ["B.esp"] = "BBBB" });
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+        SourceRepository.Track(
+            _modFolder, SourcePreset.Edits,
+            [
+                Baseline(new BaselineTrailers("A.esp", "1.0", "METAA", "AAAA")),
+                Baseline(new BaselineTrailers("B.esp", "2.0", "METAB", "BBBB")),
+            ]);
 
-            Assert.Equal("AAAA", SourceRepository.LatestBaselineTrailers(modFolder, "A.esp")?.BinarySha256);
-            Assert.Equal("BBBB", SourceRepository.LatestBaselineTrailers(modFolder, "B.esp")?.BinarySha256);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(new BaselineTrailers("A.esp", "1.0", "METAA", "AAAA"), SourceRepository.LatestBaselineTrailers(_modFolder, "A.esp"));
+        Assert.Equal(new BaselineTrailers("B.esp", "2.0", "METAB", "BBBB"), SourceRepository.LatestBaselineTrailers(_modFolder, "B.esp"));
+    }
+
+    [Fact]
+    public void LatestBaselineTrailers_ReadsThePluginsLatestBaseline_AfterAnUpdate()
+    {
+        SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline(new BaselineTrailers("A.esp", "1.0", null, "OLD"))]);
+
+        SourceRepository.CommitPristineToMain(_modFolder, [Baseline(new BaselineTrailers("A.esp", "1.1", null, "NEW"))]);
+
+        Assert.Equal(new BaselineTrailers("A.esp", "1.1", null, "NEW"), SourceRepository.LatestBaselineTrailers(_modFolder, "A.esp"));
+    }
+
+    [Fact]
+    public void LatestBaselineTrailers_IsNull_ForAPluginMainHoldsNoBaselineOf()
+    {
+        SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline(new BaselineTrailers("A.esp", "1.0", null, "AAAA"))]);
+
+        Assert.Null(SourceRepository.LatestBaselineTrailers(_modFolder, "B.esp"));
     }
 
     [Fact]
     public void LatestBaselineTrailers_ReadsMainEvenWithTheEditBranchCheckedOut()
     {
-        // Track always leaves the edit branch checked out (ADR-0007) — this is the normal state of
-        // a tracked mod's working tree at every point after Track returns, so reading "main" here
-        // must not silently mean "whatever's checked out".
-        var modFolder = NewModFolder();
-        try
-        {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            var trailers = new TrackProvenance("9.9.9", null, new Dictionary<string, string> { ["Test.esp"] = "X" });
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+        SourceRepository.Track(_modFolder, SourcePreset.Edits, [Baseline(new BaselineTrailers("Test.esp", "9.9.9", null, "X"))]);
+        var gitDir = Path.Combine(_modFolder, ".git");
+        Assert.Equal(EditBranch.Name, GitProbe.Run(gitDir, _modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+        File.WriteAllText(Path.Combine(_modFolder, "source", "Test.esp", "npc_", "Test.esp", "000001.json"), "{\"edited\":true}");
+        GitProbe.Run(gitDir, _modFolder, "commit", "-qam", "An edit\n\nPlugin: Test.esp\nUpstream-Version: 0.0.1");
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            Assert.Equal(EditBranch.Name, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
-
-            Assert.Equal("9.9.9", SourceRepository.LatestBaselineTrailers(modFolder, "Test.esp")?.UpstreamVersion);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal("9.9.9", SourceRepository.LatestBaselineTrailers(_modFolder, "Test.esp")?.UpstreamVersion);
     }
+
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(BaselineTrailers trailers) =>
+        ([new TreeFile($"source/{trailers.Plugin}/npc_/{trailers.Plugin}/000001.json", "{}"u8.ToArray())], trailers);
 }
