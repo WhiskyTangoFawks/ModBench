@@ -145,6 +145,24 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
     }
 
+    // decompile-plugin, Refusals: a question open on the mod refuses the repository destination.
+    [Fact]
+    public async Task Track_IntoAModWithAnUnansweredExternalChange_RefusesThePlugin_NamingTheQuestion()
+    {
+        WritePlugin("First.esp", "FirstNpc");
+        WritePlugin("Second.esp", "SecondNpc");
+        await Track("First.esp");
+        WritePlugin("First.esp", "ChangedByAnotherTool");
+        SourceRepository.RaiseExternalChangeQuestion(_modFolder, "First.esp changed outside Modbench.");
+
+        var result = await Track("Second.esp");
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((Key("Second.esp"), TrackRefusal.ExternalChangeUnanswered), (refused.Plugin, refused.Refusal));
+        Assert.Equal("First.esp changed outside Modbench.", refused.Message);
+        Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
+    }
+
     [Fact]
     public async Task Track_OfASelectionWhereOnePluginFailsItsRoundTripGate_CommitsTheOthers_AndRefusesItOnceWithItsReason()
     {
