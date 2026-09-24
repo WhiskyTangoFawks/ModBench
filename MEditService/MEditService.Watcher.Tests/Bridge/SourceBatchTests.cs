@@ -107,6 +107,41 @@ public sealed class SourceBatchTests
     }
 
     [Fact]
+    public async Task ACommittedDocumentDeletedFromTheWorkingTree_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, "A.esp");
+        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, "A.esp"));
+        var document = tree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
+        WatchedTree.Track(modFolder, "A.esp");
+        await tree.ApplyLoadOrder();
+
+        await tree.Observes(() => File.Delete(document));
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Equal(["000800:A.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
+        Assert.Empty(tree.Index.Of("validate"));
+    }
+
+    [Fact]
+    public async Task ADocumentNoCommitFiled_DeletedFromTheWorkingTree_ValidatesTheCopyWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+        var document = string.Empty;
+        await tree.Observes(() => document = tree.WriteRecord(modFolder, "A.esp", "000800:A.esp"));
+        Assert.True(await tree.Settles(() => tree.Index.Of("refresh").Count == 1), "the written document never settled");
+
+        await tree.Observes(() => File.Delete(document));
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Single(tree.Index.Of("validate"));
+        Assert.Single(tree.Index.Of("refresh"));
+    }
+
+    [Fact]
     public async Task ARefMove_ValidatesEveryPluginOfTheModWhole()
     {
         using var tree = new WatchedTree();

@@ -132,18 +132,25 @@ internal sealed class WatcherSinks
         }
     }
 
-    // Null when any path in the batch names no key: an unknown layout, a document that has gone or one
-    // that cannot be read is a whole-plugin question, never a guess.
+    // A file declaring nothing, deleted or unreadable, is named by HEAD's document at its path. Null
+    // when neither names a key, or another path declares the key HEAD named: a rename, which only
+    // a whole-copy validate keys right.
     private static List<string>? FormKeysOf(SourceChangeEvent change)
     {
-        var formKeys = new List<string>();
+        var declared = new List<string>();
+        var namedByHead = new List<string>();
         foreach (var path in change.Paths)
         {
             if (SourceRepository.CarriesNoRecord(path)) continue;
-            if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is not { } formKey)
+            if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is { } formKey)
+                declared.Add(formKey);
+            else if (SourceRepository.FormKeyCommittedAt(change.ModFolder, path, change.PluginName) is { } committed)
+                namedByHead.Add(committed);
+            else
                 return null;
-            formKeys.Add(formKey);
         }
-        return formKeys;
+
+        if (namedByHead.Intersect(declared, StringComparer.Ordinal).Any()) return null;
+        return [.. declared, .. namedByHead];
     }
 }

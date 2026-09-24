@@ -73,6 +73,28 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task DeletingARecord_IsApplied_PushedAsRowsChangedNamingIt_AndGoneFromTheNextRead()
+    {
+        using var fx = await Loaded(Origin);
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+
+        var response = await Client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[] { new { formKey, plugin = Plugin, origin = Origin } },
+        });
+
+        response.EnsureSuccessStatusCode();
+        Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        var rows = Assert.Single(await stream.EventsUntil(
+            "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
+        Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
+        Assert.Equal(Origin, rows.GetProperty("origin").GetString());
+        Assert.Equal(await Client.Sequence(), rows.GetProperty("sequence").GetInt64());
+        Assert.Empty(await NpcFormKeys(Plugin));
+    }
+
+    [Fact]
     public async Task DeletingThreeRecords_WhereOneIsInAnUntrackedPlugin_DeletesTwo_AndAnswersPerRecord()
     {
         using var fx = new PluginFixtureBuilder("trace-delete-three-records")
