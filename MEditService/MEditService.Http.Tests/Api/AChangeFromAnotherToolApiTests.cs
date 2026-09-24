@@ -81,9 +81,8 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
         OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
 
-        var frames = await stream.FramesThrough("rows-changed", e => Names(e, quest));
+        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
@@ -104,11 +103,23 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
         OtherTool.DeletesTheFile(original);
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
 
-        var frames = await stream.FramesThrough("rows-changed", e => Names(e, quest));
+        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // A batch publishes a record it dropped after the quest's frame, and everything before the next
+    // batch publishes anything, so the quest's second edit bounds the first edit's batch.
+    private static async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSettleAnchoredBy(
+        StreamReader stream, string modFolder, string quest)
+    {
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
+        var frames = new List<(string Kind, JsonElement Data)>(
+            await stream.FramesThrough("rows-changed", e => Names(e, quest)));
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "AnchorFilter", "BoundingFilter");
+        frames.AddRange(await stream.FramesThrough("rows-changed", e => Names(e, quest)));
+        return frames;
     }
 
     private static bool Names(JsonElement rowsChanged, string formKey) =>
