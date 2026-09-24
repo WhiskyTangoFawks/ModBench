@@ -5,25 +5,29 @@ import { parseDownloadMeta, setHiddenInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';
 import { exists, putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 
-/** `wrote` is false when the gesture was already true of the file: a command that changes no
- *  byte writes none, so it never fires the downloads watcher (ADR-0014 invariant 4). */
+/** `wrote` is false when the gesture already held, so no watcher fires (ADR-0014 invariant 4).
+ *  `metaLeftBehind` is delete's own: the file trashed but its `.meta` didn't. */
 export type DownloadsCommandResult =
-  | { applied: true; wrote: boolean }
+  | { applied: true; wrote: boolean; metaLeftBehind?: string }
   | { applied: false; refusal: string };
 
-// The one selection loop every plural verb below shares: each name lands or refuses on its own.
-async function selectionOutcomeOf(
-  names: readonly string[], run: (name: string) => Promise<DownloadsCommandResult>,
-): Promise<SelectionOutcome<string>> {
-  const landed: string[] = [];
-  const refused: ItemRefusal<string>[] = [];
+// The one selection loop every plural verb shares. `toItem` builds the item a caller sees, so
+// delete's can carry a per-landed note while exclude and include's stays the bare name.
+async function selectionOutcomeOf<T>(
+  names: readonly string[],
+  run: (name: string) => Promise<DownloadsCommandResult>,
+  toItem: (name: string, metaLeftBehind?: string) => T,
+): Promise<SelectionOutcome<T>> {
+  const landed: T[] = [];
+  const refused: ItemRefusal<T>[] = [];
   for (const name of names) {
     const outcome = await run(name);
-    if (outcome.applied) landed.push(name);
-    else refused.push({ item: name, reason: outcome.refusal });
+    if (outcome.applied) landed.push(toItem(name, outcome.metaLeftBehind));
+    else refused.push({ item: toItem(name), reason: outcome.refusal });
   }
   return { landed, refused };
 }
@@ -57,32 +61,49 @@ export function includeDownload(instanceRoot: string, name: string): Promise<Dow
   return spliceHidden(instanceRoot, name, false);
 }
 
+const bareName = (name: string): string => name;
+
 export function excludeDownloads(instanceRoot: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => excludeDownload(instanceRoot, name));
+  return selectionOutcomeOf(names, (name) => excludeDownload(instanceRoot, name), bareName);
 }
 
 export function includeDownloads(instanceRoot: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => includeDownload(instanceRoot, name));
+  return selectionOutcomeOf(names, (name) => includeDownload(instanceRoot, name), bareName);
 }
+
+/** A landed delete: `metaLeftBehind` is set only when the file's own trash landed but its
+ *  `.meta`'s then failed — the delete still applied, so a caller logs this, not a refusal. */
+export interface DeletedDownload {
+  name: string;
+  metaLeftBehind?: string;
+}
+
+const toDeletedDownload = (name: string, metaLeftBehind?: string): DeletedDownload =>
+  metaLeftBehind === undefined ? { name } : { name, metaLeftBehind };
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
   instanceRoot: string, names: readonly string[], trash: MoveToTrash,
-): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => deleteDownload(instanceRoot, name, trash));
+): Promise<SelectionOutcome<DeletedDownload>> {
+  return selectionOutcomeOf(names, (name) => deleteDownload(instanceRoot, name, trash), toDeletedDownload);
 }
 
-// The sidecar is trashed BEFORE the archive, so a mid-failure leaves a metaless archive — an
-// ordinary Downloaded row — never a lone sidecar.
+// The file is trashed first, so a failure there refuses with the sidecar untouched. Past that
+// point a `.meta` trash failure comes back as `metaLeftBehind` (downloads.md, Reporting story 2).
 async function deleteDownload(
   instanceRoot: string, name: string, trash: MoveToTrash,
 ): Promise<DownloadsCommandResult> {
-  const sidecar = downloadSidecarFile(instanceRoot, name);
   try {
-    if (await exists(sidecar)) await trash(sidecar);
     await trash(downloadFile(instanceRoot, name));
   } catch (err) {
     return refuse(err);
+  }
+  const sidecar = downloadSidecarFile(instanceRoot, name);
+  if (!(await exists(sidecar))) return { applied: true, wrote: true };
+  try {
+    await trash(sidecar);
+  } catch (err) {
+    return { applied: true, wrote: true, metaLeftBehind: errorMessage(err) };
   }
   return { applied: true, wrote: true };
 }

@@ -133,7 +133,7 @@ describe('downloads commands corpus', () => {
     expect((await rowFor(MANUAL)).hidden).toBe(true);
   });
 
-  it('delete trashes the sidecar and then the archive, and nothing else', async () => {
+  it('delete trashes the archive and then the sidecar, and nothing else', async () => {
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
 
@@ -142,15 +142,15 @@ describe('downloads commands corpus', () => {
       await rm(path);
     });
 
-    expect(outcome).toEqual({ landed: [NAME], refused: [] });
+    expect(outcome).toEqual({ landed: [{ name: NAME }], refused: [] });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([ARCHIVE, META]));
     expect(after.has(ARCHIVE)).toBe(false);
     expect(after.has(META)).toBe(false);
-    expect(trashed).toEqual([join(dir, META), join(dir, ARCHIVE)]);
+    expect(trashed).toEqual([join(dir, ARCHIVE), join(dir, META)]);
   });
 
-  it('a trash failure on the archive leaves the sidecar gone, the archive intact, and refuses', async () => {
+  it('a trash failure on the archive leaves the archive and its sidecar in place, and refuses', async () => {
     const before = await snapshotTree(dir);
 
     const outcome = await deleteDownloads(dir, [NAME], async (path) => {
@@ -158,10 +158,28 @@ describe('downloads commands corpus', () => {
       await rm(path);
     });
 
-    expect(outcome).toEqual({ landed: [], refused: [{ item: NAME, reason: 'disk full' }] });
+    expect(outcome).toEqual({ landed: [], refused: [{ item: { name: NAME }, reason: 'disk full' }] });
     const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([META]));
+    assertOnlyChanged(before, after, new Set());
     expect(after.has(ARCHIVE)).toBe(true);
+    expect(after.has(META)).toBe(true);
+  });
+
+  // The archive is already gone by the time the sidecar's trash runs, so this is not a refusal —
+  // the Output line naming it is the view's job (downloads.md, Reporting story 2).
+  it('a trash failure on the sidecar after the archive landed reports the delete as done', async () => {
+    const before = await snapshotTree(dir);
+
+    const outcome = await deleteDownloads(dir, [NAME], async (path) => {
+      if (path === join(dir, META)) throw new Error('disk full');
+      await rm(path);
+    });
+
+    expect(outcome).toEqual({ landed: [{ name: NAME, metaLeftBehind: 'disk full' }], refused: [] });
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([ARCHIVE]));
+    expect(after.has(ARCHIVE)).toBe(false);
+    expect(after.has(META)).toBe(true);
   });
 
   it('over a selection, a file that cannot be deleted is refused with why, writes nothing, and the rest are deleted', async () => {
@@ -174,8 +192,8 @@ describe('downloads commands corpus', () => {
     });
 
     expect(outcome).toEqual({
-      landed: [NAME, MANUAL],
-      refused: [{ item: LOCKED, reason: 'EPERM: operation not permitted' }],
+      landed: [{ name: NAME }, { name: MANUAL }],
+      refused: [{ item: { name: LOCKED }, reason: 'EPERM: operation not permitted' }],
     });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([ARCHIVE, META, MANUAL_ARCHIVE]));

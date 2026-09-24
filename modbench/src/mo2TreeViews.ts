@@ -8,7 +8,7 @@ import {
   registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
-import { DownloadsProvider } from './downloads/DownloadsProvider';
+import { DownloadNode, DownloadsProvider } from './downloads/DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
 import type { InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
@@ -108,7 +108,10 @@ export function registerDownloadsView(
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
-    ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask, trash),
+    ...registerDownloadsMultiRowCommands(
+      instanceRoot, reporter, ask, trash, install.log,
+      () => downloadsView.selection.filter((row): row is DownloadNode => row.kind === 'download'),
+    ),
   ]) own(disposable);
   return downloadsProvider;
 }
