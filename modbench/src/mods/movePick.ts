@@ -1,7 +1,7 @@
 // mods.md, Pickers, Move: the places a move offers. vscode-free, so unit-testable.
 
 import type { ModlistEntry } from '../instanceLoader/instance';
-import type { ModsPlace } from '../modlist/modlist';
+import type { ModsPlace, OrderEnd } from '../modlist/modlist';
 import { groupModlist, type ModlistGroup } from './modlistTree';
 import type { SortDirection } from './ModListProvider';
 
@@ -16,6 +16,10 @@ function groupsInViewOrder(entries: readonly ModlistEntry[], direction: SortDire
   const { groups } = groupModlist([...entries]);
   return direction === 'winningAtTop' ? groups : [...groups].reverse();
 }
+
+/** The end of mod order the view shows at the top: "first" and "directly above", as shown, lie
+ *  toward it. */
+export const endAtTop = (direction: SortDirection): OrderEnd => (direction === 'winningAtTop' ? 'winning' : 'losing');
 
 const CURRENT = { description: 'current' } as const;
 

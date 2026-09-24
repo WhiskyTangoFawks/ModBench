@@ -602,7 +602,8 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', modA, [modA, groupB, modC]);
 
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group B', 'Group A']);
-    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' });
+    expect(moveMods).toHaveBeenCalledWith(
+      '/instance', 'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
     expect(moveSeparators).not.toHaveBeenCalled();
   });
 
@@ -614,8 +615,23 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', groupB, [modA, groupB]);
 
     expect(pickedLabels()).toEqual(['Group A']);
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'losing');
     expect(moveMods).not.toHaveBeenCalled();
+  });
+
+  it('with winning at the top, lands mods and separators toward the winning end, as the view shows it', async () => {
+    const winningAtTop = { selection: () => [], direction: () => 'winningAtTop' as const };
+    moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod C'], refused: [] } });
+    moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
+
+    registerModMoveCommand('/instance', instance, winningAtTop, recordingReporter());
+    pickLabelled('Group A');
+    await invoke('modbench.mod.move', modC);
+    pickLabelled('Group A');
+    await invoke('modbench.mod.move', groupB);
+
+    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'winning');
   });
 
   it('offers the places in the order the view shows them', async () => {

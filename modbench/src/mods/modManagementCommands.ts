@@ -16,7 +16,7 @@ import {
   uninstallMod,
   type ModlistSelectionResult,
 } from '../modlist/modlist';
-import { modsMovePick, separatorsMovePick } from './movePick';
+import { endAtTop, modsMovePick, separatorsMovePick } from './movePick';
 import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
@@ -167,17 +167,19 @@ export function registerModMoveCommand(
     const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
     const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
     const { mods: entries, activeProfile } = instance.value;
+    const direction = view.direction();
     if (modNames.length > 0 && separatorNames.length === 0) {
       const picked = await vscode.window.showQuickPick(
-        modsMovePick(entries, view.direction(), modNames), { placeHolder: 'Move to…' });
+        modsMovePick(entries, direction, modNames), { placeHolder: 'Move to…' });
       if (!picked) return;
-      report('mod', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, picked.target));
+      report('mod', modNames.length,
+        await moveMods(instanceRoot, activeProfile, modNames, picked.target, endAtTop(direction)));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const picked = await vscode.window.showQuickPick(
-        separatorsMovePick(entries, view.direction(), separatorNames), { placeHolder: 'Move above…' });
+        separatorsMovePick(entries, direction, separatorNames), { placeHolder: 'Move above…' });
       if (!picked) return;
       report('separator', separatorNames.length,
-        await moveSeparators(instanceRoot, activeProfile, separatorNames, picked.target));
+        await moveSeparators(instanceRoot, activeProfile, separatorNames, picked.target, endAtTop(direction)));
     }
   });
 }

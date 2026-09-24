@@ -17,6 +17,7 @@ import {
   setEnabledInText,
   unlistedModNames,
   type ModsPlace,
+  type OrderEnd,
 } from '../mo2Codecs/modlistText';
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
@@ -82,25 +83,25 @@ export function setModsEnabled(
     found.reduce((acc, name) => setEnabledInText(acc, name, enabled), text));
 }
 
-export type { ModsPlace } from '../mo2Codecs/modlistText';
+export type { ModsPlace, OrderEnd } from '../mo2Codecs/modlistText';
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
- *  order. A separator that has gone refuses the whole move. */
+ *  order, at the `end` of the place's mods. A separator that has gone refuses the whole move. */
 export function moveMods(
-  instanceRoot: string, profile: string, modNames: readonly string[], place: ModsPlace,
+  instanceRoot: string, profile: string, modNames: readonly string[], place: ModsPlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
   return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
-    moveModsInText(text, found, place));
+    moveModsInText(text, found, place, end));
 }
 
 /** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
- *  and they land directly above the target, as shown. A target that has gone refuses the whole
- *  move. */
+ *  and they land on the `side` of the target and its mods. A target that has gone refuses the
+ *  whole move. */
 export function moveSeparators(
-  instanceRoot: string, profile: string, separatorNames: readonly string[], targetName: string,
+  instanceRoot: string, profile: string, separatorNames: readonly string[], targetName: string, side: OrderEnd,
 ): Promise<ModlistSelectionResult> {
   return spliceSelection(instanceRoot, profile, 'separator', separatorNames, (text, found) =>
-    moveSeparatorsInText(text, found, targetName));
+    moveSeparatorsInText(text, found, targetName, side));
 }
 
 /** Where a drag landed in the Mods tree. Re-exported so the view names the drop without naming

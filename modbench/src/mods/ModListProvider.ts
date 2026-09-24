@@ -6,6 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
+import { endAtTop } from './movePick';
 import {
   moveMods as moveModsCommand,
   reorderMod as reorderModCommand,
@@ -253,7 +254,7 @@ export class ModListProvider
       if (target instanceof SeparatorNode) {
         await this.runMutation('moveMods', async () => {
           const result = await moveModsCommand(
-            this.instanceRoot, profile, [name], { kind: 'separator', name: target.separator.name });
+            this.instanceRoot, profile, [name], { kind: 'separator', name: target.separator.name }, endAtTop(this.direction));
           const refusal = result.applied ? result.outcome.refused[0]?.reason : result.refusal;
           return refusal === undefined ? { applied: true } : { applied: false, refusal };
         });

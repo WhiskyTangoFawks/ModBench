@@ -648,7 +648,19 @@ describe('ModListProvider', () => {
       dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
       await provider.handleDrop(sepNode, dt, token);
       expect(moveModsMock).toHaveBeenCalledWith(
-        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' });
+        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'losing');
+    });
+
+    it('winning at the top, a mod dropped on a separator becomes its first mod as shown, at the winning end', async () => {
+      const { provider } = makeDndProvider();
+      provider.setViewDirection('winningAtTop');
+      const roots = await provider.getChildren();
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
+      const dt = new DataTransfer();
+      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
+      await provider.handleDrop(sepNode, dt, token);
+      expect(moveModsMock).toHaveBeenCalledWith(
+        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'winning');
     });
 
     it('winning-at-top down-drag: asks for the block before the row it landed on', async () => {

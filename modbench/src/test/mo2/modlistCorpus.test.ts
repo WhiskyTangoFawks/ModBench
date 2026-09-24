@@ -113,7 +113,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
   it('moveMods regroups mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     await moveMods(
-      dir, PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' });
+      dir, PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -124,7 +124,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
   it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul');
+    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 

@@ -307,7 +307,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveMods makes the mods the chosen separator\'s first mods as shown, keeping their order among themselves', async () => {
     const outcome = await moveMods(
       dir, 'Default', ['Cracked and Smudged Pip-Boy Screen', 'ENBoost - 12k'],
-      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' });
+      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: ['Cracked and Smudged Pip-Boy Screen', 'ENBoost - 12k'], refused: [] },
@@ -326,7 +326,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveMods to Ungrouped places the mods first among the ungrouped mods as shown, keeping their order', async () => {
     const outcome = await moveMods(
-      dir, 'Default', ['Unofficial Fallout 4 Patch', 'SKK Fast Start new game (Fallout 4)'], { kind: 'ungrouped' });
+      dir, 'Default', ['Unofficial Fallout 4 Patch', 'SKK Fast Start new game (Fallout 4)'], { kind: 'ungrouped' }, 'losing');
 
     expect(outcome).toEqual({
       applied: true,
@@ -347,7 +347,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveMods to where the mods already are writes nothing', async () => {
     const outcome = await moveMods(
       dir, 'Default', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'],
-      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' });
+      { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch'], refused: [] },
@@ -359,7 +359,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     vi.mocked(writeFile).mockClear();
 
     const outcome = await moveMods(
-      dir, 'Default', ['No Such Mod', 'Harder VATS'], { kind: 'separator', name: 'Unassigned (Modlist Development)' });
+      dir, 'Default', ['No Such Mod', 'Harder VATS'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
 
     expect(outcome).toEqual({
       applied: true,
@@ -375,7 +375,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveMods to a separator that has gone refuses the whole move, naming it', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
-    const outcome = await moveMods(dir, 'Default', ['Harder VATS'], { kind: 'separator', name: 'Gone Separator' });
+    const outcome = await moveMods(dir, 'Default', ['Harder VATS'], { kind: 'separator', name: 'Gone Separator' }, 'losing');
 
     assertRefusal(outcome, 'Gone Separator');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
@@ -384,7 +384,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveMods refuses the whole selection once when modlist.txt cannot be read', async () => {
     await rm(modlistPath());
 
-    const outcome = await moveMods(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], { kind: 'ungrouped' });
+    const outcome = await moveMods(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], { kind: 'ungrouped' }, 'losing');
 
     assertRefusal(outcome, 'ENOENT');
     await expect(stat(modlistPath())).rejects.toThrow();
@@ -392,7 +392,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators lands each separator with its mods directly above the chosen separator as shown', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul');
+      dir, 'Default', ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unassigned (Modlist Development)'], refused: [] } });
     expect((await readModlist()).map((e) => e.name)).toEqual([
@@ -409,7 +409,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators to where the separator already is writes nothing', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Radfall - All-In-One Survival Overhaul'], 'Unassigned (Modlist Development)');
+      dir, 'Default', ['Radfall - All-In-One Survival Overhaul'], 'Unassigned (Modlist Development)', 'losing');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Radfall - All-In-One Survival Overhaul'], refused: [] } });
     expect(await mtime()).toEqual(LONG_AGO);
@@ -417,7 +417,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('moveSeparators refuses a gone separator by name while the others land', async () => {
     const outcome = await moveSeparators(
-      dir, 'Default', ['Gone Separator', 'Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul');
+      dir, 'Default', ['Gone Separator', 'Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
 
     expect(outcome).toEqual({
       applied: true,
@@ -434,7 +434,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveSeparators to a separator that has gone refuses the whole move, naming it', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
-    const outcome = await moveSeparators(dir, 'Default', ['Unassigned (Modlist Development)'], 'Gone Separator');
+    const outcome = await moveSeparators(dir, 'Default', ['Unassigned (Modlist Development)'], 'Gone Separator', 'losing');
 
     assertRefusal(outcome, 'Gone Separator');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
