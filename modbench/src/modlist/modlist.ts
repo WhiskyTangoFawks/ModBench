@@ -190,7 +190,7 @@ export async function renameSeparator(
 
 /** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
  *  before its line: a refused trash writes nothing for that separator (update-load-order-file,
- *  Refusals), and a line that then cannot go leaves a separator with no folder. */
+ *  Refusals). */
 export async function deleteSeparators(
   instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<ModlistSelectionResult> {
@@ -218,7 +218,7 @@ export async function deleteSeparators(
   }
   const lines = await spliceModlist(instanceRoot, profile, (text) => {
     const stillListed = separatorNamesIn(text);
-    return toUnlist.filter((name) => stillListed.has(name)).reduce(deleteSeparatorInText, text);
+    return toUnlist.filter((name) => stillListed.has(name)).reduce((acc, name) => deleteSeparatorInText(acc, name), text);
   });
   if (lines.applied) return { applied: true, outcome: { landed: toUnlist, refused } };
   const lineRefusal = (name: string) => trashed.has(name)
