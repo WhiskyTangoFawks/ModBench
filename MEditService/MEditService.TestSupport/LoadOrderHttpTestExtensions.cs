@@ -29,8 +29,8 @@ public static class LoadOrderHttpTestExtensions
     }
 
     /// <summary>Polls status until it answers for at least <paramref name="appliedVersion"/> and
-    /// is terminal (Ready, HeldElsewhere or Failed) — status is published anew for every arrival,
-    /// even a no-op resend.</summary>
+    /// is terminal (Ready, HeldElsewhere or Failed). An identical resend answers the version already
+    /// held, so it waits on that version's reconcile.</summary>
     public static async Task AwaitTerminalLoadOrderStatus(
         this HttpClient client, long appliedVersion, TimeSpan? timeout = null)
     {

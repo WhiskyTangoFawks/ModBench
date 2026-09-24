@@ -59,12 +59,15 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         return false;
     }
 
-    // A harmless resend: it changes nothing, but it publishes load-order-status carrying its own
-    // applied version, so we skip past any unread frame an earlier PUT on this stream already left.
-    private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerResend(
+    private int _markers;
+
+    // Moves every copy one slot, since an identical resend publishes nothing: its load-order-status
+    // carries its own version, so we skip any unread frame an earlier PUT left on this stream.
+    private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerPut(
         StreamReader stream, ScatteredFixtureData fx)
     {
-        var response = await Client.PutLoadOrder(fx);
+        var offset = ++_markers;
+        var response = await Client.PutLoadOrder(fx, fx.Plugins.Select(p => p with { Slot = p.Slot + offset }));
         response.EnsureSuccessStatusCode();
         var applied = await response.Content.ReadFromJsonAsync<JsonElement>();
         var version = applied.GetProperty("version").GetInt64();
@@ -77,15 +80,14 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
             .BuildScattered();
 
-    // Loads, tracks, then loads again: the second PUT hands the watcher the value it just put, which
-    // is what arms the watch over a mod that was untracked a moment ago.
+    // Loads, then tracks: the watch over the mod widens itself when Track writes its repository.
     private async Task<ScatteredFixtureData> Watched(string preset = "Edits", Action<string>? beforeTracking = null)
     {
         var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         beforeTracking?.Invoke(OtherTool.ModFolderOf(fx, Origin));
         (await Client.Track(Origin, preset)).EnsureSuccessStatusCode();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(Plugin);
         return fx;
     }
 
@@ -184,7 +186,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "changed-by-the-release");
 
         Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
-        var frames = await FramesThroughAMarkerResend(stream, fx);
+        var frames = await FramesThroughAMarkerPut(stream, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
@@ -202,7 +204,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
         Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
-        var frames = await FramesThroughAMarkerResend(stream, fx);
+        var frames = await FramesThroughAMarkerPut(stream, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
@@ -268,7 +270,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
-        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        var frames = await FramesThroughAMarkerPut(afterRestart, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
@@ -405,7 +407,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
-        var frames = await FramesThroughAMarkerResend(afterRestart, fx);
+        var frames = await FramesThroughAMarkerPut(afterRestart, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 

@@ -125,6 +125,8 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private generation = 0;
   private connected: Promise<void> = Promise.resolve();
   private markConnected: (() => void) | undefined;
+  private openedThisStart = false;
+  private readonly reopenListeners = new Set<() => void>();
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
     super();
@@ -136,6 +138,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     if (!this.stopped) return;
     this.stopped = false;
     const generation = ++this.generation;
+    this.openedThisStart = false;
     this.connected = new Promise((resolve) => { this.markConnected = resolve; });
     void this.runLoop(generation);
   }
@@ -146,6 +149,13 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     this.abortController?.abort();
     // Nothing waits on a stream the session has closed.
     this.markConnected?.();
+  }
+
+  /** Hears each open after the first since `start()`: a stream that dropped and opened again,
+   *  perhaps onto another process listening on the same port. */
+  onReconnected(listener: () => void): () => void {
+    this.reopenListeners.add(listener);
+    return () => { this.reopenListeners.delete(listener); };
   }
 
   /** Settles once the stream carries events, or once the attempt to open it failed; never
@@ -169,6 +179,13 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     }
   }
 
+  private announceOpen(generation: number): void {
+    if (this.generation !== generation) return;
+    const reopened = this.openedThisStart;
+    this.openedThisStart = true;
+    if (reopened) for (const listener of [...this.reopenListeners]) listener();
+  }
+
   private async connectOnce(generation: number): Promise<void> {
     const controller = new AbortController();
     this.abortController = controller;
@@ -178,6 +195,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
       const response = await this.deps.openStream(controller.signal);
       if (!response.ok || !response.body) throw new Error(`notification stream responded ${response.status}`);
       settleConnected();
+      this.announceOpen(generation);
       for await (const frame of readFrames(response.body)) {
         const event = parseFrame(frame);
         if (event) this.dispatch(event);
