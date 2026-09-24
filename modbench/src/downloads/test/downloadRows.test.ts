@@ -27,6 +27,29 @@ describe('sortDownloadRows', () => {
     ]);
   });
 
+  // downloads.md, Order and view state, story 2: sort by name means the label. The file names
+  // here sort opposite the labels, so keying on `name` instead of `displayName` fails this.
+  it('sorts by name using the label, not the raw filename', () => {
+    const rows: DownloadRow[] = [
+      { ...row('z-file.zip', 1), displayName: 'Alpha' },
+      { ...row('a-file.zip', 2), displayName: 'Zeta' },
+    ];
+    expect(sortDownloadRows(rows, 'name', false).map((r) => r.displayName)).toEqual(['Alpha', 'Zeta']);
+    expect(sortDownloadRows(rows, 'name', true).map((r) => r.displayName)).toEqual(['Zeta', 'Alpha']);
+  });
+
+  // Ties in the label keep their relative order in both directions, same guarantee the
+  // status-column stability tests below cover.
+  it('is a stable sort by name (label) in both directions: ties keep their relative order', () => {
+    const rows: DownloadRow[] = [
+      { ...row('a.zip', 1), displayName: 'Same' },
+      { ...row('b.zip', 2), displayName: 'Same' },
+      { ...row('c.zip', 3), displayName: 'Other' },
+    ];
+    expect(sortDownloadRows(rows, 'name', false).map((r) => r.name)).toEqual(['c.zip', 'a.zip', 'b.zip']);
+    expect(sortDownloadRows(rows, 'name', true).map((r) => r.name)).toEqual(['a.zip', 'b.zip', 'c.zip']);
+  });
+
   // Stable sort: rows tied on the sorted column (e.g. two Downloaded entries) keep
   // their relative order rather than being reshuffled against each other, while a
   // genuinely different value (Installed) still sorts to its correct place.

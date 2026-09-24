@@ -77,8 +77,10 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-const fakeDownloadsProvider = (): Pick<DownloadsProvider, 'setSort' | 'setShowHidden'> => ({
-  setSort: vi.fn(), setShowHidden: vi.fn(),
+const fakeDownloadsProvider = (
+  currentSort: ReturnType<DownloadsProvider['currentSort']> = { column: 'mtimeMs', descending: true },
+): Pick<DownloadsProvider, 'setSort' | 'setShowHidden' | 'currentSort'> => ({
+  setSort: vi.fn(), setShowHidden: vi.fn(), currentSort: vi.fn(() => currentSort),
 });
 
 // The composition root's answers, doubled: a new mod keeps the name install proposed, the FOMOD
@@ -824,6 +826,8 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
 // ── registerDownloadsSortCommand ─────────────────────────────────────────────
 
+interface FakeSortItem { label: string; column: string; descending: boolean }
+
 describe('registerDownloadsSortCommand', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -834,27 +838,59 @@ describe('registerDownloadsSortCommand', () => {
 
   it('applies the picked option to DownloadsProvider.setSort', async () => {
     const provider = fakeDownloadsProvider();
-    showQuickPick.mockResolvedValueOnce({ label: 'Size (Largest First)', column: 'size', descending: true });
+    const { qp, accept } = makeFakeQuickPick<FakeSortItem>();
+    createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
     invoke('modbench.downloadedFile.sort');
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    accept({ label: 'Size (Largest First)', column: 'size', descending: true });
 
     await vi.waitFor(() => {
       expect(provider.setSort).toHaveBeenCalledWith('size', true);
     });
   });
 
-  it('does nothing when the pick is cancelled', async () => {
+  it('does nothing when Esc is pressed', async () => {
     const provider = fakeDownloadsProvider();
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
     invoke('modbench.downloadedFile.sort');
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
 
-    await vi.waitFor(() => {
-      expect(showQuickPick).toHaveBeenCalled();
-    });
+    await vi.waitFor(() => expect(qp.dispose).toHaveBeenCalled());
     expect(provider.setSort).not.toHaveBeenCalled();
+  });
+
+  // downloads.md, Order and view state, story 2: "The pick marks the current sort."
+  it('pre-selects the item matching the provider\'s current sort', async () => {
+    const provider = fakeDownloadsProvider({ column: 'size', descending: false });
+    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSortCommand(provider);
+    invoke('modbench.downloadedFile.sort');
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    expect(qp.activeItems).toEqual([{ label: 'Size (Smallest First)', column: 'size', descending: false }]);
+  });
+
+  // The spec default (Filetime, descending), pre-selected when the provider has never been resorted.
+  it('pre-selects Filetime (Newest First) at the default sort', async () => {
+    const provider = fakeDownloadsProvider();
+    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSortCommand(provider);
+    invoke('modbench.downloadedFile.sort');
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    expect(qp.activeItems).toEqual([{ label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true }]);
   });
 });
 

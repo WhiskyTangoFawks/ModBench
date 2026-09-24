@@ -18,7 +18,11 @@ import {
 // `vi.mock` closes over is built from literals here. `trees` is this file's own tracking of the
 // one view `registerDownloadsView` does not return.
 const h = vi.hoisted(() => ({
-  state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] },
+  state: {
+    commands: new Map<string, (...args: unknown[]) => unknown>(),
+    contextKeys: new Map<string, unknown>(),
+    boxes: [],
+  },
   trees: new Map<string, { description?: string; message?: string }>(),
   reveals: [] as { label: unknown; options: unknown }[],
   visible: { value: true },
@@ -51,7 +55,13 @@ vi.mock('vscode', () => ({
     },
     registerFileDecorationProvider: () => ({ dispose() { /* no-op */ } }),
   },
-  commands: filterBoxCommandsMock(h.state),
+  commands: {
+    ...filterBoxCommandsMock(h.state),
+    executeCommand: (command: string, ...args: unknown[]) => {
+      if (command === 'setContext' && typeof args[0] === 'string') h.state.contextKeys.set(args[0], args[1]);
+      return Promise.resolve();
+    },
+  },
 }));
 
 import { Instance } from '../instanceLoader/instance';
@@ -267,5 +277,43 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     await command('modbench.downloadedFile.hideExcluded')();
     await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once hidden rows are excluded again');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
+  });
+});
+
+// downloads.md, States, story 2: distinct from "no downloads yet" — package.json's viewsWelcome
+// gates on this key.
+describe('the Downloads view sets the all-excluded context key', () => {
+  const KEY = 'modbench.downloadedFile.allExcluded';
+  const contextValue = () => h.state.contextKeys.get(KEY);
+
+  it('is true once the corpus\'s one download is excluded, and follows Show excluded both ways', async () => {
+    const root = await cloneCorpusFixture();
+    const metaPath = join(root, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
+    await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
+    const instance = await makeInstance(root);
+
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
+    });
+
+    await vi.waitFor(() => expect(contextValue()).toBe(true));
+
+    await command('modbench.downloadedFile.showExcluded')();
+    await vi.waitFor(() => expect(contextValue()).toBe(false));
+
+    await command('modbench.downloadedFile.hideExcluded')();
+    await vi.waitFor(() => expect(contextValue()).toBe(true));
+  });
+
+  it('stays false while at least one download is not excluded', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
+    });
+
+    await vi.waitFor(() => expect(h.trees.get('modbench.downloads')).toBeDefined());
+    expect(contextValue()).not.toBe(true);
   });
 });

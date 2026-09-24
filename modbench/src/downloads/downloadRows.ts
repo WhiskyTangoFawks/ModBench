@@ -5,8 +5,13 @@ import { extname } from 'node:path';
 import type { DownloadRow } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS } from '../install/install';
 
-/** The columns MO2's own Downloads pane sorts by, each a field of the row itself. */
+/** The columns MO2's own Downloads pane sorts by. `name` means the label (downloads.md, Order
+ *  and view state, story 2), so it reads `displayName`, not the row's `name` field. */
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
+
+function sortValue(row: DownloadRow, column: DownloadSortColumn): string | number {
+  return column === 'name' ? row.displayName : row[column];
+}
 
 export function sortDownloadRows<T extends DownloadRow>(
   rows: readonly T[],
@@ -17,8 +22,8 @@ export function sortDownloadRows<T extends DownloadRow>(
   // reversing would also reverse tied rows, undoing the sort's stability.
   const dir = descending ? -1 : 1;
   return [...rows].sort((a, b) => {
-    const av = a[column];
-    const bv = b[column];
+    const av = sortValue(a, column);
+    const bv = sortValue(b, column);
     if (av < bv) return -dir;
     if (av > bv) return dir;
     return 0;

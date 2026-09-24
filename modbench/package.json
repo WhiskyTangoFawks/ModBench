@@ -112,7 +112,12 @@
       {
         "view": "modbench.downloads",
         "contents": "No downloads yet. Copy archives into `downloads/` to see them here.",
-        "when": "modbench.folder == instance && modbench.instanceRead"
+        "when": "modbench.folder == instance && modbench.instanceRead && !modbench.downloadedFile.allExcluded"
+      },
+      {
+        "view": "modbench.downloads",
+        "contents": "All downloaded files are excluded. Show excluded, in the title bar, reveals them.",
+        "when": "modbench.folder == instance && modbench.instanceRead && modbench.downloadedFile.allExcluded"
       }
     ],
     "commands": [
@@ -829,18 +834,18 @@
           "group": "downloadActions@4"
         },
         {
-          "command": "modbench.downloadedFile.delete",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@5"
-        },
-        {
           "command": "modbench.downloadedFile.exclude",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bhidden\\b/)",
-          "group": "downloadActions@6"
+          "group": "downloadActions@5"
         },
         {
           "command": "modbench.downloadedFile.include",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhidden\\b/",
+          "group": "downloadActions@5"
+        },
+        {
+          "command": "modbench.downloadedFile.delete",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
           "group": "downloadActions@6"
         },
         {

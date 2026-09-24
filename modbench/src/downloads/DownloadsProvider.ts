@@ -133,6 +133,20 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this.invalidate();
   }
 
+  /** What the sort pick pre-selects (downloads.md, Order and view state, story 2: "The pick
+   *  marks the current sort"). */
+  currentSort(): { column: DownloadSortColumn; descending: boolean } {
+    return { column: this.sortColumn, descending: this.sortDescending };
+  }
+
+  /** The all-excluded empty state (downloads.md, States, story 2), distinct from the name
+   *  filter's own no-match state. */
+  allExcluded(): boolean {
+    if (this.showHidden) return false;
+    const archives = filterArchiveRows(this.instanceValue.downloads);
+    return archives.length > 0 && archives.every((row) => row.hidden);
+  }
+
   /** Render-only: a filter keystroke narrows already-built rows and never re-pulls the Instance
    *  value. An empty string clears the filter. */
   setFilter(text: string): void {
@@ -157,7 +171,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
     this.cache ??= this.build();
     if (!this.filterLower) return this.cache;
-    return this.cache.filter((n) => n.row.name.toLowerCase().includes(this.filterLower));
+    return this.cache.filter((n) => n.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
   private build(): DownloadNode[] {
