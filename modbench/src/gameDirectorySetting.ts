@@ -20,7 +20,7 @@ export interface Subscription {
 /** Subscribes `refresh` to the game-directory setting: one call per burst, after the settle. */
 export function refreshOnGameDirectoryChange(
   onConfigChange: (listener: (e: ConfigChangeEvent) => void) => Subscription,
-  refresh: () => Promise<void>,
+  refresh: () => Promise<unknown>,
 ): Subscription {
   let settle: ReturnType<typeof setTimeout> | undefined;
   const subscription = onConfigChange((e) => {

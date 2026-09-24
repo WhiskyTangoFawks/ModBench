@@ -10,6 +10,7 @@ import {
   loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../instanceLoader/loadOrderSnapshot';
 import { gameReleaseForGame } from '../tables/gamePaths';
+import { errorMessage } from '../ports/errorMessage';
 
 /** The slice of the instance value a load order is built from. */
 export interface LoadOrderSource {
@@ -42,7 +43,7 @@ export async function putLoadOrder(
 }
 
 /** ADR-0014: the index is rebuilt before the load order is sent again, so the reconcile that
- *  follows re-indexes everything. A refused rebuild sends nothing. */
+ *  follows re-indexes everything. A rebuild refused or failed sends nothing. */
 export type RefreshResult =
   | { applied: true; loadOrder: PutLoadOrderResult }
   | { applied: false; refusal: string };
@@ -60,10 +61,10 @@ export async function refresh(
 function rebuildRefusal(
   client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, gameRelease: string,
 ): Promise<string | undefined> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     client.rebuildIndex(instanceRoot, (_message, detail) => resolve(detail), gameRelease).then(
       (rebuilt) => resolve(rebuilt ? undefined : 'mEdit did not rebuild the index.'),
-      reject,
+      (err: unknown) => resolve(errorMessage(err)),
     );
   });
 }

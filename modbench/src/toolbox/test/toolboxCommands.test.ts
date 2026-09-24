@@ -128,18 +128,27 @@ describe('Switch profile', () => {
     ]);
   });
 
-  // A write is forgotten: every view follows through the watch, so the gesture pushes nothing.
-  // Rival: a view's refresh or another view's description update fired after the write.
-  it('writes and forgets: once the switch lands it runs no command and surfaces nothing', async () => {
+  // Every other way out of the gesture throws here: the `vscode` mock holds only the members it
+  // lists, and the instance it is handed is a bare `{ value }`.
+  it('writes and forgets: the profile write is its only effect', async () => {
     showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
-    switchProfile.mockResolvedValueOnce({ applied: true });
 
     const { reporter, run } = register();
     await run('modbench.profile.switch');
 
-    expect(executeCommand).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
+    expect({
+      writes: switchProfile.mock.calls,
+      commands: executeCommand.mock.calls,
+      progress: withProgress.mock.calls,
+      reports: reporter.reports,
+      landings: reporter.landings,
+    }).toEqual({
+      writes: [['/instance', 'Modding', ['Default', 'Modding', 'Survival']]],
+      commands: [],
+      progress: [],
+      reports: [],
+      landings: [],
+    });
   });
 
   it('switches nothing when the picked profile is the active one', async () => {
@@ -153,12 +162,16 @@ describe('Switch profile', () => {
 });
 
 describe('Refresh', () => {
-  function registerRefresh(refresh: () => Promise<RefreshResult>) {
+  // `rereadFailure` is what the Instance loader's re-read answers: its own failure, or none.
+  function registerRefresh(result: RefreshResult, rereadFailure?: string) {
     const reporter = recordingReporter();
     registerRefreshCommand({
-      refresh: () => { progressSteps.push('instance commands: refresh'); return refresh(); },
+      refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); },
       instance: {
-        refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+        refresh: () => {
+          progressSteps.push('Instance loader: read every file again');
+          return Promise.resolve(rereadFailure);
+        },
       },
       reporter,
     });
@@ -166,7 +179,7 @@ describe('Refresh', () => {
   }
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
-    const { reporter, run } = registerRefresh(() => Promise.resolve({ applied: true, loadOrder: { sent: false } }));
+    const { reporter, run } = registerRefresh({ applied: true, loadOrder: { sent: false } });
 
     await run();
 
@@ -183,7 +196,7 @@ describe('Refresh', () => {
   it('reports a refused refresh at error with the refusal as its reason, and reads nothing again', async () => {
     const refusal = 'This instance\'s index is open in another Modbench window (/instance/index.duckdb). '
       + 'Close mEdit there first, or open a different instance here.';
-    const { reporter, run } = registerRefresh(() => Promise.resolve({ applied: false, refusal }));
+    const { reporter, run } = registerRefresh({ applied: false, refusal });
 
     await run();
 
@@ -195,19 +208,16 @@ describe('Refresh', () => {
     ]);
   });
 
-  // Rival: the throw escaping the gesture, so only VS Code's generic toast says it and the Output
-  // never does.
-  it('reports a refresh that threw at error with why, and reads nothing again', async () => {
-    const { reporter, run } = registerRefresh(() => Promise.reject(new Error('fetch failed')));
+  // The views keep the last value through a failed read, so this is the only word the user gets
+  // that the refresh did not read the disk.
+  it('reports a re-read that failed at error, with its reason', async () => {
+    const { reporter, run } = registerRefresh(
+      { applied: true, loadOrder: { sent: false } }, 'ModOrganizer.ini: no selected_profile');
 
     await run();
 
-    expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'instance commands: refresh', 'progress closes',
-    ]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not refresh the instance.', detail: 'fetch failed' },
-    ]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not read the instance again.', detail: 'ModOrganizer.ini: no selected_profile',
+    }]);
   });
 });
-

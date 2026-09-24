@@ -3,7 +3,6 @@ import type { Instance } from '../instanceLoader/instance';
 import { switchProfile } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
 import type { Reporter } from '../ports/reporter';
-import { errorMessage } from '../ports/errorMessage';
 
 export interface ToolboxCommandDeps {
   instanceRoot: string;
@@ -28,7 +27,6 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       );
       if (!picked || picked.label === active) return;
       const outcome = await switchProfile(instanceRoot, picked.label, profiles);
-      // ADR-0015: the write lands in ModOrganizer.ini, and every view follows through the watch.
       if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
     }),
     vscode.commands.registerCommand('modbench.instance.openSettings', () =>
@@ -43,22 +41,15 @@ export interface RefreshGestureDeps {
   reporter: Reporter;
 }
 
-// One gesture for all of Modbench, and only the safety net for a missed watcher event. A failed
-// refresh stops where it failed: nothing is read again, and nothing more is sent.
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const run = async (): Promise<void> => {
-    let outcome: RefreshResult;
-    try {
-      outcome = await deps.refresh();
-    } catch (err) {
-      deps.reporter.report('error', 'Could not refresh the instance.', errorMessage(err));
-      return;
-    }
+    const outcome = await deps.refresh();
     if (!outcome.applied) {
       deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
       return;
     }
-    await deps.instance.refresh();
+    const rereadFailure = await deps.instance.refresh();
+    if (rereadFailure !== undefined) deps.reporter.report('error', 'Could not read the instance again.', rereadFailure);
   };
   return vscode.commands.registerCommand('modbench.instance.refresh', () =>
     vscode.window.withProgress({ location: { viewId: 'modbench.toolbox' } }, run));

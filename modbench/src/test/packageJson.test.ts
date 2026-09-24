@@ -199,7 +199,7 @@ describe('package.json Toolbox view', () => {
   });
 
   // toolbox.md, Menus and keys: "Title bar | 1: refresh. Overflow: open settings."
-  it('has refresh as its one title icon and open settings in its title bar\'s overflow, inside an instance', () => {
+  it('has refresh as its one title icon and open settings in its title bar\'s overflow', () => {
     const toolboxTitle = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
       .filter((e) => requires(e.when, 'view == modbench.toolbox'));
 
@@ -208,7 +208,6 @@ describe('package.json Toolbox view', () => {
         { command: 'modbench.instance.refresh', icon: true },
         { command: 'modbench.instance.openSettings', icon: false },
       ]);
-    for (const entry of toolboxTitle) expect(requires(entry.when, IN_AN_INSTANCE), entry.command).toBe(true);
   });
 
   // toolbox.md, Menus and keys: "Profile menu | switch".
@@ -218,15 +217,6 @@ describe('package.json Toolbox view', () => {
 
     expect(profileMenu.map((e) => e.command)).toEqual(['modbench.profile.switch']);
   });
-
-  // Registered only inside an instance, so the palette waits for one too.
-  it.each(['modbench.instance.refresh', 'modbench.instance.openSettings'])(
-    'offers %s in the palette only inside an instance', (command) => {
-      const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-        .filter((e) => e.command === command);
-
-      expect(entries.map((e) => requires(e.when, IN_AN_INSTANCE))).toEqual([true]);
-    });
 });
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the

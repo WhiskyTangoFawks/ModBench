@@ -460,6 +460,23 @@ describe('Instance — a value that survives a bad read', () => {
     expect(failures).toHaveLength(1);
   });
 
+  // A gesture that asked for the read reports on that read, never an earlier one's failure.
+  it('answers a refresh with its own read\'s failure, and with none once that read lands', async () => {
+    const { root, instance } = await realInstance();
+    const ini = join(root, 'ModOrganizer.ini');
+    const complete = await readFile(ini, 'utf8');
+    await writeFile(ini, '');
+
+    const failed = await instance.refresh();
+
+    expect(failed).toContain('ModOrganizer.ini');
+    expect(failed).toBe(instance.readFailure);
+
+    await writeFile(ini, complete);
+
+    expect(await instance.refresh()).toBeUndefined();
+  });
+
   it('reports a failure after a value has landed, keeping that value', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();

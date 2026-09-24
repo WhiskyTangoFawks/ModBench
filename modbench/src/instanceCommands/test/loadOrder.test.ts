@@ -97,4 +97,14 @@ describe('refresh', () => {
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, refusal: 'mEdit did not rebuild the index.' });
   });
+
+  it('sends nothing and returns the reason when the rebuild throws', async () => {
+    const client = attachedClient();
+    client.setCommandFailure('rebuildIndex', new Error('fetch failed'));
+
+    const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
+
+    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
+    expect(result).toEqual({ applied: false, refusal: 'fetch failed' });
+  });
 });
