@@ -65,6 +65,14 @@ describe('ExcludedDownloadDecorationProvider', () => {
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
 
+  // Rival: falling back to a default downloads/ prefix. An unresolved folder decorates nothing,
+  // not even a row that would have matched that default.
+  it('decorates nothing while the downloads folder is unresolved', () => {
+    const provider = new ExcludedDownloadDecorationProvider(() => undefined, () => new Set(['excluded.zip']));
+
+    expect(provider.provideFileDecoration(downloadUri('excluded.zip'))).toBeUndefined();
+  });
+
   // Rival: capturing the folder once at construction, as a fixed instance-root join always
   // could — `download_directory` can move while Modbench runs, and a stale prefix would silently
   // stop matching every row after that.

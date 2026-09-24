@@ -24,7 +24,7 @@ import { parseModlist } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
-  defaultDownloadsDir, downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
+  downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
   pluginsFile, profilesDir, settingsFile,
 } from '../instanceAdapter/layout';
 import {
@@ -62,11 +62,12 @@ export type DownloadsResult =
   | { readonly kind: 'unresolved'; readonly reason: string };
 
 /** The instance paths a view renders or opens: the Instance adapter owns every path function, and
- *  a view reads the answer here. Filled from the instance directory alone, so they stand at
- *  sequence 0. */
+ *  a view reads the answer here. `overwriteDir`/`modDirs` stand at sequence 0; `downloadsDir`
+ *  needs a read first. */
 export interface InstancePaths {
   readonly overwriteDir: string;
-  readonly downloadsDir: string;
+  /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
+  readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name. */
   readonly modDirs: ReadonlyMap<string, string>;
 }
@@ -193,7 +194,7 @@ async function readProfileNames(instanceRoot: string): Promise<string[]> {
   }
 }
 
-const pathsOf = (instanceRoot: string, downloadsDir: string, modNames: readonly string[]): InstancePaths => ({
+const pathsOf = (instanceRoot: string, downloadsDir: string | undefined, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
   downloadsDir,
   modDirs: new Map(modNames.map((name) => [name, modDir(instanceRoot, name)])),
@@ -215,9 +216,8 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   dataFolderPlugins: { kind: 'unresolved' },
   modStatuses: new Map(),
   overwriteFileCount: 0,
-  // Not read yet, so no resolution has happened either — the Instance adapter's own default
-  // stands in until the first recompute lands.
-  paths: pathsOf(instanceRoot, defaultDownloadsDir(instanceRoot), []),
+  // Not read yet, so no resolution has happened either.
+  paths: pathsOf(instanceRoot, undefined, []),
 });
 
 export class Instance implements vscode.Disposable {
@@ -344,7 +344,7 @@ export class Instance implements vscode.Disposable {
     this.current = next;
     this.failure = undefined;
     this.seq++;
-    this.rebindDownloadsWatcherIfMoved(next.downloads.kind === 'listed' ? next.paths.downloadsDir : undefined);
+    this.rebindDownloadsWatcherIfMoved(next.paths.downloadsDir);
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
     return undefined;
   }
@@ -417,9 +417,6 @@ export class Instance implements vscode.Disposable {
       })),
     ]);
     const { gameFolder, dataFolderPlugins } = game;
-    // Never a scan of some other folder standing in (downloads.md, story 1); unreached by any
-    // command, since an unresolved value carries no rows to select one from.
-    const downloadsDir = downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : defaultDownloadsDir(instanceRoot);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.downloadEntries
       ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? [])
       : undefined;
@@ -454,8 +451,8 @@ export class Instance implements vscode.Disposable {
           rows: downloadsOutcome.downloadEntries && installedInto
             ? buildDownloadRows(downloadsOutcome.downloadEntries, installedInto).map((row) => ({
               ...row,
-              path: downloadFile(downloadsDir, row.name),
-              sidecarPath: downloadSidecarFile(downloadsDir, row.name),
+              path: downloadFile(downloadsOutcome.downloadsDir, row.name),
+              sidecarPath: downloadSidecarFile(downloadsOutcome.downloadsDir, row.name),
             }))
             : [],
         },
@@ -466,7 +463,11 @@ export class Instance implements vscode.Disposable {
       dataFolderPlugins,
       modStatuses,
       overwriteFileCount,
-      paths: pathsOf(instanceRoot, downloadsDir, entries.filter((e) => e.kind === 'mod').map((e) => e.name)),
+      paths: pathsOf(
+        instanceRoot,
+        downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : undefined,
+        entries.filter((e) => e.kind === 'mod').map((e) => e.name),
+      ),
     };
   }
 }

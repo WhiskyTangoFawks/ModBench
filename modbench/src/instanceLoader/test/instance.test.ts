@@ -417,6 +417,9 @@ describe('Instance — built by watching', () => {
 
     expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
     expect(watchers.filter((w) => w.base === join(root, 'downloads') && !w.disposed)).toHaveLength(0);
+    // paths.downloadsDir reaches uninstall, install and the Explorer dimming independently of
+    // the Downloads view's own rows, so it must carry no default-folder guess either.
+    expect(instance.value.paths.downloadsDir).toBeUndefined();
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
@@ -928,7 +931,7 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 
   // Rival: paths filled only once a read lands, which would leave a view constructed at
-  // activation joining its own.
+  // activation joining its own. downloadsDir needs a read first, so it carries no guess.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
       instanceRoot: '/an/instance', resolveGameDirectory: resolvesNotFound,
@@ -938,7 +941,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.sequence).toBe(0);
     expect(instance.value.paths.overwriteDir).toBe(join('/an/instance', 'overwrite'));
-    expect(instance.value.paths.downloadsDir).toBe(join('/an/instance', 'downloads'));
+    expect(instance.value.paths.downloadsDir).toBeUndefined();
   });
 });
 

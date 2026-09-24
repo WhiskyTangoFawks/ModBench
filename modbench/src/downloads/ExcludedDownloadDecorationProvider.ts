@@ -9,7 +9,7 @@ export class ExcludedDownloadDecorationProvider implements vscode.FileDecoration
   constructor(
     // Read fresh on every decoration, not captured once: `download_directory` can move while
     // Modbench runs, and a stale prefix would silently stop matching every row.
-    private readonly downloadsDirOf: () => string,
+    private readonly downloadsDirOf: () => string | undefined,
     private readonly excludedNames: () => ReadonlySet<string>,
   ) {}
 
@@ -20,10 +20,12 @@ export class ExcludedDownloadDecorationProvider implements vscode.FileDecoration
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    const downloadsDir = this.downloadsDirOf();
+    if (downloadsDir === undefined) return undefined;
     // `.path`, never `.fsPath`: on Windows, `Uri.file` turns a backslash-separated path into
     // `.path`'s forward-slash form, and `.fsPath` turns it back — a hardcoded `/` prefix against
     // `.fsPath` never survives that round trip.
-    const prefix = `${vscode.Uri.file(this.downloadsDirOf()).path}/`;
+    const prefix = `${vscode.Uri.file(downloadsDir).path}/`;
     if (!uri.path.startsWith(prefix)) return undefined;
     const name = uri.path.slice(prefix.length);
     if (!this.excludedNames().has(name)) return undefined;

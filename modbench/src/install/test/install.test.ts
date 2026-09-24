@@ -160,6 +160,17 @@ describe('install commands', () => {
     expect(await readFile(`${archive}.meta`, 'utf8')).toContain('installed=true');
   });
 
+  // Rival: the default downloads/ folder. This archive sits right where that fallback would look,
+  // so a `.meta` here would prove the mark used the fallback instead of skipping it.
+  it('writes no sidecar when the downloads folder is unresolved, unlike the default downloads/ folder', async () => {
+    const archive = join(root, 'downloads', 'Freshly-1-0.7z');
+
+    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, archive, undefined, { gameName: GAME_NAME, run: runnerFor() });
+
+    expect(outcome).toEqual({ applied: true, wrote: true, isFomod: false });
+    await expect(readFile(`${archive}.meta`, 'utf8')).rejects.toThrow();
+  });
+
   // Rival: mark by filename alone. A `.meta` would then appear in downloads/ for an archive the
   // user picked from their own Downloads folder, inventing a row for a file that is not there.
   it('writes no sidecar for an archive that is not a download', async () => {

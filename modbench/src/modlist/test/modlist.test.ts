@@ -820,6 +820,20 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
     });
 
+    // Rival: the default downloads/ folder. `dir`'s own downloads/ holds ARCHIVE, so a sidecar
+    // there would prove the mark used that fallback instead of skipping it while unresolved.
+    it('trashes the folder and removes the line, but marks nothing, when the downloads folder is unresolved', async () => {
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], undefined, trash);
+
+      expect(outcome).toEqual({
+        applied: true, outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch' }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+      await expect(stat(modDir(dir, 'Unofficial Fallout 4 Patch'))).rejects.toThrow();
+      expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
+    });
+
     // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
     // and a sidecar beside no archive is a file MO2 would never write.
     it('writes no sidecar for an archive that is absent from downloads/', async () => {

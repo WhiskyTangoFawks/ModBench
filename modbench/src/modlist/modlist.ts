@@ -291,10 +291,11 @@ export type UninstallModsResult =
   | { applied: false; refusal: string };
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
- *  then its downloaded file marked (update-load-order-file, mod `uninstall`). `downloadsDir` is
- *  the resolved folder (instance value `paths.downloadsDir`). */
+ *  then its downloaded file marked (update-load-order-file, mod `uninstall`). `downloadsDir`
+ *  undefined (unresolved) skips the mark; its reason was already logged once. */
 export async function uninstallMods(
-  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string, trash: MoveToTrash,
+  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string | undefined,
+  trash: MoveToTrash,
 ): Promise<UninstallModsResult> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
   const result = await trashThenUnlist(
@@ -311,7 +312,7 @@ export async function uninstallMods(
       continue;
     }
     const archiveFilename = archiveOf.get(entry.name);
-    if (archiveFilename === undefined) {
+    if (archiveFilename === undefined || downloadsDir === undefined) {
       landed.push({ name: entry.name });
       continue;
     }

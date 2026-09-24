@@ -202,7 +202,7 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
 /** Extracts into staging and moves the detected mod root in, then marks the download it came
  *  from installed — a failed mark is reported beside the landed install, never instead of it. */
 export async function installFromArchive(
-  instanceRoot: string, target: InstallTarget, archivePath: string, downloadsDir: string, opts: InstallOptions,
+  instanceRoot: string, target: InstallTarget, archivePath: string, downloadsDir: string | undefined, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
     const outcome = await withStaging(instanceRoot, async (staging) => {
@@ -220,10 +220,11 @@ export async function installFromArchive(
 }
 
 // Only an archive that IS a download has a sidecar to mark; one the user picked from anywhere
-// else has none, and writing a `.meta` into the downloads folder for it would invent a row.
+// else has none, or the folder is unresolved, and writing a `.meta` for it would invent a row.
 async function markedInstalled(
-  downloadsDir: string, archivePath: string,
+  downloadsDir: string | undefined, archivePath: string,
 ): Promise<{ downloadRefusal?: string }> {
+  if (downloadsDir === undefined) return {};
   const name = basename(archivePath);
   if (archivePath !== downloadFile(downloadsDir, name)) return {};
   const marked = await markDownloadInstalled(downloadsDir, name);

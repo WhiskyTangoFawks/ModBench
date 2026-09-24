@@ -147,10 +147,12 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // A `.meta` left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  downloadsDir: string, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
-  if (names.length === 0 || !(await confirmDelete(names, ask))) return { landed: [], refused: [] };
+  // Rows exist only once the folder resolves, so a selection is empty whenever downloadsDir is
+  // undefined — this guard is belt-and-suspenders for the type, not a reachable path.
+  if (downloadsDir === undefined || names.length === 0 || !(await confirmDelete(names, ask))) return { landed: [], refused: [] };
   const outcome = await deleteDownloads(downloadsDir, names, trash);
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (item) => item.name);
@@ -165,9 +167,11 @@ async function deleteSelection(
 // No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
 // writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
 async function excludeSelection(
-  downloadsDir: string, names: readonly string[], reporter: Reporter,
+  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  if (names.length === 0) return NOTHING_CHANGED;
+  // Rows exist only once the folder resolves, so a selection is empty whenever downloadsDir is
+  // undefined — this guard is belt-and-suspenders for the type, not a reachable path.
+  if (downloadsDir === undefined || names.length === 0) return NOTHING_CHANGED;
   const outcome = await excludeDownloads(downloadsDir, names);
   reporter.selectionOutcome(
     `Could not exclude ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
@@ -175,9 +179,9 @@ async function excludeSelection(
 }
 
 async function includeSelection(
-  downloadsDir: string, names: readonly string[], reporter: Reporter,
+  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  if (names.length === 0) return NOTHING_CHANGED;
+  if (downloadsDir === undefined || names.length === 0) return NOTHING_CHANGED;
   const outcome = await includeDownloads(downloadsDir, names);
   reporter.selectionOutcome(
     `Could not include ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
