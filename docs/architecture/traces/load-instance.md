@@ -68,5 +68,5 @@ This flow waits for no hand-off.
 
 - **The Instance loader:** given watch events and the bytes of the files, the value and its
   sequence, or the last value kept.
-- **Instance commands:** given a value, the snapshot. Given `refresh`, the rebuild, then the
-  snapshot, or the refusal and nothing sent.
+- **Instance commands:** given a value, the snapshot. Given `refresh`, the rebuild and nothing sent,
+  or the refusal and nothing sent.
