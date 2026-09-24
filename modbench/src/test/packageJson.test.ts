@@ -134,13 +134,26 @@ describe('package.json outside an instance', () => {
     expect(titleMenus.filter((e) => !requires(e.when, IN_AN_INSTANCE)).map((e) => e.command)).toEqual([]);
   });
 
-  it('says "No downloads yet" only inside an instance, once its first read has landed', () => {
+  it('says "No downloads yet" only inside an instance, once its first read has landed, and never while all are excluded', () => {
     const empty = present(
       pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.downloads' && w.contents.startsWith('No downloads yet')),
       'the Downloads empty-list welcome',
     );
     expect(requires(empty.when, IN_AN_INSTANCE)).toBe(true);
     expect(requires(empty.when, INSTANCE_READ_KEY)).toBe(true);
+    expect(requires(empty.when, '!modbench.downloadedFile.allExcluded')).toBe(true);
+  });
+
+  // downloads.md, States, story 2: distinct from "no downloads yet", never both at once.
+  it('says files are excluded only inside an instance, and only while the all-excluded key is set', () => {
+    const allExcluded = present(
+      pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.downloads' && w.contents.toLowerCase().includes('excluded')),
+      'the Downloads all-excluded welcome',
+    );
+    expect(allExcluded.contents.startsWith('No downloads yet')).toBe(false);
+    expect(requires(allExcluded.when, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(allExcluded.when, INSTANCE_READ_KEY)).toBe(true);
+    expect(requires(allExcluded.when, 'modbench.downloadedFile.allExcluded')).toBe(true);
   });
 
   // Which commands exist only inside an instance is the running extension's answer, checked by
@@ -634,8 +647,8 @@ describe('package.json plugin-row context menu', () => {
 });
 
 // downloads.md, Menus and keys: "Row menu | install · view on Nexus · open · open `.meta` ·
-// exclude or include · delete". Two gestures, never one command with a target pick.
-describe('package.json Downloads row menu — open and open .meta', () => {
+// exclude or include · delete".
+describe('package.json Downloads row menu order', () => {
   const downloadRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => e.when.includes('view == modbench.downloads') && e.when.includes(String.raw`viewItem =~ /\bdownload\b/`));
@@ -656,14 +669,24 @@ describe('package.json Downloads row menu — open and open .meta', () => {
     expect(entry.when).toContain(String.raw`viewItem =~ /\bhasMeta\b/`);
   });
 
-  it('sits between open and delete, as install · view on Nexus · open · open .meta · … names it', () => {
-    const ids = downloadRowMenu().map((e) => e.command);
-    const open = ids.indexOf('modbench.downloadedFile.open');
-    const openMeta = ids.indexOf('modbench.downloadedFile.openMeta');
-    const del = ids.indexOf('modbench.downloadedFile.delete');
-    expect(open).toBeGreaterThanOrEqual(0);
-    expect(openMeta).toBeGreaterThan(open);
-    expect(del).toBeGreaterThan(openMeta);
+  // Exclude and include are two commands for one slot — mutually exclusive by their own `when` —
+  // so the group each carries is the one place their shared position is checked.
+  it('orders the row: install, view on Nexus, open, open .meta, exclude/include, delete', () => {
+    const entries = downloadRowMenu();
+    const slotOf = (command: string): number => {
+      const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
+      return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
+    };
+    const exclude = slotOf('modbench.downloadedFile.exclude');
+    const include = slotOf('modbench.downloadedFile.include');
+    expect(include).toBe(exclude); // one slot, two mutually-exclusive commands
+
+    const slots = [
+      'modbench.downloads.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
+      'modbench.downloadedFile.openMeta', 'modbench.downloadedFile.exclude', 'modbench.downloadedFile.delete',
+    ].map(slotOf);
+    expect(slots).toEqual([...slots].sort((a, b) => a - b));
+    expect(new Set(slots).size).toBe(slots.length); // strictly increasing, no ties outside exclude/include
   });
 });
 
