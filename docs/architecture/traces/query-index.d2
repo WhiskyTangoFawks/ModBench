@@ -1,6 +1,4 @@
-# Query the record index, purple. A question and its answer are two arrows. A query reads the Store
-# and never a file, so it answers from the last projection. index-load-order is what writes it.
-# Governed by ADR-0009, ADR-0010, ADR-0015 and ADR-0019. Contract: query-index.md.
+# Query the record index, purple. Contract: query-index.md.
 ...@../styles
 shape: sequence_diagram
 views: "Plugins · Editor" {class: driving}
@@ -20,3 +18,9 @@ store -> queries: rows {class: query}
 queries -> http: "answer: diff nodes, rows" {class: query}
 http -> client: answer {class: query}
 client -> views: records, cells, plugin-keyed status {class: query}
+
+refused: "refused: the filter" {
+  queries -> http: "the SQL returns no FormKey column · the SQL cannot run" {class: query}
+  http -> client: the refusal {class: query}
+  client -> views: the refusal {class: query}
+}
