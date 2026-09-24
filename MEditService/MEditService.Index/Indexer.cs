@@ -982,11 +982,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0009 invariant 5's rebuild: closes the scope, drops the instance's index file and
-    /// reopens it empty, flooring its sequence at what this process handed out. Then every copy is
-    /// read again against the load order held, as a cold load does, off the caller's thread like a
-    /// reconcile the watcher starts; the task is that refill. With none held the store stays empty
-    /// and the task has already finished.</summary>
+    /// <summary>ADR-0009 invariant 5: drops the index file, floors its sequence at what this process
+    /// handed out, and returns the refill against the load order held, run off the caller's thread;
+    /// with none held, the store stays empty.</summary>
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;

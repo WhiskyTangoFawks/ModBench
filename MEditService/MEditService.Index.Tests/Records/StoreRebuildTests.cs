@@ -7,9 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009 invariant 5's Refresh: a rebuild drops every trace of what the file held, because it must
-// fix a row no hash-validate can (a wrong but self-consistent body). It then reads every copy again
-// against the load order the kernel holds, as a cold load does (load-instance, refresh step 2).
+// ADR-0009 invariant 5: a rebuild drops every trace of the file, to fix a row no hash-validate can
+// (a wrong but self-consistent body), then reads every copy again against the load order held.
 public sealed class StoreRebuildTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("store-rebuild")

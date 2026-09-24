@@ -61,9 +61,8 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 
     private int _markers;
 
-    // A put that moves every copy one slot: an identical resend is a no-op and publishes nothing,
-    // while this one publishes load-order-status carrying its own applied version, so we skip past
-    // any unread frame an earlier PUT on this stream already left.
+    // Moves every copy one slot, since an identical resend publishes nothing: its load-order-status
+    // carries its own version, so we skip any unread frame an earlier PUT left on this stream.
     private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerPut(
         StreamReader stream, ScatteredFixtureData fx)
     {
