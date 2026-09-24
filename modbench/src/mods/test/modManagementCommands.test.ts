@@ -37,18 +37,21 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled } = vi.hoisted(() => ({
+const {
+  uninstallMod, deleteSeparator, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
+} = vi.hoisted(() => ({
   uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
-  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(),
+  createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', () => ({
   createEmptyMod, deleteSeparator, insertSeparator,
-  moveModToSeparator: vi.fn(), renameSeparator, uninstallMod, setModsEnabled,
+  moveMods, moveSeparators, renameSeparator, uninstallMod, setModsEnabled,
 }));
 
 import {
   registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerModInstallCommands,
+  registerModMoveCommand,
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   type ModInstallDeps,
 } from '../modManagementCommands';
@@ -557,6 +560,151 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to disable mods.', detail: 'ENOENT: modlist.txt' },
+    ]);
+  });
+});
+
+describe('modbench.mod.move: the selection of mods or of separators, to a picked place', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // modlist.txt order, winning first: Group A holds Mod A, Group B holds Mod B, Mod C is ungrouped.
+  const instance = {
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      mods: [
+        { kind: 'mod', name: 'Mod A', enabled: true },
+        { kind: 'separator', name: 'Group A', enabled: true },
+        { kind: 'mod', name: 'Mod B', enabled: true },
+        { kind: 'separator', name: 'Group B', enabled: true },
+        { kind: 'mod', name: 'Mod C', enabled: true },
+      ],
+    }),
+  };
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
+  const modC = new ModNode({ kind: 'mod', name: 'Mod C', enabled: true });
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
+  const losingAtTop = { selection: () => [], direction: () => 'losingAtTop' as const };
+  const pickedLabels = (): string[] => {
+    const items: unknown = showQuickPick.mock.calls[0]?.[0];
+    if (!Array.isArray(items)) return [];
+    return items.map((item: unknown) =>
+      (typeof item === 'object' && item !== null && 'label' in item ? String(item.label) : ''));
+  };
+  const pickLabelled = (label: string) => showQuickPick.mockImplementationOnce(
+    (items: { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
+
+  it('right-clicked on a mod in a mixed selection, moves only the mods to the picked separator', async () => {
+    pickLabelled('Group B');
+    moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod C'], refused: [] } });
+
+    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', modA, [modA, groupB, modC]);
+
+    expect(pickedLabels()).toEqual(['Ungrouped', 'Group B', 'Group A']);
+    expect(moveMods).toHaveBeenCalledWith(
+      '/instance', 'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
+    expect(moveSeparators).not.toHaveBeenCalled();
+  });
+
+  it('right-clicked on a separator in a mixed selection, moves only the separators above the picked one', async () => {
+    pickLabelled('Group A');
+    moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
+
+    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    await invoke('modbench.mod.move', groupB, [modA, groupB]);
+
+    expect(pickedLabels()).toEqual(['Group A']);
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'losing');
+    expect(moveMods).not.toHaveBeenCalled();
+  });
+
+  it('with winning at the top, lands mods and separators toward the winning end, as the view shows it', async () => {
+    const winningAtTop = { selection: () => [], direction: () => 'winningAtTop' as const };
+    moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod C'], refused: [] } });
+    moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
+
+    registerModMoveCommand('/instance', instance, winningAtTop, recordingReporter());
+    pickLabelled('Group A');
+    await invoke('modbench.mod.move', modC);
+    pickLabelled('Group A');
+    await invoke('modbench.mod.move', groupB);
+
+    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], 'Group A', 'winning');
+  });
+
+  it('offers the places in the order the view shows them', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerModMoveCommand(
+      '/instance', instance, { selection: () => [], direction: () => 'winningAtTop' }, recordingReporter());
+    await invoke('modbench.mod.move', modC);
+
+    expect(pickedLabels()).toEqual(['Ungrouped', 'Group A', 'Group B']);
+  });
+
+  it('from the palette over a selection mixing mods and separators, moves nothing and says nothing', async () => {
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, { ...losingAtTop, selection: () => [modA, groupA] }, reporter);
+    await invoke('modbench.mod.move');
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(moveMods).not.toHaveBeenCalled();
+    expect(moveSeparators).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('Esc at the pick moves nothing and says nothing', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', modA);
+
+    expect(moveMods).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('Esc at the separator pick moves nothing and says nothing', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', groupB);
+
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(moveSeparators).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports a gone mod by name, once, while the others land', async () => {
+    pickLabelled('Ungrouped');
+    moveMods.mockResolvedValue({
+      applied: true,
+      outcome: { landed: ['Mod A'], refused: [{ item: 'Mod C', reason: 'Mod not found in modlist: Mod C' }] },
+    });
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', modA, [modA, modC]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not move 1 of 2 mods.', detail: '"Mod C" (Mod not found in modlist: Mod C)',
+    }]);
+  });
+
+  it('reports a refusal of the whole selection once', async () => {
+    pickLabelled('Group A');
+    moveSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', groupB);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to move separators.', detail: 'ENOENT: modlist.txt' },
     ]);
   });
 });

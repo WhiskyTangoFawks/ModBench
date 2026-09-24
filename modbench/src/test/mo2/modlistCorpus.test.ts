@@ -6,7 +6,8 @@ import {
   createEmptyMod,
   deleteSeparator,
   insertSeparator,
-  moveModToSeparator,
+  moveMods,
+  moveSeparators,
   renameSeparator,
   reorderMod,
   reorderSeparatorBlock,
@@ -109,18 +110,25 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(await separatorNames(dir)).not.toContain('Radfall - All-In-One Survival Overhaul');
   });
 
-  // A separator's section is the mods that PRECEDE it (mo2/modlistText.ts) —
-  // moving a mod "into" a separator's group means it becomes the last entry
-  // immediately above that separator's own line, not below it.
-  it('moveModToSeparator regroups a mod, touching only modlist.txt', async () => {
+  it('moveMods regroups mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveModToSeparator(dir, PROFILE, 'Cracked and Smudged Pip-Boy Screen', 'Unassigned (Modlist Development)');
+    await moveMods(
+      dir, PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     const entries = await readModlistEntries(dir);
     const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === 'Unassigned (Modlist Development)');
     expect(present(entries[sepIdx - 1], "the entry now preceding the separator").name).toBe('Cracked and Smudged Pip-Boy Screen');
+  });
+
+  it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
+    const before = await snapshotTree(dir);
+    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([MODLIST]));
+
+    expect(await separatorNames(dir)).toEqual(['Radfall - All-In-One Survival Overhaul', 'Unassigned (Modlist Development)']);
   });
 
   it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {
