@@ -258,7 +258,6 @@
       {
         "command": "modbench.mod.createEmpty",
         "title": "Create Empty Mod…",
-        "icon": "$(add)",
         "category": "Modbench"
       },
       {
@@ -494,31 +493,31 @@
         },
         {
           "command": "modbench.mod.enable",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsDisabledMod"
         },
         {
           "command": "modbench.mod.disable",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsEnabledMod"
         },
         {
           "command": "modbench.separator.add",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind && modbench.mod.singleRow"
         },
         {
           "command": "modbench.mod.move",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind"
         },
         {
           "command": "modbench.mod.uninstall",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == mod"
         },
         {
           "command": "modbench.separator.rename",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == separator && modbench.mod.singleRow"
         },
         {
           "command": "modbench.separator.delete",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.selectionKind == separator"
         },
         {
           "command": "modbench.plugin.reveal",
@@ -598,11 +597,11 @@
         },
         {
           "command": "modbench.mod.createEmpty",
-          "when": "modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance"
         },
         {
           "command": "modbench.mod.install",
-          "when": "modbench.folder == instance"
+          "when": "focusedView == modbench.modList && modbench.folder == instance"
         },
         {
           "command": "modbench.downloadedFile.filter",
@@ -694,9 +693,14 @@
           "group": "navigation@2"
         },
         {
+          "command": "modbench.mod.install",
+          "when": "view == modbench.modList && modbench.folder == instance",
+          "group": "3_create@1"
+        },
+        {
           "command": "modbench.mod.createEmpty",
           "when": "view == modbench.modList && modbench.folder == instance",
-          "group": "navigation@3"
+          "group": "3_create@2"
         },
         {
           "command": "modbench.downloadedFile.filter",
@@ -760,72 +764,82 @@
         {
           "command": "modbench.mod.openFolder",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@1"
+          "group": "1_open@1"
         },
         {
           "command": "modbench.mod.viewOnNexus",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bhasNexus\\b/",
-          "group": "modActions@2"
+          "group": "1_open@2"
         },
         {
           "command": "modbench.mod.enable",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bdisabled\\b/",
-          "group": "modActions@3"
+          "group": "2_change@1"
         },
         {
           "command": "modbench.mod.disable",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\benabled\\b/",
-          "group": "modActions@3"
+          "group": "2_change@1"
         },
         {
           "command": "modbench.separator.add",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@4"
+          "group": "3_create@1"
+        },
+        {
+          "command": "modbench.mod.createEmpty",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "3_create@2"
+        },
+        {
+          "command": "modbench.mod.install",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "3_create@3"
         },
         {
           "command": "modbench.mod.move",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@5"
+          "group": "2_change@2"
         },
         {
           "command": "modbench.mod.uninstall",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@6"
+          "group": "6_destroy@1"
         },
         {
           "command": "modbench.record.copyValue",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
-          "group": "modActions@7"
+          "group": "5_copy@1"
         },
         {
           "command": "modbench.mod.move",
           "when": "view == modbench.modList && viewItem == separator",
-          "group": "sepActions@0"
+          "group": "2_change@1"
         },
         {
           "command": "modbench.separator.rename",
           "when": "view == modbench.modList && viewItem == separator",
-          "group": "sepActions@1"
+          "group": "3_create@2"
         },
         {
           "command": "modbench.separator.add",
           "when": "view == modbench.modList && viewItem == separator",
-          "group": "sepActions@2"
+          "group": "3_create@1"
         },
         {
           "command": "modbench.separator.delete",
           "when": "view == modbench.modList && viewItem == separator",
-          "group": "sepActions@3"
+          "group": "6_destroy@1"
         },
         {
           "command": "modbench.record.copyValue",
           "when": "view == modbench.modList && viewItem == separator",
-          "group": "sepActions@4"
+          "group": "5_copy@1"
         },
         {
           "command": "modbench.mod.openFolder",
           "when": "view == modbench.modList && viewItem == overwrite",
-          "group": "overwriteActions@1"
+          "group": "1_open@1"
         },
         {
           "command": "modbench.downloads.install",
@@ -962,6 +976,43 @@
         "key": "ctrl+f",
         "mac": "cmd+f",
         "when": "focusedView == modbench.modList && modbench.folder == instance"
+      },
+      {
+        "command": "modbench.mod.enable",
+        "key": "space",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionToggle == enable"
+      },
+      {
+        "command": "modbench.mod.disable",
+        "key": "space",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionToggle == disable"
+      },
+      {
+        "command": "modbench.mod.uninstall",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == mod"
+      },
+      {
+        "command": "modbench.separator.delete",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator"
+      },
+      {
+        "command": "modbench.separator.rename",
+        "key": "f2",
+        "mac": "enter",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator && modbench.mod.singleRow"
+      },
+      {
+        "command": "modbench.record.copyValue",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance",
+        "args": {
+          "view": "modbench.modList"
+        }
       },
       {
         "command": "modbench.plugin.filter",
