@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -18,7 +19,7 @@ public sealed class SourceRepositoryUncommittedStateTests
         {
             var relativePath = Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json");
             var files = new[] { new TreeFile(relativePath, "{\"a\":1}"u8.ToArray()) };
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             // Plain unstaged edit — never `git add`ed. A rebase refusal built off staged changes
             // only would miss this and report clean.
@@ -42,7 +43,7 @@ public sealed class SourceRepositoryUncommittedStateTests
         try
         {
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             var result = SourceRepository.RebaseEditBranch(modFolder);
 
@@ -125,7 +126,7 @@ public sealed class SourceRepositoryUncommittedStateTests
         var modFolder = NewModFolder();
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
         var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-        SourceRepository.Track(modFolder, SourcePreset.Everything, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(modFolder, SourcePreset.Everything, files);
         return modFolder;
     }
 

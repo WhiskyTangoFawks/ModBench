@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -15,10 +16,9 @@ public sealed class SourceRepositoryUntrackTests
         {
             var relativePath = Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json");
             var content = "{\"formKey\":\"000001:Test.esp\"}"u8.ToArray();
-            SourceRepository.Track(
+            PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
-                [new TreeFile(relativePath, content)],
-                new TrackProvenance(null, null, new Dictionary<string, string>()));
+                [new TreeFile(relativePath, content)]);
 
             var sourceFilePath = Path.Combine(modFolder, relativePath);
             Assert.True(SourceRepository.IsTracked(modFolder));

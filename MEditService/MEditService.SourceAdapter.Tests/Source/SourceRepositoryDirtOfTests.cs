@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -37,8 +38,8 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     private SourceRepository Tracked(params TreeFile[] extraFiles)
     {
         var files = new[] { new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, files);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
@@ -186,8 +187,9 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     public void DirtOf_APathOutsideThePluginsTree_IsIgnoredEntirely(string relativePath)
     {
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
-        var repository = Tracked(new TreeFile(normalized, "{}"u8.ToArray()));
+        var repository = Tracked();
 
+        Directory.CreateDirectory(Path.Combine(_modFolder, Path.GetDirectoryName(normalized) ?? ""));
         File.WriteAllText(Path.Combine(_modFolder, normalized), "{\"changed\":true}");
 
         var dirt = repository.DirtOf(Plugin);

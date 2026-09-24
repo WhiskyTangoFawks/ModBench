@@ -1,55 +1,36 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The parked ref points at the baseline commit's own SHA (no second commit object) since
-/// the tree is literally the same content at Track time (ADR-0003).</summary>
+/// <summary>Each plugin's parked ref points at its own baseline commit's SHA (no second commit object),
+/// since that commit holds exactly the tree Track read from the binary (ADR-0003).</summary>
 public sealed class SourceRepositoryTrackParkedRefTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-parkedref-").FullName;
 
     [Fact]
-    public void Track_ParksLastCompileRef_AtTheBaselineCommit_PerPlugin()
+    public void Track_ParksEachPluginsLastCompileRef_AtItsOwnBaselineCommit()
     {
         var modFolder = NewModFolder();
         try
         {
-            var files = new[]
-            {
-                new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
-                new TreeFile("source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray()),
-            };
-            var trailers = new TrackProvenance(
-                null, null,
-                new Dictionary<string, string> { ["Test.esp"] = "AAAA", ["Other.esp"] = "BBBB" });
-
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Edits,
+                [
+                    new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
+                    new TreeFile("source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray()),
+                ]);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var baselineSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "main").Trim();
-
-            Assert.Equal(baselineSha, GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Test.esp").Trim());
-            Assert.Equal(baselineSha, GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Other.esp").Trim());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Track_WithNoPluginTrailersGiven_ParksNoRefs()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
-
-            var gitDir = Path.Combine(modFolder, ".git");
-            Assert.False(GitProbe.TryRun(gitDir, modFolder, out _, "rev-parse", "refs/medit/last-compile/Test.esp"));
+            Assert.Equal(
+                GitProbe.Run(gitDir, modFolder, "rev-parse", "main~1").Trim(),
+                GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Test.esp").Trim());
+            Assert.Equal(
+                GitProbe.Run(gitDir, modFolder, "rev-parse", "main").Trim(),
+                GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Other.esp").Trim());
         }
         finally
         {

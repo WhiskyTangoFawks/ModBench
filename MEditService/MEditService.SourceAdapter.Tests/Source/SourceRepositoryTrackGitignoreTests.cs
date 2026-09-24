@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -30,7 +31,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             WriteMetaIniBesideTheSource(modFolder);
             WritePluginBinaryBesideTheSource(modFolder);
 
-            SourceRepository.Track(modFolder, preset, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, preset, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
@@ -61,7 +62,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
         {
             File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
 
-            SourceRepository.Track(modFolder, SourcePreset.Edits, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
@@ -86,7 +87,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
             File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
 
-            SourceRepository.Track(modFolder, SourcePreset.Edits, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
@@ -116,9 +117,8 @@ public sealed class SourceRepositoryTrackGitignoreTests
             var otherPluginFile = new TreeFile(
                 Path.Combine("source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
 
-            SourceRepository.Track(
-                modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile],
-                new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe
@@ -151,7 +151,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
             WritePluginBinaryBesideTheSource(modFolder);
 
-            SourceRepository.Track(modFolder, SourcePreset.Everything, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Everything, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");

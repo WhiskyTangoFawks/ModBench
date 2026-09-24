@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -37,8 +38,8 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var npc = mod.Npcs.Single(n => n.EditorID == NpcEditorId);
         _npcFormKey = npc.FormKey.ToString();
         _npcRelativePath = NpcPathOf(npc);
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, TreeOf(mod), new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, TreeOf(mod));
     }
 
     public void Dispose()
@@ -113,8 +114,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     private void AbsorbUpstream(float heightMax, bool withNewRecord) =>
         SourceRepository.CommitPristineToMain(
             _modFolder,
-            TreeOf(Upstream(heightMax, withNewRecord)),
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Of(TreeOf(Upstream(heightMax, withNewRecord))));
 
     [Fact]
     public void RebaseEditBranch_Refuses_OverUncommittedDirt()
