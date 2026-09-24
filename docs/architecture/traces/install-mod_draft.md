@@ -12,7 +12,7 @@ the catalog, the diagrams and the principles settle. The rest is in the Open Que
 
 The `modlist.txt` line is not written here. The folder appears, and `mod sync` and `plugin sync`
 pick it up. Their stories are in
-[update-load-order-file_draft.md](update-load-order-file_draft.md).
+[update-load-order-file.md](update-load-order-file.md).
 A new mod lands where `mod sync` puts a folder it has not seen: at the winning end, disabled.
 The user moves it.
 

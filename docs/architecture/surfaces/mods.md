@@ -176,7 +176,8 @@ another separator has is refused in the prompt, as for add. *MO2*
 
 ### Delete separator
 
-See [update-load-order-file_draft.md](../traces/update-load-order-file_draft.md), question 1.
+A separator delete does not ask: no mod is lost, and the separator's folder goes to the trash.
+*Confirm what destroys; ruling*
 
 ### Create empty mod and install
 
