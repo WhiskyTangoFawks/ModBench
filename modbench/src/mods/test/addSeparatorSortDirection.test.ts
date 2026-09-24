@@ -31,8 +31,6 @@ import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
-
 // The row a real tree, sorted the given way, hands a right click — not a hand-built fixture.
 async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const root = await cloneCorpusFixture();
