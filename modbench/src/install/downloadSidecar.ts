@@ -47,8 +47,7 @@ export function markDownloadInstalled(instanceRoot: string, name: string): Promi
   return spliceSidecar(instanceRoot, name, setInstalledInText);
 }
 
-/** Each file is trashed or refused on its own, so one the trash will not take leaves the others
- *  going. Never touches the mod installed from any of them. */
+/** Never touches the mod installed from any of them. */
 export async function deleteDownloads(
   instanceRoot: string, names: readonly string[], trash: TrashFile,
 ): Promise<SelectionOutcome<string>> {

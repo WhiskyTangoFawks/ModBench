@@ -23,7 +23,6 @@ const MANUAL = 'Manually Dropped Archive.7z';
 const MANUAL_ARCHIVE = `downloads/${MANUAL}`;
 const MANUAL_META = `${MANUAL_ARCHIVE}.meta`;
 
-// A file the host's trash will not take, as one another program holds open is.
 const LOCKED = 'Locked Archive.7z';
 const LOCKED_ARCHIVE = `downloads/${LOCKED}`;
 

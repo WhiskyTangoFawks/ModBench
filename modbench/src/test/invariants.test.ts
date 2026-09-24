@@ -37,9 +37,9 @@ function commandVerbs(source: string): string[] {
     .map((m) => present(m[1], "the exported function's name"));
 }
 
-// docs/specs/containers.md rule 7: showCollapseAll on every hierarchical tree, never a flat
-// list. `createTreeView` has no declarative contribution, so the call sites are the seam.
-describe('title-bar rule 7: showCollapseAll marks exactly the hierarchical trees', () => {
+// `createTreeView` has no declarative contribution, so the call sites are the seam for a tree's
+// options.
+describe('the createTreeView sites', () => {
   const sites = sourceFiles().flatMap((f) => treeViewOptions(read(f)));
 
   it('reads every createTreeView site', () => {
@@ -49,9 +49,17 @@ describe('title-bar rule 7: showCollapseAll marks exactly the hierarchical trees
     ]);
   });
 
+  // docs/specs/containers.md rule 7: showCollapseAll on every hierarchical tree, never a flat list.
   it('collapse-all views are the Mods tree and the merged Plugins tree', () => {
     const collapsible = new Set(sites.filter((s) => /showCollapseAll:\s*true/.test(s.options)).map((s) => s.id));
     expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree']);
+  });
+
+  // common.md, A view, story 6: every list selects several rows. The Toolbox is a readout, where
+  // selecting several rows means nothing (toolbox.md).
+  it('every view but the Toolbox selects several rows', () => {
+    const singleSelect = sites.filter((s) => !/canSelectMany:\s*true/.test(s.options)).map((s) => s.id);
+    expect(singleSelect).toEqual(['modbench.toolbox']);
   });
 
   it('the site reader sees through nested braces to the whole options object', () => {

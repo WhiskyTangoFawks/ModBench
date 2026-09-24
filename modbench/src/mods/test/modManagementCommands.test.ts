@@ -177,10 +177,9 @@ describe('registerModContextCommands: the uninstall confirmation', () => {
   });
 });
 
-// The Mods tree selects several rows, so VS Code hands every row gesture the right-clicked row and
-// the selection. Until the Mods surface converts them, the destructive ones take the right-clicked
-// row alone.
-describe('the Mods row gestures not yet converted take the right-clicked row, not the selection', () => {
+// VS Code hands every row gesture of a multi-select tree the right-clicked row and the selection.
+// debt #975: the destructive Mods gestures take the right-clicked row alone.
+describe('the destructive Mods row gestures take the right-clicked row, not the selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };

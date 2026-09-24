@@ -33,7 +33,6 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive,
 }));
 
-// The real delete, watched: the view hands it the whole selection, never one file at a time.
 vi.mock('../../install/downloadSidecar', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../install/downloadSidecar')>();
   return { ...real, deleteDownloads: vi.fn(real.deleteDownloads) };
@@ -633,12 +632,9 @@ describe('registerDownloadsMultiRowCommands', () => {
     const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
+    await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
-    await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
-    // the command's own awaits before the early return lands.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ask.asked).toHaveLength(1);
     expect(fsDelete).not.toHaveBeenCalled();
   });
 
@@ -732,8 +728,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const ask = scriptedDialog('Delete');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), ask);
-    // A one-item *array*, not the no-array fallback the clicked-row-alone test above already
-    // covers, reaching the singular confirmation by a different selectionNames() path.
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
