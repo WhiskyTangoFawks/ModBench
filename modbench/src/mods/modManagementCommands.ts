@@ -13,7 +13,9 @@ import {
   renameSeparator,
   uninstallMod,
 } from '../modlist/modlist';
-import { defaultModName, installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from '../install/install';
+import {
+  ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder, type InstallChoice, type InstallTarget,
+} from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
@@ -65,7 +67,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         if (!archive) {
           const picked = await vscode.window.showOpenDialog({
             canSelectMany: false,
-            filters: { 'Mod archives': ['zip', '7z', 'rar'] },
+            filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
             openLabel: 'Install',
           });
           archive = picked?.[0]?.fsPath;

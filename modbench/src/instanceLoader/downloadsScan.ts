@@ -20,7 +20,9 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   const dir = downloadsDir(instanceRoot);
   let names: string[];
   try {
-    names = (await listDir(dir)).map((dirent) => dirent.name);
+    // A folder is never a download of its own — MO2 lists files by the installers' extensions,
+    // never folders — so a subfolder here is skipped before it ever becomes an entry.
+    names = (await listDir(dir)).filter((dirent) => dirent.isFile()).map((dirent) => dirent.name);
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
