@@ -1,16 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, fakeUri } from '../../test/vscodeMock';
 
-const { registerCommand, executeCommand, showOpenDialog, openExternal } = vi.hoisted(() => ({
+const { registerCommand, executeCommand, showOpenDialog, showInputBox, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
+  showInputBox: vi.fn(),
   openExternal: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
-  window: { showOpenDialog },
+  window: { showOpenDialog, showInputBox },
   env: { openExternal },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
@@ -26,11 +27,13 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod, deleteSeparator } = vi.hoisted(() => ({ uninstallMod: vi.fn(), deleteSeparator: vi.fn() }));
+const { uninstallMod, deleteSeparator, renameSeparator } = vi.hoisted(() => ({
+  uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(),
+}));
 
 vi.mock('../../modlist/modlist', () => ({
   createEmptyMod: vi.fn(), deleteSeparator, insertSeparator: vi.fn(),
-  moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
+  moveModToSeparator: vi.fn(), renameSeparator, uninstallMod,
 }));
 
 import {
@@ -205,10 +208,47 @@ describe('the destructive Mods row gestures take the right-clicked row, not the 
     const other = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);
     const clicked = new SeparatorNode({ kind: 'separator', name: 'My Group', enabled: true }, []);
 
-    registerSeparatorCommands('/instance', instance, runModAction);
+    registerSeparatorCommands('/instance', instance, runModAction, () => []);
     await invoke('modbench.separator.delete', clicked, [other, clicked]);
 
     expect(deleteSeparator.mock.calls).toEqual([['/instance', 'Default', 'My Group']]);
+  });
+});
+
+describe('rename separator takes its separator through the gesture entry', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
+
+  it('prompts with the right-clicked separator\'s name and renames it, not the selection around it', async () => {
+    renameSeparator.mockResolvedValue({ applied: true, wrote: true });
+    showInputBox.mockResolvedValueOnce('Renamed');
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [groupA, groupB]);
+    await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
+
+    expect(showInputBox).toHaveBeenCalledWith({ prompt: 'Rename separator', value: 'Group B' });
+    expect(renameSeparator.mock.calls).toEqual([['/instance', 'Default', 'Group B', 'Renamed']]);
+  });
+
+  it('renames nothing when the prompt keeps the same name', async () => {
+    showInputBox.mockResolvedValueOnce('Group A');
+
+    registerSeparatorCommands('/instance', instance, runModAction, () => [groupA]);
+    await invoke('modbench.separator.rename', groupA);
+
+    expect(renameSeparator).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing and renames nothing from the palette, where no row is right-clicked', async () => {
+    registerSeparatorCommands('/instance', instance, runModAction, () => [groupA]);
+    await invoke('modbench.separator.rename');
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(renameSeparator).not.toHaveBeenCalled();
   });
 });
 
