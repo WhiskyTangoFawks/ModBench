@@ -983,8 +983,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     /// <summary>ADR-0009 invariant 5: drops the index file, floors its sequence at what this process
-    /// handed out, and returns the refill against the load order held, run off the caller's thread;
-    /// with none held, the store stays empty.</summary>
+    /// handed out, and returns the refill against the load order held, run off the caller's thread.
+    /// </summary>
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;

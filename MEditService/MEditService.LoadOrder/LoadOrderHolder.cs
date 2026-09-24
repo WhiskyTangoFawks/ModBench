@@ -21,8 +21,8 @@ public sealed class LoadOrderHolder
     public event Action<LoadOrderSnapshot, long>? Changed;
 
     /// <summary>One higher per Apply that changes the load order, for a caller asking whether the
-    /// Index has reconciled it yet. A snapshot equal to the current one is a no-op (ADR-0013
-    /// invariant 1) and answers the current version.</summary>
+    /// Index has reconciled it. An equal snapshot is a no-op (ADR-0013 invariant 1), answering the
+    /// current version.</summary>
     public long Apply(LoadOrderSnapshot snapshot)
     {
         if (snapshot.Equals(Current)) return Version;
