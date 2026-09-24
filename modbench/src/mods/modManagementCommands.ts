@@ -19,13 +19,6 @@ import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
 
-/** Always empty, so VS Code renders the `viewsWelcome` contribution instead of the tree.
- *  `getTreeItem` is unreachable: `getChildren` never yields an element. */
-export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
-  getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
-  getChildren: () => [],
-};
-
 /** The Mods tree's own view direction: a view setting, writing no MO2 file, so it lives with
  *  the view it flips and needs nothing but the provider. */
 export function registerModListCoreCommands(modListProvider: ModListProvider): vscode.Disposable[] {

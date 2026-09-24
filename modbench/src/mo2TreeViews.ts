@@ -14,25 +14,7 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import { registerNameFilter } from './nameFilter';
-import { setMo2InstanceContext } from './workspaceConfig';
 
-/** Always empty, so VS Code renders the `viewsWelcome` contribution instead of the tree.
- *  `getTreeItem` is unreachable: `getChildren` never yields an element. */
-export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
-  getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
-  getChildren: () => [],
-};
-
-/** A real provider would only fail lazily on first read, so the view gets an always-empty stub
- *  and its `viewsWelcome` contribution renders an actionable message instead. */
-export function registerNotMo2InstanceWelcome(
-  instanceRoot: string,
-  outputChannel: vscode.LogOutputChannel,
-): vscode.Disposable {
-  outputChannel.info(`[toolbox] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
-  setMo2InstanceContext(false);
-  return vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER });
-}
 /** Tree, filter and profile readout together, because the view's description has exactly one
  *  owner. Split apart, a profile update and a filter keystroke race for that property and the
  *  loser silently vanishes. */

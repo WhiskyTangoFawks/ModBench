@@ -90,13 +90,29 @@
     },
     "viewsWelcome": [
       {
+        "view": "modbench.toolbox",
+        "contents": "No mod manager instance is open.\nOpen the folder of an instance Modbench recognizes.\n[Open Folder…](command:vscode.openFolder)",
+        "when": "modbench.folder == notAnInstance"
+      },
+      {
         "view": "modbench.modList",
-        "contents": "This isn't an MO2 instance.\nOpen the folder containing `ModOrganizer.ini`, alongside `mods/` and `profiles/`.\n[Open Folder…](command:vscode.openFolder)",
-        "when": "workspaceFolderCount != 0 && modbench.workspaceMo2CheckDone && !modbench.workspaceIsMo2Instance"
+        "contents": "No mod manager instance is open.\nOpen the folder of an instance Modbench recognizes.\n[Open Folder…](command:vscode.openFolder)",
+        "when": "modbench.folder == notAnInstance"
+      },
+      {
+        "view": "modbench.pluginListTree",
+        "contents": "No mod manager instance is open.\nOpen the folder of an instance Modbench recognizes.\n[Open Folder…](command:vscode.openFolder)",
+        "when": "modbench.folder == notAnInstance"
       },
       {
         "view": "modbench.downloads",
-        "contents": "No downloads yet. Copy archives into `downloads/` to see them here."
+        "contents": "No mod manager instance is open.\nOpen the folder of an instance Modbench recognizes.\n[Open Folder…](command:vscode.openFolder)",
+        "when": "modbench.folder == notAnInstance"
+      },
+      {
+        "view": "modbench.downloads",
+        "contents": "No downloads yet. Copy archives into `downloads/` to see them here.",
+        "when": "modbench.folder == instance && modbench.instanceRead"
       }
     ],
     "commands": [
@@ -501,87 +517,147 @@
         {
           "command": "modbench.record.copyAsNewRecord",
           "when": "false"
+        },
+        {
+          "command": "modbench.mod.filter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.mod.clearFilter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.profile.switch",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.mod.sortWinningAtTop",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.mod.sortLosingAtTop",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.mod.createEmpty",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.modList.installFromArchive",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.modList.installFromFolder",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.downloadedFile.filter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.downloadedFile.clearFilter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.downloadedFile.sort",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.downloadedFile.showExcluded",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.downloadedFile.hideExcluded",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.plugin.filter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.plugin.clearFilter",
+          "when": "modbench.folder == instance"
         }
       ],
       "view/title": [
         {
           "command": "modbench.instance.refresh",
-          "when": "view == modbench.toolbox",
+          "when": "view == modbench.toolbox && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.plugin.filter",
-          "when": "view == modbench.pluginListTree && !modbench.plugin.filterActive",
+          "when": "view == modbench.pluginListTree && !modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.plugin.clearFilter",
-          "when": "view == modbench.pluginListTree && modbench.plugin.filterActive",
+          "when": "view == modbench.pluginListTree && modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.setFilter",
-          "when": "view == modbench.pluginListTree",
+          "when": "view == modbench.pluginListTree && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.clearFilter",
-          "when": "view == modbench.pluginListTree && modbench.filterActive",
+          "when": "view == modbench.pluginListTree && modbench.filterActive && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.plugin.create",
-          "when": "view == modbench.pluginListTree",
+          "when": "view == modbench.pluginListTree && modbench.folder == instance",
           "group": "navigation@3"
         },
         {
           "command": "modbench.mod.filter",
-          "when": "view == modbench.modList && !modbench.mod.filterActive",
+          "when": "view == modbench.modList && !modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.mod.clearFilter",
-          "when": "view == modbench.modList && modbench.mod.filterActive",
+          "when": "view == modbench.modList && modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.mod.sortWinningAtTop",
-          "when": "view == modbench.modList && !modbench.mod.winningAtTop",
+          "when": "view == modbench.modList && !modbench.mod.winningAtTop && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.mod.sortLosingAtTop",
-          "when": "view == modbench.modList && modbench.mod.winningAtTop",
+          "when": "view == modbench.modList && modbench.mod.winningAtTop && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.mod.createEmpty",
-          "when": "view == modbench.modList",
+          "when": "view == modbench.modList && modbench.folder == instance",
           "group": "navigation@3"
         },
         {
           "command": "modbench.downloadedFile.filter",
-          "when": "view == modbench.downloads && !modbench.downloadedFile.filterActive",
+          "when": "view == modbench.downloads && !modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.downloadedFile.clearFilter",
-          "when": "view == modbench.downloads && modbench.downloadedFile.filterActive",
+          "when": "view == modbench.downloads && modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
           "command": "modbench.downloadedFile.showExcluded",
-          "when": "view == modbench.downloads && !modbench.downloadedFile.excludedShown",
+          "when": "view == modbench.downloads && !modbench.downloadedFile.excludedShown && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.downloadedFile.hideExcluded",
-          "when": "view == modbench.downloads && modbench.downloadedFile.excludedShown",
+          "when": "view == modbench.downloads && modbench.downloadedFile.excludedShown && modbench.folder == instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.downloadedFile.sort",
-          "when": "view == modbench.downloads",
+          "when": "view == modbench.downloads && modbench.folder == instance",
           "group": "1_sort"
         }
       ],
@@ -807,19 +883,19 @@
         "command": "modbench.mod.filter",
         "key": "ctrl+f",
         "mac": "cmd+f",
-        "when": "focusedView == modbench.modList"
+        "when": "focusedView == modbench.modList && modbench.folder == instance"
       },
       {
         "command": "modbench.plugin.filter",
         "key": "ctrl+f",
         "mac": "cmd+f",
-        "when": "focusedView == modbench.pluginListTree"
+        "when": "focusedView == modbench.pluginListTree && modbench.folder == instance"
       },
       {
         "command": "modbench.downloadedFile.filter",
         "key": "ctrl+f",
         "mac": "cmd+f",
-        "when": "focusedView == modbench.downloads"
+        "when": "focusedView == modbench.downloads && modbench.folder == instance"
       },
       {
         "command": "modbench.record.copyValue",

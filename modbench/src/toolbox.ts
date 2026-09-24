@@ -29,10 +29,11 @@ import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand } from './mods/modManagementCommands';
-import { createModListView, registerDownloadsView, registerNotMo2InstanceWelcome } from './mo2TreeViews';
+import { createModListView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
-import { gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
+import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
+import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { registerRefreshCommand, registerToolboxCommands, type RefreshGestureDeps } from './toolbox/toolboxCommands';
 import { putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult } from './instanceCommands/loadOrder';
@@ -75,6 +76,10 @@ export interface ToolboxDeps {
 /** The MO2 side's wiring, which the activation file calls: the Toolbox view and everything below
  *  `modbench.toolbox` in the container is built here and torn down with it. */
 export interface Toolbox extends vscode.Disposable {
+  /** The instance check's answer, and whether the Instance's first value has landed. Exposed for
+   *  integration tests, which cannot read a context key. */
+  folder: FolderCheck;
+  instanceRead: () => boolean;
   /** Absent together, on the paths with no MO2 instance to read. Exposed for integration
    *  tests — production reaches all of these through the views. */
   modListProvider?: ModListProvider;
@@ -354,6 +359,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
 interface Mo2Side {
   instance: Instance;
   instanceRoot: string;
+  firstRead: FirstReadMark;
   modListProvider: ModListProvider;
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
@@ -361,31 +367,13 @@ interface Mo2Side {
   enterEditing: () => Promise<void>;
 }
 
-// Undefined on the two paths with no MO2 instance to read: no workspace folder, and a folder
-// that is not one. Both leave the Toolbox view registered and row-less.
-function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
+function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
     setStatusText, notifyConflictsComputed, reporterFor, ask,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
-  const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!instanceRoot) {
-    outputChannel.info('[toolbox] No workspace folder open — Mod List view not registered.');
-    // Explicit, not left implicitly falsy: the viewsWelcome `when` clause also guards on VS Code's
-    // own `workspaceFolderCount != 0`, but every exit path sets both keys rather than leaving one.
-    setMo2InstanceContext(false);
-    return undefined;
-  }
-  // An MO2 instance is the folder containing ModOrganizer.ini, mods/, and profiles/ — distinct
-  // from a real instance with a genuinely unreadable/corrupt modlist, which still reports as an
-  // error tree node (ADR-0019).
-  if (!isMo2Instance(instanceRoot)) {
-    own(registerNotMo2InstanceWelcome(instanceRoot, outputChannel));
-    return undefined;
-  }
-  setMo2InstanceContext(true);
   const modListReporter = reporterFor('modList');
   // ADR-0015: the one Instance over MO2's files, recomputed from the instance directory and the
   // resolver the Instance adapter answers "where is the game" with.
@@ -393,6 +381,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     instanceRoot, log, logReadFailure: (line) => outputChannel.error(line),
     resolveGameDirectory: gameDirectoryResolver(gameDirectoryOverrides),
   }));
+  const firstRead = own(markFirstReadLanded(instance));
   // The Instance watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
@@ -496,12 +485,26 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     warnIfFomod,
   });
   const refreshGesture = { refresh: refreshIndex, instance, reporter: reporterFor('refresh') };
-  return { instance, instanceRoot, modListProvider, downloadsProvider, pluginsTree, refreshGesture, enterEditing };
+  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, refreshGesture, enterEditing };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
   for (const disposable of disposables) own(disposable);
 };
+
+type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { folder: 'notAnInstance' };
+
+// Outside an instance only the Toolbox registers, row-less, and each view's `viewsWelcome` says
+// why. An instance whose files cannot be read is still an instance: its views show the error row
+// (ADR-0019).
+function openedFolder(outputChannel: vscode.LogOutputChannel): OpenedFolder {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const folder = answerInstanceCheck(root, isMo2Instance);
+  if (folder === 'instance' && root !== undefined) return { folder, instanceRoot: root };
+  const what = root === undefined ? 'No folder is open' : `"${root}" is not an instance`;
+  outputChannel.info(`[toolbox] ${what}; every view says how to open one.`);
+  return { folder: 'notAnInstance' };
+}
 
 export function createToolbox(deps: ToolboxDeps): Toolbox {
   const { client, reporterFor } = deps;
@@ -511,7 +514,8 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     return disposable;
   };
 
-  const mo2 = buildMo2Side(own, deps);
+  const opened = openedFolder(deps.outputChannel);
+  const mo2 = opened.folder === 'instance' ? buildMo2Side(own, opened.instanceRoot, deps) : undefined;
 
   // ADR-0015: the view's rows are the Instance's value. The provider holds no state and reads
   // no disk, so a landed recompute is the only thing that can change what it shows.
@@ -524,6 +528,8 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
 
   return {
+    folder: opened.folder,
+    instanceRead: () => mo2?.firstRead.landed ?? false,
     modListProvider: mo2?.modListProvider,
     downloadsProvider: mo2?.downloadsProvider,
     pluginsTree: mo2?.pluginsTree,

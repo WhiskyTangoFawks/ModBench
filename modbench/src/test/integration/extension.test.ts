@@ -9,6 +9,7 @@ import type { BackendStatus, MEditClient, PluginMetadata } from '../../client';
 import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
+import { isRecord } from '../manifest';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -363,6 +364,15 @@ after(async () => {
 describe('modbench activation', () => {
   it('auto-activates on startup without any explicit activate() call', () => {
     assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
+  });
+
+  it('answers the instance check for an instance folder: instance', () => {
+    assert.strictEqual(ext?.exports.folder, 'instance');
+  });
+
+  it('marks the first read once the Instance lands a value', async () => {
+    await pastSequence(present(instanceExport(), 'the Instance export'), 0);
+    assert.strictEqual(ext?.exports.instanceRead(), true);
   });
 
   // The pre-activation welcome flash is not testable: it lives between workspace open and
@@ -1006,10 +1016,6 @@ function findRow<T>(rows: readonly T[], name: string): T {
 // the string case directly rather than through MarkdownString's own default Object stringification.
 function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 describe('Plugin load-order rows expand into records', () => {
