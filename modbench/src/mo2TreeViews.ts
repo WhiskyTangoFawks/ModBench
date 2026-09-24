@@ -97,6 +97,12 @@ export function registerDownloadsView(
     hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
     onRowsChanged: downloadsProvider.onDidChangeTreeData,
   }));
+  // package.json's viewsWelcome gates the all-excluded message on this key (downloads.md,
+  // States, story 2), recomputed on every row change so a disk edit reaches it too.
+  const updateAllExcludedContext = () =>
+    void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.allExcluded', downloadsProvider.allExcluded());
+  updateAllExcludedContext();
+  own(downloadsProvider.onDidChangeTreeData(updateAllExcludedContext));
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),

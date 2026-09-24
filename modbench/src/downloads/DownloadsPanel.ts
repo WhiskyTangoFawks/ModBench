@@ -112,8 +112,8 @@ async function installArchive(
     return;
   }
   if (downloadRefusal === undefined) return;
-  // ADR-0019 background/recoverable tier: Installed reads off the mod's own meta.ini, never this
-  // sidecar, so the failed mark changes nothing the user sees — one Output line, no notification.
+  // downloads.md, Reporting story 1: the install landed, so it is not reported as failed — the
+  // row still shows Installed, straight off meta.ini, and the failed mark is one Output line.
   deps.log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
 }
 
@@ -224,11 +224,40 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
   { label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true },
 ];
 
+type SortOption = { label: string; column: DownloadSortColumn; descending: boolean };
+
+// createQuickPick, not showQuickPick: only the former lets the pick mark the current sort as its
+// active item (downloads.md, Order and view state, story 2), the same pattern the upgrade pick
+// above uses for its own pre-selection.
+async function pickSort(current: { column: DownloadSortColumn; descending: boolean }): Promise<SortOption | undefined> {
+  const active = SORT_OPTIONS.find((o) => o.column === current.column && o.descending === current.descending);
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<SortOption>();
+    quickPick.items = SORT_OPTIONS;
+    quickPick.placeholder = 'Sort downloads by';
+    quickPick.activeItems = active ? [active] : [];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
+  });
+}
+
 /** A quick pick rather than column headers, which a tree does not have. Escape is a silent
  *  no-op, matching the profile picker. */
-export function registerDownloadsSortCommand(downloadsProvider: Pick<DownloadsProvider, 'setSort'>): vscode.Disposable {
+export function registerDownloadsSortCommand(
+  downloadsProvider: Pick<DownloadsProvider, 'setSort' | 'currentSort'>,
+): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.downloadedFile.sort', async () => {
-    const picked = await vscode.window.showQuickPick(SORT_OPTIONS, { placeHolder: 'Sort downloads by' });
+    const picked = await pickSort(downloadsProvider.currentSort());
     if (!picked) return;
     downloadsProvider.setSort(picked.column, picked.descending);
   });

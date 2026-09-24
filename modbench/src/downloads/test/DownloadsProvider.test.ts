@@ -219,24 +219,43 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     expect(rowNames(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
   });
 
-  it('narrows to rows whose name contains the filter text, case-insensitively', async () => {
-    const provider = makeProvider([row({ name: 'ArmorPack.zip' }), row({ name: 'WeaponPack.zip' })]);
+  it('narrows to rows whose label contains the filter text, case-insensitively', async () => {
+    const provider = makeProvider([
+      row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' }),
+      row({ name: 'WeaponPack.zip', displayName: 'WeaponPack.zip' }),
+    ]);
     await provider.getChildren();
     provider.setFilter('armor');
 
     expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
+  // downloads.md, story 4 and common.md, The name filter, story 2: the filter matches the label.
+  // The file name below has no "armor" in it, so matching on `name` would drop this row.
+  it('narrows by the label, not the raw filename', async () => {
+    const provider = makeProvider([
+      row({ name: 'file-one.zip', displayName: 'Armor Pack' }),
+      row({ name: 'file-two.zip', displayName: 'Weapon Pack' }),
+    ]);
+    await provider.getChildren();
+    provider.setFilter('armor');
+
+    expect(rowNames(await provider.getChildren())).toEqual(['file-one.zip']);
+  });
+
   // The filter is render-only: it narrows already-built rows and never re-pulls the Instance
   // value, so clearing it must show the stale cache, not a fresh read.
   it('restores the cached rows when the filter is cleared, without re-pulling the Instance value', async () => {
-    const instance = new FakeInstance(valueOf([row({ name: 'ArmorPack.zip' }), row({ name: 'WeaponPack.zip' })]));
+    const instance = new FakeInstance(valueOf([
+      row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' }),
+      row({ name: 'WeaponPack.zip', displayName: 'WeaponPack.zip' }),
+    ]));
     const provider = makeProvider([], { instance });
     await provider.getChildren();
     provider.setFilter('armor');
     await provider.getChildren();
 
-    instance.value = valueOf([row({ name: 'ArmorPack.zip' })]); // no publish(), no invalidate()
+    instance.value = valueOf([row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' })]); // no publish(), no invalidate()
     provider.setFilter('');
 
     expect(rowNames(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
@@ -315,9 +334,23 @@ describe('setShowHidden', () => {
 
 describe('setSort', () => {
   it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
-    const provider = makeProvider([row({ name: 'banana.zip' }), row({ name: 'apple.zip' })]);
+    const provider = makeProvider([
+      row({ name: 'banana.zip', displayName: 'banana.zip' }),
+      row({ name: 'apple.zip', displayName: 'apple.zip' }),
+    ]);
     provider.setSort('name', false);
     expect(rowNames(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
+  });
+
+  // The file names sort opposite the labels, so a sort keyed on `name` instead of `displayName`
+  // returns the wrong order.
+  it('sorts by the label, not the raw filename', async () => {
+    const provider = makeProvider([
+      row({ name: 'z-file.zip', displayName: 'Apple' }),
+      row({ name: 'a-file.zip', displayName: 'Banana' }),
+    ]);
+    provider.setSort('name', false);
+    expect(rowNames(await provider.getChildren())).toEqual(['z-file.zip', 'a-file.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
@@ -327,6 +360,49 @@ describe('setSort', () => {
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.setSort('name', false);
     expect(fired).toBe(true);
+  });
+});
+
+// downloads.md, Order and view state, story 2: "The pick marks the current sort." The sort
+// command reads this to pre-select its active item.
+describe('currentSort', () => {
+  it('starts at the spec default: Filetime, descending', () => {
+    expect(makeProvider([]).currentSort()).toEqual({ column: 'mtimeMs', descending: true });
+  });
+
+  it('reflects the last setSort call', () => {
+    const provider = makeProvider([]);
+    provider.setSort('name', false);
+    expect(provider.currentSort()).toEqual({ column: 'name', descending: false });
+  });
+});
+
+// downloads.md, States, story 2: distinct from "no downloads yet" — files exist, but every one
+// is currently hidden by Show excluded being off.
+describe('allExcluded', () => {
+  it('is false with no downloads at all', () => {
+    expect(makeProvider([]).allExcluded()).toBe(false);
+  });
+
+  it('is false when at least one row is not excluded', () => {
+    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    expect(provider.allExcluded()).toBe(false);
+  });
+
+  it('is true when every row is excluded and Show excluded is off', () => {
+    const provider = makeProvider([row({ name: 'a.zip', hidden: true }), row({ name: 'b.zip', hidden: true })]);
+    expect(provider.allExcluded()).toBe(true);
+  });
+
+  it('is false once Show excluded is turned on, even with every row excluded', () => {
+    const provider = makeProvider([row({ name: 'a.zip', hidden: true }), row({ name: 'b.zip', hidden: true })]);
+    provider.setShowHidden(true);
+    expect(provider.allExcluded()).toBe(false);
+  });
+
+  it('ignores a non-archive file when deciding whether every archive is excluded', () => {
+    const provider = makeProvider([row({ name: 'readme.txt', hidden: false })]);
+    expect(provider.allExcluded()).toBe(false);
   });
 });
 
