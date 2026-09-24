@@ -32,31 +32,19 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     [Fact]
     public async Task Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
-        Chmod(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
+        FileModes.Set(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
         try
         {
             await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree()));
         }
         finally
         {
-            Chmod(_mod.ModFolder, "700"); // restored before CompileFixture.Dispose() needs to clean up
+            FileModes.Set(_mod.ModFolder, "700"); // restored before CompileFixture.Dispose() needs to clean up
         }
 
         var recovery = CompileJournal.UnfinishedBatch(_mod.ModFolder);
         Assert.NotNull(recovery);
         Assert.Equal([CompileFixture.PluginName], recovery.Plugins);
         Assert.Empty(recovery.Landed);
-    }
-
-    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
-    // Linux-only runtime, and suppressing an analyzer warning is not this test's call to make.
-    private static void Chmod(string path, string mode)
-    {
-        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "chmod", [mode, path])
-        { RedirectStandardError = true }).Require();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
     }
 }
