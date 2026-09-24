@@ -188,24 +188,41 @@ export async function renameSeparator(
   }, (text) => renameSeparatorInText(text, newName, oldName));
 }
 
-/** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
- *  before its line: a refused trash writes nothing for that separator (update-load-order-file,
- *  Refusals). */
-export async function deleteSeparators(
-  instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
-): Promise<ModlistSelectionResult> {
+const entryNamesIn = (text: string, kind: EntryKind): ReadonlySet<string> =>
+  new Set(parseModlist(text).filter((e) => e.kind === kind).map((e) => e.name));
+
+/** A landed entry. `lineRefusal` is set when its folder reached the trash but its line then
+ *  could not go — the part that failed, not a refusal (common.md, Reporting). */
+export interface TrashedEntry {
+  name: string;
+  lineRefusal?: string;
+}
+
+type TrashThenUnlistResult =
+  | { applied: true; outcome: SelectionOutcome<TrashedEntry> }
+  | { applied: false; refusal: string };
+
+// `deleteSeparators` and `uninstallMods` share this shape: trash each entry's folder before its
+// line. An entry never trashed refuses outright on a line failure; a trashed one still lands,
+// carrying the failure rather than folding it into a refusal.
+async function trashThenUnlist(
+  instanceRoot: string, profile: string, kind: EntryKind, names: readonly string[],
+  folderOf: (name: string) => string | undefined, trash: MoveToTrash,
+  removeLine: (text: string, name: string) => string,
+): Promise<TrashThenUnlistResult> {
+  const noun = kind === 'mod' ? 'Mod' : 'Separator';
   let listed: ReadonlySet<string>;
   try {
-    listed = separatorNamesIn(await get(modlistFile(instanceRoot, profile)));
+    listed = entryNamesIn(await get(modlistFile(instanceRoot, profile)), kind);
   } catch (err) {
     return refuse(err);
   }
-  const refused: ItemRefusal<string>[] = names.filter((name) => !listed.has(name))
-    .map((name) => ({ item: name, reason: `Separator not found in modlist: ${name}` }));
+  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !listed.has(name))
+    .map((name) => ({ item: { name }, reason: `${noun} not found in modlist: ${name}` }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
   for (const name of names.filter((n) => listed.has(n))) {
-    const folder = separatorDir(instanceRoot, name);
+    const folder = folderOf(name);
     try {
       if (folder !== undefined && await exists(folder)) {
         await trash(folder);
@@ -213,25 +230,40 @@ export async function deleteSeparators(
       }
       toUnlist.push(name);
     } catch (err) {
-      refused.push({ item: name, reason: errorMessage(err) });
+      refused.push({ item: { name }, reason: errorMessage(err) });
     }
   }
   const lines = await spliceModlist(instanceRoot, profile, (text) => {
-    const stillListed = separatorNamesIn(text);
-    return toUnlist.filter((name) => stillListed.has(name)).reduce((acc, name) => deleteSeparatorInText(acc, name), text);
+    const stillListed = entryNamesIn(text, kind);
+    return toUnlist.filter((name) => stillListed.has(name)).reduce((acc, name) => removeLine(acc, name), text);
   });
-  if (lines.applied) return { applied: true, outcome: { landed: toUnlist, refused } };
-  const lineRefusal = (name: string) => trashed.has(name)
-    ? `its folder went to the trash, but its modlist.txt line could not be removed: ${lines.refusal}`
-    : lines.refusal;
+  if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => ({ name })), refused } };
   return {
     applied: true,
-    outcome: { landed: [], refused: [...refused, ...toUnlist.map((item) => ({ item, reason: lineRefusal(item) }))] },
+    outcome: {
+      landed: toUnlist.filter((name) => trashed.has(name)).map((name) => ({ name, lineRefusal: lines.refusal })),
+      refused: [
+        ...refused,
+        ...toUnlist.filter((name) => !trashed.has(name)).map((name) => ({ item: { name }, reason: lines.refusal })),
+      ],
+    },
   };
 }
 
-const separatorNamesIn = (text: string): ReadonlySet<string> =>
-  new Set(parseModlist(text).filter((e) => e.kind === 'separator').map((e) => e.name));
+export type DeleteSeparatorsResult = TrashThenUnlistResult;
+
+/** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
+ *  before its line: a refused trash writes nothing for that separator (update-load-order-file,
+ *  Refusals). */
+export function deleteSeparators(
+  instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
+): Promise<DeleteSeparatorsResult> {
+  return trashThenUnlist(
+    instanceRoot, profile, 'separator', names,
+    (name) => separatorDir(instanceRoot, name), trash,
+    (text, name) => deleteSeparatorInText(text, name),
+  );
+}
 
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no
 // archive is one MO2 never writes. `installed` stays, as MO2 leaves it — the codec resolves the
@@ -241,9 +273,6 @@ async function unmarkDownload(instanceRoot: string, name: string): Promise<void>
   await put(downloadSidecarFile(instanceRoot, name), setUninstalledInText, { ifMissing: '' });
 }
 
-const modNamesIn = (text: string): ReadonlySet<string> =>
-  new Set(parseModlist(text).filter((e) => e.kind === 'mod').map((e) => e.name));
-
 /** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
  *  when known. With none, no download is marked. */
 export interface ModToUninstall {
@@ -252,9 +281,8 @@ export interface ModToUninstall {
 }
 
 /** A landed mod. `markRefusal` is set when its `.meta` could not be marked uninstalled — the
- *  uninstall still stands. */
-export interface UninstalledMod {
-  name: string;
+ *  uninstall still stands. Never set alongside `lineRefusal`: a line not truly gone marks nothing. */
+export interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }
 
@@ -267,58 +295,33 @@ export type UninstallModsResult =
 export async function uninstallMods(
   instanceRoot: string, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
 ): Promise<UninstallModsResult> {
-  let listed: ReadonlySet<string>;
-  try {
-    listed = modNamesIn(await get(modlistFile(instanceRoot, profile)));
-  } catch (err) {
-    return refuse(err);
-  }
-  const refused: ItemRefusal<UninstalledMod>[] = mods.filter((m) => !listed.has(m.name))
-    .map((m) => ({ item: { name: m.name }, reason: `Mod not found in modlist: ${m.name}` }));
-  const toUnlist: ModToUninstall[] = [];
-  const trashed = new Set<string>();
-  for (const mod of mods.filter((m) => listed.has(m.name))) {
-    const folder = modDir(instanceRoot, mod.name);
-    try {
-      if (await exists(folder)) {
-        await trash(folder);
-        trashed.add(mod.name);
-      }
-      toUnlist.push(mod);
-    } catch (err) {
-      refused.push({ item: { name: mod.name }, reason: errorMessage(err) });
-    }
-  }
-  const lines = await spliceModlist(instanceRoot, profile, (text) => {
-    const stillListed = modNamesIn(text);
-    return toUnlist.filter((m) => stillListed.has(m.name)).reduce((acc, m) => removeModFromText(acc, m.name), text);
-  });
-  if (!lines.applied) {
-    const lineRefusal = (name: string) => trashed.has(name)
-      ? `its folder went to the trash, but its modlist.txt line could not be removed: ${lines.refusal}`
-      : lines.refusal;
-    return {
-      applied: true,
-      outcome: {
-        landed: [],
-        refused: [...refused, ...toUnlist.map((m) => ({ item: { name: m.name }, reason: lineRefusal(m.name) }))],
-      },
-    };
-  }
+  const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
+  const result = await trashThenUnlist(
+    instanceRoot, profile, 'mod', mods.map((m) => m.name),
+    (name) => modDir(instanceRoot, name), trash,
+    (text, name) => removeModFromText(text, name),
+  );
+  if (!result.applied) return result;
   const landed: UninstalledMod[] = [];
-  for (const mod of toUnlist) {
-    if (mod.archiveFilename === undefined) {
-      landed.push({ name: mod.name });
+  for (const entry of result.outcome.landed) {
+    // The line is not truly gone, so its download is left for a later, clean uninstall to mark.
+    if (entry.lineRefusal !== undefined) {
+      landed.push(entry);
+      continue;
+    }
+    const archiveFilename = archiveOf.get(entry.name);
+    if (archiveFilename === undefined) {
+      landed.push({ name: entry.name });
       continue;
     }
     try {
-      await unmarkDownload(instanceRoot, mod.archiveFilename);
-      landed.push({ name: mod.name });
+      await unmarkDownload(instanceRoot, archiveFilename);
+      landed.push({ name: entry.name });
     } catch (err) {
-      landed.push({ name: mod.name, markRefusal: errorMessage(err) });
+      landed.push({ name: entry.name, markRefusal: errorMessage(err) });
     }
   }
-  return { applied: true, outcome: { landed, refused } };
+  return { applied: true, outcome: { landed, refused: result.outcome.refused } };
 }
 
 /** `lineRefusal` is set only when the folder landed and the line did not: the folder stays, and

@@ -225,7 +225,10 @@ export function registerModContextCommands(
         reporter.selectionOutcome(
           `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
         for (const item of result.outcome.landed) {
-          if (item.markRefusal !== undefined) {
+          if (item.lineRefusal !== undefined) {
+            reporter.report('warning',
+              `"${item.name}" was uninstalled, but its modlist.txt line could not be removed.`, item.lineRefusal);
+          } else if (item.markRefusal !== undefined) {
             log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
           }
         }
@@ -275,7 +278,14 @@ export function registerSeparatorCommands(
           return;
         }
         reporter.selectionOutcome(
-          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (name) => name);
+          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
+          result.outcome, (item) => item.name);
+        for (const item of result.outcome.landed) {
+          if (item.lineRefusal !== undefined) {
+            reporter.report('warning',
+              `"${item.name}" was deleted, but its modlist.txt line could not be removed.`, item.lineRefusal);
+          }
+        }
       }),
   ];
 }

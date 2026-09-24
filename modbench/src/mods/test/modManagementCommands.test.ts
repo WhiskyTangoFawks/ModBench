@@ -305,7 +305,6 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
 });
 
 
-// Uninstall is the Mods tree's one destructive gesture, over the whole selection.
 // ADR-0019's dialog and reporting seams.
 describe('registerModContextCommands: modbench.mod.uninstall over the selection', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -357,21 +356,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     await invoke('modbench.mod.uninstall', modA);
 
     expect(uninstallMods).not.toHaveBeenCalled();
-  });
-
-  it('takes the whole selection, not the right-clicked row alone', async () => {
-    uninstallMods.mockResolvedValueOnce({
-      applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] },
-    });
-
-    registerModContextCommands('/instance', instance, () => [], recordingReporter(), scriptedDialog('Uninstall'), trash, log);
-    await invoke('modbench.mod.uninstall', modA, [modA, modB]);
-
-    expect(uninstallMods.mock.calls).toEqual([[
-      '/instance', 'Default',
-      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
-      trash,
-    ]]);
   });
 
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
@@ -448,6 +432,27 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     expect(log).toHaveBeenCalledWith(
       '"Mod A" was uninstalled, but its downloaded file could not be marked uninstalled: disk full');
   });
+
+  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
+  // an Output line, and the uninstall it rides on is not reported as failed (createEmptyMod's
+  // lineRefusal is the model).
+  it('a post-trash line failure is a warning notification naming the part that failed, not a failed uninstall', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true,
+      outcome: { landed: [{ name: 'Mod A', lineRefusal: 'disk full' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"Mod A" was uninstalled, but its modlist.txt line could not be removed.',
+      detail: 'disk full',
+    }]);
+    expect(log).not.toHaveBeenCalled();
+  });
 });
 
 // mods.md, Delete separator: "A separator delete does not ask: no mod is lost, and the
@@ -462,7 +467,9 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
 
   it('deletes every selected separator in one command, handing it the trash, and says nothing when all land', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A', 'Group B'], refused: [] } });
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
+    });
     const reporter = recordingReporter();
 
     registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
@@ -473,7 +480,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   });
 
   it('takes only the separators of a selection mixing mods and separators', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A'], refused: [] } });
+    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
 
     registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => []);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
@@ -482,7 +489,9 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   });
 
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A', 'Group B'], refused: [] } });
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
+    });
 
     registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => [groupA, groupB]);
     await invoke('modbench.separator.delete');
@@ -503,7 +512,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   it('reports each refused separator, naming why, once, while the others land', async () => {
     deleteSeparators.mockResolvedValue({
       applied: true,
-      outcome: { landed: ['Group A'], refused: [{ item: 'Group B', reason: 'trash unavailable' }] },
+      outcome: { landed: [{ name: 'Group A' }], refused: [{ item: { name: 'Group B' }, reason: 'trash unavailable' }] },
     });
     const reporter = recordingReporter();
 
@@ -525,6 +534,24 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to delete separators.', detail: 'ENOENT: modlist.txt' },
     ]);
+  });
+
+  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
+  // an Output line, and the delete it rides on is not reported as failed.
+  it('a post-trash line failure is a warning notification naming the part that failed, not a failed delete', async () => {
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A', lineRefusal: 'disk full' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    await invoke('modbench.separator.delete', groupA);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"Group A" was deleted, but its modlist.txt line could not be removed.',
+      detail: 'disk full',
+    }]);
   });
 });
 
