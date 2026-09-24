@@ -66,6 +66,19 @@ As a user, I want:
    tier. Rows that do not need the game folder still show. A configuration that names no game is
    story 2; no configuration is story 4. *ADR-0019, invariant 2; ruling*
 
+## The status bar
+
+As a user, I want:
+
+1. One item at the bottom left that says what mEdit is doing: `$(loading~spin) mEdit: Connecting…`,
+   `$(plug) mEdit: Attached`, `$(error) mEdit: Disconnected`, `$(circle-slash) mEdit: Stopped`, or
+   `$(check) mEdit: Ready (N plugin copies)` once the load order is indexed. It names no game.
+   *ruling*
+2. A click on it to do nothing: mEdit starts with the extension, and nothing starts it.
+   *commands.md, No lifecycle gestures*
+3. A disconnect reported, never adapted to: the views keep their rows. *ADR-0002, invariant 2;
+   plugins.md, States, story 3*
+
 ## Reporting
 
 ADR-0019 decides the tier; this table is how each tier looks on a surface.
