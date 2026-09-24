@@ -16,6 +16,7 @@ import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
+import { modsCopyValueText } from './mods/modManagementCommands';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
@@ -197,6 +198,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
+      modsCopyValueText,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
     }),

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { MEditClient } from '../client';
-import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
+import { type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
@@ -12,9 +12,9 @@ import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
+import { registerCopyValueCommand } from './copyValueCommand';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
   context: vscode.ExtensionContext;
@@ -39,6 +39,9 @@ export interface EditorCommandDeps {
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
+  // Copy value's Mods adapter (modManagementCommands.ts), narrowed the same way: this file stays
+  // free of Mods' row types, and dispatches to it only when `clicked` is one of its rows.
+  modsCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
   // The two things a committed field edit redrives (the filter's match map, the plugin's Source
   // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
   refreshMatchingPlugins: () => void;
@@ -120,22 +123,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.record.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
-    // xEdit parity (xeMainForm.pas's CopyInto). One command behind both a keybinding and a menu
-    // entry: ADR-0018's "no action reachable two ways" bars redundant affordances, not this.
-    vscode.commands.registerCommand('modbench.record.copyValue',
-      async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
-        const nodes = allSelected?.length ? allSelected
-          : referencedByTreeView.selection.length ? referencedByTreeView.selection
-          : node ? [node] : [];
-        const text = referencedByCopyText(nodes);
-        if (!text) return;
-        try {
-          await vscode.env.clipboard.writeText(text);
-        } catch (err) {
-          deps.reporterFor('referencedByTree.copy').report(
-            'error', 'Could not copy to the clipboard.', errorMessage(err));
-        }
-      }),
+    registerCopyValueCommand({
+      referencedByTreeView, modsCopyValueText: deps.modsCopyValueText, reporterFor: deps.reporterFor,
+    }),
   ];
 }
 

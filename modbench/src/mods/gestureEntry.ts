@@ -42,3 +42,9 @@ export function pluralArgument<K extends ArgumentKind>(entry: GestureEntry, ...k
   const taken = anchor === undefined ? kinds : kinds.filter((kind) => kind === anchor.kind);
   return entry.selection.filter(isOf(taken));
 }
+
+/** The whole selection, of the kinds given, with no narrowing to the anchor row's kind: unlike
+ *  `pluralArgument`, a mixed selection of mods and separators keeps both. Copy value's Argument. */
+export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
+  return entry.selection.filter(isOf(kinds));
+}

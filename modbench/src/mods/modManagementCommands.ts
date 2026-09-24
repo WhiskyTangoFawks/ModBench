@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
-import { pluralArgument, registerModsGesture, singularArgument, type GestureEntry } from './gestureEntry';
+import { pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -312,4 +312,17 @@ export function registerViewOnNexusCommand(instance: Pick<Instance, 'value'>, re
         vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusModId}`));
     });
   });
+}
+
+function isModlistEntryNode(node: unknown): node is ModNode | SeparatorNode {
+  return node instanceof ModNode || node instanceof SeparatorNode;
+}
+
+/** Mods' own adapter to the catalog's one copy value ID (mods.md, Menus and keys, story 7).
+ *  `undefined` when `clicked` is not a mod or separator row, so the caller tries another surface. */
+export function modsCopyValueText(clicked: unknown, allSelected: readonly unknown[] | undefined): string | undefined {
+  if (!isModlistEntryNode(clicked)) return undefined;
+  const selection = (allSelected?.length ? allSelected : [clicked]).filter(isModlistEntryNode);
+  const rows = selectionArgument({ clicked, selection }, 'mod', 'separator');
+  return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
 }
