@@ -220,7 +220,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     const instance = await makeInstance(root);
 
     registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
@@ -251,7 +251,7 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     const instance = await makeInstance(root);
 
     registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 

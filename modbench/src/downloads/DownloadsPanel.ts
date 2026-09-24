@@ -7,7 +7,7 @@ import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
+import { selectUpgradeCandidates, type UpgradeCandidate, type UpgradeTier } from './upgradeCandidates';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
@@ -18,34 +18,58 @@ interface UpgradePickItem extends vscode.QuickPickItem {
   choice: InstallChoice;
 }
 
-// The file-id match, if one exists, is first in `candidates` (selectUpgradeCandidates' own
-// order), which is what makes it VS Code's default-highlighted row — no explicit activeItem.
+const TIER_LABEL: Record<UpgradeTier, string> = {
+  fileId: 'File ID match',
+  installationFile: 'Installed from this file',
+};
+
+const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' as const } };
+
+// The top tier, if one exists, sorts first; the new-mod row is always last.
 function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickItem[] {
   return [
     ...candidates.map((c) => ({
       label: c.version ? `${c.modName} (v${c.version})` : c.modName,
-      description: c.fileIdMatch ? 'File ID match' : undefined,
+      description: c.tier && TIER_LABEL[c.tier],
       choice: { kind: 'upgrade' as const, name: c.modName },
     })),
-    { label: 'Install as a new mod…', choice: { kind: 'new' as const } },
+    NEW_MOD_ITEM,
   ];
 }
 
-// Esc yields no choice at all, which the caller reads as "install nothing" — never "install as
-// a new mod", which is its own explicit row.
+// Esc: no choice, "install nothing". The active item is set explicitly, not left to list order —
+// with no tier present it is the new-mod row.
 async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandidate[]): Promise<InstallChoice | undefined> {
-  const picked = await vscode.window.showQuickPick(upgradePickItems(candidates), {
-    placeHolder: `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`,
+  const items = upgradePickItems(candidates);
+  const hasTier = candidates.some((c) => c.tier !== undefined);
+  const active = hasTier ? items[0] : items.at(-1);
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<UpgradePickItem>();
+    quickPick.items = items;
+    quickPick.placeholder = `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`;
+    quickPick.activeItems = active ? [active] : [];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked?.choice);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
   });
-  return picked?.choice;
 }
 
-/** The composition root's two answers, which is what lets this view call install itself: the
- *  name only the user can give a new mod, and the FOMOD notice. */
+/** The composition root's answers, which is what lets this view call install itself: the name
+ *  only the user can give a new mod, the FOMOD notice, and the failed-mark Output line. */
 export interface DownloadInstallDeps {
   /** `undefined` is the user declining to name it, which installs nothing. */
   nameNewMod: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
+  log: (line: string) => void;
 }
 
 // An upgrade arrives already confirmed from the pick above and names its own folder, so only a
@@ -88,14 +112,9 @@ async function installArchive(
     return;
   }
   if (downloadRefusal === undefined) return;
-  // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS installed, only its
-  // Downloads bookkeeping failed. Must not read as "install failed", or the user may retry and
-  // get a duplicate mod.
-  reporter.report(
-    'warning',
-    `"${name}" was installed, but its Downloads status could not be updated.`,
-    downloadRefusal,
-  );
+  // ADR-0019 background/recoverable tier: Installed reads off the mod's own meta.ini, never this
+  // sidecar, so the failed mark changes nothing the user sees — one Output line, no notification.
+  deps.log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be

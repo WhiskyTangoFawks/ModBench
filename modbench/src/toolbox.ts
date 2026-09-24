@@ -485,6 +485,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,
+    log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
   own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh') }));
   return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing };
