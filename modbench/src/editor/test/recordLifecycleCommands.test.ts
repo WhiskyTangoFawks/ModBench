@@ -472,6 +472,36 @@ describe('registerRecordLifecycleCommands', () => {
       assertAskedOnce(ask, { messageContains: 'Its references could not be counted', buttons: ['Renumber'] });
     });
 
+    it('reports an ok answer with no body at error, and refreshes nothing', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandHandler('renumberRecord', () => Promise.resolve(undefined));
+      client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
+      client.setQueryAnswer('getReferences', []);
+      const { treeSync, reporter } = invoke(client);
+      showInputBox.mockResolvedValue('000900:MyPatch.esp');
+
+      await renumber(RECORD_NODE);
+
+      expect(reporter.reports).toEqual([
+        { severity: 'error', message: 'mEdit: Could not renumber 000801:MyPatch.esp — no answer', detail: undefined },
+      ]);
+      expect(treeSync.refresh).not.toHaveBeenCalled();
+    });
+
+    it('asks nothing when the only reference is the record\'s link to itself', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('renumberRecord', { applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
+      client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
+      client.setQueryAnswer('getReferences', [referenceResultFixture({ formKey: '000801:MyPatch.esp', origin: 'ModA' })]);
+      const { ask } = invoke(client);
+      showInputBox.mockResolvedValue('000900:MyPatch.esp');
+
+      await renumber(RECORD_NODE);
+
+      expect(ask.asked).toEqual([]);
+      expect(renumberCalls(client)).toHaveLength(1);
+    });
+
     it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a renumber', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('renumberRecord', { refused: true, message: 'mEdit: Could not renumber 000801:MyPatch.esp — boom' });
@@ -495,6 +525,12 @@ describe('registerRecordLifecycleCommands', () => {
     const THIRD_NODE = { kind: 'record', origin: 'ModA', record: { formKey: '000803:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null } };
     const applied = (oldFormKey: string, newFormKey: string) => ({ applied: true, oldFormKey, newFormKey });
 
+    function attachedClient() {
+      const client = new InMemoryMEditClient();
+      client.setStatus('attached');
+      return client;
+    }
+
     function renumbersInTurn(client: InMemoryMEditClient) {
       let next = 0x900;
       client.setCommandHandler('renumberRecord', (formKey) =>
@@ -502,7 +538,7 @@ describe('registerRecordLifecycleCommands', () => {
     }
 
     it('prompts for nothing and lets each record take the next free ID', async () => {
-      const client = new InMemoryMEditClient();
+      const client = attachedClient();
       client.setQueryAnswer('getReferences', []);
       renumbersInTurn(client);
       invoke(client);
@@ -518,7 +554,7 @@ describe('registerRecordLifecycleCommands', () => {
     });
 
     it('asks nothing when no record references any of them', async () => {
-      const client = new InMemoryMEditClient();
+      const client = attachedClient();
       client.setQueryAnswer('getReferences', []);
       renumbersInTurn(client);
       const { ask } = invoke(client);
@@ -529,8 +565,8 @@ describe('registerRecordLifecycleCommands', () => {
       expect(renumberCalls(client)).toHaveLength(3);
     });
 
-    it('confirms once, totalling the references across the selection', async () => {
-      const client = new InMemoryMEditClient();
+    it('confirms once, counting each referencing record once across the selection', async () => {
+      const client = attachedClient();
       client.setQueryAnswerOnce('getReferences', [referenceResultFixture({ formKey: '000701:Other.esp' })]);
       client.setQueryAnswerOnce('getReferences', []);
       client.setQueryAnswerOnce('getReferences', [
@@ -542,7 +578,7 @@ describe('registerRecordLifecycleCommands', () => {
       await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE, THIRD_NODE]);
 
       expect(ask.asked).toEqual([{
-        message: 'Renumber 3 records? 3 records that reference them will point at nothing until they are updated.',
+        message: 'Renumber 3 records? 2 records that reference them will point at nothing until they are updated.',
         detail: undefined,
         buttons: ['Renumber'],
       }]);
@@ -551,7 +587,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     // The rival: a confirmation per record, or renumbering on the native cancel.
     it('renumbers nothing when the one confirmation is cancelled', async () => {
-      const client = new InMemoryMEditClient();
+      const client = attachedClient();
       client.setQueryAnswer('getReferences', [referenceResultFixture({ formKey: '000701:Other.esp' })]);
       renumbersInTurn(client);
       const { ask } = invoke(client, undefined, 'Renumber', 'Renumber');
@@ -563,7 +599,7 @@ describe('registerRecordLifecycleCommands', () => {
     });
 
     it('lets each record land or be refused on its own, and reports the result once', async () => {
-      const client = new InMemoryMEditClient();
+      const client = attachedClient();
       client.setQueryAnswer('getReferences', []);
       client.setCommandHandler('renumberRecord', (formKey) => Promise.resolve(formKey === '000802:MyPatch.esp'
         ? { refused: true as const, message: 'mEdit: Could not renumber 000802:MyPatch.esp — no free FormID' }
@@ -584,7 +620,7 @@ describe('registerRecordLifecycleCommands', () => {
     });
 
     it('says nothing when every record landed', async () => {
-      const client = new InMemoryMEditClient();
+      const client = attachedClient();
       client.setQueryAnswer('getReferences', []);
       renumbersInTurn(client);
       const { reporter } = invoke(client);
@@ -593,6 +629,102 @@ describe('registerRecordLifecycleCommands', () => {
 
       expect(reporter.reports).toEqual([]);
       expect(reporter.landings).toEqual([]);
+    });
+
+    it('asks nothing when the only references are the records\' links to themselves', async () => {
+      const client = attachedClient();
+      client.setQueryAnswerOnce('getReferences', [referenceResultFixture({ formKey: '000801:MyPatch.esp', origin: 'ModA' })]);
+      client.setQueryAnswerOnce('getReferences', [referenceResultFixture({ formKey: '000802:MyPatch.esp', origin: 'ModA' })]);
+      renumbersInTurn(client);
+      const { ask } = invoke(client);
+
+      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(ask.asked).toEqual([]);
+      expect(renumberCalls(client)).toHaveLength(2);
+    });
+
+    it('counts a selected record that references another selected record, since its link will point at nothing', async () => {
+      const client = attachedClient();
+      client.setQueryAnswerOnce('getReferences', [referenceResultFixture({ formKey: '000802:MyPatch.esp', origin: 'ModA' })]);
+      client.setQueryAnswerOnce('getReferences', []);
+      renumbersInTurn(client);
+      const { ask } = invoke(client, 'Renumber');
+
+      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      assertAskedOnce(ask, { messageContains: '1 record that references them', buttons: ['Renumber'] });
+    });
+
+    it('refuses the whole selection once, asking nothing and writing nothing, while mEdit is not answering', async () => {
+      const client = new InMemoryMEditClient();
+      client.setStatus('disconnected');
+      client.setQueryFailure('getReferences', new Error('backend down'));
+      renumbersInTurn(client);
+      const { ask, reporter } = invoke(client, 'Renumber');
+
+      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE, THIRD_NODE]);
+
+      expect(ask.asked).toEqual([]);
+      expect(renumberCalls(client)).toEqual([]);
+      expect(reporter.dialogFailures).toEqual([]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error', message: 'mEdit is not answering, so no record was renumbered.', detail: undefined,
+      }]);
+    });
+
+    it('stops at the first failure that takes mEdit away, and says so once', async () => {
+      const client = attachedClient();
+      client.setQueryAnswer('getReferences', []);
+      client.setCommandHandler('renumberRecord', (formKey) => {
+        if (formKey === '000801:MyPatch.esp') return Promise.resolve(applied(formKey, '000900:MyPatch.esp'));
+        client.setStatus('disconnected');
+        return Promise.resolve({ refused: true as const, message: `mEdit: Could not renumber ${formKey} — fetch failed` });
+      });
+      const { reporter, treeSync } = invoke(client);
+
+      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE, THIRD_NODE]);
+
+      expect(renumberCalls(client)).toHaveLength(2);
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'mEdit stopped answering after renumbering 1 of 3 records; the rest were not renumbered.',
+        detail: 'mEdit: Could not renumber 000802:MyPatch.esp — fetch failed',
+      }]);
+      expect(treeSync.refresh).toHaveBeenCalledOnce();
+    });
+
+    it('refuses a record whose renumber answers with no body, naming it', async () => {
+      const client = attachedClient();
+      client.setQueryAnswer('getReferences', []);
+      client.setCommandHandler('renumberRecord', (formKey) =>
+        Promise.resolve(formKey === '000802:MyPatch.esp' ? undefined : applied(formKey, '000900:MyPatch.esp')));
+      const { reporter } = invoke(client);
+
+      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'Could not renumber 1 of 2 records.',
+        detail: '"SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)" (mEdit gave no answer)',
+      }]);
+    });
+
+    it('refuses a record whose mod cannot be resolved, and still renumbers the rest', async () => {
+      const client = attachedClient();
+      client.setQueryAnswer('getPlugins', []);
+      client.setQueryAnswer('getReferences', []);
+      renumbersInTurn(client);
+      const { reporter } = invoke(client);
+
+      await renumber(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+
+      expect(renumberCalls(client)).toEqual([['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', undefined]]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'Could not renumber 1 of 2 records.',
+        detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to)',
+      }]);
     });
   });
 });

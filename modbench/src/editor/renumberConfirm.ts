@@ -1,9 +1,26 @@
 import type { ReferenceResult } from '../client';
 
-/** The records a list of references comes from: a record holding the reference in several fields
- *  is one record, and each copy of a plugin is its own (ADR-0012). */
-export function referencingRecords(references: readonly ReferenceResult[]): number {
-  return new Set(references.map((r) => JSON.stringify([r.origin, r.plugin, r.formKey]))).size;
+/** A record a renumber is asked of: the FormKey, and the plugin copy that holds it (ADR-0012). */
+export interface RenumberTarget { formKey: string; plugin: string; origin?: string }
+
+/** The records left pointing at nothing once the targets are renumbered, each counted once however
+ *  many fields or targets it references. A target's reference to itself is not another record's. */
+export function danglingReferencers(
+  referencesByTarget: readonly (readonly [RenumberTarget, readonly ReferenceResult[]])[],
+): number {
+  const referencers = new Set<string>();
+  for (const [target, references] of referencesByTarget) {
+    for (const r of references) {
+      if (!isItself(target, r)) referencers.add(JSON.stringify([r.origin, r.plugin.toLowerCase(), r.formKey]));
+    }
+  }
+  return referencers.size;
+}
+
+function isItself(target: RenumberTarget, reference: ReferenceResult): boolean {
+  return reference.formKey === target.formKey
+    && reference.plugin.toLowerCase() === target.plugin.toLowerCase()
+    && (target.origin === undefined || reference.origin === target.origin);
 }
 
 /** Renumber leaves every reference to its records pointing at nothing, so it asks only when there

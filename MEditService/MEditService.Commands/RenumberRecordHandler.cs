@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -54,24 +55,23 @@ public sealed class RenumberRecordHandler
         if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        // Nothing touches the filesystem before the transaction does, so a refusal from the
-        // computation is returned with the tree exactly as this method found it.
-        if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var computedTargetRewrite)
-            is { } refusedSelf) return refusedSelf;
-        var targetRewrite = computedTargetRewrite
-            ?? throw new InvalidOperationException("Expected ComputeTargetRewrite to compute a target when it does not refuse.");
-
-        // A tree not as the computation found it is a refusal (ADR-0014 invariant 4); a filesystem
-        // fault is a write failure; anything else is a bug.
+        // A tree not as this gesture needs it is a refusal (ADR-0014 invariant 4); a filesystem fault is a
+        // write failure; anything else is a bug. Nothing touches the filesystem before the transaction
+        // does, so a refusal from the computation leaves the tree exactly as this method found it.
         var transaction = new SourceRepository.SourceTransaction();
         try
         {
-            WriteTargetRewrite(transaction, plugin, targetRewrite, targetFormKey);
+            if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
+                is { } refusedSelf) return refusedSelf;
+            WriteTargetRewrite(
+                transaction, plugin,
+                targetRewrite ?? throw new UnreachableException("ComputeTargetRewrite neither refused nor computed a target."),
+                targetFormKey);
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {
             return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
+                ex is AmbiguousSourceUnitException ? RecordEditRefusal.AmbiguousSourceUnit : RecordEditRefusal.SourceUnitNotFound,
                 RollBackFailedRenumber(transaction, repository, formKey, targetFormKey, ex));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -99,7 +99,7 @@ public sealed class RenumberRecordHandler
         SourceRepository.SourceTransaction transaction, SourceRepository repository,
         string oldFormKey, string newFormKey, Exception cause)
     {
-        var (unrestored, relativeError) = transaction.Rollback(cause, [repository]);
+        var (unrestored, relativeError) = transaction.Rollback(cause, repository);
         if (unrestored.Count > 0)
         {
             _logger.LogWarning(

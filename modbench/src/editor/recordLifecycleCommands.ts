@@ -4,7 +4,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
-import { referencingRecords, renumberConfirmMessage } from './renumberConfirm';
+import { danglingReferencers, renumberConfirmMessage } from './renumberConfirm';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { RecordTreeSync } from './onRecordEdited';
@@ -99,12 +99,12 @@ const UNRESOLVED_ORIGIN = 'could not resolve which mod it belongs to';
 // A record whose mod cannot be named is refused here and writes nothing; the rest still go.
 async function addressRecords(
   records: readonly RecordIdentity[], resolve: (plugin: string) => Promise<string | undefined>,
-): Promise<{ addressed: RecordAddress[]; unaddressed: ItemRefusal<RecordIdentity>[] }> {
-  const addressed: RecordAddress[] = [];
+): Promise<{ addressed: { record: RecordIdentity; address: RecordAddress }[]; unaddressed: ItemRefusal<RecordIdentity>[] }> {
+  const addressed: { record: RecordIdentity; address: RecordAddress }[] = [];
   const unaddressed: ItemRefusal<RecordIdentity>[] = [];
   for (const record of records) {
     const origin = record.origin ?? await resolve(record.plugin);
-    if (origin) addressed.push({ formKey: record.formKey, plugin: record.plugin, origin });
+    if (origin) addressed.push({ record, address: { formKey: record.formKey, plugin: record.plugin, origin } });
     else unaddressed.push({ item: record, reason: UNRESOLVED_ORIGIN });
   }
   return { addressed, unaddressed };
@@ -112,9 +112,28 @@ async function addressRecords(
 
 type RecordLifecycleClient = Pick<MEditClient,
   | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'getPlugins' | 'peekNextFreeFormKey' | 'getReferences'
+  | 'status'
   // `editRecord`: create's own ESL-flag-removal retry (`offerEslFlagRemoval`), not a record write
   // of its own.
   | 'editRecord'>;
+
+// Each record takes the next free FormID the backend draws for it. A refusal that leaves mEdit
+// unreachable is no record's own, so the loop stops there.
+async function renumberEach(
+  client: Pick<MEditClient, 'renumberRecord' | 'status'>,
+  addressed: readonly { record: RecordIdentity; address: RecordAddress }[],
+): Promise<{ landed: RecordIdentity[]; refused: ItemRefusal<RecordIdentity>[]; lostMEdit?: string }> {
+  const landed: RecordIdentity[] = [];
+  const refused: ItemRefusal<RecordIdentity>[] = [];
+  for (const { record, address } of addressed) {
+    const result = await client.renumberRecord(address.formKey, address.plugin, address.origin, undefined);
+    if (result === undefined) refused.push({ item: record, reason: 'mEdit gave no answer' });
+    else if (!isRefused(result)) landed.push(record);
+    else if (client.status === 'attached') refused.push({ item: record, reason: result.message });
+    else return { landed, refused, lostMEdit: result.message };
+  }
+  return { landed, refused };
+}
 
 interface RenumberDeps {
   client: RecordLifecycleClient;
@@ -125,16 +144,14 @@ interface RenumberDeps {
   onWritten: () => void;
 }
 
-// A single record is prompted for its new FormID; a selection is not.
 function makeRenumber(
   { client, outputChannel, reporter, ask, resolveOriginOrReport, onWritten }: RenumberDeps,
 ): (identities: readonly RecordIdentity[]) => Promise<void> {
-  // Undefined when a count failed: the confirmation then asks without one.
   async function referencesTo(records: readonly RecordIdentity[]): Promise<number | undefined> {
     try {
-      let total = 0;
-      for (const record of records) total += referencingRecords(await client.getReferences(record.formKey));
-      return total;
+      const referencesByTarget = [];
+      for (const record of records) referencesByTarget.push([record, await client.getReferences(record.formKey)] as const);
+      return danglingReferencers(referencesByTarget);
     } catch (e) {
       reporter.insideDialog('warning', 'Could not count the references for the confirmation.', errorMessage(e));
       return undefined;
@@ -170,26 +187,32 @@ function makeRenumber(
     if (!await confirmRenumber([identity])) return;
 
     const result = await client.renumberRecord(identity.formKey, identity.plugin, origin, input || suggested);
-    if (!result) return;
+    if (!result) { reporter.report('error', `mEdit: Could not renumber ${identity.formKey} — no answer`); return; }
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     onWritten();
     reporter.landed(`Renumbered to ${result.newFormKey}.`);
   }
 
-  // No prompt: each record takes the next free FormID the backend draws for it.
+  // A cause no record can escape refuses the selection once, before any record is written
+  // (commands.md, A selection is one gesture).
   async function renumberSelection(identities: readonly RecordIdentity[]): Promise<void> {
+    if (client.status !== 'attached') {
+      reporter.report('error', 'mEdit is not answering, so no record was renumbered.');
+      return;
+    }
     if (!await confirmRenumber(identities)) return;
 
-    const landed: RecordIdentity[] = [];
-    const refused: ItemRefusal<RecordIdentity>[] = [];
-    for (const identity of identities) {
-      const origin = identity.origin ?? await resolveOrigin(client, identity.plugin, (msg) => outputChannel.info(msg));
-      if (!origin) { refused.push({ item: identity, reason: UNRESOLVED_ORIGIN }); continue; }
-      const result = await client.renumberRecord(identity.formKey, identity.plugin, origin, undefined);
-      if (result && isRefused(result)) refused.push({ item: identity, reason: result.message });
-      else if (result) landed.push(identity);
-    }
+    const { addressed, unaddressed } = await addressRecords(
+      identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
+    const { landed, refused, lostMEdit } = await renumberEach(client, addressed);
+    refused.unshift(...unaddressed);
     if (landed.length > 0) onWritten();
+    if (lostMEdit !== undefined) {
+      reporter.report('error',
+        `mEdit stopped answering after renumbering ${landed.length} of ${identities.length} records; `
+        + 'the rest were not renumbered.', lostMEdit);
+      return;
+    }
     reporter.selectionOutcome(
       `Could not renumber ${refused.length} of ${identities.length} records.`, { landed, refused }, recordLabel);
   }
@@ -243,7 +266,8 @@ export function registerRecordLifecycleCommands(
 
       const { addressed, unaddressed } = await addressRecords(
         identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
-      const answer = addressed.length > 0 ? await client.deleteRecords(addressed) : { landed: [], refused: [] };
+      const answer = addressed.length > 0
+        ? await client.deleteRecords(addressed.map((a) => a.address)) : { landed: [], refused: [] };
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       if (answer.landed.length > 0) onWritten();
       const outcome: SelectionOutcome<RecordIdentity> = {

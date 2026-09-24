@@ -119,7 +119,7 @@ public static class RecordEndpoints
         .ProducesProblem(409)
         .ProducesProblem(422)
         // A rolled-back renumber surfaces here too — same shape as every other write path's I/O
-        // failure, with a richer message naming what the rollback deliberately left standing (ADR-0007).
+        // failure, with a richer message naming what the rollback deliberately left standing.
         .ProducesProblem(500)
         .ProducesProblem(503);
 

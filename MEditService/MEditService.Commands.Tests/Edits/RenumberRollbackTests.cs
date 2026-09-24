@@ -43,6 +43,44 @@ public sealed class RenumberRollbackTests
         Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 
+    // Two units claiming one container is the tree's state, not a write fault: a refusal names it,
+    // and a 500 "write failure" would send the author to check a disk that is fine.
+    [Fact]
+    public void ARenumberWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
+    {
+        const string pluginName = "TwoUnits.esp";
+        var placed = FormKey.Null;
+        using var mod = SourceModFixture.Tracked(pluginName, "TwoUnitsMod", m =>
+        {
+            var cell = new Cell(m) { EditorID = "TwoUnitsCell", WaterHeight = 0f };
+            var placedRef = new PlacedObject(m) { EditorID = "TwoUnitsRef", Position = new Noggog.P3Float(0, 0, 0) };
+            cell.Temporary.Add(placedRef);
+            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+            subBlock.Cells.Add(cell);
+            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+            block.SubBlocks.Add(subBlock);
+            m.Cells.Records.Add(block);
+            placed = placedRef.FormKey;
+        });
+        var cellFile = Directory.EnumerateFiles(
+                Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
+                SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"TwoUnitsRef\"", StringComparison.Ordinal));
+        var cellDirectory = Path.GetDirectoryName(cellFile).Require();
+        var impostor = Path.Combine(
+            Path.GetDirectoryName(cellDirectory).Require(), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
+        Directory.CreateDirectory(impostor);
+        File.Copy(cellFile, Path.Combine(impostor, "RecordData.json"));
+        var before = TreeSnapshot.Of(mod.ModFolder);
+
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, placed.ToString());
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
+        Assert.Contains("back as it was", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+    }
+
     // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
     // a container whose EditorID carries a NUL has no path a rename can land on.
     [Fact]

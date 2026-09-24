@@ -1,21 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { referencingRecords, renumberConfirmMessage } from '../renumberConfirm';
+import { danglingReferencers, renumberConfirmMessage } from '../renumberConfirm';
 import { referenceResultFixture } from '../../client/test/fixtures';
 
-describe('referencingRecords', () => {
+describe('danglingReferencers', () => {
+  const A = { formKey: '000800:A.esp', plugin: 'A.esp', origin: 'ModA' };
+  const B = { formKey: '000801:A.esp', plugin: 'A.esp', origin: 'ModA' };
+
   it('counts a record once however many of its fields hold the reference', () => {
-    expect(referencingRecords([
+    expect(danglingReferencers([[A, [
       referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB', fieldPath: 'F' }),
       referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB', fieldPath: 'G' }),
       referenceResultFixture({ formKey: '000002:C.esp', plugin: 'C.esp', origin: 'ModC' }),
-    ])).toBe(2);
+    ]]])).toBe(2);
   });
 
   it('counts each copy of a plugin as its own referencing record', () => {
-    expect(referencingRecords([
+    expect(danglingReferencers([[A, [
       referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB' }),
       referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'OtherModB' }),
-    ])).toBe(2);
+    ]]])).toBe(2);
+  });
+
+  it('counts a record referencing several of the selection once', () => {
+    const referencer = referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB' });
+    expect(danglingReferencers([[A, [referencer]], [B, [referencer]]])).toBe(1);
+  });
+
+  it('leaves out a record\'s reference to itself', () => {
+    expect(danglingReferencers([[A, [referenceResultFixture({ ...A })]]])).toBe(0);
+  });
+
+  it('counts a selected record that references another selected record', () => {
+    expect(danglingReferencers([[A, []], [B, [referenceResultFixture({ ...A })]]])).toBe(1);
   });
 });
 
