@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -46,14 +47,13 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             SourceRepository.RootFor(PluginName), "Quests",
             $"{_quest.EditorID} - {_quest.FormKey.ID:X6}_{_quest.FormKey.ModKey.FileName}.json");
 
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
             [
                 new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), HeaderDocument.Write(_mod)),
                 new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
-            ],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            ]);
     }
 
     public void Dispose()

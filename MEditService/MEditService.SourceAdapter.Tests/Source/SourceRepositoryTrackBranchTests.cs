@@ -18,7 +18,7 @@ public sealed class SourceRepositoryTrackBranchTests
         try
         {
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var currentBranch = GitProbe.Run(gitDir, modFolder, "symbolic-ref", "--short", "HEAD").Trim();

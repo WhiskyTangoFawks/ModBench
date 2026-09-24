@@ -85,9 +85,8 @@ public sealed class RegisteredPluginSpellingTests
                 PluginStrings.In(ModFolder)).GetAwaiter().GetResult();
             var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
 
-            SourceRepository.Track(
-                ModFolder, SourcePreset.Edits, pristineFiles,
-                new TrackProvenance(null, null, new Dictionary<string, string>()));
+            PluginBaselines.Track(
+                ModFolder, SourcePreset.Edits, pristineFiles);
         }
 
         public void Dispose()

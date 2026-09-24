@@ -219,56 +219,6 @@ public sealed partial class SourceRepository
     /// can be made or written here.</summary>
     public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
-    /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
-    /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure
-    /// removes .git, the .gitignore and the source tree.</summary>
-    public static void Track(string modFolder, SourcePreset preset, IReadOnlyList<TreeFile> pristineFiles, TrackProvenance trailers)
-    {
-        GitCli.EnsureOnPath();
-
-        // Refused before touching git: the cleanup below would delete a real, already-tracked repo on its
-        // first failure.
-        if (IsTracked(modFolder))
-            throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        try
-        {
-            GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
-            GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
-            GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            GitCli.Run(gitDir, modFolder, "config", "gc.autoDetach", "false");
-            // Flat file names routinely carry a space; git's default quotePath=true C-quotes such paths in
-            // porcelain output, and every porcelain reader here expects the raw path. Set once where every
-            // repo is born.
-            GitCli.Run(gitDir, modFolder, "config", "core.quotePath", "false");
-            EnsureCommitIdentity(gitDir, modFolder);
-
-            File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-            PristineFileWriter.WriteAll(pristineFiles, modFolder);
-
-            GitCli.Run(gitDir, modFolder, "add", "-A");
-            CommitWithTrailers(gitDir, modFolder, "Track: pristine baseline", trailers);
-
-            var baselineSha = GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim();
-            foreach (var plugin in trailers.BinarySha256ByPlugin.Keys)
-                GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), baselineSha);
-
-            GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
-        }
-        catch
-        {
-            // Cleaning up .git alone would orphan the .gitignore and the source tree, both written before the
-            // commit that makes them real.
-            if (Directory.Exists(gitDir)) Directory.Delete(gitDir, recursive: true);
-            var gitignorePath = Path.Combine(modFolder, ".gitignore");
-            if (File.Exists(gitignorePath)) File.Delete(gitignorePath);
-            var sourceRoot = Path.Combine(modFolder, RootFolderName);
-            if (Directory.Exists(sourceRoot)) Directory.Delete(sourceRoot, recursive: true);
-            throw;
-        }
-    }
-
     /// <summary>Object names as <c>HEAD</c> has them (<c>git ls-tree</c>, one process per batch) — not
     /// working-tree status, which diverges after the external commits this exists for. Directly
     /// comparable to records.content_hash. Null when untracked.</summary>
@@ -368,61 +318,6 @@ public sealed partial class SourceRepository
         return GitCli.Run(gitDir, workTree, "rev-parse", $"{stashSha.Trim()}^{{tree}}").Trim();
     }
 
-    /// <summary>Absorb's git mechanics: commits to main by plumbing, edit branch untouched.
-    /// <paramref name="trackedFileChanges"/> ride along; a deleted one stages as removed.</summary>
-    public static void CommitPristineToMain(
-        string modFolder, IReadOnlyList<TreeFile> pristineFiles, TrackProvenance trailers,
-        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
-    {
-        GitCli.EnsureOnPath();
-        var gitDir = Path.Combine(modFolder, ".git");
-        var parentSha = GitCli.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
-        var changes = trackedFileChanges ?? [];
-
-        // A scratch work tree and index: add/write-tree need some, and the edit branch's real ones may hold
-        // the user's own staged dirt.
-        var scratchDir = Directory.CreateTempSubdirectory("medit-absorb-").FullName;
-        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-absorb-index-{Guid.NewGuid():N}");
-        try
-        {
-            // Seeded from main's own tree, not empty: restaging is scoped below to just the plugins
-            // this baseline covers, so .gitignore, meta.ini and any other plugin's source subtree in
-            // this mod folder carry over untouched.
-            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "read-tree", parentSha);
-
-            PristineFileWriter.WriteAll(pristineFiles, scratchDir);
-
-            // A changed file's current bytes ride in; a deleted one is never copied here, so the
-            // `add -A` pathspec below finds it missing and stages the removal.
-            foreach (var change in changes)
-            {
-                if (change.Kind != TrackedFileChangeKind.Modified) continue;
-                var to = Path.Combine(scratchDir, change.RelativePath);
-                Directory.CreateDirectory(PathShape.DirectoryOf(to));
-                File.Copy(Path.Combine(modFolder, change.RelativePath), to, overwrite: true);
-            }
-
-            var pluginRoots = trailers.BinarySha256ByPlugin.Keys.Select(plugin => ToGitPath(RootFor(plugin))).ToArray();
-            var trackedPaths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
-            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, ["add", "-A", "--", .. pluginRoots, .. trackedPaths]);
-            var treeSha = GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "write-tree").Trim();
-
-            // commit-tree is plumbing, same posture as ParkCompileSnapshot's own message: no
-            // `--trailer` (porcelain-only), the trailer block hand-written at the message tail.
-            var message = "Absorb: new pristine baseline\n\n" + FormatTrailers(trailers);
-            var commitSha = GitCli.Run(gitDir, modFolder, "commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
-
-            GitCli.Run(gitDir, modFolder, "update-ref", "refs/heads/main", commitSha);
-            foreach (var plugin in trailers.BinarySha256ByPlugin.Keys)
-                GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), commitSha);
-        }
-        finally
-        {
-            Directory.Delete(scratchDir, recursive: true);
-            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
-        }
-    }
-
     /// <summary>Stages every changed tracked file on the real repo — index matches working tree —
     /// so the same bytes cannot re-raise the question once answered (ADR-0003).</summary>
     public static void StageTrackedFileChanges(string modFolder, IReadOnlyList<TrackedFileChange> changes)
@@ -431,18 +326,6 @@ public sealed partial class SourceRepository
         var gitDir = Path.Combine(modFolder, ".git");
         var paths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
         GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. paths]);
-    }
-
-    // The same "Key: Value" shape CommitWithTrailers produces via `git commit --trailer` (porcelain),
-    // hand-written here because commit-tree (plumbing) has no --trailer flag of its own.
-    private static string FormatTrailers(TrackProvenance trailers)
-    {
-        var lines = new List<string>();
-        if (trailers.UpstreamVersion is { } upstreamVersion) lines.Add($"Upstream-Version: {upstreamVersion}");
-        if (trailers.MetaSha256 is { } metaSha256) lines.Add($"Meta-SHA256: {metaSha256}");
-        foreach (var (plugin, sha256) in trailers.BinarySha256ByPlugin.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            lines.Add($"Binary-SHA256: {plugin}={sha256}");
-        return string.Join('\n', lines);
     }
 
     /// <summary>The edit branch replayed onto main's new tip. Refuses over dirt in the source tree;
@@ -564,9 +447,8 @@ public sealed partial class SourceRepository
         return entries;
     }
 
-    /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref. Two shapes: the shared
-    /// baseline's per-plugin plugin=hash lines, and a compile snapshot's bare hash. Null degrades to
-    /// asking the dialog.</summary>
+    /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref, a baseline or a compile
+    /// snapshot, each holding one plugin. Null degrades to asking the dialog.</summary>
     public static string? ParkedCompileBinarySha256(string modFolder, string plugin)
     {
         if (!IsTracked(modFolder)) return null;
@@ -575,20 +457,7 @@ public sealed partial class SourceRepository
         if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin)))
             return null;
 
-        const string prefix = "Binary-SHA256: ";
-        var values = body.Split('\n')
-            .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(line => line[prefix.Length..].Trim())
-            .ToList();
-
-        var pluginSpecific = values
-            .Select(value => (Value: value, Separator: value.IndexOf('=')))
-            .Where(t => t.Separator >= 0 && t.Value[..t.Separator].Equals(plugin, StringComparison.OrdinalIgnoreCase))
-            .Select(t => t.Value[(t.Separator + 1)..])
-            .LastOrDefault();
-        if (pluginSpecific != null) return pluginSpecific;
-
-        return values.FirstOrDefault(value => !value.Contains('=', StringComparison.Ordinal));
+        return ReadTrailer(body, "Binary-SHA256");
     }
 
     /// <summary>Whether <paramref name="observedBytes"/> is the exact binary Modbench's own last
@@ -599,39 +468,6 @@ public sealed partial class SourceRepository
         var parkedSha256 = ParkedCompileBinarySha256(modFolder, plugin);
         return parkedSha256 != null
             && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>The trailers off main's tip — explicitly refs/heads/main, never HEAD, since the edit
-    /// branch is what is checked out (ADR-0007). Per-plugin for the binary hash; folder-wide otherwise.
-    /// Null when untracked.</summary>
-    public static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin)
-    {
-        if (!IsTracked(modFolder)) return null;
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", "refs/heads/main"))
-            return null;
-
-        const string binaryPrefix = "Binary-SHA256: ";
-        var binarySha256 = body.Split('\n')
-            .Where(line => line.StartsWith(binaryPrefix, StringComparison.Ordinal))
-            .Select(line => line[binaryPrefix.Length..].Trim())
-            .Select(value => (Plugin: value.Split('=', 2)[0], Hash: value.Contains('=', StringComparison.Ordinal) ? value.Split('=', 2)[1] : null))
-            .Where(pair => pair.Plugin.Equals(plugin, StringComparison.OrdinalIgnoreCase))
-            .Select(pair => pair.Hash)
-            .LastOrDefault();
-
-        return new BaselineTrailers(ReadTrailer(body, "Upstream-Version"), ReadTrailer(body, "Meta-SHA256"), binarySha256);
-    }
-
-    // Last matching line wins — git's own rule for a repeated trailer key.
-    private static string? ReadTrailer(string body, string key)
-    {
-        var prefix = $"{key}: ";
-        return body.Split('\n')
-            .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(line => line[prefix.Length..].Trim())
-            .LastOrDefault();
     }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
@@ -676,54 +512,6 @@ public sealed partial class SourceRepository
         return sb.ToString();
     }
 
-    // Trailer formatting for a real checkout-and-commit; CommitPristineToMain hand-writes the same shape
-    // because commit-tree has no --trailer.
-    private static void CommitWithTrailers(string gitDir, string workTree, string message, TrackProvenance trailers)
-    {
-        var commitArgs = new List<string> { "commit", "-q", "-m", message };
-        if (trailers.UpstreamVersion is { } upstreamVersion)
-            commitArgs.AddRange(["--trailer", $"Upstream-Version={upstreamVersion}"]);
-        if (trailers.MetaSha256 is { } metaSha256)
-            commitArgs.AddRange(["--trailer", $"Meta-SHA256={metaSha256}"]);
-        foreach (var (plugin, sha256) in trailers.BinarySha256ByPlugin.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            commitArgs.AddRange(["--trailer", $"Binary-SHA256={plugin}={sha256}"]);
-        GitCli.Run(gitDir, workTree, [.. commitArgs]);
-    }
-
-    /// <summary>The checked-out branch edits live on (CONTEXT.md's "Edit branch") — one fixed name, since
-    /// a mod folder can hold more than one plugin.</summary>
-    internal const string EditBranchName = "edit";
-
-    // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
-    private static void EnsureCommitIdentity(string gitDir, string workTree)
-    {
-        if (!GitCli.TryRun(gitDir, workTree, out _, "config", "--get", "user.name"))
-            GitCli.Run(gitDir, workTree, "config", "user.name", "Modbench");
-        if (!GitCli.TryRun(gitDir, workTree, out _, "config", "--get", "user.email"))
-            GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
-    }
-
-    // meta.ini is never tracked content (ADR-0003) and plugin binaries are the compiled
-    // artifact; both are ignored in every preset.
-    private static string GitignoreContent(SourcePreset preset) => preset switch
-    {
-        // Root-anchored: a bare "source/" would also swallow a mod's own Scripts/Source/*.psc.
-        SourcePreset.Edits =>
-            "# Generated by Track (Edits preset) — mEdit never rewrites this file after Track.\n" +
-            "*\n" +
-            $"!/{RootFolderName}/\n" +
-            $"!/{RootFolderName}/**\n" +
-            "!.gitignore\n" +
-            "meta.ini\n",
-        // Root-anchored: plugin binaries only ever live at the mod folder root.
-        SourcePreset.Everything =>
-            "# Generated by Track (Everything preset) — mEdit never rewrites this file after Track.\n" +
-            "/*.esp\n" +
-            "/*.esm\n" +
-            "/*.esl\n" +
-            "meta.ini\n",
-        _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Unknown source preset."),
-    };
 }
 
 /// <summary>Why a record is or is not out of the tree — three states a caller must tell apart, since
@@ -744,10 +532,6 @@ public enum SourceRemoval
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
 /// (ADR-0007).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
-
-/// <summary>The provenance main's tip carries right now, the read counterpart of
-/// <see cref="TrackProvenance"/>. All optional.</summary>
-public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
 
 /// <summary>One tracked file outside the source root that git status finds dirty — the asset half of
 /// an external change (ADR-0003). <see cref="StagedAlready"/> is Keep's own collision

@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -34,8 +35,8 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
 
     private SourceRepository Tracked(params TreeFile[] files)
     {
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, files);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
