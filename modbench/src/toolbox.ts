@@ -28,7 +28,7 @@ import { syncMods } from './modlist/modlist';
 import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand } from './mods/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, reportFailure } from './mods/modManagementCommands';
 import { createModListView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
@@ -438,14 +438,8 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
   const { modListView } = createModListView(own, modListProvider, instance);
-  const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
-    try {
-      await action();
-      modListProvider.invalidate();
-    } catch (err) {
-      reporterFor(logLabel).report('error', failMessage, errorMessage(err));
-    }
-  };
+  const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
+    reportFailure(reporterFor(logLabel), failMessage, action);
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
     vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
   const warnIfFomod = (name: string, isFomod: boolean) => {
@@ -477,7 +471,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   ownAll(own, registerToolboxCommands({ instanceRoot, instance, extensionId, reporterFor }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
-  ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
+  ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
   own(registerOverwriteView(instance));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
