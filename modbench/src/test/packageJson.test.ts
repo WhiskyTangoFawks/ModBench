@@ -866,6 +866,46 @@ describe('package.json Move on the mod menu and the separator menu', () => {
   });
 });
 
+// mods.md, Menus and keys, story 7: copy value on the mod menu and the separator menu, under the
+// catalog's one copy value id (commands.md, Record: copy value) — no second command for Mods.
+describe('package.json Mods row menu — copy value', () => {
+  const modsViewMenu = (): MenuEntry[] =>
+    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => e.when.includes('view == modbench.modList'));
+  const copyValueEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.record.copyValue');
+  const rowMatches = (when: string, contextValue: string | undefined): boolean => {
+    const tokens = present(contextValue, "the row's own contextValue").split(' ');
+    const exact = /viewItem == (\w+)/.exec(when)?.[1];
+    if (exact !== undefined) return contextValue === exact;
+    return [...when.matchAll(/\\b(\w+)\\b/g)].every((m) => tokens.includes(present(m[1], 'a \\b...\\b flag name')));
+  };
+
+  it('offers copy value on every mod row, enabled or not, and on every separator row, but not Overwrite', () => {
+    const offeredOn = (contextValue: string | undefined): boolean =>
+      copyValueEntries().some((e) => rowMatches(e.when, contextValue));
+
+    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
+    expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
+    expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
+    expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
+  });
+
+  it('registers modbench.record.copyValue exactly once', () => {
+    const registrations = pkg.contributes.commands.filter((c) => c.command === 'modbench.record.copyValue');
+    expect(registrations).toHaveLength(1);
+  });
+
+  it('leaves the Referenced By tree\'s own copy value entry untouched', () => {
+    const entry = present(
+      pkg.contributes.menus['view/item/context']?.find(
+        (e) => e.command === 'modbench.record.copyValue' && e.when.includes('referencedByTree')),
+      'the Referenced By copy value entry',
+    );
+    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
+    expect(entry.group).toBe('modbench@3');
+  });
+});
+
 // ADR-0007: the Track gesture's own menu contribution.
 describe('package.json per-plugin Track', () => {
   const contextMenus = (): MenuEntry[] =>
