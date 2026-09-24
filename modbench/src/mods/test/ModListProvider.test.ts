@@ -252,7 +252,7 @@ describe('a separator\'s expander', () => {
 });
 
 describe('what the view says of itself', () => {
-  const NO_MODS = 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+  const NO_MODS = 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
 
   it('describes the enabled mods over the listed mods, counting the whole list while a filter narrows it', () => {
     const provider = makeProvider(ordered());

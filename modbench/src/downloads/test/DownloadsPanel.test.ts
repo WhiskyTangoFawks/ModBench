@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, openExternal } = vi.hoisted(() => ({
+const {
+  executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, createQuickPick, openExternal,
+} = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   showErrorMessage: vi.fn(),
   showTextDocument: vi.fn(),
   showQuickPick: vi.fn(),
+  createQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
 
@@ -14,7 +17,7 @@ import { present } from '../../ports/present';
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
-  window: { showErrorMessage, showTextDocument, showQuickPick },
+  window: { showErrorMessage, showTextDocument, showQuickPick, createQuickPick },
   env: { openExternal },
   Uri: {
     file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }),
@@ -78,11 +81,12 @@ const fakeDownloadsProvider = (): Pick<DownloadsProvider, 'setSort' | 'setShowHi
   setSort: vi.fn(), setShowHidden: vi.fn(),
 });
 
-// The composition root's two answers, doubled: a new mod keeps the name install proposed, and
-// the FOMOD notice is recorded rather than shown.
+// The composition root's answers, doubled: a new mod keeps the name install proposed, the FOMOD
+// notice is recorded rather than shown, and the failed-mark line lands on downloadsLogLines.
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
   nameNewMod: (defaultName: string) => Promise.resolve(defaultName),
   warnIfFomod: vi.fn(),
+  log: downloadsLog,
   ...over,
 });
 
@@ -91,9 +95,15 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
 // would be skipped by a failed assertion above it and leak the tmpdir).
 let instanceRoots: string[] = [];
 
+// Stands in for the composition root's `(line) => outputChannel.warn(...)`: the one Output line a
+// failed installed mark writes, with no notification of its own.
+let downloadsLogLines: string[] = [];
+const downloadsLog = (line: string): void => { downloadsLogLines.push(line); };
+
 afterEach(async () => {
   await Promise.all(instanceRoots.map((root) => rm(root, { recursive: true, force: true })));
   instanceRoots = [];
+  downloadsLogLines = [];
 });
 
 async function makeInstanceRoot(): Promise<string> {
@@ -124,17 +134,33 @@ function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
 const trash = vi.fn<MoveToTrash>();
 const trashedPaths = (): string[] => trash.mock.calls.map(([path]) => path);
 
-// vi.fn()'s own generic default types every call's args and return as `any`; this witnesses the
-// one call this file's own test cares about, at the type the test itself expects.
-function calledWith<T>(mockFn: { mock: { calls: T[][] } }, argIndex = 0): T {
-  const call = present(mockFn.mock.calls[0], "the mock function's sole call");
-  return present(call[argIndex], "the call's argument");
-}
-
 function invoke(commandId: string, ...args: unknown[]): unknown {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
   return call[1](...args);
+}
+
+// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
+// directly, matching the real object's "calling .hide() also fires onDidHide".
+function makeFakeQuickPick<T>() {
+  const acceptListeners: Array<() => void> = [];
+  const hideListeners: Array<() => void> = [];
+  const qp = {
+    items: [] as T[],
+    placeholder: undefined as string | undefined,
+    activeItems: [] as T[],
+    selectedItems: [] as T[],
+    show: vi.fn(),
+    hide: vi.fn(() => { hideListeners.forEach((cb) => cb()); }),
+    dispose: vi.fn(),
+    onDidAccept: (cb: () => void) => { acceptListeners.push(cb); return { dispose: () => {} }; },
+    onDidHide: (cb: () => void) => { hideListeners.push(cb); return { dispose: () => {} }; },
+  };
+  return {
+    qp,
+    accept: (picked: T) => { qp.selectedItems = [picked]; acceptListeners.forEach((cb) => cb()); },
+    escape: () => { hideListeners.forEach((cb) => cb()); },
+  };
 }
 
 const onDisk = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
@@ -230,7 +256,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(await readFile(meta, 'utf8')).toBe(before);
   });
 
-  it('install: a failed mark installed is reported as a warning, and the install stands', async () => {
+  it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({
@@ -241,11 +267,11 @@ describe('registerDownloadsSingleRowCommands', () => {
     registerDownloadsSingleRowCommands(root, fakeInstance(), report, installDeps());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    const reportEntry = present(report.reports[0], 'the one recorded report');
-    expect(reportEntry.severity).toBe('warning');
-    expect(reportEntry.message).toBe('"foo.7z" was installed, but its Downloads status could not be updated.');
-    expect(reportEntry.detail).toContain('EISDIR');
+    await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
+    const line = present(downloadsLogLines[0], 'the one recorded Output line');
+    expect(line).toBe('"foo.7z" was installed, but its Downloads status could not be updated: EISDIR: illegal operation on a directory');
+    expect(report.reports).toEqual([]);
+    expect(report.dialogFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
       root, { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
@@ -369,6 +395,8 @@ describe('registerDownloadsSingleRowCommands', () => {
 // The row's own Nexus ids, as the Instance read them off the sidecar.
 const NEXUS_IDS = { modID: '111', fileID: '999' };
 
+interface FakeUpgradeItem { label: string; description?: string; choice: unknown }
+
 describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -379,30 +407,99 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
       mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
 
-    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    const items = calledWith<{ label: string; description?: string; choice: unknown }[]>(showQuickPick);
-    expect(items).toEqual([
+    expect(qp.items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
       { label: 'Install as a new mod…', choice: { kind: 'new' } },
     ]);
+    // Tier 1 present: the fileId match is pre-selected, not the tierless mod ahead of it in list order.
+    expect(qp.activeItems).toEqual([{ label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } }]);
+  });
+
+  it('labels an installationFile match "Installed from this file" and pre-selects it, with no fileId match present', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const instance = fakeInstance([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
+    ]);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    const tier2Item = { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } };
+    expect(qp.items).toEqual([tier2Item, { label: 'Install as a new mod…', choice: { kind: 'new' } }]);
+    expect(qp.activeItems).toEqual([tier2Item]);
+  });
+
+  it('hides the installationFile label when a fileId match exists elsewhere in the pool', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const instance = fakeInstance([
+      mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+    ]);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    expect(qp.items).toEqual([
+      { label: 'By File Id (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'By File Id' } },
+      { label: 'By Name (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'By Name' } },
+      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+    ]);
+  });
+
+  // Neither tier: a mod shares only the Nexus mod id (still listed, tierless, per story 1) but
+  // "Install as a new mod…" — last in the list — is what is pre-selected, never the tierless mod
+  // ahead of it.
+  it('pre-selects "Install as a new mod…" when neither tier matches, even with a tierless mod listed', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const instance = fakeInstance([mod({ name: 'Some Mod', nexusId: '111', version: '1.0' })]);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    expect(qp.items).toEqual([
+      { label: 'Some Mod (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'Some Mod' } },
+      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+    ]);
+    expect(qp.activeItems).toEqual([{ label: 'Install as a new mod…', choice: { kind: 'new' } }]);
   });
 
   it('choosing a candidate calls install with the upgrade shape naming that mod', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    showQuickPick.mockResolvedValueOnce({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
+    const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
     const nameNewMod = vi.fn();
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps({ nameNewMod }));
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -417,11 +514,14 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    showQuickPick.mockResolvedValueOnce({ label: 'Install as a new mod…', choice: { kind: 'new' } });
+    const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    accept({ label: 'Install as a new mod…', choice: { kind: 'new' } });
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -435,15 +535,17 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    showQuickPick.mockResolvedValueOnce(undefined);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
-
-    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
     // A macrotask boundary, not a microtask one: the resolved pick still has to unwind through
     // pickUpgradeChoice's and installArchive's own awaits before the early return lands.
     await new Promise((resolve) => setTimeout(resolve, 0));
+
     expect(installFromArchive).not.toHaveBeenCalled();
   });
 
@@ -462,10 +564,10 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined },
       );
     });
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
   });
 
-  it('a download with a mod id no installed mod carries never shows the pick', async () => {
+  it('a download with a mod id no installed mod carries, and no installationFile match, never shows the pick', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
@@ -480,7 +582,29 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
         { gameName: 'Fallout4', modID: '222', fileID: undefined, version: undefined },
       );
     });
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
+  });
+
+  // Case-folding through the pick, not only selectUpgradeCandidates' own pure test: the mod's
+  // installationFile and the download's filename differ only in case, and still win tier 2.
+  it('matches an installationFile candidate through the pick with a differently-cased filename', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'Foo.7z');
+    const instance = fakeInstance([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'FOO.7Z' }),
+    ]);
+    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    createQuickPick.mockReturnValue(qp);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'Foo.7z', NEXUS_IDS));
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    escape();
+
+    expect(qp.items).toEqual([
+      { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } },
+      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+    ]);
   });
 });
 

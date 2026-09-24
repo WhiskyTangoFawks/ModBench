@@ -143,6 +143,22 @@ async function readModFolderNames(instanceRoot: string): Promise<string[] | unde
   }
 }
 
+// Installed reads every mod folder on disk, not one profile's modlist.txt lines: a folder no
+// profile has synced into its modlist yet still owns its meta.ini's claim.
+async function readInstalledInto(
+  instanceRoot: string, entries: readonly ModlistEntry[], modFolderNames: readonly string[],
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  // Read once: an active-profile mod's archiveFilename is already in `entries`.
+  const knownArchiveFilenames = new Map<string, string | undefined>();
+  for (const entry of entries) if (entry.kind === 'mod') knownArchiveFilenames.set(entry.name, entry.archiveFilename);
+  const metas = await Promise.all(modFolderNames.map(async (name) => {
+    if (knownArchiveFilenames.has(name)) return { name, archiveFilename: knownArchiveFilenames.get(name) };
+    const meta = await readMeta(instanceRoot, name);
+    return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
+  }));
+  return modsByInstallationFile(metas);
+}
+
 async function readModlistEntries(instanceRoot: string, profile: string): Promise<ModlistEntry[]> {
   const entries = parseModlist(await get(modlistFile(instanceRoot, profile)));
   return Promise.all(entries.map(async (entry) =>
@@ -356,6 +372,7 @@ export class Instance implements vscode.Disposable {
       })),
     ]);
     const { gameDirectory, dataFolderPlugins } = game;
+    const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? []) : undefined;
     const gameName = readGameName(iniText);
     // An unresolved game directory loses only the Data-folder copies' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
@@ -380,8 +397,8 @@ export class Instance implements vscode.Disposable {
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
-      downloads: downloadEntries
-        ? buildDownloadRows(downloadEntries, modsByInstallationFile(entries)).map((row) => ({
+      downloads: downloadEntries && installedInto
+        ? buildDownloadRows(downloadEntries, installedInto).map((row) => ({
           ...row,
           path: downloadFile(instanceRoot, row.name),
           sidecarPath: downloadSidecarFile(instanceRoot, row.name),

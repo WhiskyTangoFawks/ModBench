@@ -293,11 +293,10 @@ describe('buildDownloadRows — Installed follows the mods, not the sidecar', ()
     expect(present(rows[0], 'the sole row').status).toBe('Installed');
   });
 
-  // The mod is gone; its sidecar outlives it, still claiming the install.
-  it('never reads as Installed when no mod names it, though the sidecar claims it', () => {
+  it('reads as Uninstalled, not Downloaded, when no mod names it though the sidecar claims installed', () => {
     const rows = buildDownloadRows([entry('Pack.7z', '[General]\r\ninstalled=true\r\n')], new Map());
 
-    expect(present(rows[0], 'the sole row').status).toBe('Downloaded');
+    expect(present(rows[0], 'the sole row').status).toBe('Uninstalled');
   });
 
   // MO2's own Uninstalled is a user statement about the archive, not a claim about a mod.
