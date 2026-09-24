@@ -793,6 +793,11 @@
           "group": "modActions@6"
         },
         {
+          "command": "modbench.record.copyValue",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
+          "group": "modActions@7"
+        },
+        {
           "command": "modbench.mod.move",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@0"
@@ -811,6 +816,11 @@
           "command": "modbench.separator.delete",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@3"
+        },
+        {
+          "command": "modbench.record.copyValue",
+          "when": "view == modbench.modList && viewItem == separator",
+          "group": "sepActions@4"
         },
         {
           "command": "modbench.mod.openFolder",

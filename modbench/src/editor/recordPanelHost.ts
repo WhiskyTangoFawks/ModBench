@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { MEditClient } from '../client';
-import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
@@ -14,7 +13,6 @@ import { registerRecordPanelContextCommands } from './recordPanelContextCommands
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
   context: vscode.ExtensionContext;
@@ -32,10 +30,6 @@ export interface EditorCommandDeps {
     | 'editRecord' | 'searchRecords'
     | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
     | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences'>;
-  // The Referenced By view itself — needed for its Copy command's selection
-  // fallback (`.selection`). The provider is not threaded here: nothing in this file retargets
-  // it directly (`activate()` wires that to activeRecordTracker once).
-  referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
@@ -69,7 +63,7 @@ function recordPanelWriteDeps(
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeSync, meditClient,
-    referencedByTreeView, outputChannel, mergedTreeSelection, refreshMatchingPlugins,
+    outputChannel, mergedTreeSelection, refreshMatchingPlugins,
   } = deps;
   // One decoration provider per activation: its lookup reads treeSync's cache live, so it
   // needs no copy of that state.
@@ -120,22 +114,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.record.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
-    // xEdit parity (xeMainForm.pas's CopyInto). One command behind both a keybinding and a menu
-    // entry: ADR-0018's "no action reachable two ways" bars redundant affordances, not this.
-    vscode.commands.registerCommand('modbench.record.copyValue',
-      async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
-        const nodes = allSelected?.length ? allSelected
-          : referencedByTreeView.selection.length ? referencedByTreeView.selection
-          : node ? [node] : [];
-        const text = referencedByCopyText(nodes);
-        if (!text) return;
-        try {
-          await vscode.env.clipboard.writeText(text);
-        } catch (err) {
-          deps.reporterFor('referencedByTree.copy').report(
-            'error', 'Could not copy to the clipboard.', errorMessage(err));
-        }
-      }),
   ];
 }
 
