@@ -35,15 +35,8 @@ public enum RecordEditRefusal
     /// <summary>Held at either ref; checked server-side even for an allocator-suggested value, since a caller can type its own.</summary>
     FormKeyCollision,
 
-    /// <summary>Renumber: a referencer's FormLink rewrite cannot land as a working-tree change in an untracked plugin. Refused before any write.</summary>
-    UntrackedReferencer,
-
     /// <summary>Renumbering an override would mean renumbering it across every plugin in the stack; a typed target must be native for the same reason.</summary>
     NotNativeRecord,
-
-    /// <summary>A link a KnownDefects row says Mutagen's generated <c>RemapLinks</c> leaves behind
-    /// survived the remap; refused rather than written half-remapped.</summary>
-    ReferenceRemapIncomplete,
 
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>
     FormKeySpaceExhausted,

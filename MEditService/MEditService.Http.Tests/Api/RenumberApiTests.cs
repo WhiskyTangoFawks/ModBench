@@ -68,7 +68,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         renumbered.EnsureSuccessStatusCode();
         var newFormKey = DocumentNodes.StringValueOf((await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey"));
 
-        // ADR-0014: the renumber's create, delete and cascade settle as one batch and that batch is
+        // ADR-0014: the renumber's create and delete settle as one batch and that batch is
         // one advance, so one await is the whole wait — no poll for an end state.
         Assert.True(await ProjectionLanded(beforeRenumber), "the renumbered record never reached the index");
 

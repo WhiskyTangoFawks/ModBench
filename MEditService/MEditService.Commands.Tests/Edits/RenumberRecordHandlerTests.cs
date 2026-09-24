@@ -3,13 +3,16 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>What a renumber does to the working trees: the record's own file moves, a tracked
-/// referencer's document is rewritten, an untracked one refuses. What the Index says afterwards
-/// belongs to the Index suite.</summary>
+/// <summary>What a renumber does to the working trees: the record's own file moves and nothing else
+/// changes, the records referencing it included. What the Index says afterwards belongs to the Index
+/// suite.</summary>
 public sealed class RenumberRecordHandlerTests
 {
     [Fact]
@@ -122,52 +125,50 @@ public sealed class RenumberRecordHandlerTests
         Assert.Contains("Base.esm", result.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void RenumberRecord_RewritesATrackedReferencersFormLink_ToTheNewFormKey()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RenumberRecord_LeavesAReferencerInAnotherMod_AsItWas_TrackedOrNot(bool trackReferencer)
     {
-        using var two = RenumberTwoModFixture.Create(trackReferencer: true);
+        using var two = RenumberTwoModFixture.Create(trackReferencer);
+        var before = TreeSnapshot.Of(two.ReferencerModFolder);
 
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var referencer = two.Document(two.ReferencerPlugin, two.ReferencerNpc);
-        Assert.NotNull(referencer);
-        Assert.NotNull(result.NewFormKey);
-        Assert.Contains(result.NewFormKey, referencer.Body, StringComparison.Ordinal);
-        Assert.DoesNotContain(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
+        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey.Require()));
+        Assert.Equal(before, TreeSnapshot.Of(two.ReferencerModFolder));
     }
 
     [Fact]
-    public void RenumberRecord_Refuses_WhenAReferencerIsUntracked_NamingIt_AndWritesNothing()
+    public void RenumberRecord_ChangesOnlyTheFormKey_LeavingItsOwnLinksAndItsPluginsOtherRecordsAsTheyWere()
     {
-        using var two = RenumberTwoModFixture.Create(trackReferencer: false);
-        var oldRaceSourceFile = two.SourceFileFor(
-            two.TargetPlugin, two.TargetRace, "race", RenumberTwoModFixture.TargetRaceEditorId);
+        const string pluginName = "SelfLinked.esp";
+        var race = FormKey.Null;
+        using var mod = SourceModFixture.Tracked(pluginName, "SelfLinkedMod", m =>
+        {
+            var morphing = m.Races.AddNew("MorphingRace");
+            morphing.MorphRace.SetTo(morphing);
+            m.Npcs.AddNew("SamePluginNpc").Race.SetTo(morphing);
+            race = morphing.FormKey;
+        });
+        var oldFormKey = race.ToString();
+        var before = mod.Body(race);
+        var referencer = Directory
+            .EnumerateFiles(Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "*.json", SearchOption.AllDirectories)
+            .Single(file => File.ReadAllText(file).Contains("SamePluginNpc", StringComparison.Ordinal));
+        var referencerBefore = File.ReadAllText(referencer);
 
-        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.UntrackedReferencer, result.Refusal);
-        Assert.Contains(RenumberTwoModFixture.ReferencerPluginName, result.Message, StringComparison.Ordinal);
-
-        // "No half-applied state": refused before any write, on either side of the cascade.
-        Assert.True(File.Exists(oldRaceSourceFile));
-        Assert.NotNull(two.Document(two.TargetPlugin, two.TargetRace));
-    }
-
-    // MO2 removes a copy's file whenever it likes, and a snapshot names copies that were there when
-    // it was taken. A copy gone since is one no cascade could rewrite, not a 500.
-    [Fact]
-    public void RenumberRecord_WhenAnUntrackedCopysFileHasGoneSinceTheSnapshot_SkipsItRatherThanFaulting()
-    {
-        using var two = RenumberTwoModFixture.Create(trackReferencer: false);
-        File.Delete(Path.Combine(two.ReferencerModFolder, RenumberTwoModFixture.ReferencerPluginName));
-
-        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(result.NewFormKey);
-        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey));
+        var newFormKey = result.NewFormKey.Require();
+        var formKeyLine = $"\"FormKey\": \"{oldFormKey}\"";
+        Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
+        Assert.Equal(
+            before.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
+            mod.Body(FormKey.Factory(newFormKey)));
+        Assert.Equal(referencerBefore, File.ReadAllText(referencer));
     }
 
     [Fact]

@@ -10,110 +10,37 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A renumber that fails part-way leaves the working trees as they were (ADR-0007). The
-/// faults are real I/O: its second phase writes files and nothing else.</summary>
+/// <summary>A renumber that fails part-way leaves the working tree as it was. The faults are real
+/// I/O: its write touches files and nothing else.</summary>
 public sealed class RenumberRollbackTests
 {
-    // Free at both refs in the fixture's target plugin, and requested rather than allocated so the
+    // Free at both refs in the flat fixture's plugin, and requested rather than allocated so the
     // renumbered file's leaf name is nameable before the write.
-    private const string NewRaceFormKey = "000F00:Target.esp";
+    private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
 
     // The same, in the container fixture's plugin.
     private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
 
-    // A directory where the atomic write's scratch file belongs: that write fails, and the document
-    // being rewritten stays readable, which is what makes it a referencer at all.
+    // A directory where the atomic write's scratch file belongs: that write fails.
     private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
-    // ---- the sweep ----
-
     [Fact]
-    public void BlockingEachFileTheCascadeWrites_InTurn_LeavesEverySourceTreeUnchanged()
+    public void BlockingTheRenumberedRecordsNewFile_LeavesTheSourceTreeUnchanged()
     {
-        // Three referencing documents across three separate tracked mods, plus the renumbered
-        // record's own file. If this ever drops to one the sweep has stopped proving anything.
-        using (var probe = new CascadeRollbackFixture())
-        {
-            Assert.Equal(4, probe.CascadeWritePaths(NewRaceFormKey).Count);
-        }
+        using var mod = SourceEditFixture.Tracked();
+        Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
 
-        for (var position = 0; position < 4; position++)
-        {
-            using var fixture = new CascadeRollbackFixture();
-            Block(fixture.CascadeWritePaths(NewRaceFormKey)[position]);
-
-            // Taken after the block, so the restoration is measured against the tree the cascade
-            // actually started from.
-            var before = fixture.Snapshots();
-            var statusBefore = fixture.GitStatuses();
-
-            var thrown = Assert.Throws<IOException>(() =>
-                fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
-
-            Assert.Equal(before, fixture.Snapshots());
-            Assert.Equal(statusBefore, fixture.GitStatuses());
-
-            // No message names a repository holding partial damage, because there is none.
-            Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void ACascadeWhoseFileWriteThrows_StillLeavesEverySourceTreeUnchanged()
-    {
-        using var fixture = new CascadeRollbackFixture();
-        Block(fixture.SourceFileOf(fixture.SecondPlugin, fixture.SecondNpc, "npc_", CascadeRollbackFixture.SecondNpcEditorId));
-
-        var before = fixture.Snapshots();
+        // Taken after the block, so the restoration is measured against the tree the renumber
+        // actually started from.
+        var before = TreeSnapshot.Of(mod.ModFolder);
+        var statusBefore = mod.GitStatus();
 
         var thrown = Assert.Throws<IOException>(() =>
-            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
+            mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
 
-        Assert.Contains("back as it was", thrown.Message, StringComparison.Ordinal);
-        Assert.Equal(before, fixture.Snapshots());
-    }
-
-    // ---- a tree that is not as the gesture found it ----
-
-    // Two units claiming one FormKey is the tree's state, not a write fault: a refusal names it,
-    // and a 500 "write failure" would send the author to check a disk that is fine.
-    [Fact]
-    public void ARenumberWhoseReferencerHasTwoSourceUnits_RefusesAsSourceUnitNotFound_WithTheTreeAsItWas()
-    {
-        const string pluginName = "ContainerReferencer.esp";
-        var referenced = FormKey.Null;
-        using var referencer = SourceModFixture.Tracked(pluginName, "ContainerReferencerMod", mod =>
-        {
-            var npc = mod.Npcs.AddNew("ReferencedNpc");
-            var cell = new Cell(mod) { EditorID = "ReferencerCell", WaterHeight = 0f };
-            var placedRef = new PlacedObject(mod) { EditorID = "ReferencerRef", Position = new Noggog.P3Float(0, 0, 0) };
-            placedRef.Base.SetTo(npc.FormKey);
-            cell.Temporary.Add(placedRef);
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            mod.Cells.Records.Add(block);
-            referenced = npc.FormKey;
-        });
-        var referencerFile = Directory.EnumerateFiles(
-                Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
-                SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
-        var cellDirectory = Path.GetDirectoryName(referencerFile)
-            ?? throw new InvalidOperationException($"Expected '{referencerFile}' to have a parent directory.");
-        var impostor = Path.Combine(
-            Path.GetDirectoryName(cellDirectory) ?? throw new InvalidOperationException($"Expected '{cellDirectory}' to have a parent directory."), "Impostor - " + Path.GetFileName(cellDirectory).Split(" - ")[1]);
-        Directory.CreateDirectory(impostor);
-        File.Copy(Path.Combine(cellDirectory, "RecordData.json"), Path.Combine(impostor, "RecordData.json"));
-        var before = TreeSnapshot.Of(referencer.ModFolder);
-
-        var result = referencer.RenumberHandler.RenumberRecord(referencer.Plugin, referenced.ToString());
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
-        Assert.Contains("back as it was", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, TreeSnapshot.Of(referencer.ModFolder));
+        Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
+        Assert.Equal(statusBefore, mod.GitStatus());
+        Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 
     // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
@@ -140,21 +67,20 @@ public sealed class RenumberRollbackTests
     [Fact]
     public void TheGroupFolder_ReturnsToItsPreActionEntries()
     {
-        using var fixture = new CascadeRollbackFixture();
-        var raceFile = fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId);
-        var racesFolder = Path.GetDirectoryName(raceFile)
-            ?? throw new InvalidOperationException($"Expected '{raceFile}' to have a parent directory.");
-        Block(fixture.CascadeWritePaths(NewRaceFormKey)[0]);
+        using var mod = SourceEditFixture.Tracked();
+        var npcsFolder = Path.GetDirectoryName(mod.NpcSourceFile)
+            ?? throw new InvalidOperationException($"Expected '{mod.NpcSourceFile}' to have a parent directory.");
+        Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
 
-        var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
+        var entriesBefore = Directory.GetFileSystemEntries(npcsFolder)
             .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         Assert.Throws<IOException>(() =>
-            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+            mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
 
         Assert.Equal(
             entriesBefore,
-            Directory.GetFileSystemEntries(racesFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
+            Directory.GetFileSystemEntries(npcsFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList());
     }
 
     [Fact]

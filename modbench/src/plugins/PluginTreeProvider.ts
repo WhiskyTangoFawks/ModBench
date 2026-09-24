@@ -69,7 +69,7 @@ export class RecordTypeNode extends vscode.TreeItem {
 function recordContextValue(record: RecordSummary, immutable: boolean, tracked: boolean): string {
   if (immutable) return 'recordImmutable';
   // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
-  // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
+  // without host-locale hazards.
   const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
   if (originModKey.toLowerCase() !== record.plugin.toLowerCase()) return 'recordOverride';
   return tracked ? 'recordTracked' : 'recordUntracked';

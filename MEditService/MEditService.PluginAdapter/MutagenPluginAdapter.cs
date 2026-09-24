@@ -98,12 +98,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyCollection<string> formKeys) =>
         LoadOrderLinks.Targets(loadOrder, gameRelease, schemas, formKeys);
 
-    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself)
-    {
-        using var loaded = OpenForRead(modPath, gameRelease);
-        return OpenedPlugins.LinksTo(loaded.Getter, modPath.ModKey.FileName.String, target, itself);
-    }
-
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
