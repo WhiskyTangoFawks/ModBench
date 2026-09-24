@@ -17,6 +17,7 @@
     { "path": "./src/modlist" },
     { "path": "./src/pluginsCommands" },
     { "path": "./src/instanceCommands" },
+    { "path": "./src/downloadsCommands" },
     { "path": "./src/install" },
     { "path": "./src/client" },
     { "path": "./src/toolbox" },

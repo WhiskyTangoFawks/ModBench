@@ -7,7 +7,7 @@ import { present } from '../ports/present';
 // an input to the write side, and a write's own effect comes back to it twice.
 
 // One directory per command box the zoom-out draws in the Modbench core band and the code builds.
-const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'install'];
+const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install'];
 
 // A type the value carries arrives as an argument, so naming one is not reading the model.
 const READ_MODEL_MODULE = join('instanceLoader', 'instance');
@@ -35,7 +35,7 @@ const commandModules = (): string[] =>
 
 describe('commands never read the Instance', () => {
   it('covers every command box the core band draws and the code builds', () => {
-    expect(COMMAND_BOXES).toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install']);
+    expect(COMMAND_BOXES).toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install']);
     expect(commandModules().length).toBeGreaterThan(COMMAND_BOXES.length);
   });
 

@@ -1,16 +1,11 @@
 // Runs against the committed corpus fixture, because these verbs mutate MO2-owned state: the
 // `.meta` sidecar, the archive beside it, and nothing else in the instance.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  deleteDownloads,
-  hideDownload,
-  markDownloadInstalled,
-  unhideDownload,
-} from '../downloadSidecar';
+import { deleteDownloads, excludeDownload, includeDownload } from '../downloads';
 import { scanDownloads } from '../../instanceLoader/downloadsScan';
-import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../../mo2Codecs/downloads';
+import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../../mo2Codecs/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../../test/mo2/corpusFixture';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -44,31 +39,29 @@ describe('downloads commands corpus', () => {
     return row;
   }
 
-  const sidecarOf = async (path: string) => parseDownloadMeta(await readFile(join(dir, path), 'utf8'));
-
-  it('hide writes one sidecar and nothing else, and the row reads back hidden', async () => {
+  it('exclude writes one sidecar and nothing else, and the row reads back hidden', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await hideDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(true);
   });
 
-  it('hiding a metaless archive creates its sidecar and nothing else', async () => {
+  it('excluding a metaless archive creates its sidecar and nothing else', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await hideDownload(dir, MANUAL)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, MANUAL)).toEqual({ applied: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect((await rowFor(MANUAL)).hidden).toBe(true);
   });
 
-  it('unhide writes one sidecar and nothing else, and the row reads back visible', async () => {
-    await hideDownload(dir, NAME);
+  it('include writes one sidecar and nothing else, and the row reads back visible', async () => {
+    await excludeDownload(dir, NAME);
     const before = await snapshotTree(dir);
 
-    expect(await unhideDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await includeDownload(dir, NAME)).toEqual({ applied: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(false);
@@ -79,18 +72,6 @@ describe('downloads commands corpus', () => {
     await writeFile(join(dir, MANUAL_META), '[General]\r\nremoved=true\r\n');
 
     expect((await rowFor(MANUAL)).hidden).toBe(true);
-  });
-
-  it('mark installed writes one sidecar and nothing else — never the mod folder', async () => {
-    // As MO2 left it after an uninstall: its tab resolves `uninstalled` first, so the mark has
-    // to clear that key too, exactly as MO2's own markInstalled does.
-    await writeFile(join(dir, MANUAL_META), '[General]\r\nuninstalled=true\r\n');
-    const before = await snapshotTree(dir);
-
-    expect(await markDownloadInstalled(dir, MANUAL)).toEqual({ applied: true });
-
-    assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
-    expect(await sidecarOf(MANUAL_META)).toMatchObject({ status: 'Installed' });
   });
 
   it('delete trashes the sidecar and then the archive, and nothing else', async () => {

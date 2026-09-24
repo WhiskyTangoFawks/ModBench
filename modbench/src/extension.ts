@@ -14,6 +14,7 @@ import { EXTENSION_TO_WEBVIEW } from './wire/messages';
 import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
+import { moveToTrash } from './trash';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
@@ -159,6 +160,7 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel, session, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),
     ask: askQuestion,
+    trash: moveToTrash,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
     loadDiagnostics,
