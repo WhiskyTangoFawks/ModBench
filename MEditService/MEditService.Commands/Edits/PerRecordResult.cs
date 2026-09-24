@@ -10,9 +10,9 @@ public readonly record struct RecordAt(PluginCopyKey Plugin, string FormKey);
 /// naming the way out.</summary>
 public sealed record RecordRefused(RecordAt Record, RecordEditRefusal Refusal, string Message);
 
-/// <summary>A gesture over several records answers per record: each one applied or refused on its
-/// own, never the whole batch for one (ADR-0019 invariant 4). A cause no record can escape is the one
-/// exception: <see cref="SelectionRefusal"/> names it, and no record was written.</summary>
+/// <summary>A gesture over several records answers per record, never the whole batch for one
+/// (ADR-0019 invariant 4), except for a cause no record escapes: <see cref="SelectionRefusal"/> names
+/// it, and no record was written.</summary>
 public sealed record PerRecordResult(
     IReadOnlyList<RecordAt> Applied, IReadOnlyList<RecordRefused> Refused, RecordEditResult? SelectionRefusal = null)
 {

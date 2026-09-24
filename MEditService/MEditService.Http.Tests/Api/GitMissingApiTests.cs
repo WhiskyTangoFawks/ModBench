@@ -5,12 +5,12 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record with git missing from the PATH: a cause no record can escape, so the whole
+/// <summary>A record gesture with git missing from the PATH: a cause no record can escape, so the whole
 /// selection is refused once, before any record is written.</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
-public sealed class EditRecordWithoutGitTraceTests : HostedTests
+public sealed class GitMissingApiTests : HostedTests
 {
     private const string Plugin = "Editable.esp";
     private const string Origin = "EditableMod";
