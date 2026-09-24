@@ -16,6 +16,7 @@ import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } fr
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
+import type { MoveToTrash } from './ports/trash';
 import { loadOrderSnapshotOf, originFolder, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
@@ -71,6 +72,8 @@ export interface ToolboxDeps {
   reporterFor: (tag: string) => Reporter;
   /** ADR-0019 surfacing: the one modal question every gesture below here asks through. */
   ask: AskQuestion;
+  /** The system trash every gesture below here moves a file to. */
+  trash: MoveToTrash;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
 }
@@ -371,7 +374,7 @@ interface Mo2Side {
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
-    setStatusText, notifyConflictsComputed, reporterFor, ask, extensionId,
+    setStatusText, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
@@ -479,7 +482,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(registerPluginSync(instance, runPluginSync, outputChannel));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
+  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,
   });

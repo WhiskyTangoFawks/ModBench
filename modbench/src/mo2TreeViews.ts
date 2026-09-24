@@ -8,11 +8,12 @@ import {
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
-import { HiddenDownloadDecorationProvider } from './downloads/HiddenDownloadDecorationProvider';
+import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
 import type { InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
+import type { MoveToTrash } from './ports/trash';
 import { registerNameFilter } from './nameFilter';
 
 /** Tree, filter and count readout together, because the view's description and message line
@@ -71,6 +72,7 @@ export function registerDownloadsView(
   instance: InstanceView,
   reporter: Reporter,
   ask: AskQuestion,
+  trash: MoveToTrash,
   install: DownloadInstallDeps,
 ): DownloadsProvider {
   const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
@@ -78,10 +80,10 @@ export function registerDownloadsView(
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
   }));
-  // Dims hidden rows once Show hidden is on — the sole cue distinguishing them, since Show
-  // hidden is additive, not an exclusive filter.
+  // Dims excluded rows once Show excluded is on — the sole cue distinguishing them, since Show
+  // excluded is additive, not an exclusive filter.
   own(vscode.window.registerFileDecorationProvider(
-    new HiddenDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.hiddenNames()),
+    new ExcludedDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames()),
   ));
   own(registerNameFilter({
     view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
@@ -93,7 +95,7 @@ export function registerDownloadsView(
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
-    ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask),
+    ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask, trash),
   ]) own(disposable);
   return downloadsProvider;
 }

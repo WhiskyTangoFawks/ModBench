@@ -64,7 +64,7 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/modlist/       modlist commands — the splice of modlist.txt
   src/pluginsCommands/   plugins commands — the splice of plugins.txt
   src/instanceCommands/  instance commands — switch profile, put load order, refresh
-  src/downloadsCommands/ downloads commands — a download's .meta (drawn, not built yet)
+  src/downloadsCommands/ downloads commands — exclude, include and delete: the splice of a download's .meta
   src/install/       install — a new mod, or an upgrade over one
   src/deploy/        deploy commands — hardlinks into the game's Data folder (drawn, not built yet)
   src/client/        the mEdit client — one port over the backend's commands, queries,

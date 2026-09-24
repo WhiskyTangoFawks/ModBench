@@ -301,22 +301,22 @@ describe('setSort', () => {
   });
 });
 
-describe('hiddenNames', () => {
+describe('excludedNames', () => {
   it('is empty before any render', () => {
-    expect(makeProvider([]).hiddenNames()).toEqual(new Set());
+    expect(makeProvider([]).excludedNames()).toEqual(new Set());
   });
 
-  it('is empty while Show hidden is off, even with hidden rows in the value', async () => {
+  it('is empty while Show hidden is off, even with excluded rows in the value', async () => {
     const provider = makeProvider([row({ name: 'hidden.zip', hidden: true })]);
     await provider.getChildren();
-    expect(provider.hiddenNames()).toEqual(new Set());
+    expect(provider.excludedNames()).toEqual(new Set());
   });
 
-  it('lists hidden row names once Show hidden is on and the tree has rendered', async () => {
+  it('lists excluded row names once Show hidden is on and the tree has rendered', async () => {
     const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
     provider.setShowHidden(true);
     await provider.getChildren();
-    expect(provider.hiddenNames()).toEqual(new Set(['hidden.zip']));
+    expect(provider.excludedNames()).toEqual(new Set(['hidden.zip']));
   });
 });
 

@@ -206,7 +206,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), {
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
       nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
@@ -237,7 +237,7 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), {
+    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
       nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ },
     });
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');

@@ -28,9 +28,13 @@ function code(source: string): string {
   return source.split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
 }
 
+// The host's own file system, which is how VS Code trashes: the view is handed the trash instead.
+const HOST_FS = 'workspace.fs';
+
 function fileAccessIn(source: string): string[] {
   const imported = importsOf(source).filter((spec) => FS_MODULES.includes(spec));
-  return [...imported, ...FS_CALLS.filter((call) => new RegExp(`\\b${call}\\(`).test(code(source)))];
+  const host = code(source).includes(HOST_FS) ? [HOST_FS] : [];
+  return [...imported, ...FS_CALLS.filter((call) => new RegExp(`\\b${call}\\(`).test(code(source))), ...host];
 }
 
 const read = (file: string): string => readFileSync(join(VIEW_DIR, file), 'utf8');
@@ -38,7 +42,7 @@ const read = (file: string): string => readFileSync(join(VIEW_DIR, file), 'utf8'
 describe('the Downloads view imports no filesystem module and names no filesystem call', () => {
   it('walks every file the view is made of', () => {
     expect(VIEW_FILES).toEqual(expect.arrayContaining([
-      'DownloadsPanel.ts', 'DownloadsProvider.ts', 'HiddenDownloadDecorationProvider.ts',
+      'DownloadsPanel.ts', 'DownloadsProvider.ts', 'ExcludedDownloadDecorationProvider.ts',
       'downloadRows.ts', 'errorNode.ts', 'instanceFirstRead.ts', 'upgradeCandidates.ts',
     ]));
     for (const file of VIEW_FILES) expect(read(file).length).toBeGreaterThan(0);
@@ -52,6 +56,12 @@ describe('the Downloads view imports no filesystem module and names no filesyste
   it('flags an import of the filesystem and a call made through one', () => {
     const planted = "import { readFile } from 'node:fs/promises';\nconst text = await readFile(metaPath, 'utf8');\n";
     expect(fileAccessIn(planted)).toEqual(['node:fs/promises', 'readFile']);
+  });
+
+  // Rival this catches: the view trashing a download through the host itself.
+  it('flags a write through the host file system', () => {
+    const planted = "await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });\n";
+    expect(fileAccessIn(planted)).toEqual(['workspace.fs']);
   });
 
   it('does not flag the word in a comment or a command id', () => {
