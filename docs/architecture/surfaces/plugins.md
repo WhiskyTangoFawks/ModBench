@@ -185,8 +185,9 @@ As a user, I want:
 5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
 6. `track` to act on the plugin, and `rebase edit branch` on the plugin's mod, each offered only
-   where the catalog's condition holds: track on an untracked plugin outside Overwrite, rebase and
-   compile on a tracked, editable plugin. *catalog Where*
+   where the catalog's condition holds: track on an untracked plugin in a mod, rebase on a tracked
+   plugin's mod while no rebase is in progress, and compile on a tracked, editable plugin. *catalog
+   Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
    and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
@@ -273,10 +274,31 @@ As a user, I want a pick of the `.sql` files in my scripts folder, then "New fil
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
 that it is active and clears it. *catalog `filter`: input box, or a document*
 
+### External change
+
+As a user, I want:
+
+1. One dialog for each tracked mod that changed outside Modbench, one mod at a time. *ADR-0003,
+   invariant 3; ruling*
+2. The dialog to name the mod, list the changed plugins and the changed tracked files, and say how
+   the `meta.ini` version moved, or that it did not. *ruling*
+3. Two answers, `Commit to main as new baseline` and `Apply to working tree on <branch>`, the
+   default first. *ADR-0003, invariant 3*
+4. Esc to change nothing, and the dialog to come back at the next check while the change is still
+   there. *Esc changes nothing; decompile-plugin, The trigger*
+5. A write refused while a question is open to name the question and its two answers.
+   *decompile-plugin, The trigger*
+6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
+   at Track. *ruling*
+
+### Rebase edit branch
+
+As a user, I want a clean rebase to say nothing, a refused one to name the paths, and a conflict to
+open the native merge editor. *decompile-plugin, rebase edit branch*
+
 ### Other dialogs
 
-The external-change dialog is `decompile plugin`'s, in its contract. There is no offer to rebuild a
-binary after an interrupted compile: the compile contract's question 6 cuts it, and tracking again is
+There is no offer to rebuild a binary after an interrupted compile: the compile contract's question 6 cuts it, and tracking again is
 the recovery (ADR-0007).
 
 ## Reporting

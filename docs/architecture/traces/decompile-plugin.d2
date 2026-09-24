@@ -1,12 +1,4 @@
-# Decompile plugin. It reads a plugin's bytes into documents, all of them, once, and puts them
-# at a destination: a new repository, main, or the working tree. Two things fire it. The gesture
-# track asks for a new repository. The system trigger is the watcher settling a tracked mod
-# that changed: one classification per mod, against git and never the event list, and meta.ini
-# is a tell that pre-selects the default, never a trigger. A moved version means a new release,
-# so the destination is main; no meta change means an edit in another tool, so it is the working
-# tree. The human is asked first: one dialog per mod. After a commit to main
-# the rebase is attempted at once, and the baseline stands whatever the rebase does.
-# Governed by ADR-0003, ADR-0006, ADR-0007 and ADR-0008. Contract: decompile-plugin.md.
+# Decompile plugin, green. Contract: decompile-plugin_draft.md.
 ...@../styles
 shape: sequence_diagram
 tools: "MO2 · another tool · the user" {class: other}
@@ -36,40 +28,50 @@ indexer.label: Indexer
 the trigger: "the system trigger: which destination" {
   tools -> mo2: bytes, at any time {class: outside}
   mo2 -> watcher: changed paths {class: signal}
-  watcher."settle per mod, then classify: plugin bytes vs the parked ref · git status of tracked files · meta hash as the tell"
+  watcher."settle per mod, then classify: tracked plugins' bytes vs the parked ref · git status of tracked files · meta hash as the tell"
   watcher -> commands: a tracked mod settled {class: signal}
-  commands -> port: "external change pending: mod, what changed, the default" {class: push}
+  commands -> port: "external change pending: mod, what changed, the default · untracked plugins" {class: push}
   port -> http: publish {class: push}
   http -> client: stream {class: push}
-  client -> plugins: external change pending {class: push}
-  plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc defers, and every write to the mod is refused until it is answered"
+  client -> plugins: "external change pending · untracked plugins" {class: push}
+  plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc defers, and every write to the mod is refused until it is answered · an untracked plugin: a warning"
 }
 
-plugins -> client: "decompile plugin: to a new repository (track) · to main · to the working tree" {class: edit}
+plugins -> client: "decompile plugin: to the repository (track) · to main · to the working tree" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
-commands."round-trip gate over the tree it wrote"
-commands -> sourceadapter: all documents {class: track}
+commands."the round-trip gate, per plugin, before any of it is written"
+commands -> sourceadapter: documents, per plugin {class: track}
 commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
-to main: "the destination is main" {
-  sourceadapter."commit the baseline by plumbing, trailers from meta.ini, then rebase the edit branch"
-  sourceadapter -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
+baseline: "the repository or main" {
+  sourceadapter."one baseline commit per plugin, by plumbing, trailers from meta.ini; the edit branch moves only in a repository this run created"
 }
 
 commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> plugins: the outcome {class: edit}
-plugins."clean: silent · refused: the paths, pointing at rebase edit branch · conflict: the native merge editor"
 source -> watcher: source changed {class: signal}
 watcher -> indexer: source changed {class: signal}
 sourceadapter -> indexer: documents (tracked) {class: query}
 
-refused: "refused, nothing written" {
-  commands -> http: "a dropped subrecord, naming it · a missing strings file · git not on the PATH · a record already changed, naming the records" {class: edit}
+rebase: "rebase edit branch" {
+  plugins -> client: rebase edit branch {class: edit}
+  client -> http: envelope {class: edit}
+  http -> commands: envelope {class: edit}
+  commands -> sourceadapter: "rebase the edit branch onto main" {class: edit}
+  sourceadapter -> commands: "clean · refused (paths) · conflicted (files)" {class: edit}
+  commands -> http: the outcome {class: edit}
+  http -> client: the outcome {class: edit}
+  client -> plugins: the outcome {class: edit}
+  plugins."refused: the paths · conflict: the native merge editor"
+}
+
+refused: "refused, nothing of that plugin written" {
+  commands -> http: "git not on the PATH · a plugin in no mod · the bytes cannot be parsed · a record fails the round trip, naming it · a missing strings file · a record already changed, naming the records" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}
 }

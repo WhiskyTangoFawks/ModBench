@@ -1,150 +1,146 @@
 # decompile-plugin: contract (draft)
 
-Diagram: [decompile-plugin.d2](decompile-plugin.d2). It draws the detection and the question as
-the system trigger, because they are how the command is fired, and the command is one. Catalog rows: `track`
-under Mod and under Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
-[commands.md](../commands.md). Governed by
+Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod and under
+Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
+[commands.md](../commands.md). What the user picks and answers is in
+[plugins.md](../surfaces/plugins.md): Track, External change and Rebase edit branch. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-the-plugin-is-the-source-of-truth.md),
-[ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md) and
-[ADR-0008](../../adr/0008-masters-are-derived-from-content.md).
+[ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
+[ADR-0008](../../adr/0008-masters-are-derived-from-content.md) and
+[ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-`decompile plugin` reads a plugin's bytes into plugin source in the mod's git repository. It is the
-inverse of `compile`. Its Option is the destination: a new repository, `main`, or the working tree.
-Whether it ends as one registered command or two is settled in the ticket "One decompile command: the
-destination as an option".
+`decompile plugin` reads a plugin's bytes into plugin source in its mod's repository. It is the
+inverse of `compile`. Its Option is the destination: the mod's repository, `main`, or the working
+tree. The gesture `track` fires it to the repository. The system trigger fires it to `main` or to
+the working tree, as the user answers.
 
-Each story cites its source. **Ruling** means the maintainer decided it and nothing else states it.
+## The trigger
 
-## Shared
+1. The Mod watcher waits until a tracked mod's folder is quiet, then classifies the mod once,
+   against git and never against the paths that changed. The load-time check classifies every
+   tracked mod the same way (ADR-0003, invariant 3).
+2. The mod has changed when a tracked plugin's bytes differ from what Modbench last wrote, or when
+   a file git tracks outside `source/` differs from the edit branch. `meta.ini` alone never
+   changes the mod. A moved `meta.ini` version makes `main` the default; otherwise the default is
+   the working tree.
+3. An untracked plugin in the mod is not part of the question: it has no source to lose. Commands
+   publishes it through Ports as an untracked plugin in a tracked mod, and Plugins warns. It opens no
+   question and refuses nothing. Tracking it is the user's gesture.
+4. Commands records the open question in the mod's repository and publishes it through Ports: the
+   mod, the changed plugins, the changed tracked files, the version move and the default. The
+   HTTP endpoints stream it to the mEdit client, and Plugins asks first.
+5. A later classification that finds nothing ends the question with no answer, so bytes restored
+   by hand end it. An unanswered question is published again at each settle and load-time check
+   that still finds the change.
 
-As a user, I want:
+While a question is open, Commands refuses every write to every plugin the mod holds, compile
+included, and the refusal names the question: a compile would overwrite the evidence. Reads go on
+serving the last state.
 
-1. Every record of the plugin read into source, and the round trip checked over the tree that was
-   written. A record with no model-identical counterpart refused, naming it. *ADR-0006, invariant 2;
-   ADR-0019*
-2. Master entries the content does not need dropped, with no refusal. *ADR-0008*
-3. A binary that cannot be parsed, or git missing from the PATH, refused with the plugin and the
-   reason. *ADR-0007, invariant 5; Refuse, do not repair*
-4. A failure to write nothing of its own, and to tell me why. The commits that landed before it
-   stand; this contract's exception to the principle. *A failed gesture writes nothing; ADR-0019*
-5. My own concurrent change preserved and named, never reverted. *ADR-0003, invariant 4*
-6. Review and commit to be git's own, in the Source Control panel. *ADR-0007, invariant 5*
+## The command
 
-## track: the destination is the mod's repository
+1. Plugins sends `decompile plugin` to Commands, through the mEdit client and the HTTP endpoints:
+   the plugins, each as origin and file name, and the destination. `track` also sends the preset.
+2. For each plugin in turn, the Plugin adapter reads its bytes, and Commands reads every record
+   into documents. A localized plugin's strings come from the mod's `Strings/` folder, then from
+   the game's.
+3. Commands drops the masters that the content does not need (ADR-0008). It then checks the round
+   trip: every record has a model-identical counterpart, and no subrecord is lost (ADR-0006,
+   invariant 2). Nothing of the plugin is written before its check passes.
+4. Commands publishes track progress, per plugin and phase, through Ports.
+5. The Source adapter puts the plugin's documents at the destination:
+   - **The repository.** In a mod with no repository, once the first plugin passes its check, it
+     creates one with the preset's `.gitignore`, keeping line endings as written, and commits the mod's own files in a commit of
+     their own (`Track <mod>`): the `.gitignore` and, under `Everything`, the assets. It then
+     commits the plugin's documents to `main` as the plugin's baseline (`Track Foo.esp 1.2.3`),
+     with no checkout.
+   - **`main`.** It commits the plugin's documents to `main` as the plugin's new baseline
+     (`Update Foo.esp to 1.2.4`), with no checkout. After the last plugin, every other changed
+     tracked file goes to `main` in one commit.
+   - **The working tree.** It writes each record that changed as an uncommitted change on the
+     current branch. After the last plugin, it stages every changed tracked file as it is,
+     deletions included, so the same bytes do not open the question again.
+6. Commands records each plugin's bytes as what Modbench last wrote.
+7. After the last plugin, in a repository this run created, the Source adapter creates the edit
+   branch at `main` and checks it out. Otherwise the edit branch does not move: the user replays it
+   onto the new baselines with `rebase edit branch`.
+8. For the system trigger, Commands ends the question.
+9. Commands answers applied or the refusal, per plugin.
 
-1. Track offered on a plugin that is untracked, and on a mod that holds one. *catalog Where; ADR-0007,
-   invariant 2*
-2. Track on a plugin, or on a selection of plugins, to track each one; Track on a mod to track every
-   untracked plugin it holds. The first creates the mod's repository if it has none. Each plugin
-   lands or is refused on its own. *ADR-0007, invariant 2; A selection is one gesture*
-3. Tracking a plugin into a mod that already has a repository to do only what track does. Keeping
-   `main` and the edit branch in order when several plugins share a repository is mine. *ruling*
-4. To choose a preset: `Edits` or `Everything`. *catalog Options*
-5. Track to be my own deliberate gesture, with no confirmation. *ADR-0007, invariant 2*
-6. Each plugin's pristine state committed to `main` as its own commit, and the edit branch checked
-   out once, after the last. *ADR-0007, invariants 2 and 6*
-7. Each baseline commit's message in git's convention: a subject of the verb, the plugin and its
-   upstream version (`Track Foo.esp 1.2.3`), a blank line, then the trailers `Plugin`,
-   `Upstream-Version`, `Meta-SHA256` and `Binary-SHA256`. The upstream version is informational;
-   the binary's hash identifies the plugin. A version the mod manager does not record is left out
-   of the subject and the trailers. *ADR-0007, invariant 6*
-8. `meta.ini` never tracked, because one MO2 update check rewrites it across every mod. *ADR-0007,
-   invariant 7*
-9. The `.gitignore` generated once, and then mine. *ADR-0007, invariant 7*
-10. The mod to appear in Source Control as one group. *ADR-0007, invariant 5*
-11. The mod's own files, the `.gitignore` and, under `Everything`, its assets, committed once, in a
-    commit of their own before the first plugin's (`Track <mod>`). *ruling*
-12. A plugin refused to leave nothing of its own behind, and the plugins committed before it to
-    stay committed. No rollback beyond git's: each commit is its own unit. *ruling: git handles it*
+A baseline commit's message follows git's convention: the subject, a blank line, then the trailers
+`Plugin`, `Upstream-Version`, `Meta-SHA256` and `Binary-SHA256` (ADR-0007, invariant 6). A version
+the mod manager does not record is left out of the subject and the trailers.
 
-## The external change: how the destination is chosen
+| Preset | The repository tracks |
+|---|---|
+| Edits | `source/` and `.gitignore` |
+| Everything | every file except the plugin binaries |
 
-The trigger is the watcher settling a tracked mod that changed.
-
-1. A mod to count as changed when a plugin's bytes differ from what Modbench last wrote, or a file git
-   tracks outside `source/` differs from git's view of the edit branch. *ADR-0003, invariant 3*
-2. To be asked once for each mod, never once for each plugin, and one answer to cover every plugin and
-   every changed tracked file. *ADR-0003, invariant 3*
-3. Two answers: a new baseline on `main`, or my own edit as working-tree changes. *ADR-0003,
-   invariant 3; catalog Options*
-4. The default to follow `meta.ini`. A moved version pre-selects the new baseline. The file never
-   triggers the question. *ADR-0003, invariant 3; ADR-0007, invariant 6*
-5. Esc to defer, and to change nothing. *Esc changes nothing*
-6. While the question is open, every plugin of the mod to refuse writes, including compile, because a
-   compile would overwrite the evidence. *ADR-0003, invariant 3*
-7. Bytes I restore by hand to end the question with no answer. *ADR-0003, invariant 3*
-8. A mod whose `.git` has gone to read as untracked, with every plugin in it, with no question, so
-   Track applies again.
-   *ADR-0007, invariant 2*
-9. A refusal to leave the question open, so the other answer is still available. *Refuse, do not
-   repair*
-
-## decompile plugin: the destination is `main`
-
-1. Each changed plugin's documents committed to `main` as its own baseline commit
-   (`Update Foo.esp to 1.2.4`), then every other changed tracked file in one commit after them.
-   *ADR-0003, invariant 3; ADR-0007, invariant 6*
-2. A commit that fails to stop there. The commits before it stand, the edit branch is rebased onto
-   what landed, and the question stays open for what is left, so answering again finishes it. No
-   rollback. *ruling: git handles it; ADR-0003, invariant 3: the classifier is the authority*
-3. My edit branch rebased onto `main` at once, and the baseline to stand whatever the rebase does.
-   *diagram*
-4. A clean rebase to say nothing. *diagram*
-5. A rebase refused over my uncommitted source changes to name the paths and point at `rebase edit
-   branch`. *diagram*
-6. A conflict to open the native merge editor. *diagram; ADR-0007, invariant 5*
-
-## decompile plugin: the destination is the working tree
-
-1. The changed records to land as uncommitted changes on my current branch. *ADR-0003, invariant 3*
-2. A record I have already changed to refuse the whole command, naming the records. *ADR-0003,
-   invariant 4; Refuse, do not repair*
+Both presets ignore `meta.ini` (ADR-0007, invariant 7). Track writes the `.gitignore` once, and
+then the user owns it.
 
 ## rebase edit branch
 
-1. To replay the edit branch onto `main` when I choose. *catalog Meaning*
-2. Offered only for a mod that is tracked. *catalog Where*
+The gesture replays the edit branch onto `main`, and carries changed tracked files outside
+`source/` through the rebase. It is the only thing that rebases the edit branch. It ends clean,
+refused, or conflicted, and a conflicted rebase is git's to finish.
+
+## Hand-off
+
+This flow waits for no hand-off.
+
+- The Mod watcher sees the source change, and the Indexer refreshes the keys. Once a plugin is
+  tracked, the Indexer reads its documents, not its bytes
+  ([index-load-order](index-load-order.d2)).
+- A conflicted rebase is git's to finish, in the native merge editor and Source Control (ADR-0007,
+  invariant 5).
+
+## Refusals
+
+Commands names the cause. A refusal leaves the question open, so the other answer stays available.
+
+| Refusal | Where | Why |
+|---|---|---|
+| Git is not on the PATH | every destination, once for the whole selection | No plugin can escape it. |
+| A question is open on the mod | the repository, `rebase edit branch` | ADR-0003, invariant 3. |
+| The plugin is in no mod: the game folder or Overwrite | the repository | A repository lives in a mod's folder. The refusal points at a patch plugin. |
+| The plugin is already tracked | the repository | |
+| The mod has uncommitted changes in `source/`, naming the paths | `rebase edit branch` | Git's own rule. |
+| A rebase is already in progress | `rebase edit branch` | Git's Source Control finishes it (ADR-0007, invariant 5). |
+| The bytes cannot be read or parsed | every destination | Diagnosed, never repaired (ADR-0006, invariant 7). |
+| A record fails the round trip, naming the record and what was lost | every destination | ADR-0006, invariant 2. |
+| A localized plugin's strings file is missing, naming the file and where Modbench looked | every destination | |
+| A changed record also has an uncommitted change, naming the records | the working tree | A concurrent change is preserved (ADR-0003, invariant 4). |
+| A changed tracked file is already staged from an earlier answer, naming it | the working tree | |
+
+## Failure
+
+No rollback beyond git's: each commit is its own unit (ruling: git handles it).
+
+- **The repository.** A refused plugin leaves nothing of its own. The plugins committed before it
+  stay committed, and the rest go on.
+- **The repository, when every plugin is refused.** Nothing is written: the repository is created
+  only once the first plugin passes its check.
+- **`main`.** A commit that fails stops the run. The commits before it stand, and the question
+  stays open for the rest, so answering again finishes it.
+- **The working tree.** A failure stops the run and says so, naming what failed. The files written
+  before it stay as uncommitted changes, for the user to keep or discard with git.
+
+Exceptions to the principles:
+
+- **A failed gesture writes nothing.** The commits that landed before a failure stand, and so do
+  the working-tree files written before it.
+- **A selection is one gesture, and each item lands on its own.** An answer to the question
+  covers the whole mod: a working-tree refusal refuses every plugin in it, and a failed commit to
+  `main` stops the rest (ADR-0003, invariant 3).
+- **Confirm what destroys.** Neither answer asks again: the question is the confirmation.
 
 ## Test seam
 
-- **The driving box** (Plugins, Editor): the dialog, its buttons, its default, and Esc.
-- **The commands box:** given a destination, the plugin bytes and the repository, the documents and
-  commits written, or the refusal.
-- **The watcher:** given a settled mod and git's view, the pending change it announces, with its
-  default.
-
-## Open Questions
-
-1. **Does the trigger ask at all?** The diagram says this is open, and one dialog asks today. These
-   stories assume it asks.
-2. **The dialog wording.** The old spec has the message name the mod, list changed plugins by name and
-   changed tracked files by count and name, and say either that the `meta.ini` version moved from one
-   value to another, or that no version change was seen. Accept? Do you want the exact text fixed?
-3. **The buttons.** The old spec has `Commit to main as new baseline`, `Apply to working tree on
-   <branch>` and Esc, and the button order is the default, with no separate flag. Accept?
-4. **The queue.** The old spec asks one mod at a time, never one dialog for several. Accept?
-5. **Reads while deferred.** The old spec keeps serving the last known state and points the refusal at
-   the open question. ADR-0003 says only that writes are refused. Add?
-6. **Re-asking.** The old spec asks again at the next detection or load. Accept?
-7. **What the presets track.** The old spec says `Edits` tracks only `source/**`, `Everything` also
-   tracks the mod's assets, and binaries are ignored in both. The catalog names only the presets.
-   Accept the meaning?
-8. **Progress.** The old spec reports progress per plugin, in the view header. Accept?
-9. **`core.autocrlf`.** The old spec sets it to false in the repository, because byte equality depends
-   on it. Accept?
-10. **Localized plugins.** A missing strings file refuses, naming it, and strings resolve from the mod's
-    `Strings/` then from the game folder. Accept?
-11. **What is not a refusal.** The old spec says more occurrences of a canonical marker are not a
-    refusal. Shared story 2 covers the master case. Does the marker case need a story?
-12. **A plugin with no mod folder.** For a vanilla plugin the old spec points at authoring a patch
-    plugin instead of naming Track. Accept?
-13. **Staged files.** The old spec stages applied files as they are, deletions included, so the same
-    bytes do not raise the question again, and refuses when a tracked file from an earlier unresolved
-    answer is already staged. Accept?
-14. **Tracked files outside `source/`.** The old spec says they ride the rebase in an autostash.
-    Accept?
-15. **An untracked or authored mod.** The decompile ticket asks what a moved `meta.ini` version means
-    for a mod with no upstream. Open there.
-16. **The committed `decompile-plugin.md`.** It holds the same facts in the label format. Delete it
-    when you accept this draft?
+- **The Mod watcher:** given a settled mod and git's view of it, the question it opens and its
+  default, or none.
+- **Commands:** given the plugins, a destination, a preset and the repository, the documents,
+  commits, messages, refs and staged files written, or the refusal and nothing of that plugin
+  written.
+- **`rebase edit branch`:** given the repository, the rebase outcome, or the refusal.
