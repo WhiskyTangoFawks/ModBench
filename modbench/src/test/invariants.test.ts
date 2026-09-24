@@ -44,7 +44,7 @@ describe('title-bar rule 7: showCollapseAll marks exactly the hierarchical trees
 
   it('reads every createTreeView site', () => {
     expect(sites.map((s) => s.id).sort()).toEqual([
-      'modbench.downloads', 'modbench.modList', 'modbench.modList', 'modbench.pluginListTree',
+      'modbench.downloads', 'modbench.modList', 'modbench.pluginListTree',
       'modbench.referencedByTree', 'modbench.toolbox',
     ]);
   });

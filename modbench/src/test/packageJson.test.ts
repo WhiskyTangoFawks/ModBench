@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
+import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
+import { IN_AN_INSTANCE, isRecord, requires } from './manifest';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
 // throws rather than handing back an unproven shape.
-interface ViewsWelcomeEntry { view: string; when?: string; }
+interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
@@ -26,9 +28,6 @@ interface PackageManifest {
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
@@ -46,7 +45,7 @@ function isRecordOfArrays<T>(value: unknown, isElement: (v: unknown) => v is T):
 }
 
 function isViewsWelcomeEntry(v: unknown): v is ViewsWelcomeEntry {
-  return isRecord(v) && isString(v.view) && isOptionalString(v.when);
+  return isRecord(v) && isString(v.view) && isString(v.contents) && isOptionalString(v.when);
 }
 function isViewEntry(v: unknown): v is ViewEntry {
   return isRecord(v) && isString(v.id) && isString(v.name) && isOptionalString(v.when);
@@ -75,7 +74,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
   const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
   if (!isArrayOf(viewsWelcome, isViewsWelcomeEntry)) {
-    throw new Error('Expected contributes.viewsWelcome to be an array of { view, when? }.');
+    throw new Error('Expected contributes.viewsWelcome to be an array of { view, contents, when? }.');
   }
   if (!isRecordOfArrays(views, isViewEntry)) {
     throw new Error('Expected contributes.views to be a map of { id, name, when? } arrays.');
@@ -115,28 +114,53 @@ describe('package.json activation', () => {
   });
 });
 
-describe('package.json viewsWelcome', () => {
-  it('gates the "not an MO2 instance" message on a workspace actually being open, so no-workspace stays a neutral no-op (AC4)', () => {
-    const welcome = present(
-      pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.modList'),
-      'a viewsWelcome entry for modbench.modList',
-    );
-    // workspaceIsMo2Instance is never set with no folder open, so without this guard the
-    // wrong-folder message shows on a bare window. workspaceFolderCount is VS Code's own key.
-    expect(present(welcome.when, "the entry's when clause")).toContain('workspaceFolderCount != 0');
+describe('package.json outside an instance', () => {
+  const isNotAnInstance = `${FOLDER_KEY} == notAnInstance`;
+  const VIEWS_OF_THE_INSTANCE = ['modbench.toolbox', 'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'];
+
+  it.each(VIEWS_OF_THE_INSTANCE)('%s says, once the check answers not an instance, that no instance is open and how to open one', (view) => {
+    const notAnInstance = pkg.contributes.viewsWelcome.filter((w) => w.view === view && w.when === isNotAnInstance);
+    expect(notAnInstance).toHaveLength(1);
+    expect(present(notAnInstance[0], 'the not-an-instance welcome').contents).toContain('(command:vscode.openFolder)');
   });
 
-  // Unset context keys read falsy under `!key`, so `!modbench.workspaceIsMo2Instance` alone cannot
-  // tell "not yet checked" from "checked, not an instance"; workspaceMo2CheckDone is set only once
-  // the check has run. Exact-match, not .toContain, so a negated term cannot pass.
-  it('cannot render before the MO2 check has actually run', () => {
-    const welcome = present(
-      pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.modList'),
-      'a viewsWelcome entry for modbench.modList',
+  it('every view says it in the same words', () => {
+    const contents = new Set(pkg.contributes.viewsWelcome.filter((w) => w.when === isNotAnInstance).map((w) => w.contents));
+    expect(contents.size).toBe(1);
+  });
+
+  it('offers no title-bar gesture on any view until the check answers that the folder is an instance', () => {
+    const titleMenus = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']");
+    expect(titleMenus.filter((e) => !requires(e.when, IN_AN_INSTANCE)).map((e) => e.command)).toEqual([]);
+  });
+
+  it('says "No downloads yet" only inside an instance, once its first read has landed', () => {
+    const empty = present(
+      pkg.contributes.viewsWelcome.find((w) => w.view === 'modbench.downloads' && w.contents.startsWith('No downloads yet')),
+      'the Downloads empty-list welcome',
     );
-    expect(present(welcome.when, "the entry's when clause")).toBe(
-      'workspaceFolderCount != 0 && modbench.workspaceMo2CheckDone && !modbench.workspaceIsMo2Instance',
+    expect(requires(empty.when, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(empty.when, INSTANCE_READ_KEY)).toBe(true);
+  });
+
+  // Which commands exist only inside an instance is the running extension's answer, checked by
+  // the not-an-instance integration suite; this holds the keys to the palette's word.
+  it('binds no key to a command the palette offers only inside an instance, unless the key waits for one too', () => {
+    const insideOnly = new Set(
+      present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+        .filter((e) => requires(e.when, IN_AN_INSTANCE)).map((e) => e.command),
     );
+    expect(insideOnly.size).toBeGreaterThan(0);
+    const ungated = pkg.contributes.keybindings.filter((k) => insideOnly.has(k.command) && !requires(k.when, IN_AN_INSTANCE));
+    expect(ungated.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
+  });
+
+  it('recognizes the gate only as a top-level conjunct', () => {
+    expect(requires(`view == modbench.modList && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`view == modbench.modList && !${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires(`view == modbench.modList || ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires('view == modbench.modList', IN_AN_INSTANCE)).toBe(false);
+    expect(requires(undefined, IN_AN_INSTANCE)).toBe(false);
   });
 });
 
@@ -188,18 +212,6 @@ describe('package.json "Plugins - …" naming for Referenced By', () => {
       'the modbench.referencedByTree view entry',
     );
     expect(view.name).toBe('Plugins - Referenced By');
-  });
-});
-
-describe('package.json the Toolbox stack stays visible through an editing backend', () => {
-  const welcome = (): ViewsWelcomeEntry[] => pkg.contributes.viewsWelcome;
-
-  it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
-    const entry = present(
-      welcome().find((w) => w.view === 'modbench.modList' && (w.when ?? '').includes('workspaceIsMo2Instance')),
-      'the not-an-MO2-instance welcome entry',
-    );
-    expect(present(entry.when, "the entry's when clause")).not.toMatch(/modbench\.viewMode/);
   });
 });
 
@@ -260,7 +272,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
       'a view/title entry for modbench.clearFilter on modbench.pluginListTree',
     );
     expect(clear.group).toBe('navigation@2');
-    expect(clear.when).toBe('view == modbench.pluginListTree && modbench.filterActive');
+    expect(clear.when).toBe(`view == modbench.pluginListTree && modbench.filterActive && ${IN_AN_INSTANCE}`);
   });
 
   it('places New Plugin… at slot 3', () => {
@@ -330,8 +342,8 @@ describe('package.json filtering is one UX', () => {
       titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`)),
       `${clearCommand} on ${view}`,
     );
-    expect(openEntry.when).toBe(`view == ${view} && !${key}`);
-    expect(clearEntry.when).toBe(`view == ${view} && ${key}`);
+    expect(openEntry.when).toBe(`view == ${view} && !${key} && ${IN_AN_INSTANCE}`);
+    expect(clearEntry.when).toBe(`view == ${view} && ${key} && ${IN_AN_INSTANCE}`);
     expect(clearEntry.group).toBe('navigation@1');
   });
 
@@ -349,7 +361,7 @@ describe('package.json filtering is one UX', () => {
       `a ctrl+F binding for ${openCommand}`,
     );
     expect(entry.key).toBe('ctrl+f');
-    expect(entry.when).toBe(`focusedView == ${view}`);
+    expect(entry.when).toBe(`focusedView == ${view} && ${IN_AN_INSTANCE}`);
   });
 
   // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
@@ -373,7 +385,7 @@ describe('package.json Refresh is one command', () => {
     const entries = titleMenus().filter((e) => e.command === 'modbench.instance.refresh');
     expect(entries).toHaveLength(1);
     const entry = present(entries[0], 'the sole modbench.instance.refresh view/title entry');
-    expect(entry.when).toBe('view == modbench.toolbox');
+    expect(entry.when).toBe(`view == modbench.toolbox && ${IN_AN_INSTANCE}`);
     expect(entry.group).toBe('navigation@1');
   });
 

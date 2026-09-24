@@ -215,6 +215,7 @@ export function activate(context: vscode.ExtensionContext) {
   // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
   // instead of sleeping.
   return {
+    folder: toolbox.folder, instanceRead: toolbox.instanceRead,
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
     pluginListView: session.pluginsTreeView, treeProvider,

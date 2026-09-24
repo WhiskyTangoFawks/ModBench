@@ -69,7 +69,6 @@ const DISPOSABLE_PRODUCERS = [
   'registerModListCoreCommands',
   'registerModSync',
   'registerNameFilter',
-  'registerNotMo2InstanceWelcome',
   'registerOpenFolderCommand',
   'registerOverwriteView',
   'registerPluginSync',
