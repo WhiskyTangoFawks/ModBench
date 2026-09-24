@@ -45,9 +45,9 @@ const valueOf = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceVa
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
-// A real `PluginsTreeProvider` awaits its own cache, so a fixed poll settles a recompute instead
-// of a single microtask flush.
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+// `setImmediate` runs after the whole microtask queue drains, however many `await`s a real
+// `PluginsTreeProvider` recompute chains — an order the event loop guarantees, not a duration.
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
   h.state.commands.clear();
@@ -93,7 +93,7 @@ describe('a running say() statement survives a background row change', () => {
 
     say({ pluginsTreeView: view, pluginsNameFilter: filter }, 'Starting backend…');
     provider.applyIndexed(['TestMod.esp'], []);
-    await settle();
+    await flush();
     expect(view.message).toBe('Starting backend…');
   });
 
@@ -111,7 +111,7 @@ describe('a running say() statement survives a background row change', () => {
 
     say({ pluginsTreeView: view, pluginsNameFilter: filter }, 'Starting backend…');
     instance.publish(valueOf([plugin('TestMod.esp'), plugin('zzznomatch.esp')]));
-    await settle();
+    await flush();
     expect(view.message).toBe('Starting backend…');
   });
 });

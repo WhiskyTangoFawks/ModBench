@@ -44,16 +44,16 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
   };
 
-  // `lastWritten` is what this filter itself last put on the line — a row change leaves the line
-  // alone once something else holds it; `refresh` is the one caller that takes it regardless.
+  // `lastWritten` is what this filter itself last put on the line — every recompute leaves the
+  // line alone once something else holds it.
   let generation = 0; // drops a `hasRows` answer a later call has already overtaken
   let lastWritten: string | undefined;
   const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
-  const renderMessage = async (force = false): Promise<void> => {
+  const renderMessage = async (): Promise<void> => {
     const mine = ++generation;
     const empty = term !== '' && !(await deps.hasRows());
     if (mine !== generation) return;
-    if (!force && !ownsMessage()) return;
+    if (!ownsMessage()) return;
     if (empty) {
       const text = `No matches for "${term}".`;
       deps.view.message = text;
@@ -102,7 +102,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
 
   return {
     setBaseDescription: (text) => { base = text; render(); },
-    refresh: () => { render(); void renderMessage(true); },
+    refresh: () => { render(); void renderMessage(); },
     dispose: () => { for (const d of disposables) d.dispose(); },
   };
 }

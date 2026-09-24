@@ -245,14 +245,16 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // The Plugins view has one message surface and two claimants: the load's own statement and this.
-  // The load wins while running; `refresh` is how the filter gets its statement back.
-  it('restates its message on refresh, after something else has taken the view message surface', async () => {
+  // The Plugins view has one message surface and two claimants: the load's own statement and
+  // this. The load hands the line back blank before `refresh` restates the filter's own.
+  it('restates its message on refresh, once the caller has handed the blanked line back', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
     await open();
     currentBox().type('zzz');
     await flush();
     view.message = 'Loading plugins…';
+    await flush();
+    view.message = undefined;
     filter.refresh();
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
