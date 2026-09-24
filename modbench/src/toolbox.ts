@@ -44,6 +44,7 @@ import {
 import { registerLoadOrderPut } from './loadOrderPutTrigger';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
 // The port members every gesture, plugin sync and the launch in this file call — narrowed off
