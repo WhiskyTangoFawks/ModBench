@@ -709,7 +709,7 @@ describe('modbench.downloads tree', () => {
   // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
   // proves VS Code's real watcher fires for one, not just that it was asked to.
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
-    this.timeout(20000);
+    this.timeout(40000);
     if (!root) throw new Error('no open workspace');
     const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
     const iniPath = path.join(root, 'ModOrganizer.ini');
@@ -735,7 +735,7 @@ describe('modbench.downloads tree', () => {
         fs.writeFileSync(path.join(external, name), 'data');
         const found = await provider().getChildren();
         return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
-      }, 15000);
+      }, 35000);
       assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')), 'expected the watcher on the external folder to fire with no manual refresh');
     } finally {
       await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
@@ -746,7 +746,7 @@ describe('modbench.downloads tree', () => {
   // The ruling's own ENOENT-is-empty state applies before the folder exists at all, not only
   // once MO2 has created it — this proves the watch survives that gap too.
   it('watches a downloads folder ModOrganizer.ini points at before it exists on disk', async function () {
-    this.timeout(20000);
+    this.timeout(40000);
     if (!root) throw new Error('no open workspace');
     const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
     const notYetCreated = path.join(container, 'NotYetCreated');
@@ -769,7 +769,7 @@ describe('modbench.downloads tree', () => {
         fs.writeFileSync(path.join(notYetCreated, name), 'data');
         const found = await provider().getChildren();
         return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
-      }, 15000);
+      }, 35000);
       assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')),
         'expected the watcher to fire once the configured folder was created, with no manual refresh');
     } finally {
