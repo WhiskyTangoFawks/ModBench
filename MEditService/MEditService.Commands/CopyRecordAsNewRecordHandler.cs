@@ -60,7 +60,7 @@ public sealed class CopyRecordAsNewRecordHandler
         // is a separate operation).
         var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey,
-            DerivedEditorId(destination.Repository.EditorIdsHeld(destinationPlugin)));
+            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
         destination.Repository.Put(
             destinationPlugin,
             new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text));
@@ -102,7 +102,7 @@ public sealed class CopyRecordAsNewRecordHandler
 
         var duplicate = RecordDocumentEdits.DuplicatedWithSubtreeRekeyed(
             _codec, body, release, identity.RecordType, targetFormKey, rekeys,
-            DerivedEditorId(destination.Repository.EditorIdsHeld(destinationPlugin)));
+            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
 
         var appended = _recordCopy.AppendEmbeddedChild(
             source, container,
@@ -123,8 +123,8 @@ public sealed class CopyRecordAsNewRecordHandler
     }
 
     // The Creation Kit's own shape for a duplicate's EditorID: the source's name, "DUPLICATE" and a
-    // three-digit counter, past whatever the destination already holds. No EditorID copies with none.
-    private static Func<string?, string?> DerivedEditorId(IReadOnlySet<string> heldInDestination)
+    // three-digit counter, past whatever the destination already holds.
+    private static Func<string?, string?> EditorIdDeriver(IReadOnlySet<string> heldInDestination)
     {
         var taken = new HashSet<string>(heldInDestination, StringComparer.OrdinalIgnoreCase);
         return sourceEditorId =>

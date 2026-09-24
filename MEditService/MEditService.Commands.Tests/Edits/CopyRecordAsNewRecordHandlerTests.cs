@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -29,8 +30,6 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
-    // The Creation Kit's own shape: the source's name with "DUPLICATE001" appended, never the
-    // source's own name unchanged.
     [Fact]
     public void CopyRecordAsNewRecord_DerivesTheCopysEditorID_InTheCreationKitsShape()
     {
@@ -46,8 +45,6 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
     }
 
-    // Two copies of the same source into the same destination cannot mint the same derived name —
-    // the second draws the next free counter, past the first copy's own minted name.
     [Fact]
     public void CopyRecordAsNewRecord_TwoCopiesOfOneRecordIntoOneDestination_GetDistinctEditorIDs()
     {
@@ -69,8 +66,40 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", secondDocument.EditorId);
     }
 
-    // A source with no EditorID gives a copy with none — derivation never mints a name out of
-    // nothing.
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_SkipsToTheNextCounter()
+    {
+        using var mod = CopyFixture.Create();
+        Assert.True(mod.EditHandler.Set(
+            mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
+            JsonDocument.Parse("\"SourceNpcDUPLICATE001\"").RootElement).Applied);
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheDestinationHoldsACaseVariantOfTheDerivedName_StillCounts()
+    {
+        using var mod = CopyFixture.Create();
+        Assert.True(mod.EditHandler.Set(
+            mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
+            JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
+    }
+
     [Fact]
     public void CopyRecordAsNewRecord_WhenTheSourceHasNoEditorID_TheCopyHasNone()
     {
@@ -183,6 +212,10 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+        // Both remedies, named (edit-record.md): clearing the light flag, or renumber — never a
+        // flag-removal-and-retry prompt, which this gesture does not offer.
+        Assert.Contains("Clear the light flag", result.Message, StringComparison.Ordinal);
+        Assert.Contains("renumber", result.Message, StringComparison.Ordinal);
     }
 
     // A Cell is on xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —

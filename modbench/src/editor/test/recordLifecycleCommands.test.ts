@@ -519,7 +519,7 @@ describe('registerRecordCopyCommands', () => {
         await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(arg);
 
         expect(client.calls.filter(c => c.method === 'copyRecordAsNewRecord').map(c => c.args)).toEqual([
-          ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA', undefined, expect.any(Function)],
+          ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA', undefined],
         ]);
       });
   });
@@ -553,23 +553,24 @@ describe('registerRecordCopyCommands', () => {
     expect(treeSync.refresh).not.toHaveBeenCalled();
   });
 
-  it('asks the ESL-flag question through the injected dialog when the copy hits the flag', async () => {
+  // xedit.md divergence 5.
+  it('reports a no-free-FormID refusal as a plain error, and never asks the ESL-flag question', async () => {
     const client = new InMemoryMEditClient();
-    let onEslRefusal: ((message: string) => Promise<boolean>) | undefined;
+    const refusalMessage = 'mEdit: Could not copy 000801:MyPatch.esp into "MyPatch.esp" — MyPatch.esp has ' +
+      'exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use. Clear the light ' +
+      'flag in the header, or renumber.';
+    let capturedCallback: unknown;
     client.setCommandHandler('copyRecordAsNewRecord', (...args) => {
-      onEslRefusal = args[6];
-      return Promise.resolve({ applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
+      capturedCallback = args[6];
+      return Promise.resolve({ refused: true, message: refusalMessage });
     });
     scriptDestinationPick(client);
-    const { ask } = invoke(client, undefined);
+    const { reporter, ask } = invoke(client);
 
     await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
-    const accepted = await present(onEslRefusal, "the ESL-flag refusal callback captured from the command handler")('exhausted the ESL range');
 
-    expect(accepted).toBe(false);
-    assertAskedOnce(ask, {
-      messageContains: 'Remove the ESL flag and copy the record?',
-      buttons: ['Remove ESL Flag and Copy the Record'],
-    });
+    expect(capturedCallback).toBeUndefined();
+    expect(reporter.reports).toEqual([{ severity: 'error', message: refusalMessage, detail: undefined }]);
+    expect(ask.asked).toEqual([]);
   });
 });

@@ -165,9 +165,8 @@ public sealed partial class SourceRepository
                     case JsonTokenType.PropertyName:
                         atEditorId = reader.ValueTextEquals(EditorIdPropertyName);
                         continue;
-                    case JsonTokenType.String when atEditorId:
-                        found.Add(reader.GetString()
-                            ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string."));
+                    case JsonTokenType.String when atEditorId && reader.GetString() is { } editorId:
+                        found.Add(editorId);
                         break;
                 }
                 atEditorId = false;
@@ -180,7 +179,7 @@ public sealed partial class SourceRepository
         return found;
     }
 
-    private static ReadOnlySpan<byte> EditorIdPropertyName => "EditorID"u8;
+    private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
 
     // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
     // Empty, never null: "nothing at that ref" is an answer here.

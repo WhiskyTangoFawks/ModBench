@@ -34,8 +34,8 @@ public static class RecordDocumentEdits
             .Select(child => child.FormKey.ToString())];
 
     /// <summary>The record under <paramref name="newFormKey"/> carrying its whole embedded subtree,
-    /// each descendant re-keyed by <paramref name="rekeys"/>, and every EditorID in the subtree
-    /// replaced through <paramref name="deriveEditorId"/>.</summary>
+    /// each descendant re-keyed by <paramref name="rekeys"/> with its own self-link moved with it,
+    /// and every EditorID replaced through <paramref name="deriveEditorId"/>.</summary>
     public static NamedDocument DuplicatedWithSubtreeRekeyed(
         RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
         IReadOnlyDictionary<string, string> rekeys, Func<string?, string?> deriveEditorId)

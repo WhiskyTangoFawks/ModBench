@@ -99,6 +99,28 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
     }
 
+    [Fact]
+    public void CopyAsNewRecord_OnADialogTopicWithResponses_CopiedTwice_EachRecordGetsItsOwnNextCounter()
+    {
+        var first = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
+        Assert.True(first.Applied, first.Message);
+
+        var second = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
+        Assert.True(second.Applied, second.Message);
+
+        var secondTopicFormKey = second.NewFormKey.Require();
+        var secondTopic = _fixture.Document(_fixture.DestinationPlugin, secondTopicFormKey);
+        Assert.NotNull(secondTopic);
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE002", secondTopic.EditorId);
+
+        var responses = Responses(secondTopicFormKey);
+        Assert.Equal(
+            [ContainerCopyFixture.Response1EditorId + "DUPLICATE002", ContainerCopyFixture.Response2EditorId + "DUPLICATE002"],
+            responses.Select(r => Member(r, "EditorID")).ToArray());
+    }
+
     // An existing parent override keeps its own fields and flag: the new topic lands in its
     // DialogTopics slot and nothing else in the document changes.
     [Fact]
