@@ -206,7 +206,7 @@ describe('package.json Toolbox view', () => {
     expect(toolboxTitle.map((e) => ({ command: e.command, icon: (e.group ?? '').startsWith('navigation') })))
       .toEqual([
         { command: 'modbench.instance.refresh', icon: true },
-        { command: 'modbench.instance.openSettings', icon: false },
+        { command: 'modbench.settings.open', icon: false },
       ]);
   });
 
@@ -297,6 +297,17 @@ describe('package.json New Plugin / record filter reachable from the merged tree
 
   it('places New Plugin… at slot 3', () => {
     expect(entryFor('modbench.plugin.create').group).toBe('navigation@3');
+  });
+
+  // No dead entries (commands.md): outside an instance the title-bar icon is already absent
+  // (gated by IN_AN_INSTANCE above), so the palette entry names the same gate.
+  it('gates the palette entry the same way as the title-bar icon', () => {
+    const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
+    const entry = present(
+      palette.find((e) => e.command === 'modbench.plugin.create'),
+      'a commandPalette entry for modbench.plugin.create',
+    );
+    expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
   });
 });
 
@@ -506,6 +517,9 @@ describe('package.json command titles and categories', () => {
     'modbench.downloads.install',
     'modbench.mod.viewOnNexus',
     'modbench.downloadedFile.open',
+    // Absent when the file has no .meta (its own context-menu `when`), and even offered it still
+    // needs the clicked row's own identity — no ambient fallback.
+    'modbench.downloadedFile.openMeta',
     'modbench.downloadedFile.delete',
     'modbench.downloadedFile.exclude',
     'modbench.downloadedFile.include',
@@ -539,12 +553,34 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(28);
+    expect(PALETTE_GATED).toHaveLength(29);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
-    const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
+    const unexpectedGate = [...gatedFalse].filter(
+      (c) => !(PALETTE_GATED as readonly string[]).includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
+    );
     expect(missingGate).toEqual([]);
     expect(unexpectedGate).toEqual([]);
+  });
+
+  // System commands (commands.md): Modbench runs each on its own trigger — no gesture, no entry
+  // point, and (unlike PALETTE_GATED above) no argument a picker could ever ask for.
+  const INTERNAL_COMMANDS = [
+    'modbench.instance.putLoadOrder',
+    'modbench.mod.sync',
+    'modbench.plugin.sync',
+  ] as const;
+
+  it('gates every internal system command out of the palette too', () => {
+    const systemCommandIds = catalogCommandIds(commandsMarkdown.slice(commandsMarkdown.indexOf('## System commands')));
+    const notASystemCommand = INTERNAL_COMMANDS.filter((c) => !systemCommandIds.has(c));
+    expect(
+      notASystemCommand,
+      notASystemCommand.map((c) => `${c} is not a Command ID in commands.md's System commands table.`).join('\n'),
+    ).toEqual([]);
+    const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
+    const missingGate = INTERNAL_COMMANDS.filter((c) => !gatedFalse.has(c));
+    expect(missingGate).toEqual([]);
   });
 });
 
@@ -595,6 +631,40 @@ describe('package.json plugin-row context menu', () => {
       ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.mod.rebaseEditBranch', 'view == modbench.pluginListTree && viewItem == plugin'],
     ]);
+  });
+});
+
+// downloads.md, Menus and keys: "Row menu | install · view on Nexus · open · open `.meta` ·
+// exclude or include · delete". Two gestures, never one command with a target pick.
+describe('package.json Downloads row menu — open and open .meta', () => {
+  const downloadRowMenu = (): MenuEntry[] =>
+    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => e.when.includes('view == modbench.downloads') && e.when.includes(String.raw`viewItem =~ /\bdownload\b/`));
+
+  it('offers open unconditionally on every download row', () => {
+    const entry = present(
+      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.open'),
+      'a modbench.downloadedFile.open row-menu entry',
+    );
+    expect(entry.when).not.toContain('hasMeta');
+  });
+
+  it('offers open .meta only when the row\'s own contextValue says it has one', () => {
+    const entry = present(
+      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.openMeta'),
+      'a modbench.downloadedFile.openMeta row-menu entry',
+    );
+    expect(entry.when).toContain(String.raw`viewItem =~ /\bhasMeta\b/`);
+  });
+
+  it('sits between open and delete, as install · view on Nexus · open · open .meta · … names it', () => {
+    const ids = downloadRowMenu().map((e) => e.command);
+    const open = ids.indexOf('modbench.downloadedFile.open');
+    const openMeta = ids.indexOf('modbench.downloadedFile.openMeta');
+    const del = ids.indexOf('modbench.downloadedFile.delete');
+    expect(open).toBeGreaterThanOrEqual(0);
+    expect(openMeta).toBeGreaterThan(open);
+    expect(del).toBeGreaterThan(openMeta);
   });
 });
 
@@ -671,9 +741,39 @@ function catalogCommandIds(markdown: string): Set<string> {
   return ids;
 }
 
-const catalog = catalogCommandIds(
-  fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8'),
+const commandsMarkdown = fs.readFileSync(
+  path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8',
 );
+
+const catalog = catalogCommandIds(commandsMarkdown);
+
+// The reverse of the forward gate below: a `built` row naming an ID nothing registers.
+function catalogBuiltCommandIds(markdown: string): Set<string> {
+  const ids = new Set<string>();
+  let idColumn: number | undefined;
+  let statusColumn: number | undefined;
+  for (const line of markdown.split('\n')) {
+    if (!line.startsWith('|')) {
+      idColumn = undefined;
+      statusColumn = undefined;
+      continue;
+    }
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+    if (idColumn === undefined) {
+      idColumn = cells.indexOf('Command ID');
+      statusColumn = cells.indexOf('Status');
+      continue;
+    }
+    if (idColumn === -1 || statusColumn === undefined || statusColumn === -1) continue;
+    if (cells[statusColumn] !== 'built') continue;
+    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
+      ids.add(present(match[1], 'the backticked Command ID'));
+    }
+  }
+  return ids;
+}
+
+const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
 
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line.
@@ -708,6 +808,14 @@ describe('package.json registers every command under its catalog Command ID', ()
   it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
     const stale = [...legacy].filter((id) => !registered.includes(id));
     expect(stale, `${stale.join(', ')} is not registered: delete it from LEGACY_GESTURES.`).toEqual([]);
+  });
+
+  it('registers every Command ID whose row is built', () => {
+    const missing = [...builtCatalog].filter((id) => !registered.includes(id));
+    expect(
+      missing,
+      missing.map((id) => `${id} is \`built\` in commands.md but package.json does not register it.`).join('\n'),
+    ).toEqual([]);
   });
 });
 
