@@ -24,10 +24,10 @@ export function modsGestureEntry(
 export function registerModsGesture(
   commandId: string,
   viewSelection: () => readonly ModlistNode[],
-  run: (entry: GestureEntry) => unknown,
+  run: (entry: GestureEntry, option?: unknown) => unknown,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand(commandId, (clicked?: ModlistNode | null, selected?: readonly ModlistNode[]) =>
-    run(modsGestureEntry(clicked, selected, viewSelection)));
+  return vscode.commands.registerCommand(commandId, (clicked?: ModlistNode | null, selected?: readonly ModlistNode[], option?: unknown) =>
+    run(modsGestureEntry(clicked, selected, viewSelection), option));
 }
 
 type ArgumentRow = ModNode | SeparatorNode;

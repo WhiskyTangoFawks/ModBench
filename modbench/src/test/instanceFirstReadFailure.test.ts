@@ -62,7 +62,7 @@ async function fourViewsOverOneInstance() {
     resolveGameDirectory: resolvesNotFound,
     resolveDownloadsDirectory: downloadsDirectoryResolver(),
   });
-  const mods = new ModListProvider({ instance, log, instanceRoot: root, reporter: makeReporter(channel, 'modList') });
+  const mods = new ModListProvider({ instance, instanceRoot: root });
   const plugins = new PluginsTreeProvider({
     instance,
     source: { setPluginEnabled: () => Promise.resolve(), reorderPlugins: () => Promise.resolve() },

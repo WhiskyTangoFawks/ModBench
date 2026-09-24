@@ -985,7 +985,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "UntrackedReferencer" | "NotNativeRecord" | "ReferenceRemapIncomplete" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "UntrackedReferencer" | "NotNativeRecord" | "ReferenceRemapIncomplete" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -2296,6 +2296,15 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
