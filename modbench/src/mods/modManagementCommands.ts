@@ -188,8 +188,6 @@ export function registerSeparatorCommands(
       }),
   ];
 }
-// Mods tree title-bar action: the prompt refuses a taken name in install's own words
-// (collidingModName). A folder that landed but whose line failed is a partial, not a refusal.
 export function registerCreateEmptyModCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): vscode.Disposable {

@@ -123,7 +123,8 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('asks archive or folder before either OS picker opens', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
     await invoke('modbench.mod.install');
@@ -132,6 +133,12 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
       [expect.objectContaining({ sourceKind: 'archive' }), expect.objectContaining({ sourceKind: 'folder' })],
       expect.anything(),
     );
+    const [quickPickOrder] = showQuickPick.mock.invocationCallOrder;
+    const [openDialogOrder] = showOpenDialog.mock.invocationCallOrder;
+    if (quickPickOrder === undefined || openDialogOrder === undefined) {
+      throw new Error('expected both showQuickPick and showOpenDialog to have been called');
+    }
+    expect(quickPickOrder).toBeLessThan(openDialogOrder);
   });
 
   it('archive: Esc at the OS picker installs nothing', async () => {
@@ -209,6 +216,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     registerModInstallCommands(deps({ promptModName }));
     const succeeded = await invoke('modbench.mod.install');
 
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+    }));
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
       '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
@@ -233,8 +243,6 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     expect(reporter.reports).toEqual([]);
   });
 
-  // The prompt's own validateInput is the refusal, in install's words — collidingModName is the
-  // one function both prompts call, so the wording cannot drift between them.
   it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
     registerCreateEmptyModCommand('/instance', instance, recordingReporter());
     await invoke('modbench.mod.createEmpty');
@@ -258,8 +266,6 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     expect(reporter.reports).toEqual([]);
   });
 
-  // The folder landed even though the line did not, so this is common.md's partial: a warning
-  // naming what failed, never the "Failed to create" a refused create gets.
   it('reports a landed-but-partial line failure as a warning, not a failed create', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });

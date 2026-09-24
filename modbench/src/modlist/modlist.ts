@@ -148,6 +148,13 @@ export type CreateEmptyModResult =
   | { applied: true; wrote: boolean; lineRefusal?: string }
   | { applied: false; refusal: string };
 
+// Matches install's modNameCollisionRefusal word for word (mods.md: one wording for create and
+// install). Not imported: modlist and install are sibling Core boxes with no reference between
+// them in target-architecture-references.d2.
+function nameCollisionRefusal(name: string): string {
+  return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
+}
+
 /** A folder under `mods/` plus a disabled modlist.txt line — nothing else. `modFolders` is the
  *  value's own listing of `mods/`, handed in rather than read here, and a name already among
  *  them is refused. */
@@ -155,7 +162,7 @@ export async function createEmptyMod(
   instanceRoot: string, profile: string, name: string, modFolders: readonly string[],
 ): Promise<CreateEmptyModResult> {
   if (modFolders.includes(name)) {
-    return { applied: false, refusal: `A mod named "${name}" already exists.` };
+    return { applied: false, refusal: nameCollisionRefusal(name) };
   }
   await ensureDir(modDir(instanceRoot, name));
   // Read inside the write lock, so a line mod sync already added for this name is left alone
