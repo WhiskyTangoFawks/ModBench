@@ -57,7 +57,12 @@ export class Diagnostic {
   constructor(public range: Range, public message: string, public severity: number = DiagnosticSeverity.Error) {}
 }
 
-export const uriFile = (p: string) => ({ fsPath: p, toString: () => `file://${p}` });
+// `.path`, like real vscode's, is forward-slash always — a Windows `fsPath` (backslash) still
+// normalizes, so a decoration provider comparing by `.path` sees the same value on every OS.
+export const uriFile = (p: string) => {
+  const path = p.replaceAll('\\', '/');
+  return { fsPath: p, path, toString: () => `file://${path}` };
+};
 
 // PluginsTreeProvider.test.ts's resourceUri assertion (`toEqual({ fsPath })`) fails against the
 // richer `uriFile` above: `toEqual` does not ignore an extra defined `toString`. Real drift, so

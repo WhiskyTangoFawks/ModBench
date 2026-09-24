@@ -86,11 +86,12 @@ export function registerDownloadsView(
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
   }));
-  // Dims excluded rows once Show excluded is on — the sole cue distinguishing them, since Show
-  // excluded is additive, not an exclusive filter.
-  own(vscode.window.registerFileDecorationProvider(
-    new ExcludedDownloadDecorationProvider(instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames()),
-  ));
+  // Dims excluded rows once Show excluded is on. Refreshed on every rows change, so exclude and
+  // include reach the dim without waiting on VS Code's own re-query.
+  const excludedDecorations = new ExcludedDownloadDecorationProvider(
+    instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
+  own(vscode.window.registerFileDecorationProvider(excludedDecorations));
+  own(downloadsProvider.onDidChangeTreeData(() => excludedDecorations.refresh()));
   own(registerNameFilter({
     view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
     setFilter: (text) => downloadsProvider.setFilter(text),
