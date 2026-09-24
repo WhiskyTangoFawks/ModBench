@@ -507,7 +507,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     instanceRoot, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
     reporterFor('mod.move')));
-  ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction, () => modListView.selection));
+  ownAll(own, registerSeparatorCommands(instanceRoot, instance, reporterFor('separator'), trash, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));

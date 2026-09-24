@@ -36,6 +36,10 @@ export type ModlistEntry = Mod | Separator;
 
 const SEPARATOR_SUFFIX = '_separator';
 
+/** MO2's own name for a separator: what its line carries after the prefix, and its folder's name
+ *  under `mods/`. */
+export const separatorModName = (name: string): string => name + SEPARATOR_SUFFIX;
+
 // Deliberately state-insensitive: both prefixes match, and a caller that needs to
 // know which one did reads the prefix itself.
 const matchesModLine = (line: string, name: string): boolean =>
@@ -98,7 +102,7 @@ export function insertSeparatorAtIndexInText(
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
     const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
-    const newLine = `+${name}${SEPARATOR_SUFFIX}${detectEol(bomless)}`;
+    const newLine = `+${separatorModName(name)}${detectEol(bomless)}`;
     let insertAt: number;
     if (entryLineIdx.length === 0) {
       insertAt = lines.length;
@@ -118,11 +122,11 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
   return withBomPreserved(text, (bomless) => {
     for (const { start, end, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
-      if (matchesModLine(content, oldName + SEPARATOR_SUFFIX)) {
+      if (matchesModLine(content, separatorModName(oldName))) {
         const eol = bomless.slice(contentEnd, end);
         // content matched `+`/`-` above, so its first character is that prefix, never absent.
         const prefix = content.slice(0, 1);
-        return bomless.slice(0, start) + prefix + newName + SEPARATOR_SUFFIX + eol + bomless.slice(end);
+        return bomless.slice(0, start) + prefix + separatorModName(newName) + eol + bomless.slice(end);
       }
     }
     throw new Error(`Separator not found in modlist: ${oldName}`);
@@ -133,7 +137,7 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
 export function deleteSeparatorInText(text: string, name: string): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
-    const idx = lines.findIndex((l) => matchesModLine(l, name + SEPARATOR_SUFFIX));
+    const idx = lines.findIndex((l) => matchesModLine(l, separatorModName(name)));
     if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
     lines.splice(idx, 1);
     return lines.join('');
@@ -203,7 +207,7 @@ function ungroupedWinningEndAt(lines: readonly string[]): number {
 }
 
 function separatorLineAt(lines: readonly string[], separatorName: string): number {
-  const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
+  const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorModName(separatorName)));
   if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
   return sepIdx;
 }
@@ -279,7 +283,7 @@ export function moveModsInText(text: string, modNames: readonly string[], place:
 function separatorBlockLineIndices(lines: readonly string[], separatorNames: readonly string[]): Set<number> {
   const inBlock = new Set<number>();
   for (const [i, line] of lines.entries()) {
-    if (!separatorNames.some((name) => matchesModLine(line, name + SEPARATOR_SUFFIX))) continue;
+    if (!separatorNames.some((name) => matchesModLine(line, separatorModName(name)))) continue;
     for (let j = lineBlockStartAt(lines, i); j <= i; j++) inBlock.add(j);
   }
   return inBlock;
