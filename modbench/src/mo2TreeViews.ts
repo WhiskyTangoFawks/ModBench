@@ -9,19 +9,18 @@ import {
 } from './downloads/DownloadsPanel';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './downloads/HiddenDownloadDecorationProvider';
-import type { Instance, InstanceView } from './instanceLoader/instance';
+import type { InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import { registerNameFilter } from './nameFilter';
 
-/** Tree, filter and profile readout together, because the view's description has exactly one
- *  owner. Split apart, a profile update and a filter keystroke race for that property and the
- *  loser silently vanishes. */
+/** Tree, filter and count readout together, because the view's description and message line
+ *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
+ *  the loser silently vanishes. */
 export function createModListView(
   own: Own,
   modListProvider: ModListProvider,
-  instance: Pick<Instance, 'value' | 'subscribe'>,
 ): { modListView: vscode.TreeView<ModlistNode> } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
@@ -34,19 +33,36 @@ export function createModListView(
     object: 'modbench.mod',
     placeholder: 'Filter mods…',
     setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
-    // The pinned Overwrite row sits outside all filtering (it is a fixture over the folder, not
-    // a modlist entry), so it is not evidence that the term matched anything.
+    // Overwrite survives every filter and is no match, so it is not evidence that the term matched.
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
+    termPlacement: 'afterBase',
+    unfilteredMessage: () => modListProvider.emptyListMessage(),
     onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
-  const showProfile = () => modListFilter.setBaseDescription(instance.value.activeProfile);
-  showProfile();
-  // A profile switch rewrites ModOrganizer.ini, which the Instance watches — the recompute it
-  // lands is what moves this readout, not the gesture.
-  own(instance.subscribe(showProfile));
+  const showCount = () => modListFilter.setBaseDescription(modListProvider.description());
+  showCount();
+  modListFilter.refresh();
+  own(modListProvider.onDidChangeTreeData(showCount));
+  // A row gone before VS Code resolves it cannot be revealed, and the render that took it away
+  // reveals whatever the filter still shows.
+  const expand = () => { expandFilteredSeparators(modListView, modListProvider).catch(() => undefined); };
+  own(modListProvider.onDidChangeTreeData(expand));
+  own(modListView.onDidChangeVisibility(expand));
   return { modListView };
 }
+
+// VS Code keeps the expansion it remembers for a known row identity over the provider's
+// collapsible state, so only a reveal opens a separator the filter shows for its matching mods.
+// A reveal also opens a hidden view.
+async function expandFilteredSeparators(view: vscode.TreeView<ModlistNode>, provider: ModListProvider): Promise<void> {
+  if (!view.visible) return;
+  for (const row of await provider.getChildren()) {
+    if (row.collapsibleState !== vscode.TreeItemCollapsibleState.Expanded) continue;
+    await view.reveal(row, { select: false, focus: false, expand: true });
+  }
+}
+
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(

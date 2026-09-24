@@ -7,8 +7,8 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ModStatusResult } from '../../instanceLoader/statusChecker';
 import { present } from '../../ports/present';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
-  uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
+  uriFile, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import type {
@@ -17,7 +17,7 @@ import type {
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
@@ -39,7 +39,7 @@ vi.mock('../../modlist/modlist', () => ({
   reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { ErrorNode } from '../errorNode';
 import { onModCheckboxChanged } from '../modCheckboxHandler';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -136,31 +136,158 @@ const makeProvider = (
   instanceRoot: extra.instanceRoot ?? INSTANCE_ROOT,
 });
 
-describe('ModListProvider', () => {
-  it('builds root children: count node, then separators, then ungrouped mods (losing-at-top default)', async () => {
-    // A separator's members are the entries PRECEDING it — Alpha/Beta
-    // here. Gamma/Delta trail the last separator and are ungrouped. The default
-    // losing-at-top view pushes ungrouped mods below the separators and reverses
-    // each sibling list.
-    const provider = makeProvider([
-      mod('Alpha'),
-      mod('Beta', false),
-      sep('Section 1'),
-      mod('Gamma'),
-      mod('Delta', false),
-    ]);
-    const roots = await provider.getChildren();
+// modlist.txt runs winning-first and a separator heads the lines above it: Late Section holds
+// Late Tweak and Early Fix, Early Section holds Base Patch, and the last two are ungrouped.
+const ordered = (): ModlistEntry[] => [
+  mod('Late Tweak'),
+  mod('Early Fix', false),
+  sep('Late Section'),
+  mod('Base Patch'),
+  sep('Early Section'),
+  mod('Old Mod'),
+  mod('Oldest Mod'),
+];
 
-    expect(roots[0]).toBeInstanceOf(CountNode);
-    expect(present(roots[0], 'the first root').label).toBe('2 active / 4 installed');
-    expect(roots[1]).toBeInstanceOf(SeparatorNode);
-    expect(present(roots[1], 'the second root').label).toBe('Section 1');
-    expect(roots[2]).toBeInstanceOf(ModNode);
-    expect(present(roots[2], 'the third root').label).toBe('Delta');
-    expect(roots[3]).toBeInstanceOf(ModNode);
-    expect(present(roots[3], 'the fourth root').label).toBe('Gamma');
+const labelOf = (n: ModlistNode): string => (typeof n.label === 'string' ? n.label : n.label?.label ?? '');
+const rowsOf = (nodes: readonly ModlistNode[]) => nodes.map((n) => `${n.kind} ${labelOf(n)}`);
+
+describe('the tree reads as mod order', () => {
+  it('losing at the top: the ungrouped mods, then the separators, then Overwrite last', async () => {
+    const provider = makeProvider(ordered());
+
+    expect(rowsOf(await provider.getChildren())).toEqual([
+      'mod Oldest Mod', 'mod Old Mod', 'separator Early Section', 'separator Late Section', 'overwrite Overwrite',
+    ]);
   });
 
+  it('winning at the top: Overwrite first, then the separators, then the ungrouped mods', async () => {
+    const provider = makeProvider(ordered());
+    provider.setViewDirection('winningAtTop');
+
+    expect(rowsOf(await provider.getChildren())).toEqual([
+      'overwrite Overwrite', 'separator Late Section', 'separator Early Section', 'mod Old Mod', 'mod Oldest Mod',
+    ]);
+  });
+
+  it('a separator\'s mods follow the direction', async () => {
+    const provider = makeProvider(ordered());
+    const lateSection = async () => expectInstanceOf(
+      (await provider.getChildren()).find((n) => n.label === 'Late Section'), SeparatorNode);
+
+    expect(rowsOf(await provider.getChildren(await lateSection()))).toEqual(['mod Early Fix', 'mod Late Tweak']);
+    provider.setViewDirection('winningAtTop');
+    expect(rowsOf(await provider.getChildren(await lateSection()))).toEqual(['mod Late Tweak', 'mod Early Fix']);
+  });
+});
+
+describe('a row\'s identity is its kind and its name', () => {
+  it('a mod and a separator that share a name are two rows', async () => {
+    const provider = makeProvider([mod('Armor'), sep('Armor')]);
+    const roots = await provider.getChildren();
+    const separator = expectInstanceOf(roots.find((n) => n.kind === 'separator'), SeparatorNode);
+    const [modRow] = await provider.getChildren(separator);
+
+    expect(present(modRow, 'the Armor mod').id).not.toBe(separator.id);
+  });
+
+  it('a new instance value leaves every row\'s identity as it was', async () => {
+    const instance = new FakeInstance(valueOf(ordered()));
+    const provider = makeProvider([], { instance });
+    const idsOf = async () => (await provider.getChildren()).map((n) => n.id);
+    const before = await idsOf();
+
+    instance.publish(valueOf(ordered(), { overwriteFileCount: 4 }));
+
+    expect(await idsOf()).toEqual(before);
+    expect(new Set(before).size).toBe(before.length);
+  });
+});
+
+describe('a separator\'s expander', () => {
+  const separatorRows = async (provider: ModListProvider) =>
+    new Map((await provider.getChildren())
+      .filter((n): n is SeparatorNode => n instanceof SeparatorNode)
+      .map((n) => [labelOf(n), n.collapsibleState]));
+
+  it('starts collapsed on a fresh view, and a separator with no mods has none', async () => {
+    const provider = makeProvider([mod('Held'), sep('Full'), sep('Empty')]);
+
+    expect(await separatorRows(provider)).toEqual(new Map([
+      ['Empty', TreeItemCollapsibleState.None], ['Full', TreeItemCollapsibleState.Collapsed],
+    ]));
+  });
+
+  it('is expanded while a filter shows only the separator\'s matching mods', async () => {
+    const provider = makeProvider([mod('Armor Fix'), mod('Weapons'), sep('Gear'), mod('Armor Pack'), sep('Armory')]);
+    provider.setFilter('armo', true);
+
+    expect(await separatorRows(provider)).toEqual(new Map([
+      ['Armory', TreeItemCollapsibleState.Collapsed], ['Gear', TreeItemCollapsibleState.Expanded],
+    ]));
+  });
+
+  it('a separator whose name matches but holds no mods has none while filtering', async () => {
+    const provider = makeProvider([sep('Armory')]);
+    provider.setFilter('armo', true);
+
+    expect(await separatorRows(provider)).toEqual(new Map([['Armory', TreeItemCollapsibleState.None]]));
+  });
+});
+
+describe('what the view says of itself', () => {
+  const NO_MODS = 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+
+  it('describes the enabled mods over the listed mods, counting the whole list while a filter narrows it', () => {
+    const provider = makeProvider(ordered());
+    provider.setFilter('late', true);
+
+    expect(provider.description()).toBe('4 / 5');
+  });
+
+  it('says there are no mods or separators, and how to add one', () => {
+    expect(makeProvider([]).emptyListMessage()).toBe(NO_MODS);
+  });
+
+  it('says nothing of an empty list while a separator alone is listed', () => {
+    expect(makeProvider([sep('Only')]).emptyListMessage()).toBeUndefined();
+  });
+
+  // Before the first read the value is the empty sentinel, which is "not read yet".
+  it('says nothing before the first read lands', () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 0) });
+
+    expect(provider.description()).toBeUndefined();
+    expect(provider.emptyListMessage()).toBeUndefined();
+  });
+});
+
+// VS Code's reveal walks up through getParent, and a filter's expansion is a reveal.
+describe('a row\'s parent', () => {
+  it('is the separator that holds a mod, and nothing for a root', async () => {
+    const provider = makeProvider(ordered());
+    const roots = await provider.getChildren();
+    const lateSection = expectInstanceOf(roots.find((n) => labelOf(n) === 'Late Section'), SeparatorNode);
+    const [earlyFix] = await provider.getChildren(lateSection);
+
+    expect(provider.getParent(present(earlyFix, 'Early Fix'))).toBe(lateSection);
+    expect(roots.map((n) => provider.getParent(n))).toEqual(roots.map(() => undefined));
+  });
+});
+
+describe('a click only selects', () => {
+  it('no row carries a command', async () => {
+    const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries, { overwriteFileCount: 5 })) });
+    const roots = await provider.getChildren();
+    const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
+    const rows = [...roots, ...children.flat()];
+
+    expect(rows.map((n) => n.kind).sort()).toEqual(['mod', 'mod', 'overwrite', 'separator']);
+    expect(rows.filter((n) => n.command !== undefined)).toEqual([]);
+  });
+});
+
+describe('ModListProvider', () => {
   // Rival: the provider ignores the injected value and falls back to a read of its own — with
   // that rival, these rows would be empty/wrong rather than exactly what the fixture says.
   it('rows exactly match the fixture value — not a re-derivation', async () => {
@@ -308,11 +435,9 @@ describe('ModListProvider', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('renders a genuinely empty modlist immediately when the first landed value already carries none', async () => {
+  it('renders a genuinely empty modlist immediately, as the Overwrite row alone, when the first landed value already carries none', async () => {
     const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 1) });
-    const roots = await provider.getChildren();
-    expect(roots).toHaveLength(1); // just the count node
-    expect(roots[0]).toBeInstanceOf(CountNode);
+    expect(rowsOf(await provider.getChildren())).toEqual(['overwrite Overwrite']);
   });
 
   describe('setFilter — grouping on (default)', () => {
@@ -397,13 +522,11 @@ describe('ModListProvider', () => {
       mod('Delta'),
     ] satisfies ModlistEntry[];
 
-    it('flat list: only matching mods, no separators, no count', async () => {
+    it('flat list: only matching mods, no separators, and Overwrite', async () => {
       const provider = makeProvider(entries);
       provider.setFilter('alpha', false);
-      const roots = await provider.getChildren();
 
-      expect(roots.every((n) => n instanceof ModNode)).toBe(true);
-      expect(roots.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha']); // reversed: losing-at-top default
+      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha Child', 'mod Alpha', 'overwrite Overwrite']);
     });
   });
 
@@ -480,7 +603,7 @@ describe('ModListProvider', () => {
 
     it('winning-at-top down-drag: asks for the block before the row it landed on', async () => {
       const { provider, drops } = makeRecordingProvider();
-      provider.toggleViewDirection(); // -> winning-at-top (view == file order)
+      provider.setViewDirection('winningAtTop');
       const gammaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma'), "the 'Gamma' node");
       await drop(provider, gammaNode, modItem('Alpha'));
       expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'before', name: 'Gamma' } }]);
@@ -490,7 +613,7 @@ describe('ModListProvider', () => {
     // names its target the same way a drag down does.
     it('winning-at-top up-drag: asks for the block before the row it landed on', async () => {
       const { provider, drops } = makeRecordingProvider();
-      provider.toggleViewDirection(); // -> winning-at-top (view == file order)
+      provider.setViewDirection('winningAtTop');
       const betaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta'), "the 'Beta' node");
       await drop(provider, betaNode, modItem('Delta'));
       expect(drops).toEqual([{ command: 'reorderMod', name: 'Delta', drop: { kind: 'before', name: 'Beta' } }]);
@@ -498,7 +621,7 @@ describe('ModListProvider', () => {
 
     it('winning-at-top: drop onto empty space asks for the losing end, the view\u2019s own bottom', async () => {
       const { provider, drops } = makeRecordingProvider();
-      provider.toggleViewDirection(); // -> winning-at-top (view == file order)
+      provider.setViewDirection('winningAtTop');
       await provider.getChildren(); // populate cache
       await drop(provider, undefined, modItem('Alpha'));
       expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'losingEnd' } }]);
@@ -508,7 +631,7 @@ describe('ModListProvider', () => {
     // travel with it is the command's reading of modlist.txt, not the tree's.
     it('winning-at-top down-drag: a separator asks the block command, naming the separator alone', async () => {
       const { provider, drops } = makeRecordingProvider();
-      provider.toggleViewDirection(); // -> winning-at-top (view == file order)
+      provider.setViewDirection('winningAtTop');
       const roots = await provider.getChildren();
       const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(provider, deltaNode, sepItem('Group A'));
@@ -521,7 +644,7 @@ describe('ModListProvider', () => {
     // onto it must be a no-op, never falling through to "move to end".
     it('drop onto the Overwrite node asks for nothing at all', async () => {
       const { provider, drops } = makeRecordingProvider();
-      const overwriteNode = new OverwriteNode(fakeUri('/x'), 1);
+      const overwriteNode = new OverwriteNode(1);
       await drop(provider, overwriteNode, modItem('Alpha'));
       expect(drops).toEqual([]);
     });
@@ -664,7 +787,6 @@ describe('ModListProvider', () => {
       provider.setFilter('x', false);
       provider.setFilter('', false); // grouping arg ignored when text cleared
       const roots = await provider.getChildren();
-      expect(roots.some((n) => n instanceof CountNode)).toBe(true);
       expect(roots.some((n) => n instanceof SeparatorNode)).toBe(true);
     });
   });
@@ -682,41 +804,14 @@ describe('ModListProvider', () => {
   });
 
   describe('sort order toggle', () => {
-    it('toggleViewDirection fires a refresh', () => {
+    it('setting the view direction fires a refresh', () => {
       const provider = makeProvider([mod('A')]);
       let fired = false;
       provider.onDidChangeTreeData(() => { fired = true; });
 
-      provider.toggleViewDirection();
+      provider.setViewDirection('winningAtTop');
 
       expect(fired).toBe(true);
-    });
-
-    it('toggled to winning-at-top: ungrouped first, then separators, all in file order', async () => {
-      // Section 1's real members are Alpha/Beta (preceding it); Section 2's
-      // are Gamma (preceding it, back to Section 1). Solo A/B trail the last
-      // separator and are the truly ungrouped ones.
-      const provider = makeProvider([
-        mod('Alpha'),
-        mod('Beta', false),
-        sep('Section 1'),
-        mod('Gamma'),
-        sep('Section 2'),
-        mod('Solo A'),
-        mod('Solo B', false),
-      ]);
-      provider.toggleViewDirection(); // -> winning-at-top (file order)
-      const roots = await provider.getChildren();
-
-      expect(roots[0]).toBeInstanceOf(CountNode);
-      expect(roots[1]).toBeInstanceOf(ModNode);
-      expect(present(roots[1], 'the second root').label).toBe('Solo A');
-      expect(roots[2]).toBeInstanceOf(ModNode);
-      expect(present(roots[2], 'the third root').label).toBe('Solo B');
-      expect(roots[3]).toBeInstanceOf(SeparatorNode);
-      expect(present(roots[3], 'the fourth root').label).toBe('Section 1');
-      expect(roots[4]).toBeInstanceOf(SeparatorNode);
-      expect(present(roots[4], 'the fifth root').label).toBe('Section 2');
     });
 
     it('toggled to winning-at-top: mods within a separator are in file order', async () => {
@@ -727,7 +822,7 @@ describe('ModListProvider', () => {
         mod('Third'),
         sep('Section'),
       ]);
-      provider.toggleViewDirection(); // -> winning-at-top (file order)
+      provider.setViewDirection('winningAtTop');
       const roots = await provider.getChildren();
       const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
       const children = await provider.getChildren(sepNode);
@@ -735,7 +830,7 @@ describe('ModListProvider', () => {
       expect(children.map((n) => n.label)).toEqual(['First', 'Second', 'Third']);
     });
 
-    it('toggle applies to flatFilteredRoots (grouping off)', async () => {
+    it('the direction applies to the flat list', async () => {
       // Group A's real member is Alpha (preceding it); Alpha Child/Alpha
       // Other trail the last separator and are ungrouped.
       const provider = makeProvider([
@@ -744,15 +839,14 @@ describe('ModListProvider', () => {
         mod('Alpha Child'),
         mod('Alpha Other'),
       ]);
-      provider.toggleViewDirection(); // -> winning-at-top (file order)
+      provider.setViewDirection('winningAtTop');
       provider.setFilter('alpha', false);
       const roots = await provider.getChildren();
 
-      // winning-at-top: ungrouped (Alpha Child, Alpha Other) first, then grouped (Alpha).
-      expect(roots.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other', 'Alpha']);
+      expect(rowsOf(roots)).toEqual(['overwrite Overwrite', 'mod Alpha', 'mod Alpha Child', 'mod Alpha Other']);
     });
 
-    it('toggle applies to groupedFilteredRoots (grouping on)', async () => {
+    it('the direction applies to the grouped, filtered list', async () => {
       // Group A's real members are Alpha Child/Alpha Other (preceding it);
       // Alpha trails the last separator and is ungrouped.
       const provider = makeProvider([
@@ -761,14 +855,11 @@ describe('ModListProvider', () => {
         sep('Group A'),
         mod('Alpha'),
       ]);
-      provider.toggleViewDirection(); // -> winning-at-top (file order)
+      provider.setViewDirection('winningAtTop');
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
 
-      // winning-at-top: ungrouped (Alpha) first, then grouped (Group A).
-      expect(roots[0]).toBeInstanceOf(ModNode);
-      expect(present(roots[0], 'the first root').label).toBe('Alpha');
-      expect(roots[1]).toBeInstanceOf(SeparatorNode);
+      expect(rowsOf(roots)).toEqual(['overwrite Overwrite', 'separator Group A', 'mod Alpha']);
       const sepNode = expectInstanceOf(roots[1], SeparatorNode);
       const children = await provider.getChildren(sepNode);
       expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other']);
@@ -820,18 +911,18 @@ describe('ModListProvider', () => {
 
     // View order (winningAtTop, presentation-only) and override order (who wins a file
     // conflict) are provably independent — flipping the view never changes the winner.
-    it('flipping view direction (toggleViewDirection) never changes a conflict\'s winner', async () => {
+    it('flipping the view direction never changes a conflict\'s winner', async () => {
       const instance = new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() }));
       const provider = makeProvider([], { instance });
       const before = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(before.tooltip).toContain('winner: ModB');
 
-      provider.toggleViewDirection(); // presentation flip only — losing-at-top -> winning-at-top
+      provider.setViewDirection('winningAtTop');
       const afterFlip = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(afterFlip.tooltip).toContain('winner: ModB');
       expect(afterFlip.iconPath).toEqual(before.iconPath);
 
-      provider.toggleViewDirection(); // flip back
+      provider.setViewDirection('losingAtTop');
       const afterFlipBack = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(afterFlipBack.tooltip).toContain('winner: ModB');
     });
@@ -868,68 +959,55 @@ describe('ModListProvider', () => {
     });
   });
 
-  // A pinned Overwrite leaf, last row of the tree, outside separator grouping. The count is a
-  // plain field of the Instance value — no disk, no temporary instance.
+  // A pinned leaf outside separator grouping, over the value's own count: no disk and no
+  // temporary instance.
   describe('Overwrite row', () => {
     const entries = (): ModlistEntry[] => [mod('Alpha'), sep('Group A'), mod('Beta')];
+    const overwriteRow = async (overwriteFileCount: number) => {
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { overwriteFileCount })) });
+      return expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
+    };
 
-    it('appends an Overwrite node as the very last root when the value carries a non-zero count', async () => {
-      const provider = makeProvider(entries(), {
-        instance: new FakeInstance(valueOf(entries(), { overwriteFileCount: 3 })),
-      });
-      const roots = await provider.getChildren();
+    it('holding files: its count as the description and a tinted folder icon', async () => {
+      const row = await overwriteRow(3);
 
-      const last = roots[roots.length - 1];
-      expect(last).toBeInstanceOf(OverwriteNode);
-      // Outside grouping: exactly one, and it is not a child of any separator.
-      expect(roots.filter((n) => n instanceof OverwriteNode)).toHaveLength(1);
+      expect(row.label).toBe('Overwrite');
+      expect(row.description).toBe('3');
+      expect(row.iconPath).toEqual(new ThemeIcon('folder', new ThemeColor('charts.red')));
     });
 
-    it('omits the Overwrite node when the value carries a zero count', async () => {
-      const provider = makeProvider(entries()); // overwriteFileCount defaults to 0
-      const roots = await provider.getChildren();
-      expect(roots.some((n) => n instanceof OverwriteNode)).toBe(false);
+    it('holding nothing: still a row, with no description and an untinted folder icon', async () => {
+      const row = await overwriteRow(0);
+
+      expect(row.label).toBe('Overwrite');
+      expect(row.description).toBeUndefined();
+      expect(row.iconPath).toEqual(new ThemeIcon('folder'));
     });
 
-    it('is read-only: no checkbox, a reveal command, contextValue, and a count+help tooltip', async () => {
-      const provider = makeProvider(entries(), {
-        instance: new FakeInstance(valueOf(entries(), { overwriteFileCount: 2 })),
-      });
-      const roots = await provider.getChildren();
-      const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");
+    it('says what Overwrite is, and nothing of deploy', async () => {
+      const row = await overwriteRow(2);
 
-      expect(node.label).toBe('Overwrite');
-      expect(node.checkboxState).toBeUndefined();
-      expect(node.contextValue).toBe('overwrite');
-      expect(present(node.command, "the OverwriteNode's reveal command").command).toBe('modbench.mod.openFolder');
-      const tooltip = node.tooltip;
-      if (typeof tooltip !== 'string') throw new Error('expected OverwriteNode.tooltip to be a string');
-      expect(tooltip).toContain('2');
-      expect(tooltip).toMatch(/reassign|clear/i);
+      expect(row.tooltip).toBe('The files tools wrote while MO2 ran them, which win over every mod.');
     });
 
-    // The pinned row's resourceUri (Explorer reveal / the decoration provider's key) is the
-    // path the value carries — this provider joins none of its own.
-    it('builds the Overwrite node\'s resourceUri from the overwrite path the value carries', async () => {
-      const provider = makeProvider(entries(), {
-        instance: new FakeInstance(valueOf(entries(), {
-          overwriteFileCount: 1,
-          paths: { overwriteDir: '/my/mo2/instance/overwrite', downloadsDir: '', modDirs: new Map() },
-        })),
-      });
-      const roots = await provider.getChildren();
-      const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");
-      expect(node.resourceUri.fsPath).toBe('/my/mo2/instance/overwrite');
-      expect(typeof node.resourceUri.toString).toBe('function');
+    // A resourceUri would hand the label to every file decoration provider, git's included.
+    it('is not a mod: no check box, no click, no resourceUri, and its own menu', async () => {
+      const row = await overwriteRow(2);
+
+      expect(row.checkboxState).toBeUndefined();
+      expect(row.command).toBeUndefined();
+      expect(row.resourceUri).toBeUndefined();
+      expect(row.contextValue).toBe('overwrite');
     });
 
-    it('stays last even under descending sort (outside all grouping)', async () => {
-      const provider = makeProvider(entries(), {
-        instance: new FakeInstance(valueOf(entries(), { overwriteFileCount: 1 })),
-      });
-      provider.toggleViewDirection();
-      const roots = await provider.getChildren();
-      expect(roots[roots.length - 1]).toBeInstanceOf(OverwriteNode);
+    it('cannot be dragged', async () => {
+      const row = await overwriteRow(2);
+      const provider = makeProvider(entries());
+      const dataTransfer = new DataTransfer();
+
+      provider.handleDrag([row], dataTransfer, new FakeCancellationToken());
+
+      expect(dataTransfer.get('application/vnd.medit.modlist-node')).toBeUndefined();
     });
   });
 });

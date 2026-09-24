@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode } from './ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
 import { registerModsGesture, singularArgument } from './gestureEntry';
-import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -19,21 +18,21 @@ import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
-
-/** The Mods tree's own view direction: a view setting, writing no MO2 file, so it lives with
- *  the view it flips and needs nothing but the provider. */
-export function registerModListCoreCommands(modListProvider: ModListProvider): vscode.Disposable[] {
+/** The Mods tree's view direction writes no MO2 file, so it lives with the view it flips. It
+ *  starts losing at the top on each activation, and the context key, which outlives an extension
+ *  host restart, is told so. */
+export function registerModListCoreCommands(modListProvider: Pick<ModListProvider, 'setViewDirection'>): vscode.Disposable[] {
+  const show = (direction: SortDirection) => {
+    modListProvider.setViewDirection(direction);
+    void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', direction === 'winningAtTop');
+  };
+  void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', false);
   return [
-      vscode.commands.registerCommand('modbench.mod.sortWinningAtTop', () => {
-        modListProvider.toggleViewDirection();
-        void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', true);
-      }),
-      vscode.commands.registerCommand('modbench.mod.sortLosingAtTop', () => {
-        modListProvider.toggleViewDirection();
-        void vscode.commands.executeCommand('setContext', 'modbench.mod.winningAtTop', false);
-      }),
+    vscode.commands.registerCommand('modbench.mod.sortWinningAtTop', () => show('winningAtTop')),
+    vscode.commands.registerCommand('modbench.mod.sortLosingAtTop', () => show('losingAtTop')),
   ];
 }
+
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
  *  name prompt and a refused install are one answer, since each leaves nothing installed. */
 export interface InstallFromArchiveOutcome {
@@ -203,13 +202,6 @@ export function registerCreateEmptyModCommand(
     });
   });
 }
-/** The pinned Overwrite row's reddish tint; the row's own visibility and count come from the
- *  Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
-export function registerOverwriteView(instance: Pick<Instance, 'value'>): vscode.Disposable {
-  // Stateless: keyed on the value's own overwrite path, which is what OverwriteNode.resourceUri carries.
-  return vscode.window.registerFileDecorationProvider(
-    new OverwriteDecorationProvider(instance.value.paths.overwriteDir));
-}
 
 /** A mod row opens the mod's folder, and the Overwrite row the overwrite folder. */
 export function registerOpenFolderCommand(instance: Pick<Instance, 'value'>, reporter: Reporter): vscode.Disposable {
@@ -235,7 +227,7 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 function folderOf(
   instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
 ): { name: string; folder: vscode.Uri } | undefined {
-  if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: node.resourceUri };
+  if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: vscode.Uri.file(instance.value.paths.overwriteDir) };
   const folder = instance.value.paths.modDirs.get(node.mod.name);
   return folder === undefined ? undefined : { name: node.mod.name, folder: vscode.Uri.file(folder) };
 }
