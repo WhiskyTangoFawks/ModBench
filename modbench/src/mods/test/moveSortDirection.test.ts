@@ -27,6 +27,7 @@ import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } from '../ModListProvider';
 import { registerModMoveCommand } from '../modManagementCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 type RowName = { kind: 'mod' | 'separator'; name: string };
 
@@ -50,7 +51,7 @@ async function moveFrom(direction: SortDirection, selected: readonly RowName[], 
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root, log: () => {}, logReadFailure: () => {},
-    resolveGameDirectory: () => Promise.resolve(undefined),
+    resolveGameDirectory: resolvesNotFound,
   });
   const provider = new ModListProvider({ instance, instanceRoot: root });
   try {

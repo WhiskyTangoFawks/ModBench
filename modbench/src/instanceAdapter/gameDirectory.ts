@@ -1,5 +1,5 @@
-// Where the game is: the instance's own ini first, then Steam and Wine detection. The user's
-// overrides arrive from the composition root as values; nothing here reads a setting itself.
+// Where the game is: the setting first, then the instance's own ini, then Steam and Wine detection.
+// The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
 import { dirname, join } from 'node:path';
 import { readGameName, readGamePath } from '../mo2Codecs/modOrganizerIni';
@@ -7,23 +7,47 @@ import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths'
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { factsOf } from './files';
 import { present } from '../ports/present';
+import { errorMessage } from '../ports/errorMessage';
 
-export interface GameDirectory {
-  /** Folder containing the game executable and Data/. */
-  root: string;
-  dataFolder: string;
+/** The setting that names the game folder outright, and so the one that fixes a folder not found. */
+export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
+
+/** One place Modbench looked for the game folder, and what it found there. */
+export interface GameFolderLook {
+  readonly place: string;
+  readonly answer: string;
 }
+
+/** Where the game is, or each place Modbench looked for it and why none answered. Not finding it
+ *  is an answer, never a failed read: every row that does not need the game folder still shows. */
+export type GameFolder =
+  | {
+    readonly kind: 'found';
+    /** Folder containing the game executable and Data/. */
+    readonly root: string;
+    readonly dataFolder: string;
+  }
+  | {
+    readonly kind: 'notFound';
+    /** In the order Modbench looked; a place after one that refused to fall through is absent. */
+    readonly looked: readonly GameFolderLook[];
+    readonly setting: string;
+  };
 
 /** What the user set, read fresh on each resolve by whoever built the resolver. */
 export interface GameDirectoryOverrides {
-  /** The game folder outright (`modbench.mods.gameDirectory`). */
+  /** The game folder outright (`GAME_FOLDER_SETTING`). */
   gameDirectory?: string;
 }
 
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
- *  read, so a resolution can never come from a different generation than the value it lands in.
- *  `undefined` when nothing resolves. */
-export type GameDirectoryResolver = (iniText: string) => Promise<GameDirectory | undefined>;
+ *  read, so a resolution can never come from a different generation than the value it lands in. */
+export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
+
+/** The Data folder of a game folder found, undefined when it was not. */
+export function dataFolderOf(folder: GameFolder): string | undefined {
+  return folder.kind === 'found' ? folder.dataFolder : undefined;
+}
 
 /** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. */
 export type DetectWinePrefix = () => Promise<string | null>;
@@ -97,43 +121,69 @@ function set(value: string | undefined): string | undefined {
   return trimmed === '' ? undefined : trimmed;
 }
 
-// Only the ini's own read/parse is tolerated as "not found"; a translation failure must propagate.
+const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING}`;
+const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
+const STEAM_PLACE = 'the Steam install';
+const NOT_SET = 'not set';
+
+type Looked = { found: string } | { look: GameFolderLook; fallThrough: boolean };
+
+const noDataFolder = (place: string, root: string): Looked =>
+  ({ look: { place, answer: `${root} has no Data folder` }, fallThrough: true });
+
+// A translation failure refuses to fall through to Steam: resolving a different game folder
+// entirely would hide the real problem.
 async function iniGamePath(
   iniText: string, facts: GameAutodetect | undefined, detectors: GameDetectors,
-): Promise<string | null> {
+): Promise<Looked> {
   let raw: string;
   try {
     raw = readGamePath(iniText);
   } catch {
-    return null;
+    return { look: { place: GAME_PATH_PLACE, answer: NOT_SET }, fallThrough: true };
   }
   const prefix: DetectWinePrefix = () => (facts ? detectors.winePrefix(facts.steamAppId) : Promise.resolve(null));
-  return normalizeGamePath(raw, process.platform, prefix);
+  let root: string;
+  try {
+    root = await normalizeGamePath(raw, process.platform, prefix);
+  } catch (err) {
+    return { look: { place: GAME_PATH_PLACE, answer: errorMessage(err) }, fallThrough: false };
+  }
+  return (await hasDataFolder(root)) ? { found: root } : noDataFolder(GAME_PATH_PLACE, root);
 }
 
-/** Explicit setting, then MO2's `gamePath`, then autodetect. A translation failure rejects
- *  rather than falling through to autodetect, because resolving a different game directory
- *  entirely would hide the real problem. */
+/** The setting, then MO2's `gamePath`, then autodetect. A set setting with no Data folder refuses
+ *  to fall through, because it names the folder the user chose. */
 export function gameDirectoryResolver(
   overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
 ): GameDirectoryResolver {
-  return async (iniText: string): Promise<GameDirectory | undefined> => {
+  return async (iniText: string): Promise<GameFolder> => {
     const facts = autodetectFacts(iniText);
-    const at = (root: string): GameDirectory => ({ root, dataFolder: join(root, 'Data') });
+    const at = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: join(root, 'Data') });
+    const looked: GameFolderLook[] = [];
+    const notFound = (): GameFolder => ({ kind: 'notFound', looked, setting: GAME_FOLDER_SETTING });
 
     const explicit = set(overridesOf().gameDirectory);
     if (explicit !== undefined) {
-      if (!(await hasDataFolder(explicit))) {
-        throw new Error(`modbench.mods.gameDirectory has no Data/ subfolder: ${explicit}`);
-      }
-      return at(explicit);
+      if (await hasDataFolder(explicit)) return at(explicit);
+      looked.push({ place: SETTING_PLACE, answer: `${explicit} has no Data folder` });
+      return notFound();
     }
+    looked.push({ place: SETTING_PLACE, answer: NOT_SET });
 
     const fromIni = await iniGamePath(iniText, facts, detectors);
-    if (fromIni && (await hasDataFolder(fromIni))) return at(fromIni);
+    if ('found' in fromIni) return at(fromIni.found);
+    looked.push(fromIni.look);
+    if (!fromIni.fallThrough) return notFound();
 
+    if (!facts) {
+      looked.push({ place: STEAM_PLACE, answer: 'not asked: Modbench has no Steam entry for this game' });
+      return notFound();
+    }
     // Last, because a detection reads Steam's library file and runs `reg query` on Windows.
-    const found = facts ? await detectors.paths(facts) : null;
-    return found ? { root: dirname(found.dataFolder), dataFolder: found.dataFolder } : undefined;
+    const detected = await detectors.paths(facts);
+    if (detected) return { kind: 'found', root: dirname(detected.dataFolder), dataFolder: detected.dataFolder };
+    looked.push({ place: STEAM_PLACE, answer: 'the game is in no Steam library' });
+    return notFound();
   };
 }

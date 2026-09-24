@@ -23,9 +23,9 @@ export interface NameFilterDeps {
   toggle?: { icon: string; label: string };
   /** Where the term sits beside the base description; before it unless the view says otherwise. */
   termPlacement?: 'beforeBase' | 'afterBase';
-  /** What the view's message line says while no filter is active, asked again on each row
-   *  change. The no-match message takes the line while a filter is active. */
-  unfilteredMessage?: () => string | undefined;
+  /** What the view's message line says about the view itself, asked again on each row change.
+   *  The no-match message takes the line while a filter matches nothing. */
+  viewMessage?: () => string | undefined;
   onRowsChanged?: vscode.Event<unknown>;
 }
 
@@ -56,9 +56,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
   const renderMessage = async (): Promise<void> => {
     const mine = ++generation;
-    const text = term === ''
-      ? deps.unfilteredMessage?.()
-      : (await deps.hasRows()) ? undefined : `No matches for "${term}".`;
+    const text = term === '' || (await deps.hasRows()) ? deps.viewMessage?.() : `No matches for "${term}".`;
     if (mine !== generation) return;
     if (!ownsMessage()) return;
     if (text !== undefined) {
