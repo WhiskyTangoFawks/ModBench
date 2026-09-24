@@ -28,8 +28,7 @@ import { ModListProvider, type ModlistNode, type SortDirection } from '../ModLis
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
-
-const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 // The row a real tree, sorted the given way, hands a right click — not a hand-built fixture.
 async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
@@ -56,10 +55,12 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   registerCommand.mockClear();
   showInputBox.mockResolvedValueOnce('New Section');
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
-  registerSeparatorCommands(root, instance, runModAction, () => []);
+  const reporter = recordingReporter();
+  registerSeparatorCommands(root, instance, reporter, vi.fn(), () => []);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
   if (!call) throw new Error('modbench.separator.add not registered');
   await call[1](anchor);
+  expect(reporter.reports).toEqual([]);
   const text = await readFile(`${root}/${DEFAULT_MODLIST}`, 'utf8');
   await rm(root, { recursive: true, force: true });
   return text;

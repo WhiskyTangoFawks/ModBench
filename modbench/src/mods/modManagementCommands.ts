@@ -5,15 +5,17 @@ import { modsGestureEntry, pluralArgument, registerModsGesture, selectionArgumen
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import type { MoveToTrash } from '../ports/trash';
 import {
   createEmptyMod,
-  deleteSeparator,
+  deleteSeparators,
   insertSeparator,
   moveMods,
   moveSeparators,
   renameSeparator,
   setModsEnabled,
   uninstallMod,
+  separatorNameRefusal,
   type ModlistSelectionResult,
   type MovePlace,
 } from '../modlist/modlist';
@@ -216,42 +218,50 @@ export function registerModContextCommands(
       }),
   ];
 }
+function separatorNamePrompt(instance: Pick<Instance, 'value'>, own?: string): (value: string) => string | undefined {
+  return (value) => (value === '' ? undefined : separatorNameRefusal(instance.value.mods, value, own));
+}
+
 export function registerSeparatorCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>,
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable[] {
   return [
       registerModsGesture('modbench.separator.rename', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'separator');
         if (!node) return;
+        const oldName = node.separator.name;
         const newName = await vscode.window.showInputBox({
-          prompt: 'Rename separator',
-          value: node.separator.name,
+          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(instance, oldName),
         });
-        if (!newName || newName === node.separator.name) return;
-        await runModAction('renameSeparator', 'Failed to rename separator.', async () => {
-          const profile = instance.value.activeProfile;
-          applyOrThrow(await renameSeparator(instanceRoot, profile, node.separator.name, newName));
+        if (!newName || newName === oldName) return;
+        await reportFailure(reporter, 'Failed to rename separator.', async () => {
+          applyOrThrow(await renameSeparator(instanceRoot, instance.value.activeProfile, oldName, newName));
         });
       }),
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
-        const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
+        const name = await vscode.window.showInputBox({
+          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(instance),
+        });
         if (!name) return;
-        await runModAction('addSeparator', 'Failed to add separator.', async () => {
-          const profile = instance.value.activeProfile;
-          const anchorName = node.kind === 'mod' ? node.mod.name : node.separator.name;
-          applyOrThrow(await insertSeparator(instanceRoot, profile, name, anchorName));
+        const anchor = node.kind === 'mod' ? node.mod : node.separator;
+        await reportFailure(reporter, 'Failed to add separator.', async () => {
+          applyOrThrow(await insertSeparator(
+            instanceRoot, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
         });
       }),
-      vscode.commands.registerCommand('modbench.separator.delete', async (node: SeparatorNode | undefined) => {
-        if (node?.kind !== 'separator') return;
-        await runModAction('deleteSeparator', 'Failed to delete separator.', async () => {
-          const profile = instance.value.activeProfile;
-          applyOrThrow(await deleteSeparator(instanceRoot, profile, node.separator.name));
-        });
+      registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
+        const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
+        if (names.length === 0) return;
+        const result = await deleteSeparators(instanceRoot, instance.value.activeProfile, names, trash);
+        if (!result.applied) {
+          reporter.report('error', 'Failed to delete separators.', result.refusal);
+          return;
+        }
+        reporter.selectionOutcome(
+          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (name) => name);
       }),
   ];
 }

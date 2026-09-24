@@ -13,16 +13,21 @@ import {
   renameSeparatorInText,
   setEnabledInText,
   unlistedModNames,
+  type ModlistEntry,
   type MovePlace,
   type OrderEnd,
   type SeparatorsPlace,
 } from '../mo2Codecs/modlistText';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modlistFile, modsDir } from '../instanceAdapter/layout';
-import { ensureDir, exists, put, putIfChanged, remove } from '../instanceAdapter/files';
+import {
+  downloadFile, downloadSidecarFile, mo2FolderName, modDir, modlistFile, modsDir, separatorDir,
+} from '../instanceAdapter/layout';
+import { ensureDir, exists, get, put, putIfChanged, remove, rename } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
+import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { MoveToTrash } from '../ports/trash';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -100,15 +105,38 @@ export function moveSeparators(
     moveSeparatorsInText(text, found, place, end));
 }
 
+const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
+
+/** Why `requested` cannot name a separator among `entries`, or `undefined` when it can. Its name
+ *  is the one MO2 would give its folder, and `own` is the name of the separator being renamed. */
+export function separatorNameRefusal(
+  entries: readonly Pick<ModlistEntry, 'kind' | 'name'>[], requested: string, own?: string,
+): string | undefined {
+  const name = mo2FolderName(requested);
+  if (!name) return `Not a valid separator name: "${requested}"`;
+  const clashes = name !== own && entries.some((e) => e.kind === 'separator' && e.name === name);
+  return clashes ? SEPARATOR_NAME_CLASH : undefined;
+}
+
+function refuseSeparatorName(text: string, requested: string, own?: string): void {
+  const refusal = separatorNameRefusal(parseModlist(text), requested, own);
+  if (refusal !== undefined) throw new Error(refusal);
+}
+
+const folderOfFiltered = (instanceRoot: string, name: string): string =>
+  present(separatorDir(instanceRoot, name), `the folder of the filtered separator name "${name}"`);
+
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
  *  after it; on a separator, before its own group's winning-most member. */
-export function insertSeparator(
-  instanceRoot: string, profile: string, name: string, anchorName: string,
+export async function insertSeparator(
+  instanceRoot: string, profile: string, requested: string, anchor: Pick<ModlistEntry, 'kind' | 'name'>,
 ): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => {
+  const name = mo2FolderName(requested);
+  const line = await spliceModlist(instanceRoot, profile, (text) => {
+    refuseSeparatorName(text, requested);
     const entries = parseModlist(text);
-    const entryIdx = entries.findIndex((e) => e.name === anchorName);
-    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${anchorName}`);
+    const entryIdx = entries.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
+    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
     const anchorEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
     let afterIndex = entryIdx;
     if (anchorEntry.kind === 'separator') {
@@ -122,19 +150,88 @@ export function insertSeparator(
     }
     return insertSeparatorAtIndexInText(text, name, afterIndex);
   });
+  return thenFolder(instanceRoot, profile, line, () => ensureDir(folderOfFiltered(instanceRoot, name)),
+    (text) => deleteSeparatorInText(text, name));
 }
 
-/** Rename a separator in place. */
-export function renameSeparator(
-  instanceRoot: string, profile: string, oldName: string, newName: string,
+// A name is judged against modlist.txt as it is at write time (mods.md, Add separator), so the
+// line is written before the folder, and a folder that then fails takes its line back.
+async function thenFolder(
+  instanceRoot: string, profile: string, line: ModlistCommandResult,
+  folder: () => Promise<void>, undoLine: (text: string) => string,
 ): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => renameSeparatorInText(text, oldName, newName));
+  if (!line.applied) return line;
+  try {
+    await folder();
+    return line;
+  } catch (err) {
+    const undone = await spliceModlist(instanceRoot, profile, undoLine);
+    const reason = errorMessage(err);
+    return { applied: false, refusal: undone.applied ? reason : `${reason}; its modlist.txt line could not be put back: ${undone.refusal}` };
+  }
 }
 
-/** Remove a separator's own line; the mods it wrapped join the section above. */
-export function deleteSeparator(instanceRoot: string, profile: string, name: string): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => deleteSeparatorInText(text, name));
+/** Rename a separator in place, and its folder with it. */
+export async function renameSeparator(
+  instanceRoot: string, profile: string, oldName: string, requested: string,
+): Promise<ModlistCommandResult> {
+  const newName = mo2FolderName(requested);
+  const line = await spliceModlist(instanceRoot, profile, (text) => {
+    refuseSeparatorName(text, requested, oldName);
+    return renameSeparatorInText(text, oldName, newName);
+  });
+  const oldFolder = separatorDir(instanceRoot, oldName);
+  return thenFolder(instanceRoot, profile, line, async () => {
+    if (oldFolder !== undefined && await exists(oldFolder)) {
+      await rename(oldFolder, folderOfFiltered(instanceRoot, newName));
+    }
+  }, (text) => renameSeparatorInText(text, newName, oldName));
 }
+
+/** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
+ *  before its line: a refused trash writes nothing for that separator (update-load-order-file,
+ *  Refusals). */
+export async function deleteSeparators(
+  instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
+): Promise<ModlistSelectionResult> {
+  let listed: ReadonlySet<string>;
+  try {
+    listed = separatorNamesIn(await get(modlistFile(instanceRoot, profile)));
+  } catch (err) {
+    return refuse(err);
+  }
+  const refused: ItemRefusal<string>[] = names.filter((name) => !listed.has(name))
+    .map((name) => ({ item: name, reason: `Separator not found in modlist: ${name}` }));
+  const toUnlist: string[] = [];
+  const trashed = new Set<string>();
+  for (const name of names.filter((n) => listed.has(n))) {
+    const folder = separatorDir(instanceRoot, name);
+    try {
+      if (folder !== undefined && await exists(folder)) {
+        await trash(folder);
+        trashed.add(name);
+      }
+      toUnlist.push(name);
+    } catch (err) {
+      refused.push({ item: name, reason: errorMessage(err) });
+    }
+  }
+  const lines = await spliceModlist(instanceRoot, profile, (text) => {
+    const stillListed = separatorNamesIn(text);
+    return toUnlist.filter((name) => stillListed.has(name)).reduce((acc, name) => deleteSeparatorInText(acc, name), text);
+  });
+  if (lines.applied) return { applied: true, outcome: { landed: toUnlist, refused } };
+  const lineRefusal = (name: string) => trashed.has(name)
+    ? `its folder went to the trash, but its modlist.txt line could not be removed: ${lines.refusal}`
+    : lines.refusal;
+  return {
+    applied: true,
+    outcome: { landed: [], refused: [...refused, ...toUnlist.map((item) => ({ item, reason: lineRefusal(item) }))] },
+  };
+}
+
+const separatorNamesIn = (text: string): ReadonlySet<string> =>
+  new Set(parseModlist(text).filter((e) => e.kind === 'separator').map((e) => e.name));
 
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no
 // archive is one MO2 never writes. `installed` stays, as MO2 leaves it — the codec resolves the
