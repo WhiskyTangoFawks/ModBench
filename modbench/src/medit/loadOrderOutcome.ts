@@ -55,9 +55,8 @@ export async function settleReconciled(status: LoadOrderProgress, deps: Reconcil
   await deps.applyReconciled(status.failures, status.totalPlugins);
 }
 
-/** ADR-0019: a read failure both logs and warns, and never throws out of the sync. It shows
- *  nothing new either: the filter clears only on purpose (plugins.md, Order and view state,
- *  story 5), so a failed read leaves the view as it last was. */
+/** ADR-0019: a read failure logs and warns, and never throws. The filter clears only on purpose
+ *  (plugins.md, Order and view state, story 5), so a failed read leaves the view as it was. */
 export async function syncActiveFilter(
   getActiveFilter: () => Promise<RecordFilter | null>,
   deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },
