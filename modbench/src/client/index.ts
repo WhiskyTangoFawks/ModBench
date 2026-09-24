@@ -16,5 +16,5 @@ export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle'
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
 export {
   createLoadOrderSender,
-  type LoadOrderSender, type LoadOrderSnapshot, type LoadOrderSendClient, type LoadOrderSendOptions,
+  type LoadOrderSender, type LoadOrderSnapshot, type LoadOrderSendClient,
 } from './loadOrderSender';

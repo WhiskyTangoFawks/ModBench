@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '../MEditClient';
@@ -236,13 +236,12 @@ describe('createLoadOrderSender — dispose', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
-    const onProgress = vi.fn();
 
-    const sent = sender.send(snapshot('A.esp'), { onProgress });
+    const sent = sender.send(snapshot('A.esp'));
     sender.dispose();
 
     expect(await sent).toEqual(ABANDONED);
-    expect(onProgress).not.toHaveBeenCalled();
+    expect(puts(client)).toEqual([]);
   });
 });
 

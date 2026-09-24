@@ -85,8 +85,8 @@ export class HttpMEditClient implements MEditClient {
     return this.notifications.subscribe(kind, listener);
   }
 
-  // ADR-0014 invariant 2: `putLoadOrder` and `track` each ride one notification kind. `extract`
-  // picks that kind's payload out of the flat wire envelope; undefined skips the event.
+  // ADR-0014 invariant 2: `track` rides its own notification kind. `extract` picks that kind's
+  // payload out of the flat wire envelope; undefined skips the event.
   private subscribeStatus<T>(
     kind: NotificationKind,
     extract: (event: NotificationEvent) => T | undefined,
@@ -181,7 +181,6 @@ export class HttpMEditClient implements MEditClient {
       if (!event.loadOrderStatus) return;
       const status = toLoadOrderStatus(event.loadOrderStatus);
       applying.latest = status;
-      options.onProgress?.(status);
       if (applying.version !== undefined && isTerminalLoadOrderStatusFor(status, applying.version)) resolveTerminal(status);
     });
 

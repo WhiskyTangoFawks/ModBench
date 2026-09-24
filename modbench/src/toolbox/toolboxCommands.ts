@@ -37,9 +37,10 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
 export interface RefreshGestureDeps {
   /** instance commands' refresh, bound by the root to the mEdit client and the current value. */
   refresh: () => Promise<RefreshResult>;
-  /** Armed before the rebuild is asked for: settles once mEdit's refill ends, since the rebuild
-   *  answers before it has read anything again. */
-  nextRefill: () => Promise<void>;
+  /** Armed before the rebuild is asked for: `ended` settles once mEdit's refill ends, since the
+   *  rebuild answers before it has read anything again. A refused rebuild starts no refill, so its
+   *  wait is released. */
+  nextRefill: () => { ended: Promise<void>; release: () => void };
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   /** Names this instance in toolbox.md's Reporting story 1 — Modbench cannot name the other
@@ -49,7 +50,7 @@ export interface RefreshGestureDeps {
 
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const run = async (): Promise<void> => {
-    const refilled = deps.nextRefill();
+    const refill = deps.nextRefill();
     const outcome = await deps.refresh();
     if (!outcome.applied) {
       if (outcome.heldElsewhere) {
@@ -58,9 +59,10 @@ export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposa
       } else {
         deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
       }
+      refill.release();
       return;
     }
-    await refilled;
+    await refill.ended;
     const rereadFailure = await deps.instance.refresh();
     if (rereadFailure !== undefined) deps.reporter.report('error', 'Could not read the instance again.', rereadFailure);
   };

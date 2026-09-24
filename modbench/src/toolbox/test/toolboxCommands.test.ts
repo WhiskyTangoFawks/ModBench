@@ -168,9 +168,10 @@ describe('Refresh', () => {
     refill: Promise<void> = Promise.resolve(),
   ) {
     const reporter = recordingReporter();
+    const released: true[] = [];
     registerRefreshCommand({
       refresh: () => { progressSteps.push('instance commands: refresh'); return Promise.resolve(result); },
-      nextRefill: () => refill,
+      nextRefill: () => ({ ended: refill, release: () => { released.push(true); } }),
       instance: {
         refresh: () => {
           progressSteps.push('Instance loader: read every file again');
@@ -180,7 +181,7 @@ describe('Refresh', () => {
       reporter,
       instanceRoot,
     });
-    return { reporter, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
+    return { reporter, released, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
   }
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
@@ -240,6 +241,15 @@ describe('Refresh', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not rebuild the index.', detail: refusal },
     ]);
+  });
+
+  it('releases the wait it armed for a refill, since a refused rebuild starts none', async () => {
+    const { released, run } = registerRefresh(
+      { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, undefined, '/instance', new Promise<void>(() => {}));
+
+    await run();
+
+    expect(released).toEqual([true]);
   });
 
   // The views keep the last value through a failed read, so this is the only word the user gets

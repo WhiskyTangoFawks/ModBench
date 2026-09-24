@@ -84,9 +84,6 @@ export type LoadOrderOutcome =
 /** Deliberately plain stdlib — `AbortSignal`, not a bespoke token — so this interface carries no
  *  VS Code types and `openapi-fetch` can forward it straight to `fetch`. */
 export interface LoadOrderOptions {
-  /** Called on each `load-order-status` notification while the PUT is in flight. Never called
-   *  after the reconcile settles. */
-  onProgress?: (progress: LoadOrderProgress) => void;
   /** Trips when the user deliberately abandons this reconcile (closing mEdit). Aborts the PUT
    *  itself rather than waiting for a dead socket. */
   signal?: AbortSignal;

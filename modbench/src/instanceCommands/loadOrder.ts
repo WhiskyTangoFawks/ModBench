@@ -3,7 +3,7 @@
 // view from here.
 
 import type {
-  LoadOrderOutcome, LoadOrderSender, LoadOrderSendOptions, LoadOrderSnapshot, MEditClient,
+  LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
 } from '../client';
 import type { GameFolder } from '../instanceAdapter/gameDirectory';
 import {
@@ -38,11 +38,10 @@ function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnap
 
 export async function putLoadOrder(
   sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string, value: LoadOrderSource,
-  options?: LoadOrderSendOptions,
 ): Promise<PutLoadOrderResult> {
   const snapshot = snapshotOf(instanceRoot, value);
   if (!snapshot) return { sent: false };
-  return { sent: true, snapshot, outcome: await sender.send(snapshot, options) };
+  return { sent: true, snapshot, outcome: await sender.send(snapshot) };
 }
 
 /** update-load-order-file: the load order is put on change. False with no game folder found, since

@@ -142,7 +142,7 @@ describe('the reconcile narrator: the refill a rebuild starts', () => {
     narrator.hear(ready());
     await flushed();
     let refilled = false;
-    void narrator.nextRefill().then(() => { refilled = true; });
+    void narrator.nextRefill().ended.then(() => { refilled = true; });
 
     narrator.hear(ready());
     narrator.hear(dropped());
@@ -159,18 +159,28 @@ describe('the reconcile narrator: the refill a rebuild starts', () => {
     const { narrator } = narrated();
     narrator.hear(dropped());
 
-    await expect(narrator.nextRefill()).resolves.toBeUndefined();
+    await expect(narrator.nextRefill().ended).resolves.toBeUndefined();
   });
 
   it('ends the wait when a refusal ends the refill', async () => {
     const { narrator } = narrated();
     narrator.hear(ready());
-    const refilled = narrator.nextRefill();
+    const refilled = narrator.nextRefill().ended;
 
     narrator.hear(dropped());
     narrator.hear(tick({ refusalMessage: 'another window' }));
 
     await expect(refilled).resolves.toBeUndefined();
+  });
+
+  it('ends a released wait at once', async () => {
+    const { narrator } = narrated();
+    narrator.hear(ready());
+    const wait = narrator.nextRefill();
+
+    wait.release();
+
+    await expect(wait.ended).resolves.toBeUndefined();
   });
 
   it('hands over the next process\'s first Ready, though its version is one already handed over', async () => {
@@ -188,7 +198,7 @@ describe('the reconcile narrator: the refill a rebuild starts', () => {
   it('closes the progress and ends every wait when mEdit goes away', async () => {
     const { progress, narrator } = narrated();
     narrator.hear(ready());
-    const refilled = narrator.nextRefill();
+    const refilled = narrator.nextRefill().ended;
     const settled = narrator.settled(9);
     narrator.hear(tick());
 

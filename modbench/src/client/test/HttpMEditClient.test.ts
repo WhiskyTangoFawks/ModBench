@@ -355,37 +355,6 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await load;
   });
 
-  it('subscribes to load-order-status while the PUT is in flight, and unsubscribes once it settles', async () => {
-    const { response: streamResponse, push: pushFrame } = pushableStreamResponse();
-    let resolvePut!: (r: Response) => void;
-    const putPromise = new Promise<Response>((r) => { resolvePut = r; });
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(streamResponse)],
-      ['/load-order', () => putPromise],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-
-    const onProgress = vi.fn();
-    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    pushFrame(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [], version: 1 }));
-    await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
-
-    resolvePut(jsonResponse(200, appliedBody));
-    pushFrame(readyTick());
-    await load;
-    expect(onProgress).toHaveBeenCalledTimes(2); // the mid-flight tick, then the terminal one that settled the PUT
-
-    pushFrame(readyTick());
-    // A macrotask boundary, not a microtask one: the pushed chunk still has to unwind through the
-    // stream reader's own read loop before a (wrongly) still-subscribed callback would see it.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(onProgress).toHaveBeenCalledTimes(2); // still 2 — the settled PUT's subscription is gone
-  });
-
-  // A new process numbers its versions from 1 again, so the last process's Ready would answer
-  // for a load order this one has not reconciled.
   it('answers a PUT to a process attached again from that process\'s own ticks, never the last one\'s', async () => {
     const streams: { push: (chunk: Uint8Array) => void }[] = [];
     const fetch = routedFetch([

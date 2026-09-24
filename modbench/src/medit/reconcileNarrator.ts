@@ -12,13 +12,19 @@ export interface ReconcileNarratorDeps {
   log: (msg: string) => void;
 }
 
+/** A wait armed for a rebuild's refill. A rebuild refused starts none, so its wait is released. */
+export interface RefillWait {
+  ended: Promise<void>;
+  release(): void;
+}
+
 export interface ReconcileNarrator {
   hear(status: LoadOrderProgress): void;
   /** Resolves once a reconcile answering at least `version` has been handed to the views. */
   settled(version: number): Promise<void>;
   /** Armed before a rebuild is asked for: resolves once the refill that follows ends, and at once
    *  when the index held nothing to refill. */
-  nextRefill(): Promise<void>;
+  nextRefill(): RefillWait;
   /** mEdit went away: the progress closes, every wait ends, and the next process's versions
    *  start over. */
   detached(): void;
@@ -101,7 +107,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
       span.tick(status);
     },
     settled: (version) => (version <= settledVersion ? Promise.resolve() : settleWaits.arm(version)),
-    nextRefill: () => (!last || last.holdsNone ? Promise.resolve() : refillWaits.arm()),
+    nextRefill: () => (!last || last.holdsNone ? { ended: Promise.resolve(), release: () => {} } : refillWaits.arm()),
     detached() {
       generation++;
       closeSpan();
@@ -137,7 +143,18 @@ function versionWaits() {
 function refillWaitList() {
   let waits: { refillStarted: boolean; resolve: () => void }[] = [];
   return {
-    arm: () => new Promise<void>((resolve) => { waits.push({ refillStarted: false, resolve }); }),
+    arm(): RefillWait {
+      let wait!: { refillStarted: boolean; resolve: () => void };
+      const ended = new Promise<void>((resolve) => { wait = { refillStarted: false, resolve }; });
+      waits.push(wait);
+      return {
+        ended,
+        release: () => {
+          waits = waits.filter((w) => w !== wait);
+          wait.resolve();
+        },
+      };
+    },
     started() { for (const w of waits) w.refillStarted = true; },
     end(all: boolean) {
       const done = waits.filter((w) => all || w.refillStarted);
