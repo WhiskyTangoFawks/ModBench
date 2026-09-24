@@ -38,16 +38,16 @@ vi.mock('../../install/install', async (importOriginal) => ({
 }));
 
 const {
-  uninstallMod, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
+  uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
 } = vi.hoisted(() => ({
-  uninstallMod: vi.fn(), deleteSeparators: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
+  uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../modlist/modlist')>()),
   createEmptyMod, deleteSeparators, insertSeparator,
-  moveMods, moveSeparators, renameSeparator, uninstallMod, setModsEnabled,
+  moveMods, moveSeparators, renameSeparator, uninstallMods, setModsEnabled,
 }));
 
 import {
@@ -60,7 +60,7 @@ import {
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
-import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -305,61 +305,153 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
 });
 
 
-// Uninstall is the Mods tree's one destructive gesture, so the modal it asks and what a cancel
-// leaves untouched are the behaviour worth pinning (ADR-0019's dialog seam).
-describe('registerModContextCommands: the uninstall confirmation', () => {
+// ADR-0019's dialog and reporting seams.
+describe('registerModContextCommands: modbench.mod.uninstall over the selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
-  const modNode = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, archiveFilename: 'my-mod.7z' });
-  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+  const trash = vi.fn(() => Promise.resolve());
+  const log = vi.fn();
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true, archiveFilename: 'mod-a.7z' });
+  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
-  it('asks one modal naming the mod, then deletes the folder once it is confirmed', async () => {
-    uninstallMod.mockResolvedValueOnce({ applied: true });
+  it('asks one modal naming the mod, then uninstalls it once confirmed', async () => {
+    uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands('/instance', instance, runModAction, ask);
-    await invoke('modbench.mod.uninstall', modNode);
+    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    await invoke('modbench.mod.uninstall', modA);
 
     expect(ask.asked).toEqual([{
-      message: 'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
+      message: 'Uninstall "Mod A"? Its folder will be moved to the system trash.',
       detail: undefined,
       buttons: ['Uninstall'],
     }]);
-    expect(uninstallMod).toHaveBeenCalledWith('/instance', 'Default', 'My Mod', 'my-mod.7z');
+    expect(uninstallMods).toHaveBeenCalledWith(
+      '/instance', 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+  });
+
+  it('asks one modal listing every mod, for a selection of several', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] },
+    });
+    const ask = scriptedDialog('Uninstall');
+
+    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    await invoke('modbench.mod.uninstall', modA, [modA, modB]);
+
+    assertAskedOnce(ask, { messageContains: '"Mod A", "Mod B"', buttons: ['Uninstall'] });
+    expect(ask.asked[0]?.message).toContain('Their folders will be moved to the system trash.');
+    expect(uninstallMods).toHaveBeenCalledWith(
+      '/instance', 'Default',
+      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
+      trash,
+    );
   });
 
   it('uninstalls nothing when the modal is dismissed', async () => {
-    uninstallMod.mockResolvedValue({ applied: true }); // so a lost guard would get all the way through
+    uninstallMods.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 
-    registerModContextCommands('/instance', instance, runModAction, scriptedDialog(undefined));
-    await invoke('modbench.mod.uninstall', modNode);
+    registerModContextCommands('/instance', instance, () => [], recordingReporter(), scriptedDialog(undefined), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
 
-    expect(uninstallMod).not.toHaveBeenCalled();
+    expect(uninstallMods).not.toHaveBeenCalled();
   });
-});
 
-// VS Code hands every row gesture of a multi-select tree the right-clicked row and the selection.
-// debt #975: the destructive Mods gestures take the right-clicked row alone.
-describe('the destructive Mods row gestures take the right-clicked row, not the selection', () => {
-  beforeEach(() => vi.clearAllMocks());
+  it('falls back to the view selection from a key, where no row is right-clicked', async () => {
+    uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
 
-  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
-  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+    registerModContextCommands('/instance', instance, () => [modA], recordingReporter(), scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall');
 
-  it('uninstall asks about and uninstalls the right-clicked mod alone', async () => {
-    uninstallMod.mockResolvedValue({ applied: true });
-    const other = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
-    const clicked = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, archiveFilename: 'my-mod.7z' });
+    expect(uninstallMods).toHaveBeenCalledWith(
+      '/instance', 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+  });
+
+  it('an empty selection asks nothing and uninstalls nothing', async () => {
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands('/instance', instance, runModAction, ask);
-    await invoke('modbench.mod.uninstall', clicked, [other, clicked]);
+    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    await invoke('modbench.mod.uninstall');
 
-    expect(ask.asked.map((q) => q.message)).toEqual([
-      'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
+    expect(ask.asked).toEqual([]);
+    expect(uninstallMods).not.toHaveBeenCalled();
+  });
+
+  it('reports a refused mod by name, once, while the others land', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true,
+      outcome: { landed: [{ name: 'Mod A' }], refused: [{ item: { name: 'Mod B' }, reason: 'trash unavailable' }] },
+    });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA, [modA, modB]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not uninstall 1 of 2 mods.', detail: '"Mod B" (trash unavailable)',
+    }]);
+  });
+
+  it('reports a refusal of the whole selection once, when modlist.txt cannot be read at all', async () => {
+    uninstallMods.mockResolvedValueOnce({ applied: false, refusal: 'ENOENT: modlist.txt' });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to uninstall mods.', detail: 'ENOENT: modlist.txt' },
     ]);
-    expect(uninstallMod.mock.calls).toEqual([['/instance', 'Default', 'My Mod', 'my-mod.7z']]);
+  });
+
+  it('says nothing extra for a fully landed uninstall with no failed mark', async () => {
+    uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([]);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  // common.md, Reporting: a failed mark is never a failure notification, and the uninstall it
+  // rides on stands landed.
+  it('a failed mark is one Output line and no notification; the uninstall it rides on stands landed', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true,
+      outcome: { landed: [{ name: 'Mod A', markRefusal: 'disk full' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([]);
+    expect(log).toHaveBeenCalledWith(
+      '"Mod A" was uninstalled, but its downloaded file could not be marked uninstalled: disk full');
+  });
+
+  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
+  // an Output line, and the uninstall it rides on is not reported as failed (createEmptyMod's
+  // lineRefusal is the model).
+  it('a post-trash line failure is a warning notification naming the part that failed, not a failed uninstall', async () => {
+    uninstallMods.mockResolvedValueOnce({
+      applied: true,
+      outcome: { landed: [{ name: 'Mod A', lineRefusal: 'disk full' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    await invoke('modbench.mod.uninstall', modA);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"Mod A" was uninstalled, but its modlist.txt line could not be removed.',
+      detail: 'disk full',
+    }]);
+    expect(log).not.toHaveBeenCalled();
   });
 });
 
@@ -375,7 +467,9 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
 
   it('deletes every selected separator in one command, handing it the trash, and says nothing when all land', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A', 'Group B'], refused: [] } });
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
+    });
     const reporter = recordingReporter();
 
     registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
@@ -386,7 +480,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   });
 
   it('takes only the separators of a selection mixing mods and separators', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A'], refused: [] } });
+    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
 
     registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => []);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
@@ -395,7 +489,9 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   });
 
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
-    deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group A', 'Group B'], refused: [] } });
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
+    });
 
     registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => [groupA, groupB]);
     await invoke('modbench.separator.delete');
@@ -416,7 +512,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   it('reports each refused separator, naming why, once, while the others land', async () => {
     deleteSeparators.mockResolvedValue({
       applied: true,
-      outcome: { landed: ['Group A'], refused: [{ item: 'Group B', reason: 'trash unavailable' }] },
+      outcome: { landed: [{ name: 'Group A' }], refused: [{ item: { name: 'Group B' }, reason: 'trash unavailable' }] },
     });
     const reporter = recordingReporter();
 
@@ -438,6 +534,24 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to delete separators.', detail: 'ENOENT: modlist.txt' },
     ]);
+  });
+
+  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
+  // an Output line, and the delete it rides on is not reported as failed.
+  it('a post-trash line failure is a warning notification naming the part that failed, not a failed delete', async () => {
+    deleteSeparators.mockResolvedValue({
+      applied: true, outcome: { landed: [{ name: 'Group A', lineRefusal: 'disk full' }], refused: [] },
+    });
+    const reporter = recordingReporter();
+
+    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    await invoke('modbench.separator.delete', groupA);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"Group A" was deleted, but its modlist.txt line could not be removed.',
+      detail: 'disk full',
+    }]);
   });
 });
 
