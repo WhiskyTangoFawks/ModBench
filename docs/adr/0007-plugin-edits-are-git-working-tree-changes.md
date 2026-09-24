@@ -14,11 +14,10 @@ the binary from it.
    blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
 2. **A plugin is tracked when its plugin source is in a git repository in its mod's folder, and
-   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track
-   on a mod tracks every plugin it holds; Track on a plugin tracks that plugin alone, creating the
-   mod's repository if it has none. Either serializes every record of the plugins it tracks,
-   verifies the round-trip gate over the tree it wrote, commits the pristine state to `main`, and
-   checks out an edit branch. A repo destroyed outside Modbench reads as untracked the next time
+   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a plugin, a selection of plugins, or a mod, which tracks every plugin it holds. The
+   first plugin tracked in a mod creates the mod's repository. Each plugin is serialized, verified
+   by the round-trip gate over the tree it wrote, and committed to `main` as its own baseline
+   commit; the edit branch is checked out once, after the last. A repo destroyed outside Modbench reads as untracked the next time
    anyone looks.
 3. **The source is complete, and a tracked plugin loads from it.** Ingest deserializes the
    working tree as Effective and `HEAD` as Head and never consults the binary for content; an
@@ -36,9 +35,12 @@ the binary from it.
 6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine
    upstream state on `main` and is edited on the edit branch, so `git diff main <branch>` is
    everything the user changed and compiling `main` restores the pristine plugin. An authored mod
-   merges into `main` at will. Baseline commits carry trailers for the upstream version and the
-   binary's hash, read by humans and agents; a trailer may pre-select a dialog's default and never
-   acts on its own.
+   merges into `main` at will. A baseline commit holds one plugin, so a Track or an update that covers several plugins writes
+   one commit per plugin. Its message follows git's convention. The plugin's version is two facts:
+   the upstream version the mod manager records, which is informational, and the hash of the
+   plugin's binary, which identifies it. The subject names the plugin and the upstream version, and
+   the trailers carry both facts, read by humans and agents. A trailer may pre-select a dialog's
+   default and never acts on its own.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
    trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
    generates the `.gitignore`, then the user owns it.

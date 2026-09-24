@@ -59,6 +59,12 @@ As a user, I want:
    rows, and says how to open an instance. The message waits for the check, so a folder not yet
    checked never reads as not an instance. An instance Modbench recognizes whose files cannot be
    read is story 2, not this. *ruling*
+5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The
+   Toolbox's Game row shows `$(warning)` and "game folder not found", with a tooltip naming each
+   place Modbench looked and the setting that fixes it. Every view whose rows need the game folder
+   says so in its message line. One line in the Output. No notification; this is the background
+   tier. Rows that do not need the game folder still show. A configuration that names no game is
+   story 2; no configuration is story 4. *ADR-0019, invariant 2; ruling*
 
 ## Reporting
 

@@ -28,8 +28,10 @@ disagrees with the views below it. *ADR-0015*
 | Game | the game the instance is for, as MO2's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
 
-The Instance adapter reads which game the instance is for from MO2's configuration, and the Instance
-loader carries it in the instance value.
+The Instance adapter reads which game the instance is for from the mod manager's configuration, and
+where its folder is from the game folder setting, then the configuration's game path, then the Steam
+install. The Instance loader carries both in the instance value. When either fails, the Toolbox
+shows it as [common.md](common.md#states) says, stories 2, 4 and 5.
 
 ## States
 
@@ -78,9 +80,9 @@ By [common.md](common.md#reporting). As a user, I want:
 
 | What | Waits on |
 |---|---|
-| `deploy / purge`, a toggle the Toolbox offers, with a Deployment row and the first-deploy consent | deployment after the alpha, #968; #971 removes today's |
+| `deploy / purge`, a toggle the Toolbox offers, with a Deployment row and the first-deploy consent | deployment after the alpha, #968; #971 removed today's |
 | `select game` | a need for it |
-| `run`, and `add`, `remove` and `edit executable` | #971 removes today's; their design |
+| `run`, and `add`, `remove` and `edit executable` | #971 removed today's; their design |
 | `log in`, `set up instance`, `track modlist`, `cancel` | their design |
 | `create` a profile | its design |
 | `validate` the instance | its design |

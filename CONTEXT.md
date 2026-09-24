@@ -73,8 +73,8 @@ A git workflow where `main` is the work itself.
 Avoid: custom mod, personal mod
 
 ## Vendored workflow
-A git workflow where `main` holds one commit per release of the upstream mod, the baseline, with the
-release version and the binary's hash as trailers. Edits live on the `edit` branch. Upstream is the
+A git workflow where `main` holds the upstream mod's releases: for each release, one baseline commit
+per plugin, with the release version and that plugin's binary hash as trailers. Edits live on the `edit` branch. Upstream is the
 author's releases, not a git remote: the repository holds no link to it.
 Avoid: modified mod (a vendored workflow describes where `main` points)
 
@@ -140,7 +140,7 @@ to no record in the load order. A type-mismatched link resolves to a type the fi
 Avoid: missing reference, broken link
 
 # Instance
-The MO2 installation, a set of files on disk.
+A mod manager's installation, a set of files on disk. MO2 is the one Modbench reads today.
 Avoid: loadout, workspace, profile (that is one part of it)
 
 # Profile
