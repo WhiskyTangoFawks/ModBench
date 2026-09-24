@@ -153,7 +153,8 @@ export interface MoveView {
 export function registerModMoveCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const report = (noun: string, count: number, result: ModlistSelectionResult) => {
+  const report = (kind: 'mod' | 'separator', count: number, result: ModlistSelectionResult) => {
+    const noun = `${kind}s`;
     if (!result.applied) {
       reporter.report('error', `Failed to move ${noun}.`, result.refusal);
       return;
@@ -170,12 +171,12 @@ export function registerModMoveCommand(
       const picked = await vscode.window.showQuickPick(
         modsMovePick(entries, view.direction(), modNames), { placeHolder: 'Move to…' });
       if (!picked) return;
-      report('mods', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, picked.target));
+      report('mod', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, picked.target));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const picked = await vscode.window.showQuickPick(
         separatorsMovePick(entries, view.direction(), separatorNames), { placeHolder: 'Move above…' });
       if (!picked) return;
-      report('separators', separatorNames.length,
+      report('separator', separatorNames.length,
         await moveSeparators(instanceRoot, activeProfile, separatorNames, picked.target));
     }
   });
