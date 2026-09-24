@@ -13,9 +13,7 @@ import {
   renameSeparator,
   uninstallMod,
 } from '../modlist/modlist';
-import {
-  ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder, type InstallChoice, type InstallTarget,
-} from '../install/install';
+import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
@@ -37,9 +35,10 @@ export function registerModListCoreCommands(modListProvider: Pick<ModListProvide
 
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
  *  name prompt and a refused install are one answer, since each leaves nothing installed. */
-export interface InstallFromArchiveOutcome {
+export interface InstallOutcome {
   installed: boolean;
 }
+const NOT_INSTALLED: InstallOutcome = { installed: false };
 
 export interface ModInstallDeps {
   instanceRoot: string;
@@ -48,62 +47,69 @@ export interface ModInstallDeps {
   promptModName: (defaultName: string, validate?: (value: string) => string | undefined) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
+
+interface SourceKindItem extends vscode.QuickPickItem {
+  sourceKind: 'archive' | 'folder';
+}
+
+// modbench.mod.install: the Mods menu supplies no source, so it asks archive-or-folder first,
+// before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { instanceRoot, instance, runModAction, promptModName, warnIfFomod } = deps;
   const validateName = (name: string) => collidingModName(instance, name);
-  // An upgrade arrives already confirmed from the Downloads pick, so only a new mod reaches
-  // the name prompt.
-  const resolveTarget = async (choice: InstallChoice, defaultName: string): Promise<InstallTarget | undefined> => {
-    if (choice.kind === 'upgrade') return choice;
-    const name = await promptModName(defaultName, validateName);
-    return name ? { kind: 'new', name } : undefined;
+  const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
+    const name = await promptModName(defaultModName(archivePath), validateName);
+    if (!name) return NOT_INSTALLED;
+    let succeeded = false;
+    await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
+      const outcome = await installFromArchive(
+        instanceRoot, { kind: 'new', name }, archivePath, { gameName: instance.value.gameRelease });
+      if (!outcome.applied) throw new Error(outcome.refusal);
+      warnIfFomod(name, outcome.isFomod);
+      succeeded = true;
+    });
+    return { installed: succeeded };
+  };
+  const installFolder = async (folder: string): Promise<InstallOutcome> => {
+    const name = await promptModName(path.basename(folder), validateName);
+    if (!name) return NOT_INSTALLED;
+    let succeeded = false;
+    await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
+      const outcome = await installFromFolder(instanceRoot, { kind: 'new', name }, folder, { gameName: instance.value.gameRelease });
+      if (!outcome.applied) throw new Error(outcome.refusal);
+      warnIfFomod(name, outcome.isFomod);
+      succeeded = true;
+    });
+    return { installed: succeeded };
   };
   return [
-      vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
-        archivePath?: string, modID?: string, fileID?: string, version?: string,
-        choice: InstallChoice = { kind: 'new' },
-      ): Promise<InstallFromArchiveOutcome> => {
-        let archive = archivePath;
-        if (!archive) {
-          const picked = await vscode.window.showOpenDialog({
-            canSelectMany: false,
-            filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
-            openLabel: 'Install',
-          });
-          archive = picked?.[0]?.fsPath;
-        }
-        if (!archive) return { installed: false };
-        const resolvedArchive = archive;
-        const target = await resolveTarget(choice, defaultModName(resolvedArchive));
-        if (!target) return { installed: false };
-        let succeeded = false;
-        await runModAction('installFromArchive', `Failed to install "${target.name}".`, async () => {
-          const outcome = await installFromArchive(
-            instanceRoot, target, resolvedArchive,
-            { gameName: instance.value.gameRelease, modID, fileID, version });
-          if (!outcome.applied) throw new Error(outcome.refusal);
-          warnIfFomod(target.name, outcome.isFomod);
-          succeeded = true;
-        });
-        return { installed: succeeded };
-      }),
-      vscode.commands.registerCommand('modbench.modList.installFromFolder', async () => {
-        const picked = await vscode.window.showOpenDialog({
-          canSelectFiles: false,
-          canSelectFolders: true,
+    vscode.commands.registerCommand('modbench.mod.install', async (): Promise<InstallOutcome> => {
+      const picked = await vscode.window.showQuickPick<SourceKindItem>(
+        [
+          { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },
+          { label: 'Folder…', description: 'An already-extracted mod folder', sourceKind: 'folder' },
+        ],
+        { placeHolder: 'Install a mod from an archive or a folder' },
+      );
+      if (!picked) return NOT_INSTALLED;
+      if (picked.sourceKind === 'archive') {
+        const archivePicked = await vscode.window.showOpenDialog({
           canSelectMany: false,
+          filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
           openLabel: 'Install',
         });
-        const folder = picked?.[0]?.fsPath;
-        if (!folder) return;
-        const target = await resolveTarget({ kind: 'new' }, path.basename(folder));
-        if (!target) return;
-        await runModAction('installFromFolder', `Failed to install "${target.name}".`, async () => {
-          const outcome = await installFromFolder(instanceRoot, target, folder, { gameName: instance.value.gameRelease });
-          if (!outcome.applied) throw new Error(outcome.refusal);
-          warnIfFomod(target.name, outcome.isFomod);
-        });
-      }),
+        const archive = archivePicked?.[0]?.fsPath;
+        return archive ? installArchive(archive) : NOT_INSTALLED;
+      }
+      const folderPicked = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: 'Install',
+      });
+      const folder = folderPicked?.[0]?.fsPath;
+      return folder ? installFolder(folder) : NOT_INSTALLED;
+    }),
   ];
 }
 export function registerModContextCommands(
@@ -182,19 +188,28 @@ export function registerSeparatorCommands(
       }),
   ];
 }
-/** Mods tree title-bar action: a name prompt, refusing a name already in use (ADR-0015 invariant 2
- *  — the command itself decides the refusal; this only surfaces it). */
+// Mods tree title-bar action: the prompt refuses a taken name in install's own words
+// (collidingModName). A folder that landed but whose line failed is a partial, not a refusal.
 export function registerCreateEmptyModCommand(
-  instanceRoot: string, instance: Pick<Instance, 'value'>,
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
-    const name = await vscode.window.showInputBox({ prompt: 'New mod name', placeHolder: 'My New Mod' });
-    if (!name) return;
-    await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
-      const profile = instance.value.activeProfile;
-      applyOrThrow(await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders ?? []));
+    const name = await vscode.window.showInputBox({
+      prompt: 'New mod name', placeHolder: 'My New Mod',
+      validateInput: (value) => collidingModName(instance, value),
     });
+    if (!name) return;
+    try {
+      const profile = instance.value.activeProfile;
+      const outcome = await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders ?? []);
+      applyOrThrow(outcome);
+      if (outcome.lineRefusal !== undefined) {
+        reporter.report(
+          'warning', `"${name}" was created, but its modlist.txt line could not be written.`, outcome.lineRefusal);
+      }
+    } catch (err) {
+      reporter.report('error', `Failed to create "${name}".`, errorMessage(err));
+    }
   });
 }
 

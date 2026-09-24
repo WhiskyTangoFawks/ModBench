@@ -37,7 +37,7 @@ import {
   syncMods,
   uninstallMod,
 } from '../modlist';
-import { parseModlist } from '../../mo2Codecs/modlistText';
+import { insertModAtWinningEnd, parseModlist } from '../../mo2Codecs/modlistText';
 import { modsDir } from '../../instanceAdapter/layout';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
@@ -376,6 +376,36 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       assertRefusal(outcome, 'Harder VATS');
       expect(await readdir(join(dir, 'mods', 'Harder VATS'))).toEqual(before);
       expect(await readFile(modlistPath(), 'utf8')).toBe(beforeModlist);
+    });
+
+    // Models mod sync winning the race against this command's own line write.
+    // Rival: insert unconditionally. That doubles the line here.
+    it('writes no second line when mod sync already added it, and reports no failure', async () => {
+      const name = 'Synced In First';
+      const before = await readFile(modlistPath(), 'utf8');
+      await writeFile(modlistPath(), insertModAtWinningEnd(before, name));
+
+      const outcome = await createEmptyMod(dir, 'Default', name, MOD_FOLDERS);
+
+      expect(outcome).toEqual({ applied: true, wrote: false });
+      expect((await stat(join(dir, 'mods', name))).isDirectory()).toBe(true);
+      expect((await readModlist()).filter((e) => e.name === name)).toHaveLength(1);
+    });
+
+    // Rival: fold the line's failure back into `applied: false`. The folder is on disk either
+    // way, so that reports a landed create as failed.
+    it('a failed line write leaves the folder in place and answers a partial, not a refusal', async () => {
+      const name = 'Line Write Fails';
+      vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
+
+      const outcome = await createEmptyMod(dir, 'Default', name, MOD_FOLDERS);
+
+      expect(outcome.applied).toBe(true);
+      if (!outcome.applied) throw new Error('expected applied: true');
+      expect(outcome.wrote).toBe(false);
+      expect(outcome.lineRefusal).toMatch(/disk full/);
+      expect((await stat(join(dir, 'mods', name))).isDirectory()).toBe(true);
+      expect((await readModlist()).some((e) => e.name === name)).toBe(false);
     });
   });
 });

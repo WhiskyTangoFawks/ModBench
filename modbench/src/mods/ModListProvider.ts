@@ -212,7 +212,7 @@ export class ModListProvider
    *  list says so here, above it. */
   emptyListMessage(): string | undefined {
     if (this.instance.sequence === 0 || this.instanceValue.mods.length > 0) return undefined;
-    return 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+    return 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
   }
 
   handleDrag(

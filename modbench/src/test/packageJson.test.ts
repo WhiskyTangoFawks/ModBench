@@ -777,7 +777,7 @@ const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line.
 const LEGACY_GESTURES = [
-  { gesture: 'install', removedBy: '#959', ids: ['modbench.modList.installFromArchive', 'modbench.modList.installFromFolder', 'modbench.downloads.install'] },
+  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'] },
   { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },
   { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
   { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },

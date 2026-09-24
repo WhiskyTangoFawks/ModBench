@@ -257,13 +257,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.installFromArchive",
-        "title": "Install Mod from Archive…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.modList.installFromFolder",
-        "title": "Install Mod from Folder…",
+        "command": "modbench.mod.install",
+        "title": "Install Mod…",
         "category": "Modbench"
       },
       {
@@ -583,11 +578,7 @@
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.modList.installFromArchive",
-          "when": "modbench.folder == instance"
-        },
-        {
-          "command": "modbench.modList.installFromFolder",
+          "command": "modbench.mod.install",
           "when": "modbench.folder == instance"
         },
         {
