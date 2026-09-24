@@ -213,13 +213,19 @@ function separatorLineAt(lines: readonly string[], separatorName: string): numbe
   return sepIdx;
 }
 
-// A separator's block runs back to the previous separator's line, or to the first entry line, so
-// a leading comment or blank line stays where it is.
-function separatorBlockStartAt(lines: readonly string[], separatorName: string): number {
-  const sepIdx = separatorLineAt(lines, separatorName);
-  const previous = [...lines.entries()].slice(0, sepIdx).findLast(([, line]) => isSeparatorLine(line));
-  return previous === undefined ? Math.min(firstEntryLineAt(lines), sepIdx) : previous[0] + 1;
+// A separator trails the mods it holds, so its block runs back to the previous separator, or to
+// `first` when none precedes it.
+function blockStartOf<T>(items: readonly T[], sepIdx: number, isSeparator: (item: T) => boolean, first: number): number {
+  const previous = items.slice(0, sepIdx).findLastIndex(isSeparator);
+  return previous === -1 ? Math.min(first, sepIdx) : previous + 1;
 }
+
+// Starting at the first entry line, so a leading comment or blank line stays where it is.
+const lineBlockStartAt = (lines: readonly string[], sepIdx: number): number =>
+  blockStartOf(lines, sepIdx, isSeparatorLine, firstEntryLineAt(lines));
+
+const separatorBlockStartAt = (lines: readonly string[], separatorName: string): number =>
+  lineBlockStartAt(lines, separatorLineAt(lines, separatorName));
 
 // Only the file's last line may lack an EOL, so every other line gets one.
 function moveBlock(
@@ -252,13 +258,9 @@ export function moveModsInText(text: string, modNames: readonly string[], place:
 
 function separatorBlockLineIndices(lines: readonly string[], separatorNames: readonly string[]): Set<number> {
   const inBlock = new Set<number>();
-  let blockStart = lines.findIndex(isEntryLine);
   for (const [i, line] of lines.entries()) {
-    if (!isSeparatorLine(line)) continue;
-    if (separatorNames.some((name) => matchesModLine(line, name + SEPARATOR_SUFFIX))) {
-      for (let j = blockStart; j <= i; j++) inBlock.add(j);
-    }
-    blockStart = i + 1;
+    if (!separatorNames.some((name) => matchesModLine(line, name + SEPARATOR_SUFFIX))) continue;
+    for (let j = lineBlockStartAt(lines, i); j <= i; j++) inBlock.add(j);
   }
   return inBlock;
 }
@@ -280,10 +282,7 @@ export function moveSeparatorsInText(
 export function separatorBlockNames(entries: readonly ModlistEntry[], separatorName: string): string[] {
   const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === separatorName);
   if (sepIdx < 0) return [separatorName];
-  let blockStart = 0;
-  for (const [i, entry] of [...entries.entries()].slice(0, sepIdx).reverse()) {
-    if (entry.kind === 'separator') { blockStart = i + 1; break; }
-  }
+  const blockStart = blockStartOf(entries, sepIdx, (e) => e.kind === 'separator', 0);
   return [...entries.slice(blockStart, sepIdx).map((e) => e.name), separatorName];
 }
 
@@ -298,17 +297,7 @@ export function moveSeparatorBlockInText(
     const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
     if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
 
-    // A separator trails the mods it wraps, so the block runs back to the previous
-    // separator, or to the first entry line — falling back to line 0 instead would
-    // sweep a leading comment or blank line into the block.
-    let prevSepIdx = -1;
-    for (const [i, line] of [...lines.entries()].slice(0, sepIdx).reverse()) {
-      if (isSeparatorLine(line)) {
-        prevSepIdx = i;
-        break;
-      }
-    }
-    const blockStart = prevSepIdx >= 0 ? prevSepIdx + 1 : lines.findIndex(isEntryLine);
+    const blockStart = lineBlockStartAt(lines, sepIdx);
     const block = lines.splice(blockStart, sepIdx - blockStart + 1);
 
     const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);

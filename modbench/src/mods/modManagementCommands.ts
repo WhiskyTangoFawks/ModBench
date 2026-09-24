@@ -142,14 +142,13 @@ export function registerModEnableCommands(
     registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
   ];
 }
+
 /** What the move asks of the Mods view: its selection, and the direction its pick follows. */
 export interface MoveView {
   selection: () => readonly ModlistNode[];
   direction: () => SortDirection;
 }
 
-// modbench.mod.move: the selection of mods or of separators through the entry (mods.md, Pickers,
-// Move). With no row to choose the kind, a selection mixing both moves nothing.
 export function registerModMoveCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {

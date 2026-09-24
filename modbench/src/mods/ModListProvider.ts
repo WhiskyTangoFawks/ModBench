@@ -138,6 +138,8 @@ export class OverwriteNode extends vscode.TreeItem {
 
 export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
+type DropOutcome = { applied: true } | { applied: false; refusal: string };
+
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
@@ -271,7 +273,7 @@ export class ModListProvider
 
   private async runMutation(
     operation: 'reorder' | 'moveMods' | 'reorderSeparatorBlock',
-    mutate: () => Promise<{ applied: true } | { applied: false; refusal: string }>,
+    mutate: () => Promise<DropOutcome>,
   ): Promise<void> {
     try {
       const outcome = await mutate();

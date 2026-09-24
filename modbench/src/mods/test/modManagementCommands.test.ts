@@ -667,6 +667,18 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     expect(reporter.reports).toEqual([]);
   });
 
+  it('Esc at the separator pick moves nothing and says nothing', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
+    const reporter = recordingReporter();
+
+    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    await invoke('modbench.mod.move', groupB);
+
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(moveSeparators).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('reports a gone mod by name, once, while the others land', async () => {
     pickLabelled('Ungrouped');
     moveMods.mockResolvedValue({

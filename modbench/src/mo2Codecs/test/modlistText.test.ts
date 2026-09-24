@@ -416,9 +416,10 @@ describe('moveSeparatorsInText', () => {
   });
 
   it('moves a separator that holds no mods as its line alone', () => {
-    const out = moveSeparatorsInText('+A\r\n+S1_separator\r\n+S2_separator\r\n+B\r\n', ['S2'], 'S1', 'losing');
+    const out = moveSeparatorsInText(
+      '+A\r\n+S1_separator\r\n+S2_separator\r\n+C\r\n+S3_separator\r\n+D\r\n', ['S2'], 'S3', 'losing');
 
-    expect(out).toBe('+A\r\n+S1_separator\r\n+S2_separator\r\n+B\r\n');
+    expect(out).toBe('+A\r\n+S1_separator\r\n+C\r\n+S3_separator\r\n+S2_separator\r\n+D\r\n');
   });
 
   it('terminates a last line that had no EOL once a block lands below it', () => {

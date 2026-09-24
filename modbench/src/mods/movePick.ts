@@ -1,4 +1,4 @@
-// mods.md, Pickers, Move: the places a move offers. vscode-free, so unit-testable.
+// mods.md, Pickers, Move: the places a move offers.
 
 import type { ModlistEntry } from '../instanceLoader/instance';
 import type { ModsPlace, OrderEnd } from '../modlist/modlist';

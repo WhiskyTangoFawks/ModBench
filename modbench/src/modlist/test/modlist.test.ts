@@ -304,7 +304,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  it('moveMods makes the mods the chosen separator\'s first mods as shown, keeping their order among themselves', async () => {
+  it('moveMods at the losing end makes the mods the chosen separator\'s losing-most mods, keeping their order among themselves', async () => {
     const outcome = await moveMods(
       dir, 'Default', ['Cracked and Smudged Pip-Boy Screen', 'ENBoost - 12k'],
       { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
@@ -324,7 +324,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     ]);
   });
 
-  it('moveMods to Ungrouped places the mods first among the ungrouped mods as shown, keeping their order', async () => {
+  it('moveMods at the losing end of Ungrouped makes the mods the losing-most ungrouped mods, keeping their order', async () => {
     const outcome = await moveMods(
       dir, 'Default', ['Unofficial Fallout 4 Patch', 'SKK Fast Start new game (Fallout 4)'], { kind: 'ungrouped' }, 'losing');
 
@@ -390,7 +390,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     await expect(stat(modlistPath())).rejects.toThrow();
   });
 
-  it('moveSeparators lands each separator with its mods directly above the chosen separator as shown', async () => {
+  it('moveSeparators on the losing side lands each separator with its mods directly on the losing side of the chosen one', async () => {
     const outcome = await moveSeparators(
       dir, 'Default', ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
 
