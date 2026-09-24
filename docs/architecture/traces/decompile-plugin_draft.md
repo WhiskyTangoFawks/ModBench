@@ -26,8 +26,8 @@ As a user, I want:
 2. Master entries the content does not need dropped, with no refusal. *ADR-0008*
 3. A binary that cannot be parsed, or git missing from the PATH, refused with the plugin and the
    reason. *ADR-0007, invariant 5; Refuse, do not repair*
-4. A failure to leave the mod as it was, and to tell me why. *A failed gesture writes nothing;
-   ADR-0019*
+4. A failure to write nothing of its own, and to tell me why. The commits that landed before it
+   stand; this contract's exception to the principle. *A failed gesture writes nothing; ADR-0019*
 5. My own concurrent change preserved and named, never reverted. *ADR-0003, invariant 4*
 6. Review and commit to be git's own, in the Source Control panel. *ADR-0007, invariant 5*
 
@@ -35,19 +35,28 @@ As a user, I want:
 
 1. Track offered on a plugin that is untracked, and on a mod that holds one. *catalog Where; ADR-0007,
    invariant 2*
-2. Track on a plugin to track that plugin alone, creating the mod's repository if it has none. Track
-   on a mod to track every untracked plugin it holds. *ADR-0007, invariant 2*
+2. Track on a plugin, or on a selection of plugins, to track each one; Track on a mod to track every
+   untracked plugin it holds. The first creates the mod's repository if it has none. Each plugin
+   lands or is refused on its own. *ADR-0007, invariant 2; A selection is one gesture*
 3. Tracking a plugin into a mod that already has a repository to do only what track does. Keeping
    `main` and the edit branch in order when several plugins share a repository is mine. *ruling*
 4. To choose a preset: `Edits` or `Everything`. *catalog Options*
 5. Track to be my own deliberate gesture, with no confirmation. *ADR-0007, invariant 2*
-6. The pristine state committed to `main`, and the edit branch checked out. *ADR-0007, invariant 2*
-7. The baseline commit to carry the upstream version and the binary's hash as trailers. *ADR-0007,
-   invariant 6*
+6. Each plugin's pristine state committed to `main` as its own commit, and the edit branch checked
+   out once, after the last. *ADR-0007, invariants 2 and 6*
+7. Each baseline commit's message in git's convention: a subject of the verb, the plugin and its
+   upstream version (`Track Foo.esp 1.2.3`), a blank line, then the trailers `Plugin`,
+   `Upstream-Version`, `Meta-SHA256` and `Binary-SHA256`. The upstream version is informational;
+   the binary's hash identifies the plugin. A version the mod manager does not record is left out
+   of the subject and the trailers. *ADR-0007, invariant 6*
 8. `meta.ini` never tracked, because one MO2 update check rewrites it across every mod. *ADR-0007,
    invariant 7*
 9. The `.gitignore` generated once, and then mine. *ADR-0007, invariant 7*
 10. The mod to appear in Source Control as one group. *ADR-0007, invariant 5*
+11. The mod's own files, the `.gitignore` and, under `Everything`, its assets, committed once, in a
+    commit of their own before the first plugin's (`Track <mod>`). *ruling*
+12. A plugin refused to leave nothing of its own behind, and the plugins committed before it to
+    stay committed. No rollback beyond git's: each commit is its own unit. *ruling: git handles it*
 
 ## The external change: how the destination is chosen
 
@@ -73,14 +82,18 @@ The trigger is the watcher settling a tracked mod that changed.
 
 ## decompile plugin: the destination is `main`
 
-1. The plugin documents and every changed tracked file committed to `main` as the new baseline.
-   *ADR-0003, invariant 3*
-2. My edit branch rebased onto it at once, and the baseline to stand whatever the rebase does.
+1. Each changed plugin's documents committed to `main` as its own baseline commit
+   (`Update Foo.esp to 1.2.4`), then every other changed tracked file in one commit after them.
+   *ADR-0003, invariant 3; ADR-0007, invariant 6*
+2. A commit that fails to stop there. The commits before it stand, the edit branch is rebased onto
+   what landed, and the question stays open for what is left, so answering again finishes it. No
+   rollback. *ruling: git handles it; ADR-0003, invariant 3: the classifier is the authority*
+3. My edit branch rebased onto `main` at once, and the baseline to stand whatever the rebase does.
    *diagram*
-3. A clean rebase to say nothing. *diagram*
-4. A rebase refused over my uncommitted source changes to name the paths and point at `rebase edit
+4. A clean rebase to say nothing. *diagram*
+5. A rebase refused over my uncommitted source changes to name the paths and point at `rebase edit
    branch`. *diagram*
-5. A conflict to open the native merge editor. *diagram; ADR-0007, invariant 5*
+6. A conflict to open the native merge editor. *diagram; ADR-0007, invariant 5*
 
 ## decompile plugin: the destination is the working tree
 
