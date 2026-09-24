@@ -118,7 +118,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
   // Record-type children do not paginate — xEdit's own record-type group nodes load in full
   // (`vstNavInitChildren`, xeMainForm.pas), and measurement found no meaningful cost even at the
-  // realistic worst case (~78k INFO rows, ~500ms; docs/specs/plugins.md).
+  // realistic worst case (~78k INFO rows, ~500ms; plugins.md, The tree 10).
   it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
     const count = 78_089; // Fallout4.esm's own measured INFO count in a full FO4 load order
     const records = Array.from({ length: count }, (_, i) => makeRecord(i));

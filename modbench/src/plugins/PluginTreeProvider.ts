@@ -13,7 +13,7 @@ export { headerFormKeyFor } from './formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
 // one call (measured no meaningful cost even at the realistic worst case; see fetchRecords and
-// docs/specs/plugins.md).
+// plugins.md, The tree, story 10).
 const PAGE_SIZE = 50;
 
 // The backend's `/records` `limit` query param is a plain `int`, no upper bound enforced —
@@ -564,8 +564,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
       // Every record of this type in one call, no "Load more…" step — measured no meaningful cost
-      // even at the realistic worst case (docs/specs/plugins.md). Matches xEdit's own record-type
-      // group nodes, which load unconditionally in full.
+      // even at the realistic worst case (plugins.md, The tree, story 10). xEdit's own record-type
+      // group nodes load in full too.
       const cached = await this.getOrLoad(this.pageCache, this.cacheKey(node),
         () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
       // qust/dial rows are collapsible here too — a Quest reached from its flat record-type

@@ -173,7 +173,7 @@ public static class LoquiUnions
     public const string UnionTypeDiscriminator = "MutagenObjectType";
 
     // An enum, so the editor's enum-leaf rule renders it and the class names stay wire tokens
-    // LeafLabel labels. Setting it switches the object's leaf; see docs/specs/medit-record-editor.md.
+    // LeafLabel labels. Setting it switches the object's leaf; see editor-fields.md, A field of several kinds.
     internal static SubFieldSpec BuildUnionDiscriminatorField(LoquiUnion union) =>
         new(UnionTypeDiscriminator, "enum", LeafSpec.NoFormKeyTypes,
             [.. union.Leaves.Select(l => new EnumMember(

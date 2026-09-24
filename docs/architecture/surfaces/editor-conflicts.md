@@ -27,7 +27,7 @@ xEdit's benign and ignored states come from its priority table, which Modbench d
 | Override | green | copies change the field, and none disagrees with another |
 | Conflict | orange | copies disagree on the field |
 
-*ADR-0018, invariant 3; xedit.md, divergence 6; old spec*
+*ADR-0018, invariant 3; xedit.md, divergence 6; ruling*
 
 As a user, I want:
 
@@ -49,13 +49,13 @@ As a user, I want:
 | ConflictWins | orange | default | disagrees with another copy, and wins |
 | ConflictLoses | red | red | disagrees with another copy, and loses |
 
-*ADR-0018, invariant 3; old spec*
+*ADR-0018, invariant 3; ruling*
 
 As a user, I want:
 
-1. A cell whose plugin has nothing there to have no colour. *old spec*
+1. A cell whose plugin has nothing there to have no colour. *ruling*
 2. Each column's header painted with the worst state among its cells, as a summary; the cells are
-   what count. *old spec*
+   what count. *ruling*
 
 ## What takes part
 

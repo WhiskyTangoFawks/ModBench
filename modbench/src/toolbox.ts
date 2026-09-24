@@ -146,7 +146,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     canSelectMany: true,
     // A drag moves plugins.txt lines, which the same provider owns.
     dragAndDropController: pluginsTree,
-    // Title-bar rule 7 (docs/specs/containers.md): hierarchical trees get Collapse All, and this
+    // commands.md, Chrome: Collapse All is on trees only, and this
     // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   }));
