@@ -29,17 +29,22 @@ internal static class ExternalChangeClassifier
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         if (changedPlugins.Count == 0 && trackedFileChanges.Count == 0) return null;
 
-        // Mod-wide, so any tracked plugin's name resolves the same trailers off refs/heads/main.
-        var representative = plugins.Count > 0 ? plugins[0].PluginName : "";
-        var baseline = SourceRepository.LatestBaselineTrailers(modFolder, representative);
+        // Each plugin's own baseline carries the meta.ini it was taken with, and plugins sharing a
+        // repository are taken at different times: the changed plugins' baselines are the ones asked.
+        IReadOnlyList<string> asked = changedPlugins.Count > 0 ? changedPlugins : [.. plugins.Select(p => p.PluginName)];
+        var baselines = asked
+            .Select(plugin => SourceRepository.LatestBaselineTrailers(modFolder, plugin))
+            .OfType<BaselineTrailers>()
+            .ToList();
         var meta = SourceRepository.MetaFactsIn(modFolder);
 
         // Trailers inform the dialog's default, never act: unchanged or absent both mean false.
-        var metaChanged = baseline?.MetaSha256 != null && meta.MetaSha256 != null
-            && !string.Equals(baseline.MetaSha256, meta.MetaSha256, StringComparison.OrdinalIgnoreCase);
+        var metaChanged = meta.MetaSha256 != null && baselines.Any(baseline => baseline.MetaSha256 != null
+            && !string.Equals(baseline.MetaSha256, meta.MetaSha256, StringComparison.OrdinalIgnoreCase));
 
         return new ExternalChangeClassification.ExternalChange(
-            changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged, baseline?.UpstreamVersion, meta.UpstreamVersion);
+            changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged,
+            baselines.FirstOrDefault()?.UpstreamVersion, meta.UpstreamVersion);
     }
 
     /// <summary>Every plugin the load order holds in <paramref name="modFolder"/>, read fresh off

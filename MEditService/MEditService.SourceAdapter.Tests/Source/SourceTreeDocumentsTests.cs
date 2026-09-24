@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -61,15 +62,14 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         _interiorCellPath = Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell), "RecordData.json");
         _worldspacePath = Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "RecordData.json");
 
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
             [
                 new TreeFile(_interiorCellPath, Serialize(_interiorCell)),
                 new TreeFile(_worldspacePath, Serialize(_worldspace)),
                 new TreeFile(Path.Combine(Root, "Quests", Leaf(_quest) + ".json"), Serialize(_quest)),
-            ],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            ]);
     }
 
     public void Dispose()

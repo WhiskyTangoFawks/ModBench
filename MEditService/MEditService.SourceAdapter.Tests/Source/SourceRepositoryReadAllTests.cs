@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -36,14 +37,13 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     private static readonly string NpcRelativePath =
         Path.Combine("source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    // Track parks the last-compile ref for every plugin the trailers name, so the ref this reads at is
-    // the one Save & Compile parks.
+    // Track parks each plugin's last-compile ref at its baseline, so the ref this reads at is the one
+    // Save & Compile parks.
     private SourceRepository Tracked()
     {
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder, SourcePreset.Edits,
-            [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
-            new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
+            [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
@@ -62,11 +62,10 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
 
     private SourceRepository TrackedWithHeader()
     {
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder, SourcePreset.Edits,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
-             new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
-            new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
+             new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }

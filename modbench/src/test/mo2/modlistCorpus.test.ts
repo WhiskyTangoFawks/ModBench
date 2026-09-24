@@ -1,10 +1,11 @@
-// Each test drives the real write path and asserts over the WHOLE instance tree that only
-// modlist.txt changed — the composition-level guarantee a per-format test cannot give.
+// Each test drives the real write path and asserts over the WHOLE instance tree that only the
+// files it names changed — the composition-level guarantee a per-format test cannot give.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rm } from 'node:fs/promises';
+import { rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   createEmptyMod,
-  deleteSeparator,
+  deleteSeparators,
   insertSeparator,
   moveMods,
   moveSeparators,
@@ -24,7 +25,7 @@ const PROFILE = 'Default';
 const separatorNames = async (dir: string): Promise<string[]> =>
   (await readModlistEntries(dir)).filter((e) => e.kind === 'separator').map((e) => e.name);
 
-describe('modlist.txt corpus — every entry mutation touches modlist.txt and nothing else', () => {
+describe('modlist.txt corpus — every entry mutation touches the files it names and nothing else', () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -75,37 +76,72 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(present(entries[0], 'the first entry after reordering to the winning end').name).toBe('ENBoost - 12k');
   });
 
-  it('insertSeparator adds a new separator marker, touching only modlist.txt', async () => {
+  it('insertSeparator adds a separator line and its empty mods/ folder, touching no other file', async () => {
     const before = await snapshotTree(dir);
-    await insertSeparator(dir, PROFILE, 'QA Corpus Marker', 'Cracked and Smudged Pip-Boy Screen');
+    await insertSeparator(dir, PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const after = await snapshotTree(dir);
+    // An empty directory holds no files, so the folder is asserted on its own below.
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     expect(await separatorNames(dir)).toContain('QA Corpus Marker');
+    expect((await stat(join(dir, 'mods', 'QA Corpus Marker_separator'))).isDirectory()).toBe(true);
   });
 
-  // This separator has a real mods/..._separator/ folder on disk; the rival is a rename that
-  // also renames the folder to "stay consistent".
-  it('renameSeparator renames the marker, leaving its mods/ folder untouched', async () => {
+  it('renameSeparator renames the line and its mods/ folder, its meta.ini carried along unchanged', async () => {
+    const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
+    const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';
     const before = await snapshotTree(dir);
     await renameSeparator(dir, PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([MODLIST, OLD_META, NEW_META]));
+
+    expect(await separatorNames(dir)).toContain('Renamed QA Group');
+    expect(after.has(OLD_META)).toBe(false);
+    expect(after.get(NEW_META)).toEqual(before.get(OLD_META));
+  });
+
+  // "Radfall - All-In-One Survival Overhaul_separator" has NO folder on disk in the fixture (a
+  // real MO2 shape: a separator can outlive the folder MO2 once made for it).
+  it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
+    const before = await snapshotTree(dir);
+    await renameSeparator(dir, PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     expect(await separatorNames(dir)).toContain('Renamed QA Group');
-    expect(after.has('mods/Unassigned (Modlist Development)_separator/meta.ini')).toBe(true);
+    expect(await modFolderNames(dir)).not.toContain('Renamed QA Group_separator');
   });
 
-  // "Radfall - All-In-One Survival Overhaul_separator" has NO folder on disk in the
-  // fixture (a real MO2 shape: a separator can outlive the folder MO2 once made for
-  // it) — deleting it must not touch mods/ at all.
-  it('deleteSeparator removes the marker, touching only modlist.txt', async () => {
+  it('deleteSeparators of a separator with no folder removes its line alone, and trashes nothing', async () => {
+    const trashed: string[] = [];
     const before = await snapshotTree(dir);
-    await deleteSeparator(dir, PROFILE, 'Radfall - All-In-One Survival Overhaul');
+    const outcome = await deleteSeparators(dir, PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
+      trashed.push(path);
+      return Promise.resolve();
+    });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
+    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Radfall - All-In-One Survival Overhaul'], refused: [] } });
     expect(await separatorNames(dir)).not.toContain('Radfall - All-In-One Survival Overhaul');
+    expect(trashed).toEqual([]);
+  });
+
+  it('deleteSeparators removes the line and trashes the folder, and its mods stay where they are', async () => {
+    const SEPARATOR_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
+    const trashed: string[] = [];
+    const modsBefore = (await readModlistEntries(dir)).filter((e) => e.kind === 'mod');
+    const before = await snapshotTree(dir);
+    await deleteSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
+      trashed.push(path);
+      await rm(path, { recursive: true });
+    });
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([MODLIST, SEPARATOR_META]));
+
+    expect(trashed).toEqual([join(dir, 'mods', 'Unassigned (Modlist Development)_separator')]);
+    expect(await separatorNames(dir)).toEqual(['Radfall - All-In-One Survival Overhaul']);
+    expect((await readModlistEntries(dir)).filter((e) => e.kind === 'mod')).toEqual(modsBefore);
   });
 
   it('moveMods regroups mods, touching only modlist.txt', async () => {

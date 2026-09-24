@@ -28,7 +28,7 @@ internal sealed class DocumentEditFixture : IDisposable
 
     internal DocumentEditFixture()
     {
-        SourceRepository.Track(_modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, []);
         _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 

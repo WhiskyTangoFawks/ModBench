@@ -14,10 +14,9 @@ public sealed class SourceRepositoryTrackConfigTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-config-").FullName;
 
     private static void Track(string modFolder) =>
-        SourceRepository.Track(
+        PluginBaselines.Track(
             modFolder, SourcePreset.Edits,
-            [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())]);
 
     [Fact]
     public void Track_PinsAutocrlfFalseGpgsignFalseAndGcAutoDetachFalse_RepoLocal()

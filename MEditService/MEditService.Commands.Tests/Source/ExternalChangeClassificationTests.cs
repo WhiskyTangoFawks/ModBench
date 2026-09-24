@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -41,6 +42,14 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         File.WriteAllBytes(path, bytes);
         return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
             [new RegisteredCopy(PluginName, Origin, path, 0, Enabled: true, Winning: true)]);
+    }
+
+    private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
+    {
+        foreach (var (name, bytes) in plugins) File.WriteAllBytes(Path.Combine(ModFolder, name), bytes);
+        return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
+            [.. plugins.Select((plugin, slot) => new RegisteredCopy(
+                plugin.Name, Origin, Path.Combine(ModFolder, plugin.Name), slot, Enabled: true, Winning: true))]);
     }
 
     private LoadOrderSnapshot WithNoPlugin() =>
@@ -112,6 +121,27 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal("2.0.0", TheQuestion().NewVersion);
     }
 
+    // Two plugins share the repository, and only the second was taken again after meta.ini moved:
+    // its own baseline, not the other plugin's, says whether meta.ini moved since.
+    [Fact]
+    public void ASettle_ReadsTheMetaTell_OffTheChangedPluginsOwnBaseline_WhenTwoPluginsShareTheRepository()
+    {
+        var unchanged = "the first plugin's tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins(("First.esp", unchanged), ("Second.esp", "an external binary"u8.ToArray()));
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
+        SourceRepository.Track(
+            ModFolder, SourcePreset.Edits,
+            [BaselineOver(ModFolder, "First.esp", Convert.ToHexString(SHA256.HashData(unchanged))), BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
+        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.Equal(["Second.esp"], TheQuestion().Plugins);
+        Assert.False(TheQuestion().MetaChanged);
+        Assert.Equal("2.0.0", TheQuestion().OldVersion);
+    }
+
     // A meta.ini edit with no accompanying plugin or tracked-file change raises nothing at all —
     // the rule's "meta.ini is a tell, never a trigger" half.
     [Fact]
@@ -171,23 +201,21 @@ public sealed class ExternalChangeClassificationTests : IDisposable
 
     private static void Track(string modFolder, string plugin)
     {
-        var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-        var trailers = TrailersOver(modFolder, plugin);
-        SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+        SourceRepository.Track(modFolder, SourcePreset.Edits, [BaselineOver(modFolder, plugin)]);
     }
 
     private static void TrackEverything(string modFolder, string plugin)
     {
-        var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-        var trailers = TrailersOver(modFolder, plugin);
-        SourceRepository.Track(modFolder, SourcePreset.Everything, files, trailers);
+        SourceRepository.Track(modFolder, SourcePreset.Everything, [BaselineOver(modFolder, plugin)]);
     }
 
-    // The trailers Track itself writes: the folder's meta facts, plus a stand-in binary hash.
-    private static TrackProvenance TrailersOver(string modFolder, string plugin)
+    // The baseline Track itself writes: the folder's meta facts, plus a stand-in binary hash.
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) BaselineOver(
+        string modFolder, string plugin, string binarySha256 = "0000000000")
     {
         var meta = SourceRepository.MetaFactsIn(modFolder);
-        return new TrackProvenance(
-            meta.UpstreamVersion, meta.MetaSha256, new Dictionary<string, string> { [plugin] = "0000000000" });
+        return (
+            [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())],
+            new BaselineTrailers(plugin, meta.UpstreamVersion, meta.MetaSha256, binarySha256));
     }
 }

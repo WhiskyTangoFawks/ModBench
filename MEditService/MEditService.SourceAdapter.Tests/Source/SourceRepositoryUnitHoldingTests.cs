@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -26,8 +27,8 @@ public sealed class SourceRepositoryUnitHoldingTests : IDisposable
     private SourceRepository Tracked()
     {
         var header = new TreeFile(HeaderPath, "{\"MasterReferences\": []}"u8.ToArray());
-        SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [header], new TrackProvenance(null, null, new Dictionary<string, string>()));
+        PluginBaselines.Track(
+            _modFolder, SourcePreset.Edits, [header]);
         return SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }

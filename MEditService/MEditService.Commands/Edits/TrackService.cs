@@ -58,8 +58,7 @@ public sealed class TrackService(
         {
             SourceRepository.EnsureTrackable();
 
-            var pristineFiles = new List<TreeFile>();
-            var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var verified = new List<(string Name, IReadOnlyList<TreeFile> Files, string BinarySha256)>();
 
             var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
 
@@ -111,21 +110,22 @@ public sealed class TrackService(
                         cancel) is { } refusal)
                     return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
 
-                pristineFiles.AddRange(pluginPristineFiles);
-
-                binaryHashesByPlugin[plugin.Name] = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
+                verified.Add((plugin.Name, pluginPristineFiles, PluginBinaryHash.TrailerFormOfFile(plugin.Path)));
                 SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
             }
 
             SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
             var meta = SourceRepository.MetaFactsIn(modFolder);
-            var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binaryHashesByPlugin);
+            IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
+            [
+                .. verified.Select(v => (v.Files, new BaselineTrailers(v.Name, meta.UpstreamVersion, meta.MetaSha256, v.BinarySha256))),
+            ];
 
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
+                logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, verified.Sum(v => v.Files.Count), plugins.Count);
             }
-            SourceRepository.Track(modFolder, preset, pristineFiles, trailers);
+            SourceRepository.Track(modFolder, preset, baselines);
             return TrackResult.Success();
         }
         catch (GitUnavailableException ex)

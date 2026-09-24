@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -25,11 +26,10 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     // file lands where the tree's placement puts it, and committed: both refs then hold the tree.
     public SourceRepositoryFilesOfTests()
     {
-        SourceRepository.Track(
+        PluginBaselines.Track(
             _modFolder,
             SourcePreset.Edits,
-            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())],
-            new TrackProvenance(null, null, new Dictionary<string, string>()));
+            [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
         Git("add", "-A");
         Git("commit", "-q", "-m", "the fixture's npc");

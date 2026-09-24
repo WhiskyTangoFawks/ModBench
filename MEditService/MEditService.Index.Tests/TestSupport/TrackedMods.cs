@@ -26,9 +26,10 @@ internal static class TrackedMods
         if (missingStrings is not null)
             throw new InvalidOperationException($"{pluginName} declares strings file '{missingStrings}' and the disk has none.");
 
-        var trailers = new TrackProvenance(
-            null, null, new Dictionary<string, string> { [pluginName] = PluginBinaryHash.TrailerFormOfFile(pluginPath) });
-        SourceRepository.Track(modFolder, SourcePreset.Edits, SourceRepository.PristineFilesOf(pluginName, files), trailers);
+        SourceRepository.Track(
+            modFolder, SourcePreset.Edits,
+            [(SourceRepository.PristineFilesOf(pluginName, files),
+              new BaselineTrailers(pluginName, null, null, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>
