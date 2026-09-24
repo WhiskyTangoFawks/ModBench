@@ -145,9 +145,8 @@ type MockLoadOrderStatus = {
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-// Mirrors the real Holder's own counter: one higher per PUT, carried on the wire response and
-// every status tick that answers for it. Never reset: the extension's process lives across every
-// suite, and a real mEdit numbers its versions from 1 only when it restarts.
+// The real Holder's counter: one higher per PUT, on the response and every tick answering it.
+// Never reset, since a real mEdit numbers its versions from 1 only when it restarts.
 let loadOrderVersion = 0;
 // When set, PUT /load-order does not answer until the test releases it — the real backend's load
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
