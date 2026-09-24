@@ -150,7 +150,7 @@ public sealed class TrackService(
         if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))
             return Refuse(TrackRefusal.AlreadyTracked, $"{plugin.Name} is already tracked in '{modFolder}'.");
 
-        if (ExternalChangeClassifier.BlockingQuestion(loadOrder, modFolder) is { } question)
+        if (WriteTargets.BlockingQuestion(loadOrder, modFolder) is { } question)
             return Refuse(TrackRefusal.ExternalChangeUnanswered, question);
 
         if (!Readable(plugin))

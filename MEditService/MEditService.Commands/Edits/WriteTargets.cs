@@ -145,9 +145,33 @@ internal sealed class WriteTargets(
         (modFolder, repository) = (folder, opened);
 
         // Checked before anything else, so the source file is never reached.
-        return ExternalChangeClassifier.BlockingQuestion(loadOrder.Current, folder) is { } question
+        return BlockingQuestion(loadOrder.Current, folder) is { } question
             ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
             : null;
+    }
+
+    /// <summary>The mod's unanswered question while its change still stands, or null, for every write
+    /// to the mod, Track's included. The marker caches the last verdict (ADR-0003): present means
+    /// classify again.</summary>
+    internal static string? BlockingQuestion(LoadOrderSnapshot loadOrder, string modFolder)
+    {
+        if (SourceRepository.UnansweredExternalChange(modFolder) is not { } question) return null;
+
+        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
+        if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } plugins) return question;
+
+        switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
+        {
+            case ExternalChangeClassification.ExternalChange:
+                return question;
+            case null:
+                SourceRepository.ClearExternalChangeQuestion(modFolder);
+                return null;
+            default:
+                // An interrupted compile is the repair offer's state, not this question's; the marker
+                // waits for a verdict either way.
+                return null;
+        }
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

@@ -49,30 +49,6 @@ internal static class ExternalChangeClassifier
             baselines.FirstOrDefault()?.UpstreamVersion, meta.UpstreamVersion);
     }
 
-    /// <summary>The mod's unanswered question while its change still stands, or null. The marker caches
-    /// the last verdict (ADR-0003): present means classify again, and a verdict of nothing drops
-    /// it.</summary>
-    public static string? BlockingQuestion(LoadOrderSnapshot loadOrder, string modFolder)
-    {
-        if (SourceRepository.UnansweredExternalChange(modFolder) is not { } question) return null;
-
-        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
-        if (PluginBytesIn(loadOrder, modFolder) is not { } plugins) return question;
-
-        switch (ClassifyMod(modFolder, plugins))
-        {
-            case ExternalChangeClassification.ExternalChange:
-                return question;
-            case null:
-                SourceRepository.ClearExternalChangeQuestion(modFolder);
-                return null;
-            default:
-                // An interrupted compile is the repair offer's state, not this question's; the marker
-                // waits for a verdict either way.
-                return null;
-        }
-    }
-
     /// <summary>Every plugin the load order holds in <paramref name="modFolder"/>, read fresh off
     /// disk, or null when one cannot be read — a partial set would classify the rest as the whole
     /// mod.</summary>

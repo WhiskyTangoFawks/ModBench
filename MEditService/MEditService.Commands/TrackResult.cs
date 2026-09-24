@@ -68,4 +68,6 @@ public sealed class TrackSelectionResult
     public IReadOnlyList<TrackRefused> Refused { get; }
 
     public TrackResult? SelectionRefusal { get; }
+
+    public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }
