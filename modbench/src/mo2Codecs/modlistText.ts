@@ -190,41 +190,65 @@ export function removeModFromText(text: string, modName: string): string {
 
 // Ungrouped means "after the last separator" — the tail of the entry lines —
 // never a position relative to the first separator.
-function ungroupedInsertAt(lines: string[]): number {
+function ungroupedInsertAt(lines: readonly string[]): number {
   const lastEntry = [...lines.entries()].findLast(([, line]) => isEntryLine(line));
   return lastEntry === undefined ? lines.length : lastEntry[0] + 1;
 }
 
-// A separator's section is the mods that PRECEDE it; its last member sits
-// immediately above the separator's own line, so the insert point for "append to
-// this section" is simply the separator line's own index.
-function separatorSectionInsertAt(lines: string[], separatorName: string): number {
+function separatorLineAt(lines: readonly string[], separatorName: string): number {
   const sepIdx = lines.findIndex((l) => matchesModLine(l, separatorName + SEPARATOR_SUFFIX));
   if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
   return sepIdx;
 }
 
-/** The end of a separator's section is immediately above the separator's own
- *  line. A null `separatorName` means the ungrouped tail of the file. */
-export function moveModToSeparatorEndInText(
-  text: string,
-  modName: string,
-  separatorName: string | null,
+// Only the file's last line may lack an EOL, so every other line gets one.
+function moveBlock(
+  bomless: string, isMoved: (line: string, index: number) => boolean, at: (rest: readonly string[]) => number,
 ): string {
+  const lines = splitLinesKeepEol(bomless);
+  const block = lines.filter((line, i) => isMoved(line, i));
+  const rest = lines.filter((line, i) => !isMoved(line, i));
+  rest.splice(at(rest), 0, ...block);
+  const eol = detectEol(bomless);
+  return rest.map((line, i) => (i < rest.length - 1 && lineContent(line) === line ? line + eol : line)).join('');
+}
+
+/** Where moved mods land. A separator's line trails the mods it holds, so its losing-most mods
+ *  sit directly above its line. */
+export type ModsPlace = { kind: 'ungrouped' } | { kind: 'separator'; name: string };
+
+/** The mods land as one block, in their own order: as the losing-most mods of a separator, or
+ *  after the last entry line, the losing-most of the ungrouped mods. Throws if the separator is
+ *  absent. */
+export function moveModsInText(text: string, modNames: readonly string[], place: ModsPlace): string {
+  return withBomPreserved(text, (bomless) => moveBlock(
+    bomless,
+    (line) => modNames.some((name) => matchesModLine(line, name)),
+    (rest) => (place.kind === 'ungrouped' ? ungroupedInsertAt(rest) : separatorLineAt(rest, place.name)),
+  ));
+}
+
+// A separator's block runs back to the previous separator's line, or to the first entry line, so
+// a leading comment or blank line stays where it is.
+function separatorBlockLineIndices(lines: readonly string[], separatorNames: readonly string[]): Set<number> {
+  const inBlock = new Set<number>();
+  let blockStart = lines.findIndex(isEntryLine);
+  for (const [i, line] of lines.entries()) {
+    if (!isSeparatorLine(line)) continue;
+    if (separatorNames.some((name) => matchesModLine(line, name + SEPARATOR_SUFFIX))) {
+      for (let j = blockStart; j <= i; j++) inBlock.add(j);
+    }
+    blockStart = i + 1;
+  }
+  return inBlock;
+}
+
+/** Each separator and the mods it holds land as one block, in their own order, directly on the
+ *  losing side of the target separator's line. Throws if the target is absent. */
+export function moveSeparatorsInText(text: string, separatorNames: readonly string[], targetName: string): string {
   return withBomPreserved(text, (bomless) => {
-    const lines = splitLinesKeepEol(bomless);
-
-    const modLine = lines.find((l) => matchesModLine(l, modName));
-    if (modLine === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
-    lines.splice(lines.indexOf(modLine), 1);
-
-    const insertAt =
-      separatorName === null
-        ? ungroupedInsertAt(lines)
-        : separatorSectionInsertAt(lines, separatorName);
-
-    lines.splice(insertAt, 0, modLine);
-    return lines.join('');
+    const inBlock = separatorBlockLineIndices(splitLinesKeepEol(bomless), separatorNames);
+    return moveBlock(bomless, (_line, i) => inBlock.has(i), (rest) => separatorLineAt(rest, targetName) + 1);
   });
 }
 

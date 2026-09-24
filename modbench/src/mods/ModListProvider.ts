@@ -7,11 +7,11 @@ import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import {
-  moveModToSeparator as moveModToSeparatorCommand,
+  moveMods as moveModsCommand,
   reorderMod as reorderModCommand,
   reorderSeparatorBlock as reorderSeparatorBlockCommand,
   setModsEnabled as setModsEnabledCommand,
-  type ModlistCommandResult, type ModlistDrop,
+  type ModlistDrop,
 } from '../modlist/modlist';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -251,8 +251,12 @@ export class ModListProvider
     const profile = this.instanceValue.activeProfile;
     if (kind === 'mod') {
       if (target instanceof SeparatorNode) {
-        await this.runMutation('moveModToSeparator', () =>
-          moveModToSeparatorCommand(this.instanceRoot, profile, name, target.separator.name));
+        await this.runMutation('moveMods', async () => {
+          const result = await moveModsCommand(
+            this.instanceRoot, profile, [name], { kind: 'separator', name: target.separator.name });
+          const refusal = result.applied ? result.outcome.refused[0]?.reason : result.refusal;
+          return refusal === undefined ? { applied: true } : { applied: false, refusal };
+        });
       } else {
         await this.runMutation('reorder', () =>
           reorderModCommand(this.instanceRoot, profile, name, drop));
@@ -265,8 +269,8 @@ export class ModListProvider
   }
 
   private async runMutation(
-    operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
-    mutate: () => Promise<ModlistCommandResult>,
+    operation: 'reorder' | 'moveMods' | 'reorderSeparatorBlock',
+    mutate: () => Promise<{ applied: true } | { applied: false; refusal: string }>,
   ): Promise<void> {
     try {
       const outcome = await mutate();
@@ -388,6 +392,10 @@ export class ModListProvider
     if (!result.applied) throw new Error(result.refusal);
     const refusal = result.outcome.refused[0];
     if (refusal) throw new Error(refusal.reason);
+  }
+
+  viewDirection(): SortDirection {
+    return this.direction;
   }
 
   /** Presentation only — never changes which mod wins a conflict. */

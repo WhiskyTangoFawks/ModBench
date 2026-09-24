@@ -9,11 +9,14 @@ import {
   createEmptyMod,
   deleteSeparator,
   insertSeparator,
-  moveModToSeparator,
+  moveMods,
+  moveSeparators,
   renameSeparator,
   setModsEnabled,
   uninstallMod,
+  type ModlistSelectionResult,
 } from '../modlist/modlist';
+import { modsMovePick, separatorsMovePick } from './movePick';
 import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
@@ -139,26 +142,51 @@ export function registerModEnableCommands(
     registerModsGesture('modbench.mod.disable', viewSelection, run(false)),
   ];
 }
+/** What the move asks of the Mods view: its selection, and the direction its pick follows. */
+export interface MoveView {
+  selection: () => readonly ModlistNode[];
+  direction: () => SortDirection;
+}
+
+// modbench.mod.move: the selection of mods or of separators through the entry (mods.md, Pickers,
+// Move). With no row to choose the kind, a selection mixing both moves nothing.
+export function registerModMoveCommand(
+  instanceRoot: string, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
+): vscode.Disposable {
+  const report = (noun: string, count: number, result: ModlistSelectionResult) => {
+    if (!result.applied) {
+      reporter.report('error', `Failed to move ${noun}.`, result.refusal);
+      return;
+    }
+    reporter.selectionOutcome(
+      `Could not move ${result.outcome.refused.length} of ${count} ${noun}.`, result.outcome, (name) => name);
+  };
+  return registerModsGesture('modbench.mod.move', view.selection, async (entry) => {
+    const rows = pluralArgument(entry, 'mod', 'separator');
+    const modNames = rows.flatMap((row) => (row.kind === 'mod' ? [row.mod.name] : []));
+    const separatorNames = rows.flatMap((row) => (row.kind === 'separator' ? [row.separator.name] : []));
+    const { mods: entries, activeProfile } = instance.value;
+    if (modNames.length > 0 && separatorNames.length === 0) {
+      const picked = await vscode.window.showQuickPick(
+        modsMovePick(entries, view.direction(), modNames), { placeHolder: 'Move to…' });
+      if (!picked) return;
+      report('mods', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, picked.target));
+    } else if (separatorNames.length > 0 && modNames.length === 0) {
+      const picked = await vscode.window.showQuickPick(
+        separatorsMovePick(entries, view.direction(), separatorNames), { placeHolder: 'Move above…' });
+      if (!picked) return;
+      report('separators', separatorNames.length,
+        await moveSeparators(instanceRoot, activeProfile, separatorNames, picked.target));
+    }
+  });
+}
+
 export function registerModContextCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
   ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.mod.move', async (node: ModNode | undefined) => {
-        if (node?.kind !== 'mod') return;
-        const separators = instance.value.mods.filter((e) => e.kind === 'separator').map((e) => e.name);
-        const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
-          { label: 'Ungrouped', description: 'Before first separator', sepName: null },
-          ...separators.map((s) => ({ label: s, sepName: s })),
-        ];
-        const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Move to separator…' });
-        if (!picked) return;
-        await runModAction('moveToSeparator', 'Failed to move mod.', async () => {
-          const profile = instance.value.activeProfile;
-          applyOrThrow(await moveModToSeparator(instanceRoot, profile, node.mod.name, picked.sepName));
-        });
-      }),
       vscode.commands.registerCommand('modbench.mod.uninstall', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
         const answer = await ask(
