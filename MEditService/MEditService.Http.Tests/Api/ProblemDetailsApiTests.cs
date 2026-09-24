@@ -104,6 +104,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
+    [InlineData("deleteRecord", 503)]
     // Each route's own "no load order" guard: the request body's validation passes (real values
     // below), so the request reaches the no-load-order branch and the 503 these routes declare
     // via .ProducesProblem(503).
@@ -120,6 +121,10 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
                 "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new { origin = "NoLoadOrderMod", preset = "Edits" }),
+            "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
+            {
+                records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } },
+            }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 

@@ -82,6 +82,11 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
+    /// <summary>An origin no registered copy carries names no repository — Rebase and its
+    /// continuation's own "not found".</summary>
+    internal static IResult OriginNotFound(string origin) =>
+        Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
+
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never
     /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>

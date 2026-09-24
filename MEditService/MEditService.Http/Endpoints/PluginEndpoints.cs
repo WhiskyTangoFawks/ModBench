@@ -390,7 +390,7 @@ public static class PluginEndpoints
         if (result is null)
         {
             logger.LogWarning("No loaded plugin has origin {Origin}", origin);
-            return Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
+            return WriteEndpointMapping.OriginNotFound(origin);
         }
         return Results.Ok(new RebaseResponse(result.Outcome, result.RefusalReason, result.ConflictedPaths));
     }
