@@ -1,51 +1,71 @@
 # load-instance: contract (draft)
 
-Diagram: [load-instance.d2](load-instance.d2). Catalog row: `refresh` under
-Instance in [commands.md](../commands.md). Governed by
+Diagram: [load-instance.d2](load-instance.d2). Catalog row: `refresh` under Instance in
+[commands.md](../commands.md). What the views show is in [common.md](../surfaces/common.md),
+States, and [toolbox.md](../surfaces/toolbox.md), Refresh. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
+[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-Each story cites its source. Loading the instance has no gesture of its own. `refresh` is the one
-gesture that runs it, so the shared block is what every load promises.
+The Instance loader is how every view reads the instance: one value, built from disk and nothing
+else. A change from Modbench and a change from MO2 or any other tool reach it the same way
+(ADR-0015, invariant 2).
 
-## Shared: loading the instance
+## The flow
 
-As a user, I want:
-
-1. Every view to show the same thing, whichever tool or gesture changed a file. *diagram header;
-   ADR-0015, invariant 2*
-2. A burst of changes to cause one load. *ADR-0015, invariant 7*
-3. The value replaced whole, so two views never show two generations. *ADR-0015, invariant 6*
-4. A file that cannot be parsed to leave the last good value in place. *ADR-0015, invariant 7*
-5. A torn write to be read again after it settles, and shown only if the second read agrees.
-   *ADR-0015, invariant 7*
-6. A change to reach mEdit as a new load order. *diagram; ADR-0013*
+1. The Instance loader watches the instance through the globs the Instance adapter names: each
+   profile's `modlist.txt` and `plugins.txt`, `ModOrganizer.ini`, `mods/`, `overwrite/` and the
+   downloads folder. One debounce covers every watch, so a burst of changes is one read.
+   Activation and refresh start the same read.
+2. The Instance loader reads, through the Instance adapter, `ModOrganizer.ini` first: the active
+   profile, the game, and where the downloads are. Then it reads the profile's `modlist.txt` and
+   `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
+   folder's plugins. The Instance adapter finds the game folder: the setting first, then MO2's
+   configuration, then Steam or Wine detection.
+3. One codec parses each file.
+4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
+   sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
+5. The value goes to every view, and to instance commands. Instance commands derive the load order
+   snapshot from it, every physical copy (ADR-0012), and send it to mEdit
+   ([index-load-order](index-load-order.md)).
 
 ## refresh
 
-As a user, I want:
+`refresh` runs the flow on purpose, for all of Modbench at once. It is a safety net, never how a
+change normally arrives.
 
-1. One refresh for all of Modbench. *catalog Meaning; One identity*
-2. It to drop and rebuild the index, and to read every source from disk again. *catalog Meaning*
-3. It to be a safety net, never how changes normally arrive. *catalog Meaning; ADR-0015*
-4. Refresh refused while another window holds the index, with the reason. *catalog Meaning; ADR-0009,
-   invariant 5*
-5. A failed refresh to leave the views as they were, and to say why. *A failed gesture writes nothing;
-   ADR-0019*
+1. The Toolbox fires `refresh`. Instance commands ask mEdit, through the mEdit client, to drop and
+   rebuild the index.
+2. Once the rebuild lands, instance commands send the load order snapshot, and mEdit reads every
+   copy again.
+3. The Toolbox then asks the Instance loader to read every file again, as flow step 2 does.
+
+A refused or failed rebuild stops there: nothing is sent, and nothing is read again.
+
+## Hand-off
+
+This flow waits for no hand-off.
+
+- mEdit indexes the snapshot ([index-load-order](index-load-order.md)).
+- When the value disagrees with the disk, mod sync and plugin sync run on it
+  ([update-load-order-file](update-load-order-file.d2)). Their writes come back through the watch.
+
+## Refusals and failures
+
+| Outcome | What happens |
+|---|---|
+| A file fails to parse | The last value stays, with its sequence. One line goes to the Output. How a view says that it is behind the disk is #973. |
+| The first read fails | No value lands. The views show the error row (common.md, States, story 2). |
+| The folder is not an instance | The views say so, and how to open one (common.md, States, story 4). |
+| The game folder cannot be found | The value lands without it. No snapshot is sent, so mEdit keeps the load order it holds (common.md, States, story 5). |
+| `refresh`, while another window holds the index | Refused, naming it (ADR-0009, invariant 5). |
+| `refresh`, when the rebuild fails | It stops, and says why. |
 
 ## Test seam
 
-- **The Toolbox:** that `refresh` is offered, and what it reports.
-- **The Instance loader:** given watch events and the bytes of the MO2 files, the value and its sequence, and
-  the load order snapshot.
-
-## Open Questions
-
-1. **Debounce.** The diagram says "debounced". The old spec gives 200 ms for Downloads. Is the interval
-   a rule?
-2. **What the user sees on a parse failure.** ADR-0015 keeps the last value. The old spec shows an error
-   node in Mods and reports once. Accept?
-3. **No instance.** The old spec shows a welcome text when `ModOrganizer.ini`, `mods/` or `profiles/`
-   is missing. Where should that live? It is a surface state.
+- **The Instance loader:** given watch events and the bytes of the files, the value and its
+  sequence, or the last value kept.
+- **Instance commands:** given a value, the snapshot. Given `refresh`, the rebuild, then the
+  snapshot, or the refusal and nothing sent.

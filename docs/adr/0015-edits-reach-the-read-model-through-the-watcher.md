@@ -31,8 +31,7 @@ architecture on both sides of the HTTP boundary is worth more than either side's
    stops being affordable, this ADR is what gets rewritten.
 7. **The Instance loader owns every MO2-side watcher, and a bad read is not a new value.** A watcher
    event, activation and refresh run the same whole recompute, debounced once. A read that throws
-   keeps the last value; a torn write that parses to nothing is re-read after a settle and
-   published only if the re-read agrees.
+   keeps the last value.
 
 ## Alternatives rejected
 

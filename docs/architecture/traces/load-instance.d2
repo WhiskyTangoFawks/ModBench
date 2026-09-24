@@ -1,9 +1,4 @@
-# Load the instance: every MO2 file that says what loads, read into one value. One watch over the
-# instance folder, debounced, and activation and refresh take the same path. One codec per file
-# parses. One whole value replaces the last, with the next sequence: no partial update and no
-# per-key patch, so no consumer holds two generations. A parse failure keeps the last value, and a
-# torn write is read again after it settles. The value goes to every view and on to mEdit.
-# Governed by ADR-0003, ADR-0013, ADR-0015 and ADR-0017. Contract: load-instance.md.
+# Load the instance. Contract: load-instance_draft.md.
 ...@../styles
 shape: sequence_diagram
 mo2: @../target-architecture.modbench_data.mo2
@@ -23,7 +18,7 @@ client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 
 mo2 -> instanceloader: "watch: every file and folder, debounced" {class: signal}
-instanceloader -> instanceadapter: "get: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadorder}
+instanceloader -> instanceadapter: "get: ModOrganizer.ini first · modlist.txt · plugins.txt · meta.ini · the downloads' .meta · the game folder's plugins" {class: loadorder}
 instanceadapter -> instanceloader: bytes {class: loadorder}
 instanceloader -> codecs: bytes {class: loadorder}
 codecs -> instanceloader: "parsed, one codec per file" {class: loadorder}
