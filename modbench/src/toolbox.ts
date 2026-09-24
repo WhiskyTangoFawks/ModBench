@@ -11,7 +11,7 @@ import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
-import { ModListProvider } from './mods/ModListProvider';
+import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
@@ -396,6 +396,9 @@ interface Mo2Side {
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
+  // Copy value's Mods adapter reads this once an instance exists; createToolbox falls back to
+  // undefined selection outside one, the same posture as `modListProvider` and its siblings.
+  modListSelection: () => readonly ModlistNode[];
 }
 
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
@@ -509,13 +512,6 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
-  own(registerCopyValueCommand(
-    [
-      { text: modsCopyValueText(() => modListView.selection), reporterTag: 'mod.copyValue' },
-      { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
-    ],
-    reporterFor,
-  ));
   const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
     syncMods(instanceRoot, profile, modFolders);
   own(registerModSync(instance, runModSync, outputChannel));
@@ -528,7 +524,10 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
   own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh'), instanceRoot }));
-  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing };
+  return {
+    instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
+    modListSelection: () => modListView.selection,
+  };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
@@ -563,6 +562,15 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   const provider = own(new ToolboxProvider({ instance: mo2?.instance }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
+  // Registered here, not inside buildMo2Side: Referenced By's own copy reaches this regardless
+  // of whether the folder is an instance, the same as before Mods had an adapter of its own.
+  own(registerCopyValueCommand(
+    [
+      { text: mo2 ? modsCopyValueText(() => mo2.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
+      { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
+    ],
+    reporterFor,
+  ));
 
   return {
     folder: opened.folder,
