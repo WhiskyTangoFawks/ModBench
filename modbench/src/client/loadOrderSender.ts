@@ -43,6 +43,20 @@ interface Waiting {
   settle: (outcome: LoadOrderOutcome) => void;
 }
 
+// Swallowing the throw here is what keeps one bad send from wedging every send after it; the
+// caller still hears the failure as this snapshot's own outcome (ADR-0019).
+function putWhole(
+  client: LoadOrderSendClient, { snapshot, options }: Waiting, signal: AbortSignal,
+): Promise<LoadOrderOutcome> {
+  const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot;
+  return client.putLoadOrder(plugins, gameDirectory, instanceRoot, gameRelease, {
+    onProgress: options.onProgress, signal,
+  }).catch((e: unknown): LoadOrderOutcome => ({
+    outcome: 'failed',
+    message: `mEdit: Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
+  }));
+}
+
 export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSender {
   let armed: AbortController | undefined;
   // At most one: an arrival replaces whatever had not been sent yet, which is what makes the
@@ -75,18 +89,7 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
     const next = waiting;
     waiting = undefined;
     sending = true;
-    const { signal } = arm();
-    const { plugins, gameDirectory, instanceRoot, gameRelease } = next.snapshot;
-    void client.putLoadOrder(plugins, gameDirectory, instanceRoot, gameRelease, {
-      onProgress: next.options.onProgress, signal,
-    }).catch(
-      // Swallowing the throw here is what keeps one bad send from wedging every send after it;
-      // the caller still hears the failure as this snapshot's own outcome (ADR-0019).
-      (e: unknown): LoadOrderOutcome => ({
-        outcome: 'failed',
-        message: `mEdit: Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
-      }),
-    ).then((outcome) => {
+    void putWhole(client, next, arm().signal).then((outcome) => {
       if (outcome.outcome === 'failed') forget(next.snapshot);
       next.settle(outcome);
     }).finally(() => {
