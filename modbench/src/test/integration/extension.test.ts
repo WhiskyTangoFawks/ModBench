@@ -946,7 +946,8 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
     await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
     await new Promise((r) => setTimeout(r, 1500));
     await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-    await waitFor('the palette\'s disable to write modlist.txt', () => fs.readFileSync(modlistPath, 'utf8').includes('-Palette Mod'));
+    await waitFor('the palette\'s disable to land in the Instance', () =>
+      instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled));
   });
 });
 
