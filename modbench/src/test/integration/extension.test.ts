@@ -10,6 +10,7 @@ import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
 import { isRecord } from '../manifest';
+import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -966,6 +967,67 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
 
     await renderAfter(() => provider().setFilter('weap', true));
     assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+  });
+});
+
+// ── The Mods palette and Space in a running host ─────────────────────────────
+
+// mods.md, Menus and keys. A test cannot press a key, so Space is checked as the command VS Code
+// runs for it on a focused row with no Modbench binding: `list.toggleExpand`.
+describe('The Mods view\'s palette entries and Space, as VS Code runs them', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
+  const modDir = root ? path.join(root, 'mods', 'Palette Mod') : '';
+  let original = '';
+
+  // The folder's own arrival can land a sync that adds its line disabled, so each test enables
+  // the mod itself once the folder is known. Mods' own Ctrl+C copy value names what is selected.
+  const enabledAndSelected = async () => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '+Palette Mod\r\n'));
+    await waitFor('the mod row to be focused and selected', async () => {
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('modbench.modList.focus');
+      await vscode.commands.executeCommand('list.focusFirst');
+      await vscode.commands.executeCommand('list.select');
+      await vscode.commands.executeCommand('modbench.record.copyValue', MODS_KEY_ARGS);
+      return (await vscode.env.clipboard.readText()) === 'Palette Mod';
+    });
+  };
+
+  before(async () => {
+    if (!root) return;
+    original = fs.readFileSync(modlistPath, 'utf8');
+    await writeAndAwaitInstance(() => fs.mkdirSync(modDir, { recursive: true }));
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+    if (!root) return;
+    await writeAndAwaitInstance(() => {
+      fs.writeFileSync(modlistPath, original);
+      fs.rmSync(modDir, { recursive: true, force: true });
+    });
+  });
+
+  it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
+    if (!root) this.skip();
+    await enabledAndSelected();
+    await vscode.commands.executeCommand('list.toggleExpand');
+    await new Promise((r) => setTimeout(r, 750));
+    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+  });
+
+  it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
+    if (!root) this.skip();
+    this.timeout(30_000);
+    await enabledAndSelected();
+    // The API shows no palette item, so each try reopens it and accepts its top item until the
+    // disable lands; a try made before the item is listed accepts nothing.
+    await waitFor('the palette\'s disable to land in the Instance', async () => {
+      await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Disable Mod');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      return instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled);
+    });
   });
 });
 

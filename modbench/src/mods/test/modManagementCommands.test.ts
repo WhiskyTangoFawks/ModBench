@@ -58,6 +58,7 @@ import {
   type ModInstallDeps,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
@@ -429,8 +430,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     expect(log).not.toHaveBeenCalled();
   });
 
-  // common.md, Reporting: a failed mark is never a failure notification, and the uninstall it
-  // rides on stands landed.
   it('a failed mark is one Output line and no notification; the uninstall it rides on stands landed', async () => {
     uninstallMods.mockResolvedValueOnce({
       applied: true,
@@ -446,9 +445,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       '"Mod A" was uninstalled, but its downloaded file could not be marked uninstalled: disk full');
   });
 
-  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
-  // an Output line, and the uninstall it rides on is not reported as failed (createEmptyMod's
-  // lineRefusal is the model).
   it('a post-trash line failure is a warning notification naming the part that failed, not a failed uninstall', async () => {
     uninstallMods.mockResolvedValueOnce({
       applied: true,
@@ -549,8 +545,6 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     ]);
   });
 
-  // common.md, Reporting: "A gesture landed, but part of it failed" — a warning notification and
-  // an Output line, and the delete it rides on is not reported as failed.
   it('a post-trash line failure is a warning notification naming the part that failed, not a failed delete', async () => {
     deleteSeparators.mockResolvedValue({
       applied: true, outcome: { landed: [{ name: 'Group A', lineRefusal: 'disk full' }], refused: [] },
@@ -645,9 +639,20 @@ describe('rename separator takes its separator through the gesture entry', () =>
     expect(renameSeparator).not.toHaveBeenCalled();
   });
 
-  it('asks nothing and renames nothing from the palette, where no row is right-clicked', async () => {
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupA]);
-    await invoke('modbench.separator.rename');
+  it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('renames the one selected separator from %s', async (_from, args) => {
+    renameSeparator.mockResolvedValue({ applied: true, wrote: true });
+    showInputBox.mockResolvedValueOnce('Renamed');
+
+    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupB]);
+    await invoke('modbench.separator.rename', ...args);
+
+    expect(promptOptions()).toMatchObject({ value: 'Group B' });
+    expect(renameSeparator.mock.calls).toEqual([['/instance', 'Default', 'Group B', 'Renamed']]);
+  });
+
+  it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('asks nothing from %s while several rows are selected', async (_from, args) => {
+    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
+    await invoke('modbench.separator.rename', ...args);
 
     expect(showInputBox).not.toHaveBeenCalled();
     expect(renameSeparator).not.toHaveBeenCalled();
@@ -732,8 +737,18 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     expect(insertSeparator).not.toHaveBeenCalled();
   });
 
-  it('asks nothing and adds nothing from the palette, where no row is right-clicked or focused', async () => {
+  it('anchors the new separator on the one selected row from the palette', async () => {
+    insertSeparator.mockResolvedValue({ applied: true, wrote: true });
+    showInputBox.mockResolvedValueOnce('New Section');
+
     registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA]);
+    await invoke('modbench.separator.add');
+
+    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
+  });
+
+  it('asks nothing and adds nothing from the palette while several rows are selected', async () => {
+    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA, groupA]);
     await invoke('modbench.separator.add');
 
     expect(showInputBox).not.toHaveBeenCalled();
@@ -1127,10 +1142,17 @@ describe('modsCopyValueText', () => {
     expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
   });
 
-  // A key or the palette invokes with no arguments at all, unlike a context menu — and Mods has
-  // no key or palette entry of its own in this slice, so it must never guess this is its row.
   it('is undefined with no clicked row, even when the view has a selection', () => {
     const viewSelection = (): ModlistNode[] => [alpha, groupA];
     expect(modsCopyValueText(viewSelection)(undefined, undefined)).toBeUndefined();
+  });
+
+  it('copies the view\'s selection for the Mods key\'s own args', () => {
+    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1)];
+    expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
+  });
+
+  it('owns the Mods key\'s invocation with nothing to copy when nothing is selected', () => {
+    expect(modsCopyValueText(noSelection)(MODS_KEY_ARGS, undefined)).toBe('');
   });
 });

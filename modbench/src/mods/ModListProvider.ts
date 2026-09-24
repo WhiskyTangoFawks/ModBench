@@ -127,6 +127,9 @@ export class OverwriteNode extends vscode.TreeItem {
 
 export type ModlistNode = SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
+export const NO_MODS_MESSAGE =
+  'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
@@ -201,11 +204,17 @@ export class ModListProvider
     return `${activeCount} / ${installedCount}`;
   }
 
+  /** A row the view still holds may predate the value, so its mod's state is read from the value. */
+  isEnabled(row: ModNode): boolean {
+    const entry = this.instanceValue.mods.find((m) => m.kind === 'mod' && m.name === row.mod.name);
+    return entry?.enabled ?? row.mod.enabled;
+  }
+
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty
    *  list says so here, above it. */
   emptyListMessage(): string | undefined {
     if (this.instance.sequence === 0 || this.instanceValue.mods.length > 0) return undefined;
-    return 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+    return NO_MODS_MESSAGE;
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection

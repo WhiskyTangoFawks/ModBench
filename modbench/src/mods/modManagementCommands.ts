@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
-import { modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from './gestureEntry';
+import {
+  isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
+} from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -367,13 +369,13 @@ function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
   return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
 }
 
-/** Mods' own text for the catalog's one copy value id (mods.md, Menus and keys, story 7).
- *  `undefined` unless `clicked` is a mod or separator row — a keyless invocation defers to the
- *  next adapter. */
+/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a mod or
+ *  separator row or the Mods key's args, so the palette and another view's key defer. */
 export function modsCopyValueText(
   viewSelection: () => readonly ModlistNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
   return (clicked, allSelected) => {
+    if (isModsKeyArgs(clicked)) return copyValueRowNames(selectionArgument({ selection: viewSelection() }, 'mod', 'separator'));
     if (!isModlistEntryNode(clicked)) return undefined;
     const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
     return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));

@@ -16,6 +16,7 @@ import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { registerNameFilter } from './nameFilter';
+import { modsKeyContext } from './mods/gestureEntry';
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
@@ -47,6 +48,15 @@ export function createModListView(
   showCount();
   modListFilter.refresh();
   own(modListProvider.onDidChangeTreeData(showCount));
+  const showKeyContext = () => {
+    const context = modsKeyContext(modListView.selection, (row) => modListProvider.isEnabled(row));
+    for (const [name, value] of Object.entries(context)) {
+      void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, value);
+    }
+  };
+  showKeyContext();
+  own(modListView.onDidChangeSelection(showKeyContext));
+  own(modListProvider.onDidChangeTreeData(showKeyContext));
   const expand = () => void expandFilteredSeparators(modListView, modListProvider, log);
   own(modListProvider.onDidChangeTreeData(expand));
   own(modListView.onDidChangeVisibility(expand));
