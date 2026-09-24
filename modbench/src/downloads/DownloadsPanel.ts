@@ -7,7 +7,7 @@ import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
+import { selectUpgradeCandidates, type UpgradeCandidate, type UpgradeTier } from './upgradeCandidates';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
@@ -18,13 +18,18 @@ interface UpgradePickItem extends vscode.QuickPickItem {
   choice: InstallChoice;
 }
 
-// The file-id match, if one exists, is first in `candidates` (selectUpgradeCandidates' own
-// order), which is what makes it VS Code's default-highlighted row — no explicit activeItem.
+const TIER_LABEL: Record<UpgradeTier, string> = {
+  fileId: 'File ID match',
+  installationFile: 'Installed from this file',
+};
+
+// The top tier, if one exists, is first in `candidates` (selectUpgradeCandidates' own order),
+// which is what makes it VS Code's default-highlighted row — no explicit activeItem.
 function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickItem[] {
   return [
     ...candidates.map((c) => ({
       label: c.version ? `${c.modName} (v${c.version})` : c.modName,
-      description: c.fileIdMatch ? 'File ID match' : undefined,
+      description: c.tier && TIER_LABEL[c.tier],
       choice: { kind: 'upgrade' as const, name: c.modName },
     })),
     { label: 'Install as a new mod…', choice: { kind: 'new' as const } },
@@ -88,10 +93,9 @@ async function installArchive(
     return;
   }
   if (downloadRefusal === undefined) return;
-  // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS installed, only its
-  // Downloads bookkeeping failed. Must not read as "install failed", or the user may retry and
-  // get a duplicate mod.
-  reporter.report(
+  // ADR-0019 background/recoverable tier: Installed reads off the mod's own meta.ini, never this
+  // sidecar, so the failed mark changes nothing the user sees — Output only, no notification.
+  reporter.insideDialog(
     'warning',
     `"${name}" was installed, but its Downloads status could not be updated.`,
     downloadRefusal,

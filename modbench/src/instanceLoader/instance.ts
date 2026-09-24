@@ -143,6 +143,18 @@ async function readModFolderNames(instanceRoot: string): Promise<string[] | unde
   }
 }
 
+// Installed reads every mod folder on disk, not one profile's modlist.txt lines: a folder no
+// profile has synced into its modlist yet still owns its meta.ini's claim.
+async function readInstalledInto(
+  instanceRoot: string, modFolderNames: readonly string[],
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const metas = await Promise.all(modFolderNames.map(async (name) => {
+    const meta = await readMeta(instanceRoot, name);
+    return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
+  }));
+  return modsByInstallationFile(metas);
+}
+
 async function readModlistEntries(instanceRoot: string, profile: string): Promise<ModlistEntry[]> {
   const entries = parseModlist(await get(modlistFile(instanceRoot, profile)));
   return Promise.all(entries.map(async (entry) =>
@@ -356,6 +368,9 @@ export class Instance implements vscode.Disposable {
       })),
     ]);
     const { gameDirectory, dataFolderPlugins } = game;
+    // Every mod folder on disk, not this profile's modlist.txt lines: a folder synced into no
+    // profile yet still owns its meta.ini's Installed claim.
+    const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, modFolderNames ?? []) : undefined;
     const gameName = readGameName(iniText);
     // An unresolved game directory loses only the Data-folder copies' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
@@ -380,8 +395,8 @@ export class Instance implements vscode.Disposable {
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
-      downloads: downloadEntries
-        ? buildDownloadRows(downloadEntries, modsByInstallationFile(entries)).map((row) => ({
+      downloads: downloadEntries && installedInto
+        ? buildDownloadRows(downloadEntries, installedInto).map((row) => ({
           ...row,
           path: downloadFile(instanceRoot, row.name),
           sidecarPath: downloadSidecarFile(instanceRoot, row.name),

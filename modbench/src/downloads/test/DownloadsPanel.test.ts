@@ -230,7 +230,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(await readFile(meta, 'utf8')).toBe(before);
   });
 
-  it('install: a failed mark installed is reported as a warning, and the install stands', async () => {
+  it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({
@@ -241,11 +241,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     registerDownloadsSingleRowCommands(root, fakeInstance(), report, installDeps());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    const reportEntry = present(report.reports[0], 'the one recorded report');
+    await vi.waitFor(() => expect(report.dialogFailures).toHaveLength(1));
+    const reportEntry = present(report.dialogFailures[0], 'the one recorded Output line');
     expect(reportEntry.severity).toBe('warning');
     expect(reportEntry.message).toBe('"foo.7z" was installed, but its Downloads status could not be updated.');
     expect(reportEntry.detail).toContain('EISDIR');
+    expect(report.reports).toEqual([]); // no failure notification — the install already landed
     expect(installFromArchive).toHaveBeenCalledWith(
       root, { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
@@ -389,6 +390,50 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     expect(items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
+      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+    ]);
+  });
+
+  // No fileId match anywhere in the pool, so the mod meta.ini names as this exact download's own
+  // installationFile wins the "Installed from this file" tier and the pre-selected first row.
+  it('labels an installationFile match "Installed from this file" and lists it first, with no fileId match present', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const instance = fakeInstance([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
+    ]);
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+
+    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+    const items = calledWith<{ label: string; description?: string; choice: unknown }[]>(showQuickPick);
+    expect(items).toEqual([
+      { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } },
+      { label: 'Install as a new mod…', choice: { kind: 'new' } },
+    ]);
+  });
+
+  // Tier 2 hidden: an installationFile match beside a fileId match elsewhere in the pool loses
+  // its "Installed from this file" label — the fileId match alone is first and pre-selected.
+  it('hides the installationFile label when a fileId match exists elsewhere in the pool', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    const instance = fakeInstance([
+      mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+    ]);
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerDownloadsSingleRowCommands(root, instance, recordingReporter(), installDeps());
+    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+
+    await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
+    const items = calledWith<{ label: string; description?: string; choice: unknown }[]>(showQuickPick);
+    expect(items).toEqual([
+      { label: 'By File Id (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'By File Id' } },
+      { label: 'By Name (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'By Name' } },
       { label: 'Install as a new mod…', choice: { kind: 'new' } },
     ]);
   });

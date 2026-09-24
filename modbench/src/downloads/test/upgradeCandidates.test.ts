@@ -9,12 +9,10 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-// The rows this reads are the codec's own: it never looks at the paths the Instance adds.
-const valueOf = (
-  mods: InstanceValue['mods'], downloads: readonly DownloadRow[] = [],
-): { mods: InstanceValue['mods']; downloads: readonly DownloadRow[] } => ({ mods, downloads });
+const valueOf = (mods: InstanceValue['mods']): { mods: InstanceValue['mods'] } => ({ mods });
 
-const download = (over: { modID?: string; fileID?: string }): Pick<DownloadRow, 'modID' | 'fileID'> => over;
+const download = (over: { modID?: string; fileID?: string; name?: string }): Pick<DownloadRow, 'modID' | 'fileID' | 'name'> =>
+  ({ name: 'foo.7z', ...over });
 
 describe('selectUpgradeCandidates', () => {
   it('is empty when the download carries no mod id', () => {
@@ -32,59 +30,73 @@ describe('selectUpgradeCandidates', () => {
     expect(selectUpgradeCandidates(value, download({}))).toEqual([]);
   });
 
-  it('flags an installedFiles file-id match', () => {
+  it('flags an installedFiles file-id match as tier fileId', () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
     expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS', version: '2.0', fileIdMatch: true },
+      { modName: 'Harder VATS', version: '2.0', tier: 'fileId' },
     ]);
   });
 
-  it('reports several candidates with no match, preserving order when none matches', () => {
-    const value = valueOf([
-      mod({ name: 'Harder VATS A', nexusId: '111', version: '1.0' }),
-      mod({ name: 'Harder VATS B', nexusId: '111', version: '1.1', installedFiles: [{ modid: '111', fileid: '1' }] }),
-    ]);
+  it('lists a mod sharing only the mod id as tierless, still a candidate', () => {
+    const value = valueOf([mod({ name: 'Harder VATS A', nexusId: '111', version: '1.0' })]);
     expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS A', version: '1.0', fileIdMatch: false },
-      { modName: 'Harder VATS B', version: '1.1', fileIdMatch: false },
+      { modName: 'Harder VATS A', version: '1.0', tier: undefined },
     ]);
   });
 
-  it('matches through the sidecar named by installationFile when installedFiles does not match', () => {
-    const value = valueOf(
-      [mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' })],
-      [{ name: 'harder-vats-v1.7z', displayName: 'harder-vats-v1.7z', status: 'Downloaded', size: 0, mtimeMs: 0, hasMeta: true, hidden: false, fileID: '999' }],
-    );
-    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS', version: '1.0', fileIdMatch: true },
-    ]);
-  });
-
-  it('sorts a file-id match first among several candidates', () => {
+  it('sorts a file-id match first, tierless mods after', () => {
     const value = valueOf([
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
       mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
     expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'The Match', version: '2.0', fileIdMatch: true },
-      { modName: 'No Match', version: '1.0', fileIdMatch: false },
+      { modName: 'The Match', version: '2.0', tier: 'fileId' },
+      { modName: 'No Match', version: '1.0', tier: undefined },
     ]);
   });
 
-  it('never consults the download\'s filename to decide a match', () => {
+  it('flags a meta.ini installationFile match naming this exact download as tier installationFile', () => {
     const value = valueOf([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ]);
-    // The download's own name coincidentally matches the mod's installationFile, but carries a
-    // different file id — no match, because filename is never the signal.
-    const value2: { mods: InstanceValue['mods']; downloads: readonly DownloadRow[] } = {
-      mods: value.mods,
-      downloads: [{ name: 'harder-vats-v1.7z', displayName: 'harder-vats-v1.7z', status: 'Downloaded', size: 0, mtimeMs: 0, hasMeta: true, hidden: false, fileID: '111' }],
-    };
-    expect(selectUpgradeCandidates(value2, download({ modID: '111', fileID: '999' }))).toEqual([
-      { modName: 'Harder VATS', version: '1.0', fileIdMatch: false },
+    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
+      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
+    ]);
+  });
+
+  it('compares the installationFile match case-folded, as the status does', () => {
+    const value = valueOf([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'Harder-VATS-v1.7Z' }),
+    ]);
+    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'harder-vats-v1.7z' }))).toEqual([
+      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
+    ]);
+  });
+
+  // Tier 2 hidden: an installationFile match sits beside a fileId match elsewhere in the pool, so
+  // it never earns the "Installed from this file" label — it lists, but tierless.
+  it('drops the installationFile tier when a fileId match exists elsewhere in the pool', () => {
+    const value = valueOf([
+      mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
+    ]);
+    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
+      { modName: 'By File Id', version: '2.0', tier: 'fileId' },
+      { modName: 'By Name', version: '1.0', tier: undefined },
+    ]);
+  });
+
+  it('never consults the download\'s filename for a fileId match — only meta.ini\'s own pairs', () => {
+    const value = valueOf([
+      mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
+    ]);
+    // The archiveFilename coincidentally matches the download's own name, but the download
+    // carries a fileID absent from the mod's installedFiles — no fileId tier from that alone;
+    // the installationFile tier still applies on the name match itself.
+    expect(selectUpgradeCandidates(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
+      { modName: 'Harder VATS', version: '1.0', tier: 'installationFile' },
     ]);
   });
 });

@@ -136,8 +136,8 @@ export function modsByInstallationFile(
 }
 
 /** Hidden rows are built and flagged, never filtered — filtering is a view concern. Sidecars do
- *  not become rows of their own. `installedInto` is what makes a row Installed: the sidecar's
- *  own flag outlives the mod it claims. */
+ *  not become rows of their own. `installedInto` is what makes a row Installed; unclaimed, the
+ *  sidecar's flag is stale, not a status. */
 export function buildDownloadRows(
   entries: DownloadEntry[], installedInto: ReadonlyMap<string, readonly string[]>,
 ): DownloadRow[] {
@@ -147,11 +147,11 @@ export function buildDownloadRows(
       const { status: sidecarStatus, hidden, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',
       );
-      // Installed is the mods' answer; the sidecar keeps its other two, which say nothing
-      // about whether a mod stands on disk.
-      const status: DownloadStatus = installedInto.has(archiveKey(e.name))
-        ? 'Installed'
-        : (sidecarStatus === 'Installed' ? 'Downloaded' : sidecarStatus);
+      // Installed is the mods' own answer, never the sidecar's: a claimed install outlives the
+      // mod it names. Uncorroborated, `installed=true` and `uninstalled=true` read alike —
+      // both are the sidecar saying "not Downloaded" with nothing left to stand on.
+      let status: DownloadStatus = sidecarStatus === 'Downloaded' ? 'Downloaded' : 'Uninstalled';
+      if (installedInto.has(archiveKey(e.name))) status = 'Installed';
       // Mirrors MO2's displayNameByInfo (downloadmanager.cpp:1410): `.meta` name
       // when non-empty, else the raw filename — falsy `||` covers absent AND
       // present-but-empty (`name=`) identically, so a row is never blank.

@@ -602,7 +602,23 @@ describe('Instance — downloads, profile and game directory', () => {
     await rm(join(root, 'mods', 'Unofficial Fallout 4 Patch'), { recursive: true, force: true });
     await instance.refresh();
 
-    expect(statusOf()).toBe('Downloaded');
+    // Uncorroborated, the sidecar's own installed=true reads Uninstalled, not Downloaded.
+    expect(statusOf()).toBe('Uninstalled');
+  });
+
+  // A mod folder can sit on disk with no profile's modlist.txt line for it yet.
+  it('reads a download as Installed from a mod folder with no line in the active profile\u2019s modlist', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'downloads'), { recursive: true });
+    await writeFile(join(root, 'downloads', 'Off-Profile-1.7z'), 'archive bytes');
+    await writeModFile(root, 'Off Profile Mod', 'meta.ini', '[General]\r\ninstallationFile=Off-Profile-1.7z\r\n');
+
+    await instance.refresh();
+
+    expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
+    expect(instance.value.modFolders).toContain('Off Profile Mod');
+    const download = instance.value.downloads.find((d) => d.name === 'Off-Profile-1.7z');
+    expect(download?.status).toBe('Installed');
   });
 
   it('reflects a profile switch made outside Modbench in the next value', async () => {
