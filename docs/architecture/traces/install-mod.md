@@ -1,4 +1,4 @@
-# install-mod: contract (draft)
+# install-mod: contract
 
 Diagram: [install-mod.d2](install-mod.d2). Catalog row: `install` under Mod in
 [commands.md](../commands.md). What the user picks and types is in
