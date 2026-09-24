@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import {
-  downloadContextValue, filterHiddenRows, sortDownloadRows, type DownloadSortColumn,
+  downloadContextValue, filterArchiveRows, filterHiddenRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
 import type {
   DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
@@ -161,8 +161,10 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   private build(): DownloadNode[] {
-    // Hidden-filtering applies first, then sort — the acceptance criterion the two compose by.
-    const filtered = filterHiddenRows(this.instanceValue.downloads, this.showHidden);
+    // Archive-filtering applies first — a non-archive is never a row, toggle or not — then
+    // hidden-filtering, then sort — the acceptance criterion the three compose by.
+    const archives = filterArchiveRows(this.instanceValue.downloads);
+    const filtered = filterHiddenRows(archives, this.showHidden);
     const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row));
   }

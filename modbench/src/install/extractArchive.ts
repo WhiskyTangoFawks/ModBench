@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
+import { ARCHIVE_EXTENSIONS } from './install';
 
 /** Rejects with the spawn error (ENOENT when the binary is absent) or a
  *  non-zero-exit error; `extractArchive` distinguishes the two. */
@@ -37,8 +38,9 @@ export async function extractArchive(
       throw new Error(`Failed to extract ${archivePath}: ${message}`, { cause: err });
     }
   }
+  const extensions = ARCHIVE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
   throw new Error(
     `No 7z binary found (tried ${CANDIDATES.join(', ')}). ` +
-      'Install p7zip-full to extract .zip/.7z/.rar archives.',
+      `Install p7zip-full to extract ${extensions} archives.`,
   );
 }

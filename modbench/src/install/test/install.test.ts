@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { installFromArchive, installFromFolder } from '../install';
+import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import type { Runner } from '../extractArchive';
 import { writeMetaIni } from '../../mo2Codecs/metaIni';
@@ -350,5 +350,29 @@ describe('install commands', () => {
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/corrupt/);
+  });
+});
+
+// Install's one export about which files it takes: every picker, and the Downloads view, reads
+// this list rather than naming an extension of its own.
+describe('ARCHIVE_EXTENSIONS', () => {
+  it('is the archive extensions install can extract, lower-cased', () => {
+    expect([...ARCHIVE_EXTENSIONS].sort()).toEqual(['7z', 'rar', 'zip']);
+  });
+});
+
+describe('defaultModName', () => {
+  it('strips an archive extension install can extract', () => {
+    expect(defaultModName('/downloads/Sleep or Save-123-1-0.zip')).toBe('Sleep or Save-123-1-0');
+    expect(defaultModName('/downloads/Sleep or Save-123-1-0.7z')).toBe('Sleep or Save-123-1-0');
+    expect(defaultModName('/downloads/Sleep or Save-123-1-0.rar')).toBe('Sleep or Save-123-1-0');
+  });
+
+  it('strips the extension case-insensitively', () => {
+    expect(defaultModName('/downloads/Sleep or Save.ZIP')).toBe('Sleep or Save');
+  });
+
+  it('leaves a name with no recognised archive extension untouched', () => {
+    expect(defaultModName('/downloads/notes.txt')).toBe('notes.txt');
   });
 });
