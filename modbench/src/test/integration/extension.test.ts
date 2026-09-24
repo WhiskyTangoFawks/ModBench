@@ -693,6 +693,21 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
 
 // ── modbench.downloads tree ─────────────────────────────────────────────────
 
+// Longer than the Instance's 200 ms settle: every write restarts that settle, so probes written
+// any faster would hold every recompute off.
+const PROBE_SPACING_MS = 1000;
+function nextLandingWithin(instance: InstanceLike, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      subscription.dispose();
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    const subscription = instance.subscribe(done);
+  });
+}
+
 // A row this tree does not own (an ErrorNode) carries no archive name — undefined, not thrown.
 const archiveNameOf = (row: DownloadsTreeNode): string | undefined =>
   row instanceof DownloadNode ? row.row.name : undefined;
@@ -701,6 +716,35 @@ describe('modbench.downloads tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const downloadsDir = root ? path.join(root, 'downloads') : '';
   const provider = () => present(ext?.exports.downloadsProvider, "the activated extension's downloadsProvider export");
+  const instance = () => present(instanceExport(), 'the Instance activate() exports');
+  const iniPath = root ? path.join(root, 'ModOrganizer.ini') : '';
+
+  // Past the rebind, its extra recompute and any recompute queued behind them, only a watcher
+  // event lands a new value, so a row that appears later is the watcher's doing.
+  async function repointDownloads(iniText: string, dir: string): Promise<void> {
+    fs.writeFileSync(iniPath, iniText);
+    const rebound = await waitFor(`the Instance to resolve downloads to ${dir}`,
+      () => (instance().value.paths.downloadsDir === dir ? instance().sequence : undefined));
+    await pastSequence(instance(), rebound);
+    for (let landed = instance().sequence; ; landed = instance().sequence) {
+      await nextLandingWithin(instance(), PROBE_SPACING_MS);
+      if (instance().sequence === landed) return;
+    }
+  }
+
+  // A just-bound watch arms some time after it is created and nothing reports when, so a probe
+  // written before then is lost and another follows it.
+  async function probeUntilListed(dir: string, prefix: string): Promise<void> {
+    const written = new Set<string>();
+    await waitFor(`a file written into ${dir} to reach the Downloads tree through the watcher`, async () => {
+      const name = `${prefix}-${written.size}.zip`;
+      written.add(name);
+      fs.writeFileSync(path.join(dir, name), 'data');
+      await nextLandingWithin(instance(), PROBE_SPACING_MS);
+      const rows = await provider().getChildren();
+      return rows.some((r) => written.has(archiveNameOf(r) ?? '')) || undefined;
+    }, 35000);
+  }
 
   // The committed test workspace fixture has no downloads/ folder — created and torn down
   // here (mirrors the Overwrite suite's overwriteDir cleanup).
@@ -744,13 +788,10 @@ describe('modbench.downloads tree', () => {
     this.timeout(40000);
     if (!root) throw new Error('no open workspace');
     const external = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-external-downloads-'));
-    const iniPath = path.join(root, 'ModOrganizer.ini');
     const originalIni = fs.readFileSync(iniPath, 'utf8');
     try {
       fs.writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await writeAndAwaitInstance(() => {
-        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`);
-      });
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`, external);
 
       const scanned = await provider().getChildren();
       assert.ok(
@@ -758,19 +799,9 @@ describe('modbench.downloads tree', () => {
         'expected the file already in the external folder to be scanned once the ini named it',
       );
 
-      // A freshly (re)bound watcher's arm lags its JS creation. Writing a new file each poll
-      // attempt, not one file after a fixed sleep, means some attempt lands after it is armed.
-      const written = new Set<string>();
-      const watched = await waitFor('a file written after the external watcher has had a chance to arm', async () => {
-        const name = `external-new-${written.size}.zip`;
-        written.add(name);
-        fs.writeFileSync(path.join(external, name), 'data');
-        const found = await provider().getChildren();
-        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
-      }, 35000);
-      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')), 'expected the watcher on the external folder to fire with no manual refresh');
+      await probeUntilListed(external, 'external-new');
     } finally {
-      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      await repointDownloads(originalIni, downloadsDir);
       fs.rmSync(external, { recursive: true, force: true });
     }
   });
@@ -782,30 +813,18 @@ describe('modbench.downloads tree', () => {
     if (!root) throw new Error('no open workspace');
     const container = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-notyet-downloads-'));
     const notYetCreated = path.join(container, 'NotYetCreated');
-    const iniPath = path.join(root, 'ModOrganizer.ini');
     const originalIni = fs.readFileSync(iniPath, 'utf8');
     try {
-      await writeAndAwaitInstance(() => {
-        fs.writeFileSync(iniPath, `${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`);
-      });
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, notYetCreated);
 
       const beforeCreate = await provider().getChildren();
       assert.strictEqual(beforeCreate.filter((r) => archiveNameOf(r) !== undefined).length, 0,
         'expected no rows before the configured folder even exists');
 
-      const written = new Set<string>();
-      const watched = await waitFor('a file written after the not-yet-existing folder is created and the watcher has had a chance to arm', async () => {
-        fs.mkdirSync(notYetCreated, { recursive: true });
-        const name = `created-${written.size}.zip`;
-        written.add(name);
-        fs.writeFileSync(path.join(notYetCreated, name), 'data');
-        const found = await provider().getChildren();
-        return found.some((r) => written.has(archiveNameOf(r) ?? '')) ? found : undefined;
-      }, 35000);
-      assert.ok(watched.some((r) => written.has(archiveNameOf(r) ?? '')),
-        'expected the watcher to fire once the configured folder was created, with no manual refresh');
+      fs.mkdirSync(notYetCreated);
+      await probeUntilListed(notYetCreated, 'created');
     } finally {
-      await writeAndAwaitInstance(() => fs.writeFileSync(iniPath, originalIni));
+      await repointDownloads(originalIni, downloadsDir);
       fs.rmSync(container, { recursive: true, force: true });
     }
   });
