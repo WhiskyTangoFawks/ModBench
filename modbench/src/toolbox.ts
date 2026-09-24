@@ -108,9 +108,9 @@ export interface LoadOrderPuts {
   putOnConnect(): Promise<void>;
 }
 
-// update-load-order-file: put on change and on connect. Nothing is put while detached, since the
-// connect's put reads the value current then; a stream reopen is a connect, the process behind it
-// perhaps another. `connected` runs at each connect too, for what else waits on mEdit's answers.
+// update-load-order-file: put on change and on connect, running `connected` at each connect.
+// Nothing is put while detached; a stream reopen is a connect, the process behind it perhaps
+// another.
 export function registerLoadOrderPut(
   own: Own,
   instance: Pick<Instance, 'subscribe'>,

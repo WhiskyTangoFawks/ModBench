@@ -100,9 +100,8 @@ export async function syncPlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
 ): Promise<PluginSyncResult> {
-  // Without the Data folder's listing, or without the implicit masters, every verdict is a guess:
-  // a line for a plugin the game loads from Data is dropped, and a mod's copy of a vanilla master
-  // earns a line. So the run refuses before it writes (update-load-order-file, Refusals).
+  // Without the Data folder's listing or the implicit masters, a line for a Data plugin is
+  // dropped and a mod's copy of a vanilla master earns one (update-load-order-file, Refusals).
   if (inData.kind === 'unresolved') return { applied: false, refusal: 'the game folder is not found' };
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
