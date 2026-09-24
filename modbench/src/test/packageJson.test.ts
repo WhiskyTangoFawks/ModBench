@@ -15,7 +15,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -25,7 +26,7 @@ interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
 interface MenuEntry { command: string; when: string; group?: string; icon?: string; }
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
-interface KeybindingEntry { command: string; key: string; when: string; }
+interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
 interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; }
 
@@ -71,7 +72,7 @@ function isCommandEntry(v: unknown): v is CommandEntry {
   return isRecord(v) && isString(v.command) && isString(v.title) && isString(v.category) && isOptionalString(v.icon);
 }
 function isKeybindingEntry(v: unknown): v is KeybindingEntry {
-  return isRecord(v) && isString(v.command) && isString(v.key) && isString(v.when);
+  return isRecord(v) && isString(v.command) && isString(v.key) && isString(v.when) && isOptionalString(v.mac);
 }
 function isViewsContainerEntry(v: unknown): v is ViewsContainerEntry {
   return isRecord(v) && isString(v.id);
@@ -547,21 +548,12 @@ describe('package.json command titles and categories', () => {
     // Absent when the file has no .meta (its own context-menu `when`), and even offered it still
     // needs the clicked row's own identity — no ambient fallback.
     'modbench.downloadedFile.openMeta',
-    // Has the Delete key's own ambient selection fallback; still gated here, as mod.enable below
-    // is, because no palette entry names it.
+    // Has the Delete key's own ambient selection fallback; still gated here, because no palette
+    // entry names it.
     'modbench.downloadedFile.delete',
     'modbench.downloadedFile.exclude',
     'modbench.downloadedFile.include',
     'modbench.mod.openFolder',
-    // Has the plural gesture's own ambient selection fallback; the Space key and the palette
-    // entries are placed by a later slice.
-    'modbench.mod.enable',
-    'modbench.mod.disable',
-    'modbench.separator.add',
-    'modbench.mod.move',
-    'modbench.mod.uninstall',
-    'modbench.separator.rename',
-    'modbench.separator.delete',
     'modbench.plugin.reveal',
     // Needs the clicked row's plugin name to resolve which mod folder to track.
     'modbench.plugin.track',
@@ -585,7 +577,7 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(30);
+    expect(PALETTE_GATED).toHaveLength(23);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter(
@@ -772,37 +764,6 @@ describe('package.json Mods row menu — enable/disable by row state', () => {
     expect(disable.when).not.toContain(String.raw`\bdisabled\b`);
   });
 
-  // Enable and disable are one slot, mutually exclusive by their own `when` — same posture as
-  // Downloads' exclude/include pair.
-  it('shares one slot between enable and disable', () => {
-    const entries = modRowMenu();
-    const slotOf = (command: string): number => {
-      const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
-      return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
-    };
-    expect(slotOf('modbench.mod.enable')).toBe(slotOf('modbench.mod.disable'));
-  });
-
-  // mods.md's row order: "open folder · view on Nexus · enable or disable · move… · add
-  // separator · … · uninstall" — a change gesture between the last read (view on Nexus) and the
-  // destroy group (uninstall), never after it.
-  it('sits after view on Nexus and before uninstall', () => {
-    const entries = modRowMenu();
-    const slotOf = (command: string): number => {
-      const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
-      return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
-    };
-    const viewOnNexus = slotOf('modbench.mod.viewOnNexus');
-    const enable = slotOf('modbench.mod.enable');
-    const disable = slotOf('modbench.mod.disable');
-    const uninstall = slotOf('modbench.mod.uninstall');
-
-    expect(enable).toBeGreaterThan(viewOnNexus);
-    expect(disable).toBeGreaterThan(viewOnNexus);
-    expect(enable).toBeLessThan(uninstall);
-    expect(disable).toBeLessThan(uninstall);
-  });
-
   it('registers both IDs under the same view/item/context gate a mod row matches, whether or not it has a Nexus id', () => {
     for (const command of ['modbench.mod.enable', 'modbench.mod.disable']) {
       const entry = present(modRowMenu().find((e) => e.command === command), `a ${command} row-menu entry`);
@@ -853,17 +814,6 @@ describe('package.json Move on the mod menu and the separator menu', () => {
     expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
     expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
   });
-
-  it('puts move first on the separator menu', () => {
-    const separatorMenu = modsViewMenu().filter((e) => e.when.includes('viewItem == separator'));
-    const slotOf = (entry: MenuEntry): number =>
-      Number(present(/@(\d+)$/.exec(entry.group ?? '')?.[1], `a numbered group for ${entry.command}`));
-    const move = present(separatorMenu.find((e) => e.command === 'modbench.mod.move'), 'a separator-menu move entry');
-
-    const others = separatorMenu.filter((e) => e !== move);
-    expect(others.length).toBeGreaterThan(0);
-    expect(others.every((e) => e.group?.split('@')[0] === move.group?.split('@')[0] && slotOf(e) > slotOf(move))).toBe(true);
-  });
 });
 
 // mods.md, Menus and keys, story 7: copy value on the mod menu and the separator menu, under the
@@ -903,6 +853,116 @@ describe('package.json Mods row menu — copy value', () => {
     );
     expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
     expect(entry.group).toBe('modbench@3');
+  });
+});
+
+// mods.md, Menus and keys: the placement table.
+describe('package.json Mods title bar, menus, keys and palette follow mods.md', () => {
+  const MODS_VIEW = 'view == modbench.modList';
+  const inModsView = (menu: string): MenuEntry[] =>
+    present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, MODS_VIEW));
+  const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
+  const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
+  // VS Code draws the navigation group first, then the other groups by name, each by its order.
+  const rank = (group: string): string => (group === 'navigation' ? '' : group);
+  const placed = (entries: readonly MenuEntry[]): [string, string][] =>
+    [...entries]
+      .sort((a, b) => rank(groupOf(a)).localeCompare(rank(groupOf(b))) || orderOf(a) - orderOf(b))
+      .map((e) => [e.command, groupOf(e)]);
+  const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => e.when.includes(row));
+  const MOD_ROW = String.raw`viewItem =~ /\bmod\b/`;
+
+  // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
+  it('title bar: filter or clear, then sort direction, as icons; install then create empty mod in the overflow', () => {
+    expect(placed(inModsView('view/title'))).toEqual([
+      ['modbench.mod.filter', 'navigation'],
+      ['modbench.mod.clearFilter', 'navigation'],
+      ['modbench.mod.sortWinningAtTop', 'navigation'],
+      ['modbench.mod.sortLosingAtTop', 'navigation'],
+      ['modbench.mod.install', '3_create'],
+      ['modbench.mod.createEmpty', '3_create'],
+    ]);
+  });
+
+  it('mod menu: open, change, create, copy, then destroy, with source control left to track', () => {
+    expect(placed(rowMenu(MOD_ROW))).toEqual([
+      ['modbench.mod.openFolder', '1_open'],
+      ['modbench.mod.viewOnNexus', '1_open'],
+      ['modbench.mod.enable', '2_change'],
+      ['modbench.mod.disable', '2_change'],
+      ['modbench.mod.move', '2_change'],
+      ['modbench.separator.add', '3_create'],
+      ['modbench.mod.createEmpty', '3_create'],
+      ['modbench.mod.install', '3_create'],
+      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.mod.uninstall', '6_destroy'],
+    ]);
+  });
+
+  it('mod menu: enable and disable share one slot', () => {
+    const slot = (command: string) => present(rowMenu(MOD_ROW).find((e) => e.command === command), command).group;
+    expect(slot('modbench.mod.enable')).toBe(slot('modbench.mod.disable'));
+  });
+
+  it('separator menu: move, add separator, rename, copy value, delete', () => {
+    expect(placed(rowMenu('viewItem == separator'))).toEqual([
+      ['modbench.mod.move', '2_change'],
+      ['modbench.separator.add', '3_create'],
+      ['modbench.separator.rename', '3_create'],
+      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.separator.delete', '6_destroy'],
+    ]);
+  });
+
+  it('Overwrite menu: open folder', () => {
+    expect(placed(rowMenu('viewItem == overwrite'))).toEqual([['modbench.mod.openFolder', '1_open']]);
+  });
+
+  const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
+  // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
+  const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
+
+  it('binds each key to its command while the Mods tree has focus', () => {
+    const modsKeys = pkg.contributes.keybindings
+      .filter((k) => k.when.startsWith('focusedView == modbench.modList'))
+      .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
+    expect(modsKeys).toEqual([
+      { command: 'modbench.mod.filter', key: 'ctrl+f', mac: 'cmd+f', when: `focusedView == modbench.modList && ${IN_AN_INSTANCE}`, args: undefined },
+      { command: 'modbench.mod.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == enable`, args: undefined },
+      { command: 'modbench.mod.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == disable`, args: undefined },
+      { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },
+      { command: 'modbench.separator.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
+      { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_SEPARATOR}`, args: undefined },
+      { command: 'modbench.record.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
+    ]);
+  });
+
+  // commands.md, No dead entries: each is listed only while the selection holds what it acts on.
+  const MODS_PALETTE = [
+    ['modbench.mod.enable', 'modbench.mod.holdsDisabledMod'],
+    ['modbench.mod.disable', 'modbench.mod.holdsEnabledMod'],
+    ['modbench.mod.move', 'modbench.mod.selectionKind'],
+    ['modbench.separator.add', 'modbench.mod.selectionKind && modbench.mod.singleRow'],
+    ['modbench.separator.rename', ONE_SEPARATOR],
+    ['modbench.separator.delete', 'modbench.mod.selectionKind == separator'],
+    ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
+    ['modbench.mod.createEmpty', undefined],
+    ['modbench.mod.install', undefined],
+  ] as const;
+
+  it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    const focused = `focusedView == modbench.modList && ${IN_AN_INSTANCE}`;
+    expect(entries.map((e) => e.when)).toEqual([holds === undefined ? focused : `${focused} && ${holds}`]);
+  });
+
+  it('the empty list\'s message names the overflow\'s own titles', () => {
+    const overflowTitles = inModsView('view/title').filter((e) => groupOf(e) !== 'navigation')
+      .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
+    expect(overflowTitles.length).toBeGreaterThan(0);
+    for (const title of overflowTitles) expect(NO_MODS_MESSAGE).toContain(title);
+    expect(NO_MODS_MESSAGE).toContain('overflow');
   });
 });
 
