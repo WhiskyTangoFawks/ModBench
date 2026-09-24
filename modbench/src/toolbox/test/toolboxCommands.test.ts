@@ -180,7 +180,7 @@ describe('Refresh', () => {
   }
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
-    const { reporter, run } = registerRefresh({ applied: true, loadOrder: { sent: false } });
+    const { reporter, run } = registerRefresh({ applied: true });
 
     await run();
 
@@ -227,7 +227,7 @@ describe('Refresh', () => {
   // that the refresh did not read the disk.
   it('reports a re-read that failed at error, with its reason', async () => {
     const { reporter, run } = registerRefresh(
-      { applied: true, loadOrder: { sent: false } }, 'ModOrganizer.ini: no selected_profile');
+      { applied: true }, 'ModOrganizer.ini: no selected_profile');
 
     await run();
 

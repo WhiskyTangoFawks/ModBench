@@ -983,13 +983,28 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     /// <summary>ADR-0009 invariant 5's rebuild: closes the scope, drops the instance's index file and
-    /// reopens it empty, flooring its sequence at what this process handed out. The next reconcile
-    /// fills it.</summary>
-    public void RebuildStore(GameRelease gameRelease, string instanceRoot)
+    /// reopens it empty, flooring its sequence at what this process handed out. Then every copy is
+    /// read again against the load order held, as a cold load does, off the caller's thread like a
+    /// reconcile the watcher starts; the task is that refill. With none held the store stays empty
+    /// and the task has already finished.</summary>
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
         Close();
-        using var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence);
+        // Released before the reconcile below opens the same file for its own scope.
+        _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
+
+        var (held, version) = (_holder.Current, _holder.Version);
+        if (held.DataFolderPath.Length == 0) return Task.CompletedTask;
+        return Task.Factory.StartNew(
+            () => ReconcileUnlessDisposed(held, version),
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    private void ReconcileUnlessDisposed(LoadOrderSnapshot snapshot, long version)
+    {
+        lock (_lock) if (_disposed) return;
+        Reconcile(snapshot, version);
     }
 
     // Drops the scope: the copies it has open and the store's connection. Cancels an in-flight

@@ -85,34 +85,15 @@ describe('load order changed', () => {
 });
 
 describe('refresh', () => {
-  it('puts the load order after a rebuild even when it is the one already put', async () => {
-    const client = attachedClient();
-    client.setCommandResult('rebuildIndex', { rebuilt: true });
-    const sender = createLoadOrderSender(client);
-    await putLoadOrder(sender, '/instance', VALUE);
-
-    await refresh(client, sender, '/instance', VALUE);
-
-    expect(client.calls.map((c) => c.method)).toEqual(['putLoadOrder', 'rebuildIndex', 'putLoadOrder']);
-  });
-
-  it('rebuilds the index for the instance, then sends the load order', async () => {
+  // load-instance, refresh step 2: mEdit reads every copy again against the load order it holds.
+  it('rebuilds the index for the instance and sends nothing', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });
 
-    const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
+    const result = await refresh(client, '/instance', 'Fallout 4');
 
-    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex', 'putLoadOrder']);
-    const [rebuild] = client.calls;
-    expect(rebuild?.args).toEqual(['/instance', 'Fallout4']);
-    expect(result).toEqual({
-      applied: true,
-      loadOrder: {
-        sent: true,
-        snapshot: { plugins: [PLUGIN], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
-        outcome: APPLIED,
-      },
-    });
+    expect(client.calls.map((c) => [c.method, ...c.args])).toEqual([['rebuildIndex', '/instance', 'Fallout4']]);
+    expect(result).toEqual({ applied: true });
   });
 
   // ADR-0009 invariant 5: held-elsewhere is refused by name, apart from every other failure — the
@@ -121,7 +102,7 @@ describe('refresh', () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });
 
-    const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
+    const result = await refresh(client, '/instance', 'Fallout 4');
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, heldElsewhere: true });
@@ -131,7 +112,7 @@ describe('refresh', () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
 
-    const result = await refresh(client, createLoadOrderSender(client), '/instance', VALUE);
+    const result = await refresh(client, '/instance', 'Fallout 4');
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' });

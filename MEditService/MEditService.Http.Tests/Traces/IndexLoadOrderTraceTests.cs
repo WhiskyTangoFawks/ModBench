@@ -47,6 +47,22 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
+    // ADR-0013 invariant 1: an identical snapshot does nothing. The version it answers is the one
+    // already reconciled, and no reconcile answers a newer one.
+    [Fact]
+    public async Task PuttingTheLoadOrderHeld_AnswersItsVersion_AndReconcilesNothing()
+    {
+        using var fx = OneMod();
+        var first = await (await Client.PutLoadOrder(fx)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var again = await (await Client.PutLoadOrder(fx)).Content.ReadFromJsonAsync<JsonElement>();
+
+        var held = first.GetProperty("version").GetInt64();
+        Assert.Equal(held, again.GetProperty("version").GetInt64());
+        var status = await Client.GetFromJsonAsync<JsonElement>("/load-order/status");
+        Assert.Equal(held, status.GetProperty("version").GetInt64());
+    }
+
     // A binary has no smaller unit than itself, so the copy the reconcile names is re-derived whole
     // rather than by key.
     [Fact]

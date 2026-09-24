@@ -239,15 +239,13 @@ function applySyncedFilterState(
 }
 
 // ADR-0013: instance commands hand the client the load order, and the answer is reported and
-// applied here, where the views are. `loadOrderOf` picks the put out of the answer: undefined
-// when nothing was sent.
-function handleLoadOrder<T>(
+// applied here, where the views are.
+function handleLoadOrder(
   deps: LoadOrderHandlingDeps,
-  command: (options: LoadOrderSendOptions) => Promise<T>,
-  loadOrderOf: (answer: T) => PutLoadOrderResult | undefined,
-): Promise<T> {
+  command: (options: LoadOrderSendOptions) => Promise<PutLoadOrderResult>,
+): Promise<PutLoadOrderResult> {
   const { session, client, setStatusText } = deps;
-  const run = async (): Promise<T> => {
+  const run = async (): Promise<PutLoadOrderResult> => {
     const treeProgress = makeTreeProgressHandler(session);
     const answer = await command({
       // The Index's own known refusal rides a tick, never the put's own outcome (ADR-0013) — this
@@ -257,8 +255,7 @@ function handleLoadOrder<T>(
         treeProgress.onProgress(status);
       },
     });
-    const put = loadOrderOf(answer);
-    if (put) await settleLoadOrder(deps, treeProgress, put);
+    await settleLoadOrder(deps, treeProgress, answer);
     return answer;
   };
   // A snapshot handed over before mEdit is attached waits on the client for the connect, so
@@ -447,13 +444,11 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
   const putCurrentLoadOrder = async (): Promise<void> => {
     await handleLoadOrder(
-      handlingDeps, (options) => putLoadOrder(sender, instanceRoot, loadOrderSource(), options), (put) => put);
+      handlingDeps, (options) => putLoadOrder(sender, instanceRoot, loadOrderSource(), options));
   };
-  // ADR-0014: instance commands rebuild the index and then put the load order; the gesture itself
-  // asks the Instance loader to read every file again.
-  const refreshIndex = () => handleLoadOrder(
-    handlingDeps, (options) => refresh(client, sender, instanceRoot, loadOrderSource(), options),
-    (answer) => (answer.applied ? answer.loadOrder : undefined));
+  // load-instance, refresh: instance commands rebuild the index and send nothing; the gesture
+  // itself asks the Instance loader to read every file again.
+  const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.

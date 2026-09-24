@@ -145,7 +145,8 @@ export class HttpMEditClient implements MEditClient {
     return data ?? { name, path, origin, slot: null, version: 0 };
   }
 
-  /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty.
+  /** ADR-0014: Refresh's first step — drops the instance's index file, which mEdit then refills
+   *  against the load order it holds.
    *  ADR-0009 invariant 5: a 423 is `heldElsewhere`, apart from every other failure — never a
    *  rejection. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {

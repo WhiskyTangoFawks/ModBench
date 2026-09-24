@@ -20,10 +20,13 @@ public sealed class LoadOrderHolder
     /// this Apply's own version, so a subscriber and its caller name the same arrival.</summary>
     public event Action<LoadOrderSnapshot, long>? Changed;
 
-    /// <summary>Monotonic, one higher per Apply: this arrival's version, for a caller later asking
-    /// whether the Index has reconciled it yet (ADR-0013).</summary>
+    /// <summary>Monotonic, one higher per Apply that changed the load order: this arrival's version,
+    /// for a caller later asking whether the Index has reconciled it yet (ADR-0013). A snapshot
+    /// equal to the current one is a no-op (ADR-0013 invariant 1) and answers the current version.
+    /// </summary>
     public long Apply(LoadOrderSnapshot snapshot)
     {
+        if (snapshot.Equals(Current)) return Version;
         var version = Interlocked.Increment(ref _version);
         Volatile.Write(ref _current, snapshot);
         Changed?.Invoke(snapshot, version);

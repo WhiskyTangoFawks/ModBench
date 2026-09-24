@@ -1632,20 +1632,22 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// ADR-0014: Refresh rebuilds the Index (drops and reopens it empty) and then resends the load
-// order exactly as a cold load does, so the reconcile that follows re-indexes everything.
-describe('Refresh rebuilds the index, then resends the load order', () => {
-  beforeEach(() => resetMockBackend());
+// load-instance, refresh: mEdit reads every copy again against the load order it holds, and the
+// re-read of the instance that follows finds that load order unchanged.
+describe('Refresh rebuilds the index and sends nothing', () => {
+  // Launched, so a re-read that changed the load order would put it.
+  beforeEach(async () => {
+    await resetMockBackendDetached();
+    await enterEditing();
+    requestLog.length = 0;
+  });
   after(() => resetMockBackend());
 
-  it('POSTs /index/rebuild before it PUTs /load-order', async () => {
+  it('POSTs /index/rebuild and PUTs no load order', async () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    const rebuildAt = requestLog.indexOf('POST /index/rebuild');
-    const putAt = requestLog.indexOf('PUT /load-order');
-    assert.ok(rebuildAt >= 0, 'modbench.instance.refresh must rebuild the index');
-    assert.ok(putAt >= 0, 'modbench.instance.refresh must resend the load order after the rebuild');
-    assert.ok(rebuildAt < putAt, 'the rebuild must run before the load order is resent');
+    assert.ok(requestLog.includes('POST /index/rebuild'), 'modbench.instance.refresh must rebuild the index');
+    assert.ok(!requestLog.includes('PUT /load-order'), 'modbench.instance.refresh must send no load order');
   });
 
   // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,

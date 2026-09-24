@@ -232,7 +232,8 @@ public static class IndexEndpoints
 
         try
         {
-            index.RebuildStore(gameRelease, req.InstanceRoot);
+            // Answered once the store is empty again; the refill reports through the index status.
+            _ = index.RebuildStore(gameRelease, req.InstanceRoot);
             return Results.NoContent();
         }
         catch (IndexHeldElsewhereException ex)
