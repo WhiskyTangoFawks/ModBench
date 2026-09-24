@@ -99,6 +99,7 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
         .ProducesProblem(400)
+        .ProducesProblem(500)
         .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/renumber", (
@@ -237,6 +238,7 @@ public static class RecordEndpoints
         {
             var result = edits.DeleteRecords(
                 [.. records.Select(r => new RecordAt(new PluginCopyKey(r.Plugin, r.Origin), r.FormKey))]);
+            if (result.SelectionRefusal is { } selectionRefusal) return WriteEndpointMapping.Refusal(selectionRefusal);
             return Results.Ok(new RecordDeleteResponse(
                 [.. result.Applied.Select(Addressed)],
                 [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
