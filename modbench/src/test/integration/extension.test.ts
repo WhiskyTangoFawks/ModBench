@@ -758,6 +758,52 @@ describe('Overwrite row', () => {
   });
 });
 
+// ── A Mods gesture's write reaches the view through the watch alone ──────────────
+
+// ADR-0015 invariant 2: the gesture writes modlist.txt and returns, and the view follows the value
+// the watch lands, as it would a change from MO2.
+describe('A Mods gesture\'s write reaches the Mods view through the watch alone', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
+  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
+  const instance = () => present(instanceExport(), 'the Instance activate() exports');
+  const separatorRow = async (name: string) =>
+    (await provider().getChildren()).find((n) => n.kind === 'separator' && n.label === name);
+  let original = '';
+
+  before(async () => {
+    if (!root) return;
+    original = fs.readFileSync(modlistPath, 'utf8');
+    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '-Doomed_separator\r\n'));
+  });
+
+  after(async () => {
+    if (!root) return;
+    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, original));
+  });
+
+  it('delete separator asks for no refresh, and its row goes when the watch lands the new value', async function () {
+    if (!root) this.skip();
+    const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
+    let refreshes = 0;
+    const listening = provider().onDidChangeTreeData(() => { refreshes++; });
+    const before = instance().sequence;
+
+    try {
+      await vscode.commands.executeCommand('modbench.separator.delete', doomed);
+
+      assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
+      assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
+      assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
+
+      await pastSequence(instance(), before);
+      assert.strictEqual(await separatorRow('Doomed'), undefined, 'the watch\'s value should have taken the row away');
+    } finally {
+      listening.dispose();
+    }
+  });
+});
+
 // ── Notification stream lifecycle is gated on the backend ────────────────────
 
 // ADR-0014 invariant 2: every notification kind rides this one stream, proven once here.

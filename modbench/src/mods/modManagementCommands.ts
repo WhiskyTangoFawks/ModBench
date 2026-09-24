@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode } from './ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode } from './ModListProvider';
+import { registerModsGesture, singularArgument } from './gestureEntry';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
@@ -153,10 +154,12 @@ export function registerModContextCommands(
 export function registerSeparatorCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+  viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.separator.rename', async (node: SeparatorNode | undefined) => {
-        if (node?.kind !== 'separator') return;
+      registerModsGesture('modbench.separator.rename', viewSelection, async (entry) => {
+        const node = singularArgument(entry, 'separator');
+        if (!node) return;
         const newName = await vscode.window.showInputBox({
           prompt: 'Rename separator',
           value: node.separator.name,
@@ -219,8 +222,7 @@ export function registerOpenFolderCommand(instance: Pick<Instance, 'value'>, rep
   });
 }
 
-// A read gesture's failure path. Not `runModAction`, which refreshes the Mods tree after a write.
-async function reportFailure(reporter: Reporter, failMessage: string, action: () => Promise<void>): Promise<void> {
+export async function reportFailure(reporter: Reporter, failMessage: string, action: () => Promise<void>): Promise<void> {
   try {
     await action();
   } catch (err) {
