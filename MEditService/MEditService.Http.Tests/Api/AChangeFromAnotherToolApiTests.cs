@@ -109,8 +109,8 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    // A batch publishes a record it dropped after the quest's frame, and everything before the next
-    // batch publishes anything, so the quest's second edit bounds the first edit's batch.
+    // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame
+    // bounds everything the first batch published.
     private static async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSettleAnchoredBy(
         StreamReader stream, string modFolder, string quest)
     {

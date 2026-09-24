@@ -124,6 +124,26 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
+    // Its name still carries the key, but a document that declares nothing files no record, so the
+    // whole-copy validate would count it unreadable and keep the stale row.
+    [Fact]
+    public async Task ACommittedDocumentOverwrittenToDeclareNothing_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, "A.esp");
+        Directory.CreateDirectory(SourceRepository.RootIn(modFolder, "A.esp"));
+        var document = tree.WriteRecord(modFolder, "A.esp", "000800:A.esp");
+        WatchedTree.Track(modFolder, "A.esp");
+        await tree.ApplyLoadOrder();
+
+        await tree.Observes(() => tree.WriteFile(document, "{}"u8.ToArray()));
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Equal(["000800:A.esp"], Assert.Single(tree.Index.Of("refresh")).Keys);
+        Assert.Empty(tree.Index.Of("validate"));
+    }
+
     // A move whose two halves settle apart: the new path's batch closed before the old path's
     // delete arrived, and the folder it went to is where no refresh by key looks.
     [Fact]
