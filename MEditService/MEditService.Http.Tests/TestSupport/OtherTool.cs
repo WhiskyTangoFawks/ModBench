@@ -58,8 +58,9 @@ internal static class OtherTool
         File.Move(document, Beside(document, renamedTo));
     }
 
-    /// <summary>The first half of a move by a tool that copies and then deletes, in the same terms as
-    /// <see cref="RenamesASourceDocument"/>.</summary>
+    /// <summary>The first half of a move that copies, then deletes: <paramref name="document"/> copied
+    /// to <paramref name="copiedTo"/>, relative to its folder, <c>{0}</c> standing for its file
+    /// name.</summary>
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
         File.Copy(document, Beside(document, copiedTo));
 
