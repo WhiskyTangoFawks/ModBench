@@ -75,6 +75,7 @@ import { createModListView, registerDownloadsView } from '../mo2TreeViews';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
+import { resolvesNotFound } from './mo2/gameFolderNotFound';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 const command = commandInvoker(h.state);
@@ -83,7 +84,7 @@ const currentBox = currentBoxOf(h.state);
 async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: () => Promise.resolve(undefined),
+    resolveGameDirectory: resolvesNotFound,
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });

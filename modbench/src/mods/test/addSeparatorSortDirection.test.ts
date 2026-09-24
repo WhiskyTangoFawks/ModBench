@@ -27,6 +27,7 @@ import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, type ModlistNode, type SortDirection } from '../ModListProvider';
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
 
@@ -36,7 +37,7 @@ async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) =>
   try {
     const instance = new Instance({
       instanceRoot: root, log: () => {}, logReadFailure: () => {},
-      resolveGameDirectory: () => Promise.resolve(undefined),
+      resolveGameDirectory: resolvesNotFound,
     });
     await instance.refresh();
     const provider = new ModListProvider({ instance, instanceRoot: root });

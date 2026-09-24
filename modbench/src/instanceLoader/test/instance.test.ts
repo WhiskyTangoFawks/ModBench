@@ -8,6 +8,7 @@ import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
+import { GAME_FOLDER_NOT_FOUND, resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
@@ -32,9 +33,7 @@ const DATA_FOLDER = '/game/Data';
 
 // The Instance adapter's own answer is doubled: where the game is is its question, not the Instance's.
 const resolvesDataFolder: GameDirectoryResolver = () =>
-  Promise.resolve({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
-
-const resolvesNothing: GameDirectoryResolver = () => Promise.resolve(undefined);
+  Promise.resolve({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
 
 interface Hooks {
   resolveGameDirectory?: GameDirectoryResolver;
@@ -578,7 +577,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.activeProfile).toBe('Default');
     expect(instance.value.gameRelease).toBe('Fallout 4');
     expect(instance.value.nexusSlug).toBe('fallout4');
-    expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
+    expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
   it('carries no deployed state, whether or not a deploy manifest sits under mods/', async () => {
@@ -692,19 +691,38 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.modFolders).toBeUndefined();
   });
 
-  // Same reasoning again: the empty value already has `gameDirectory: undefined`, so a prior
-  // resolved refresh plus the sequence bump prove tolerance rather than a swallowed failure.
-  it('yields a value with no game directory, rather than a failure, when nothing resolves', async () => {
-    const { instance, setResolver } = await realInstance();
+  // The empty value already reads as not found, so a prior found refresh plus the sequence bump
+  // prove a landed value rather than a swallowed failure.
+  it('lands a value carrying the game folder not found, with each place looked, rather than a failure', async () => {
+    const { instance, setResolver, readFailureLines } = await realInstance();
     await instance.refresh();
-    expect(instance.value.gameDirectory).toBeDefined();
+    expect(instance.value.gameFolder.kind).toBe('found');
     const before = instance.sequence;
 
-    setResolver(resolvesNothing);
+    setResolver(resolvesNotFound);
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.gameDirectory).toBeUndefined();
+    expect(instance.readFailure).toBeUndefined();
+    expect(readFailureLines).toEqual([]);
+    expect(instance.value.gameFolder).toEqual(GAME_FOLDER_NOT_FOUND);
+    expect(instance.value.mods.length).toBeGreaterThan(0);
+  });
+
+  // Rival: a configuration naming no game read as the game folder not found, which a missing
+  // gameName also leaves Steam nothing to go on for.
+  it('fails the read, keeping the last value, when the configuration names no game', async () => {
+    const { root, instance, readFailureLines } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+    const ini = join(root, 'ModOrganizer.ini');
+    await writeFile(ini, (await readFile(ini, 'utf8')).replace(/gameName=.*\r?\n/, ''));
+
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before);
+    expect(instance.readFailure).toMatch(/gameName/);
+    expect(readFailureLines).toHaveLength(1);
   });
 
   // A mod- or overwrite-provided row keeps its real path; a listed name only Data/ could provide
@@ -722,7 +740,7 @@ describe('Instance — downloads, profile and game directory', () => {
     const modProvidedBefore = withGameDirectory.find((p) => p.name === 'NonAsciiRetexture.esp');
     expect(modProvidedBefore?.path).toEqual(expect.any(String));
 
-    setResolver(resolvesNothing);
+    setResolver(resolvesNotFound);
     await instance.refresh();
 
     const modProvided = instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp');
@@ -740,12 +758,12 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
     const before = instance.sequence;
     const explicitDir = join(root, 'ExplicitGame');
-    setResolver(() => Promise.resolve({ root: explicitDir, dataFolder: join(explicitDir, 'Data') }));
+    setResolver(() => Promise.resolve({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') }));
 
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
+    expect(instance.value.gameFolder).toEqual({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') });
   });
 
   // The Instance's whole input: the instance directory it was given, and the resolver's answer
@@ -770,14 +788,14 @@ describe('Instance — downloads, profile and game directory', () => {
     setResolver(async () => {
       const text = await readFile(ini, 'utf8');
       await writeFile(ini, text.replace(/gameName=.*/, 'gameName=Rewritten Mid Recompute'));
-      return undefined;
+      return GAME_FOLDER_NOT_FOUND;
     });
 
     await instance.refresh();
 
     expect(instance.value.gameRelease).toBe(beforeRelease);
     // Positive control: the rewrite is real, and the next recompute does read it.
-    setResolver(resolvesNothing);
+    setResolver(resolvesNotFound);
     await instance.refresh();
     expect(instance.value.gameRelease).toBe('Rewritten Mid Recompute');
   });
@@ -799,7 +817,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // activation joining its own.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNothing, log: () => {}, logReadFailure: () => {},
+      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNotFound, log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
@@ -824,7 +842,7 @@ async function minimalInstance(): Promise<{
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
   const logs: string[] = [];
   const readFailureLines: string[] = [];
-  let resolve: GameDirectoryResolver = resolvesNothing;
+  let resolve: GameDirectoryResolver = resolvesNotFound;
   const instance = new Instance({
     instanceRoot: root,
     resolveGameDirectory: (iniText) => resolve(iniText),
@@ -929,7 +947,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await writeFile(join(dataFolder, 'Fallout4.ba2'), '');
     await writeFile(join(dataFolder, 'Hidden.esp.mohidden'), '');
     await writeFile(join(dataFolder, 'Textures', 'Nested.esp'), '');
-    setResolver(() => Promise.resolve({ root: dirname(dataFolder), dataFolder }));
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
 
     await instance.refresh();
 
@@ -946,7 +964,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await instance.refresh();
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
 
-    setResolver(() => Promise.resolve({ root: '/nowhere', dataFolder: '/nowhere/Data' }));
+    setResolver(() => Promise.resolve({ kind: 'found', root: '/nowhere', dataFolder: '/nowhere/Data' }));
     await instance.refresh();
 
     expect(instance.value.dataFolderPlugins).toMatchObject({ kind: 'unreadable' });

@@ -40,7 +40,7 @@ export function createModListView(
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    unfilteredMessage: () => modListProvider.emptyListMessage(),
+    viewMessage: () => modListProvider.emptyListMessage(),
     onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
   const showCount = () => modListFilter.setBaseDescription(modListProvider.description());

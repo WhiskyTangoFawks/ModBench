@@ -2,7 +2,7 @@
 // watches files and takes a resolver, so the composition root turns an edit into the same
 // recompute Refresh's re-read runs.
 
-export const GAME_DIRECTORY_SECTION = 'modbench.mods.gameDirectory';
+import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 
 /** The Toolbox's own settle: a burst of edits (a pasted path, keystroke by keystroke) becomes
  *  one recompute, as a burst of file events does under the Instance's own settle. */
@@ -24,7 +24,7 @@ export function refreshOnGameDirectoryChange(
 ): Subscription {
   let settle: ReturnType<typeof setTimeout> | undefined;
   const subscription = onConfigChange((e) => {
-    if (!e.affectsConfiguration(GAME_DIRECTORY_SECTION)) return;
+    if (!e.affectsConfiguration(GAME_FOLDER_SETTING)) return;
     clearTimeout(settle);
     settle = setTimeout(() => void refresh(), SETTING_SETTLE_MS);
   });

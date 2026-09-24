@@ -27,7 +27,9 @@ import {
   downloadFile, downloadSidecarFile, downloadsDir, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
   pluginsFile, profilesDir, settingsFile,
 } from '../instanceAdapter/layout';
-import type { GameDirectory, GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import {
+  GAME_FOLDER_SETTING, dataFolderOf, type GameFolder, type GameDirectoryResolver,
+} from '../instanceAdapter/gameDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { get, listDir } from '../instanceAdapter/files';
@@ -40,6 +42,7 @@ export type { Mod, ModlistEntry, Separator } from '../mo2Codecs/modlistText';
 export { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 export type { PluginEntry } from '../mo2Codecs/pluginsText';
 export type { DownloadRow, DownloadStatus } from '../mo2Codecs/downloads';
+export type { GameFolder, GameFolderLook } from '../instanceAdapter/gameDirectory';
 
 // How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
 // the wait before an empty modlist read is believed.
@@ -78,7 +81,7 @@ export interface InstanceValue {
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
   /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0013). A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
-   *  undefined — when the game directory is unresolved. */
+   *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   /** downloads/ rows, `.meta` sidecars folded in — status and hidden included. */
   readonly downloads: readonly DownloadFile[];
@@ -88,8 +91,8 @@ export interface InstanceValue {
   readonly gameRelease: string;
   /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
   readonly nexusSlug: string;
-  /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
-  readonly gameDirectory: GameDirectory | undefined;
+  /** Setting, then MO2's `gamePath`, then autodetect; or each place looked when none answered. */
+  readonly gameFolder: GameFolder;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
@@ -198,7 +201,8 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   activeProfile: '',
   gameRelease: '',
   nexusSlug: '',
-  gameDirectory: undefined,
+  // Not read yet reads as not found, so a view that says not found waits for sequence 1.
+  gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
   modStatuses: new Map(),
   overwriteFileCount: 0,
@@ -367,14 +371,14 @@ export class Instance implements vscode.Disposable {
       readProfileNames(instanceRoot),
       // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
       // generations in one value; beside the reads above, the game side costs no round trip.
-      resolveGameDirectory(iniText).then(async (gameDirectory) => ({
-        gameDirectory, dataFolderPlugins: await readDataFolderPlugins(gameDirectory?.dataFolder, log),
+      resolveGameDirectory(iniText).then(async (gameFolder) => ({
+        gameFolder, dataFolderPlugins: await readDataFolderPlugins(dataFolderOf(gameFolder), log),
       })),
     ]);
-    const { gameDirectory, dataFolderPlugins } = game;
+    const { gameFolder, dataFolderPlugins } = game;
     const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? []) : undefined;
     const gameName = readGameName(iniText);
-    // An unresolved game directory loses only the Data-folder copies' paths: every
+    // A game folder not found loses only the Data-folder copies' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
     // itself (see `LoadOrderPluginLine`), not from the game directory.
     const plugins = await buildLoadOrderRows(
@@ -386,7 +390,7 @@ export class Instance implements vscode.Disposable {
         readEnabledPlugins: () => Promise.resolve(pluginLines.filter((p) => p.enabled).map((p) => p.name)),
       },
       instanceRoot,
-      gameDirectory?.dataFolder,
+      dataFolderOf(gameFolder),
       () => Promise.resolve(index),
     );
     const modStatuses = computeModStatuses(entries, index);
@@ -407,7 +411,7 @@ export class Instance implements vscode.Disposable {
       activeProfile: profile,
       gameRelease: gameName,
       nexusSlug: nexusSlugForGame(gameName),
-      gameDirectory,
+      gameFolder,
       dataFolderPlugins,
       modStatuses,
       overwriteFileCount,

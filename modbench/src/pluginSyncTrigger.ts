@@ -2,6 +2,7 @@ import type * as vscode from 'vscode';
 import type { Instance } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 import { errorMessage } from './ports/errorMessage';
+import { dataFolderOf } from './instanceAdapter/gameDirectory';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
 // as the Plugins view's directory.
@@ -25,7 +26,7 @@ export function registerPluginSync(
       try {
         const outcome = await sync(
           value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
-          value.gameDirectory?.dataFolder, value.gameRelease);
+          dataFolderOf(value.gameFolder), value.gameRelease);
         if (!outcome.applied) {
           channel.error(`[modmanager] plugin sync failed: ${outcome.refusal}`);
           return;

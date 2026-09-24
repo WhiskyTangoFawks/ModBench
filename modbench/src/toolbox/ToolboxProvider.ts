@@ -8,11 +8,22 @@ export interface ToolboxDeps {
   instance: InstanceView | undefined;
 }
 
-function gameRow({ gameRelease, gameDirectory }: InstanceValue): vscode.TreeItem {
+function gameRow({ gameRelease, gameFolder }: InstanceValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Game');
-  row.description = gameRelease;
-  row.iconPath = new vscode.ThemeIcon('game');
-  row.tooltip = gameDirectory?.root;
+  if (gameFolder.kind === 'found') {
+    row.description = gameRelease;
+    row.iconPath = new vscode.ThemeIcon('game');
+    row.tooltip = gameFolder.root;
+    return row;
+  }
+  // common.md, States, story 5: the name stays, and the warning rides beside it.
+  row.description = `${gameRelease} · game folder not found`;
+  row.iconPath = new vscode.ThemeIcon('warning');
+  row.tooltip = [
+    'Game folder not found. Modbench looked at:',
+    ...gameFolder.looked.map(({ place, answer }) => `${place}: ${answer}`),
+    `Set ${gameFolder.setting} to the game folder to fix it.`,
+  ].join('\n');
   return row;
 }
 

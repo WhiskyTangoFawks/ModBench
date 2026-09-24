@@ -298,22 +298,23 @@ describe('providedPluginsOf', () => {
 
 // ADR-0013: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
 describe('loadOrderSnapshotOf', () => {
-  const GAME_DIRECTORY = { root: '/game', dataFolder: '/game/Data' };
+  const GAME_FOLDER = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
+  const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
   const resolved: LoadOrderPlugin = { name: 'a.esp', path: '/mods/A/a.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
   const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };
 
-  it('is undefined — no put at all — when the game directory has not resolved', () => {
-    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: undefined })).toBeUndefined();
+  it('is undefined — no put at all — when the game folder is not found', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameFolder: NOT_FOUND })).toBeUndefined();
   });
 
-  it('carries the game directory\'s dataFolder and every resolved plugin once it has', () => {
-    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: GAME_DIRECTORY }))
+  it('carries the game folder\'s dataFolder and every resolved plugin once it is found', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameFolder: GAME_FOLDER }))
       .toEqual({ dataFolder: '/game/Data', plugins: [resolved] });
   });
 
   // Rival: casting the union blind and sending `path: undefined` to the backend.
   it('omits a line-only row rather than sending it with path: undefined', () => {
-    const snapshot = loadOrderSnapshotOf({ plugins: [resolved, unresolved], gameDirectory: GAME_DIRECTORY });
+    const snapshot = loadOrderSnapshotOf({ plugins: [resolved, unresolved], gameFolder: GAME_FOLDER });
     expect(snapshot?.plugins).toEqual([resolved]);
   });
 });

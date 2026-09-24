@@ -21,7 +21,7 @@ import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
-import { GAME_DIRECTORY_SECTION } from './gameDirectorySetting';
+import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
@@ -65,7 +65,7 @@ function wireAutoLaunch(
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(GAME_DIRECTORY_SECTION) && client.status !== 'attached') void launch();
+      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'attached') void launch();
     }),
   );
 }

@@ -2,9 +2,10 @@
 // debounced once. An edited setting reaches the value as one of those refreshes.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  GAME_DIRECTORY_SECTION, SETTING_SETTLE_MS, refreshOnGameDirectoryChange,
+  SETTING_SETTLE_MS, refreshOnGameDirectoryChange,
   type ConfigChangeEvent, type Subscription,
 } from '../gameDirectorySetting';
+import { GAME_FOLDER_SETTING } from '../instanceAdapter/gameDirectory';
 
 function fakeConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;
@@ -24,7 +25,7 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe('the game-directory setting reaches the Instance as one refresh', () => {
   it('names the setting the override lives at', () => {
-    expect(GAME_DIRECTORY_SECTION).toBe('modbench.mods.gameDirectory');
+    expect(GAME_FOLDER_SETTING).toBe('modbench.mods.gameDirectory');
   });
 
   it('refreshes once the settle has elapsed, not on the spot', async () => {
@@ -33,7 +34,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const refresh = vi.fn().mockResolvedValue(undefined);
 
     refreshOnGameDirectoryChange(config.subscribe, refresh);
-    config.fire(GAME_DIRECTORY_SECTION);
+    config.fire(GAME_FOLDER_SETTING);
     expect(refresh).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS);
@@ -49,7 +50,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
 
     refreshOnGameDirectoryChange(config.subscribe, refresh);
     for (let i = 0; i < 5; i++) {
-      config.fire(GAME_DIRECTORY_SECTION);
+      config.fire(GAME_FOLDER_SETTING);
       await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS / 2);
     }
     expect(refresh).not.toHaveBeenCalled();
@@ -80,7 +81,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const refresh = vi.fn().mockResolvedValue(undefined);
 
     const subscription = refreshOnGameDirectoryChange(config.subscribe, refresh);
-    config.fire(GAME_DIRECTORY_SECTION);
+    config.fire(GAME_FOLDER_SETTING);
     subscription.dispose();
     await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);
 

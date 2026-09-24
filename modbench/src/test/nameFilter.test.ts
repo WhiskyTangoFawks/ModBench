@@ -285,11 +285,11 @@ describe('a term that matches nothing says so', () => {
   });
 });
 
-describe('the view\'s own message while no filter is active', () => {
+describe('the view\'s own message', () => {
   it('shows it on a row change, gives way to the no-match message while filtering, and returns once the filter clears', async () => {
     const rows = fakeRowsChangedEvent();
     const { view } = setup({
-      hasRows: () => Promise.resolve(false), onRowsChanged: rows.event, unfilteredMessage: () => 'Nothing here yet.',
+      hasRows: () => Promise.resolve(false), onRowsChanged: rows.event, viewMessage: () => 'Nothing here yet.',
     });
     rows.fire();
     await flush();
@@ -308,7 +308,7 @@ describe('the view\'s own message while no filter is active', () => {
   it('takes it down once the view has something to show', async () => {
     let message: string | undefined = 'Nothing here yet.';
     const rows = fakeRowsChangedEvent();
-    const { view } = setup({ onRowsChanged: rows.event, unfilteredMessage: () => message });
+    const { view } = setup({ onRowsChanged: rows.event, viewMessage: () => message });
     rows.fire();
     await flush();
 
@@ -318,8 +318,22 @@ describe('the view\'s own message while no filter is active', () => {
     expect(view.message).toBeUndefined();
   });
 
+  // Rival: the view's message read only while no filter is active, so a filter that matches
+  // leaves the line empty over a view that still has something to say.
+  it('keeps it standing while a filter matches rows', async () => {
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({ onRowsChanged: rows.event, viewMessage: () => 'Something is missing.' });
+    rows.fire();
+    await flush();
+
+    await open();
+    currentBox().type('thing');
+    await flush();
+    expect(view.message).toBe('Something is missing.');
+  });
+
   it('states it on refresh, with no row change', async () => {
-    const { view, filter } = setup({ unfilteredMessage: () => 'Nothing here yet.' });
+    const { view, filter } = setup({ viewMessage: () => 'Nothing here yet.' });
     filter.refresh();
     await flush();
     expect(view.message).toBe('Nothing here yet.');
