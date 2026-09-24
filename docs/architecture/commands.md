@@ -255,7 +255,7 @@ Offered on Mods. A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Status | Trace |
 |---|---|---|---|---|---|---|---|---|---|
-| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods; inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #960, #967 | update-load-order-file |
+| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods; inside (planned) | MO2 mod list | Add a mod separator next to a mod or a separator. | debt #967 | update-load-order-file |
 | rename | writes | Mods: context menu, key (F2) | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | debt #967 | update-load-order-file |
 | delete | writes | Mods: context menu, key (Delete) | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | debt #967 | update-load-order-file |
 
