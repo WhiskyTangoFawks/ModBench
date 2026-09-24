@@ -34,10 +34,24 @@ public sealed partial class SourceRepository
     /// answers empty rather than throwing.</summary>
     public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
-    /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
-    /// nothing broader (a folder that merely exists, or exists but was never tracked, is not
-    /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
-    public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
+    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
+    /// exists. A <c>.git</c> with no <c>main</c> is a Track that failed before its first commit,
+    /// which Track creates again.</summary>
+    public static bool IsTracked(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
+    }
+
+    // Read off the ref store's files, not by running git: every read of a tracked copy asks this.
+    // A branch is a loose ref file until git packs it into packed-refs.
+    private static bool HasMainBranch(string gitDir)
+    {
+        if (File.Exists(Path.Combine(gitDir, "refs", "heads", "main"))) return true;
+        var packedRefs = Path.Combine(gitDir, "packed-refs");
+        return File.Exists(packedRefs)
+            && File.ReadLines(packedRefs).Any(line => line.EndsWith(" refs/heads/main", StringComparison.Ordinal));
+    }
 
     /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a copy's origin
     /// and path.</summary>

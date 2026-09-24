@@ -107,8 +107,12 @@ public sealed class TrackService(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            logger.LogError(ex, "Could not create the repository in {ModFolder}", modFolder);
-            failed = [.. plugins.Select(v => (v.Plugin.Name, ex.Message))];
+            // Creating the repository or checking out its edit branch failed; a baseline already on
+            // main landed all the same (decompile-plugin, The command, step 9).
+            logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
+            failed = [.. plugins
+                .Where(v => !SourceRepository.IsPluginTracked(modFolder, v.Plugin.Name))
+                .Select(v => (v.Plugin.Name, ex.Message))];
         }
 
         foreach (var plugin in plugins.Select(v => v.Plugin))

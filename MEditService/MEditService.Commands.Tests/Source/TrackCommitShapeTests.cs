@@ -145,6 +145,24 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
     }
 
+    // decompile-plugin, The command, step 9: a failure after a plugin's commit landed does not
+    // report that plugin refused. A file beneath the edit branch's name holds it, so its checkout
+    // fails after every baseline is on main.
+    [Fact]
+    public async Task Track_WhoseEditBranchCheckoutFails_ReportsThePluginsWhoseBaselinesLandedAsLanded()
+    {
+        WritePlugin("First.esp", "FirstNpc");
+        Git("init", "-q", "-b", "main");
+        Directory.CreateDirectory(Path.Combine(_modFolder, ".git", "refs", "heads", "edit"));
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "heads", "edit", "held"), "not a ref\n");
+
+        var result = await Track("First.esp");
+
+        Assert.Equal([Key("First.esp")], result.Landed);
+        Assert.Empty(result.Refused);
+        Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
+    }
+
     // decompile-plugin, Refusals: a question open on the mod refuses the repository destination.
     [Fact]
     public async Task Track_IntoAModWithAnUnansweredExternalChange_RefusesThePlugin_NamingTheQuestion()

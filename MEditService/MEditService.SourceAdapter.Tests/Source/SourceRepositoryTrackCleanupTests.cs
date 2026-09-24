@@ -46,6 +46,34 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
+    // ADR-0003: a failed first Track leaves a .git with no main behind, and nothing but Track itself
+    // recovers from that without a hand delete.
+    [Fact]
+    public void Track_AfterAFailedTrackOfTheModsOwnFiles_IsNotTracked_AndTrackingAgainCreatesTheRepository()
+    {
+        var asset = Path.Combine(_modFolder, "Locked.dds");
+        File.WriteAllText(asset, "pixels");
+        FileModes.Set(asset, "000");
+        try
+        {
+            Assert.ThrowsAny<InvalidOperationException>(
+                () => SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]));
+        }
+        finally
+        {
+            FileModes.Set(asset, "600");
+        }
+        Assert.True(Directory.Exists(Path.Combine(_modFolder, ".git")));
+        Assert.False(SourceRepository.IsTracked(_modFolder));
+
+        var refused = SourceRepository.Track(_modFolder, SourcePreset.Everything, [Baseline("A.esp")]);
+
+        Assert.Empty(refused);
+        Assert.Equal(["Track SomeMod", "Track A.esp"], SubjectsOnMain());
+        Assert.True(SourceRepository.IsTracked(_modFolder));
+        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
+    }
+
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
         ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null, null));
 

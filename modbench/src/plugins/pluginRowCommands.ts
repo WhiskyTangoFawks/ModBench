@@ -32,6 +32,14 @@ export interface PluginsViewProgress {
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
+// ADR-0012: the origin, once resolved, tells two copies of one file apart; a row whose mod cannot
+// be resolved has none, and none is invented for it.
+type TrackedRow = { name: string; origin?: string };
+
+function rowName(row: TrackedRow): string {
+  return row.origin ? `${row.name} (${row.origin})` : row.name;
+}
+
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
@@ -46,16 +54,15 @@ export function registerTrackCommand(
     if (nodes.length === 0) return;
 
     const addressed: PluginAddress[] = [];
-    const unaddressed: ItemRefusal<PluginAddress>[] = [];
+    const unaddressed: ItemRefusal<TrackedRow>[] = [];
     for (const node of nodes) {
       const name = node.plugin.name;
       const origin = node.origin ?? await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
       if (origin) addressed.push({ name, origin });
-      else unaddressed.push({ item: { name, origin: '' }, reason: 'its mod could not be resolved' });
+      else unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
     }
-    const report = (outcome: SelectionOutcome<PluginAddress>) => {
-      reporter.selectionOutcome(
-        `Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, (plugin) => plugin.name);
+    const report = (outcome: SelectionOutcome<TrackedRow>) => {
+      reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
     };
     const [first] = addressed;
     if (!first) { report({ landed: [], refused: unaddressed }); return; }

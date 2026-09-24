@@ -131,8 +131,8 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
-    // INVARIANT: every write gesture — the six record gestures and compile — enters here first, and
-    // this is the only place the deferral refusal is raised. A write that bypasses it is not refused
+    // INVARIANT: the six record gestures and compile enter here first, Track asks BlockingQuestion
+    // below, and nowhere else raises the deferral refusal. A write that bypasses both is not refused
     // while a question is unanswered.
     internal RecordEditResult? RefuseIfBlocked(PluginCopyKey plugin, out string modFolder, out SourceRepository? repository)
     {

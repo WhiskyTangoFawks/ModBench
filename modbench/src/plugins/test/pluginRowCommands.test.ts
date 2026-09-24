@@ -112,7 +112,7 @@ describe('registerTrackCommand', () => {
     ]);
     expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not track 1 of 2 plugins.', outcome }]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp" (Second.esp does not round-trip.)' },
+      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModB)" (Second.esp does not round-trip.)' },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
@@ -147,6 +147,8 @@ describe('registerTrackCommand', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 of 1 plugins.', detail: '"MyMod.esp" (its mod could not be resolved)' },
     ]);
+    // ADR-0012: the row's own identity, with no origin invented for it.
+    expect(reporter.selectionOutcomeCalls.map((call) => call.outcome.refused.map((r) => r.item))).toEqual([[{ name: 'MyMod.esp' }]]);
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
   });
