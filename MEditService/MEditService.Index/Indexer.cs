@@ -179,7 +179,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     /// once, when the outermost of any nested scopes closes. A no-op with no store held.</summary>
     public IDisposable BeginProjection()
     {
-        lock (_lock) return _index?.BeginProjection() ?? IndexStore.NoProjectionScope;
+        lock (_lock) return _index?.BeginProjection() ?? Store.NoProjectionScope;
     }
 
     /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed, so
@@ -514,7 +514,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         index.Register(plugin.Key, plugin.Registration);
 
         // An untracked copy's binary was already hashed against its stored claim when the index file
-        // opened (IndexStore.ValidateAgainstDisk), so a second hash of every binary here would pay
+        // opened (Store.ValidateAgainstDisk), so a second hash of every binary here would pay
         // that whole cost twice for no new answer.
         if (!holdsTree) return true;
 

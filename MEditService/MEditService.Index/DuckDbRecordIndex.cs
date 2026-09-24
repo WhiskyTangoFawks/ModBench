@@ -18,7 +18,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index;
 
 // The single DuckDB implementation of IRecordIndex/IRecordReads, split into four collaborators:
-// IndexStore, PluginIngest, WorkingTreeOverlay and SourceValidation. This class owns every
+// Store, PluginIngest, WorkingTreeOverlay and SourceValidation. This class owns every
 // transaction boundary, registration, the winner sweep, reads and the SQL door.
 internal sealed class DuckDbRecordIndex : IRecordIndex
 {
@@ -33,9 +33,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // Connection forwards to IndexStore rather than being held here, so a rebuild that reassigns its
+    // Connection forwards to Store rather than being held here, so a rebuild that reassigns its
     // Connection is transparent to every `.Connection` reader.
-    private readonly IndexStore _indexStore;
+    private readonly Store _store;
 
     // Constructed at the end of Initialize, once Connection is stable and the schemas and release
     // are resolved, so every dependency is captured once rather than chased through a mutable
@@ -55,8 +55,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // Validate's tracked half. Constructed alongside its siblings, for the same reason.
     private SourceValidation? _sourceValidation;
 
-    public DuckDBConnection Connection => _indexStore.Connection;
-    private DuckDBConnection OpenRead() => _indexStore.OpenReadConnection();
+    public DuckDBConnection Connection => _store.Connection;
+    private DuckDBConnection OpenRead() => _store.OpenReadConnection();
 
     private readonly TableDdlBuilder _ddlBuilder;
     private bool _recordTypeViewsCreated;
@@ -77,7 +77,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _ddlBuilder = ddlBuilder;
         _logger = logger;
         _notifications = notifications;
-        _indexStore = new IndexStore(logger, databasePath, timeProvider);
+        _store = new Store(logger, databasePath, timeProvider);
     }
 
     // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0011).
@@ -96,10 +96,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public void Initialize(GameRelease release)
     {
         var indexVersion = IndexVersion.For(_schemaReflector, release);
-        // Before the schemas, not after: IndexStore's own version check throws away a file written
+        // Before the schemas, not after: Store's own version check throws away a file written
         // under a different shape *before* this process starts appending to tables it only half
         // recognizes.
-        _indexStore.Initialize(indexVersion);
+        _store.Initialize(indexVersion);
 
         _schemas = _schemaReflector.GetSchemas(release);
         _release = release;
@@ -111,7 +111,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
         // acting on the stale set stays here.
-        foreach (var key in _indexStore.ValidateAgainstDisk())
+        foreach (var key in _store.ValidateAgainstDisk())
             Unindex(key);
     }
 
@@ -120,9 +120,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
     {
-        _indexStore.RebuildFile();
+        _store.RebuildFile();
         Initialize(release);
-        _indexStore.SeedSequence(atLeastSequence);
+        _store.SeedSequence(atLeastSequence);
     }
 
     // --- Indexing ---
@@ -131,16 +131,16 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         Index(documents, registration, key.Name, key.Origin, filePath, derivedFrom);
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginCopyKey key) => _indexStore.IndexedContentHash(key);
+    public string? IndexedContentHash(PluginCopyKey key) => _store.IndexedContentHash(key);
 
     /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
-    public long Sequence => _indexStore.CurrentSequence();
+    public long Sequence => _store.CurrentSequence();
 
     /// <summary>See <see cref="IRecordIndex.BeginProjection"/>.</summary>
-    public IDisposable BeginProjection() => _indexStore.BeginProjection();
+    public IDisposable BeginProjection() => _store.BeginProjection();
 
     /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
-    public void Announce(Action publish) => _indexStore.Announce(publish);
+    public void Announce(Action publish) => _store.Announce(publish);
 
     // ADR-0012: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
@@ -160,7 +160,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         UpsertRegistration(plugin, origin, registration);
         // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
         // with them rather than beside them.
-        _indexStore.StampCopy(plugin, origin, filePath, derivedFrom);
+        _store.StampCopy(plugin, origin, filePath, derivedFrom);
 
         // Must run before the appender is created.
         RequirePluginIngest().DeletePriorDocuments(plugin, origin);
@@ -169,7 +169,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
         using var documentAppender = Connection.CreateAppender("mirror", "records");
         var timing = RequirePluginIngest().IndexPlugin(documents, plugin, origin, schemas, documentAppender);
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
         tx.Commit();
@@ -199,9 +199,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
         // The copy's facts go with the rows they describe — Unindex is the file-gone verb, so leaving
         // them behind would leave the files table asserting rows the index does not hold.
-        _indexStore.DeleteCopyFacts(plugin, origin);
+        _store.DeleteCopyFacts(plugin, origin);
         DeleteRegistration(plugin, origin);
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
 
         tx.Commit();
     }
@@ -231,7 +231,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         using var tx = Connection.BeginTransaction();
         UpsertRegistration(key.Name, key.Origin, registration);
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -243,7 +243,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         using var tx = Connection.BeginTransaction();
         DeleteRegistration(key.Name, key.Origin);
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -277,7 +277,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         ReplaceParticipating(participating);
         UpdateWinnersCore();
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -287,7 +287,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         using var tx = Connection.BeginTransaction();
         UpdateWinnersCore();
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -362,14 +362,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             var projected = RequireWorkingTreeOverlay().ProjectDocuments(key, deltas);
             if (projected.Structural) UpdateWinnersCore();
             touched = projected.Touched;
-            _indexStore.BumpSequence();
+            _store.BumpSequence();
             tx.Commit();
         }
 
         // ADR-0015 invariant 3: after the commit, so a subscriber re-reading on receipt sees the rows
         // this names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
-        _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
+        _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
@@ -379,7 +379,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         RequireWorkingTreeOverlay().SetCommittedBaseline(key, baselines);
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -393,7 +393,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
         // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009).
         UpdateWinnersCore();
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -409,7 +409,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // The counterpart of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
         // demote whoever was winning it at that ref. Effective is untouched either way.
         UpdateWinnersCore();
-        _indexStore.BumpSequence();
+        _store.BumpSequence();
         tx.Commit();
     }
 
@@ -425,7 +425,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // (ADR-0007 invariant 3), bytes moved or not: a copy tracked after indexing arrives here
         // still stamped from its binary.
         if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
-            _indexStore.RestampDerivation(key, DerivedFrom.SourceTree);
+            _store.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A key at neither ref is a record the tree has gained, and no document says where the tree
         // puts it: a new exterior cell's block is a directory, not a field.
@@ -505,13 +505,13 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using (BeginProjection())
         {
             SourceIngest.Ingest(
-                this, modFolder, registration, key, _indexStore.IndexedFile(key)?.FilePath,
+                this, modFolder, registration, key, _store.IndexedFile(key)?.FilePath,
                 _release, _schemaReflector, _logger);
             ResweepWinners();
         }
 
         // ADR-0015 invariant 3: too many rows to name, so the copy is named, at the sequence it landed on.
-        _indexStore.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
+        _store.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
     }
 
     // The three facts the copy's registration row carries (ADR-0013), read back for a re-ingest that
@@ -546,12 +546,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>Restates which truth <paramref name="key"/>'s rows read as, for Validate's tracked
     /// half.</summary>
     internal void RestampDerivation(PluginCopyKey key, DerivedFrom derivedFrom) =>
-        _indexStore.RestampDerivation(key, derivedFrom);
+        _store.RestampDerivation(key, derivedFrom);
 
     // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
     // every reconciled record of a whole plugin, where a notification per record would be noise.
     internal void PublishRowsChanged(PluginCopyKey key, IReadOnlyList<string> formKeys) =>
-        _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
+        _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
     // ADR-0009's load-time check, asked of one copy: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
@@ -559,7 +559,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         // Nothing vouches for these rows (an in-memory mod, or a tracked copy whose folder went
         // away), so there is nothing to compare them against.
-        if (_indexStore.IndexedFile(key) is not { } claim) return ValidationReport.Clean(key);
+        if (_store.IndexedFile(key) is not { } claim) return ValidationReport.Clean(key);
 
         if (!File.Exists(claim.FilePath))
         {
@@ -575,11 +575,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Reached only for a copy no repository holds, so rows stamped from a source tree came from
         // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
-        if (_indexStore.DerivationOf(key) == DerivedFrom.SourceTree)
+        if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport(key, [], NeedsRebuild: true, []);
 
         // A file that cannot be read is no evidence its rows are still true, so it counts as a
-        // mismatch — IndexStore.ValidateAgainstDisk's own rule.
+        // mismatch — Store.ValidateAgainstDisk's own rule.
         return PluginBinaryHash.OfFile(claim.FilePath) == claim.ContentHash
             ? ValidationReport.Clean(key)
             : new ValidationReport(key, [], NeedsRebuild: true, []);
@@ -1464,5 +1464,5 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _filterActive = true;
     }
 
-    public void Dispose() => _indexStore.Dispose();
+    public void Dispose() => _store.Dispose();
 }

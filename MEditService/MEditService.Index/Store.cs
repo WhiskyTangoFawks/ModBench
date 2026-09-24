@@ -14,7 +14,7 @@ namespace MEditService.Index;
 /// <summary>The connection/DDL/validate/rebuild collaborator of <see cref="DuckDbRecordIndex"/>.
 /// Validate is a pure question: this class returns the stale set and never removes rows itself,
 /// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
-internal sealed class IndexStore : IDisposable
+internal sealed class Store : IDisposable
 {
     internal const string FilesRelation = "mirror.files";
     internal const string CopySourceRelation = $"mirror.{TableDdlBuilder.CopySourceTable}";
@@ -32,7 +32,7 @@ internal sealed class IndexStore : IDisposable
 
     public DuckDBConnection Connection { get; private set; }
 
-    public IndexStore(ILogger logger, string? databasePath, TimeProvider? timeProvider = null)
+    public Store(ILogger logger, string? databasePath, TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _databasePath = databasePath;
