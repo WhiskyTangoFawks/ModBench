@@ -36,10 +36,10 @@ import {
   renameSeparator,
   setModsEnabled,
   syncMods,
-  uninstallMod,
+  uninstallMods,
 } from '../modlist';
 import { insertModAtWinningEnd, parseModlist } from '../../mo2Codecs/modlistText';
-import { modsDir } from '../../instanceAdapter/layout';
+import { modDir, modsDir } from '../../instanceAdapter/layout';
 import { modNameCollisionRefusal } from '../../install/install';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
@@ -447,7 +447,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     it('removes the line and trashes the folder, and the mods it held join the separator above', async () => {
       const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED], trash);
 
-      expect(outcome).toEqual({ applied: true, outcome: { landed: [UNASSIGNED], refused: [] } });
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: UNASSIGNED }], refused: [] } });
       expect(await order()).toEqual([
         'mod:SKK Fast Start new game (Fallout 4)', 'mod:[NODELETE] Radfall', 'mod:Unofficial Fallout 4 Patch',
         `separator:${RADFALL}`, 'mod:ENBoost - 12k', 'mod:Harder VATS', 'mod:Cracked and Smudged Pip-Boy Screen',
@@ -458,7 +458,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     it('the mods of the first separator become ungrouped', async () => {
       const outcome = await deleteSeparators(dir, 'Default', [RADFALL], trash);
 
-      expect(outcome).toEqual({ applied: true, outcome: { landed: [RADFALL], refused: [] } });
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: RADFALL }], refused: [] } });
       expect(await order()).toEqual([
         'mod:SKK Fast Start new game (Fallout 4)', `separator:${UNASSIGNED}`, 'mod:[NODELETE] Radfall',
         'mod:Unofficial Fallout 4 Patch', 'mod:ENBoost - 12k', 'mod:Harder VATS', 'mod:Cracked and Smudged Pip-Boy Screen',
@@ -470,7 +470,9 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
       const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED, RADFALL], trash);
 
-      expect(outcome).toEqual({ applied: true, outcome: { landed: [UNASSIGNED, RADFALL], refused: [] } });
+      expect(outcome).toEqual({
+        applied: true, outcome: { landed: [{ name: UNASSIGNED }, { name: RADFALL }], refused: [] },
+      });
       expect((await readModlist()).every((e) => e.kind === 'mod')).toBe(true);
       expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
     });
@@ -485,8 +487,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(outcome).toEqual({
         applied: true,
         outcome: {
-          landed: [UNASSIGNED],
-          refused: [{ item: 'No Such Separator', reason: 'Separator not found in modlist: No Such Separator' }],
+          landed: [{ name: UNASSIGNED }],
+          refused: [{ item: { name: 'No Such Separator' }, reason: 'Separator not found in modlist: No Such Separator' }],
         },
       });
       expect(trashed).toEqual([unassignedFolder()]);
@@ -502,8 +504,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(trashed).toEqual([]);
     });
 
-    // The folder is in the trash by then; the line alone is a separator with no folder.
-    it('refuses a separator whose line cannot go after its folder was trashed, naming the part that failed', async () => {
+    // UNASSIGNED's folder is trashed; RADFALL's never existed, so nothing was trashed for it.
+    it('a separator whose line cannot go after its folder was trashed still lands, carrying the part that failed', async () => {
       const before = await readFile(modlistPath(), 'utf8');
       vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
 
@@ -512,11 +514,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(outcome).toEqual({
         applied: true,
         outcome: {
-          landed: [],
-          refused: [
-            { item: UNASSIGNED, reason: 'its folder went to the trash, but its modlist.txt line could not be removed: disk full' },
-            { item: RADFALL, reason: 'disk full' },
-          ],
+          landed: [{ name: UNASSIGNED, lineRefusal: 'disk full' }],
+          refused: [{ item: { name: RADFALL }, reason: 'disk full' }],
         },
       });
       expect(trashed).toEqual([unassignedFolder()]);
@@ -534,7 +533,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
       expect(outcome).toEqual({
         applied: true,
-        outcome: { landed: [RADFALL], refused: [{ item: UNASSIGNED, reason: 'trash unavailable' }] },
+        outcome: { landed: [{ name: RADFALL }], refused: [{ item: { name: UNASSIGNED }, reason: 'trash unavailable' }] },
       });
       const withoutRadfallLine = before.split('\r\n').filter((line) => !line.includes(RADFALL)).join('\r\n');
       expect(await readFile(modlistPath(), 'utf8')).toBe(withoutRadfallLine);
@@ -687,39 +686,149 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  it('uninstallMod removes the modlist entry and deletes the mod folder', async () => {
-    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS');
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
-    await expect(stat(join(dir, 'mods', 'Harder VATS'))).rejects.toThrow();
-  });
+  describe('uninstallMods', () => {
+    const ARCHIVE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+    const metaPath = () => join(dir, 'downloads', `${ARCHIVE}.meta`);
+    const trashed: string[] = [];
+    const trash = vi.fn(async (path: string) => {
+      trashed.push(path);
+      await rm(path, { recursive: true });
+    });
+    beforeEach(() => { trashed.length = 0; trash.mockClear(); });
 
-  it('uninstallMod refuses an unknown mod, leaving the modlist and mods/ untouched', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
-    const beforeDirs = await readdir(join(dir, 'mods'));
-    const outcome = await uninstallMod(dir, 'Default', 'No Such Mod');
-    assertRefusal(outcome);
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
-    expect(await readdir(join(dir, 'mods'))).toEqual(beforeDirs);
-  });
+    // Order is the one property this suite cannot read off the end state alone: every mock
+    // vitest hands out shares one call-order counter, trash included.
+    const writeOrderOf = (path: string): number => {
+      const callIdx = vi.mocked(writeFile).mock.calls.findIndex(([p]) => p === path);
+      return present(vi.mocked(writeFile).mock.invocationCallOrder[callIdx], `a writeFile call for ${path}`);
+    };
 
-  it('uninstallMod marks the download it is handed uninstalled, without failing the uninstall itself', async () => {
-    await uninstallMod(
-      dir, 'Default', 'Unofficial Fallout 4 Patch', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z');
-    const meta = await readFile(
-      join(dir, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta'), 'utf8',
-    );
-    expect(meta).toContain('uninstalled=true');
-    expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
-  });
+    it('trashes the folder, then removes the line, then marks the download uninstalled, in that order', async () => {
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
 
-  // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
-  // and a sidecar beside no archive is a file MO2 would never write.
-  it('uninstallMod writes no sidecar for an archive that is absent from downloads/', async () => {
-    const outcome = await uninstallMod(dir, 'Default', 'Harder VATS', 'Long Gone-1-0.7z');
+      expect(outcome).toEqual({
+        applied: true, outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch' }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+      await expect(stat(modDir(dir, 'Unofficial Fallout 4 Patch'))).rejects.toThrow();
+      expect(await readFile(metaPath(), 'utf8')).toContain('uninstalled=true');
 
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    await expect(stat(join(dir, 'downloads', 'Long Gone-1-0.7z.meta'))).rejects.toThrow();
+      const [trashOrder] = trash.mock.invocationCallOrder;
+      expect(trashOrder).toBeLessThan(writeOrderOf(modlistPath()));
+      expect(writeOrderOf(modlistPath())).toBeLessThan(writeOrderOf(metaPath()));
+    });
+
+    it('removes every selected mod\'s line in one write', async () => {
+      vi.mocked(writeFile).mockClear();
+
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], trash);
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: { landed: [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], refused: [] },
+      });
+      expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+    });
+
+    it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'No Such Mod' }, { name: 'Harder VATS' }], trash);
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: {
+          landed: [{ name: 'Harder VATS' }],
+          refused: [{ item: { name: 'No Such Mod' }, reason: 'Mod not found in modlist: No Such Mod' }],
+        },
+      });
+      expect(trashed).toEqual([modDir(dir, 'Harder VATS')]);
+    });
+
+    it('refuses the whole selection once and trashes nothing when modlist.txt cannot be read', async () => {
+      await rm(modlistPath());
+
+      const outcome = await uninstallMods(dir, 'Default', [{ name: 'Harder VATS' }], trash);
+
+      assertRefusal(outcome, 'ENOENT');
+      expect(trashed).toEqual([]);
+    });
+
+    it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark', async () => {
+      const failingFolder = modDir(dir, 'Harder VATS');
+      // A real archive of its own, so "its downloaded file untouched" is a claim that could fail.
+      const HARDER_VATS_ARCHIVE = 'Harder VATS-1-0.7z';
+      const harderVatsMetaPath = join(dir, 'downloads', `${HARDER_VATS_ARCHIVE}.meta`);
+      await writeFile(join(dir, 'downloads', HARDER_VATS_ARCHIVE), '');
+      await writeFile(harderVatsMetaPath, '[General]\r\ninstalled=true\r\n');
+      const refusingTrash = vi.fn(async (path: string) => {
+        if (path === failingFolder) throw new Error('trash unavailable');
+        await trash(path);
+      });
+
+      const outcome = await uninstallMods(
+        dir, 'Default',
+        [
+          { name: 'Harder VATS', archiveFilename: HARDER_VATS_ARCHIVE },
+          { name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE },
+        ],
+        refusingTrash,
+      );
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: {
+          landed: [{ name: 'Unofficial Fallout 4 Patch' }],
+          refused: [{ item: { name: 'Harder VATS' }, reason: 'trash unavailable' }],
+        },
+      });
+      expect((await stat(failingFolder)).isDirectory()).toBe(true);
+      expect((await readModlist()).some((e) => e.name === 'Harder VATS')).toBe(true);
+      expect(await readFile(metaPath(), 'utf8')).toContain('uninstalled=true');
+      expect(await readFile(harderVatsMetaPath, 'utf8')).not.toContain('uninstalled=true');
+    });
+
+    it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
+      vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
+
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: {
+          landed: [{ name: 'Unofficial Fallout 4 Patch', lineRefusal: 'disk full' }],
+          refused: [],
+        },
+      });
+      expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
+    });
+
+    it('carries a failed mark on the landed item rather than refusing it, and leaves the download unmarked', async () => {
+      const passthrough = present(vi.mocked(writeFile).getMockImplementation(), 'the writeFile passthrough');
+      vi.mocked(writeFile).mockImplementationOnce(passthrough).mockRejectedValueOnce(new Error('disk full'));
+
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch', markRefusal: 'disk full' }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+      expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
+    });
+
+    // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
+    // and a sidecar beside no archive is a file MO2 would never write.
+    it('writes no sidecar for an archive that is absent from downloads/', async () => {
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], trash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
+      await expect(stat(join(dir, 'downloads', 'Long Gone-1-0.7z.meta'))).rejects.toThrow();
+    });
   });
 
   describe('createEmptyMod', () => {
