@@ -176,6 +176,17 @@ function pushLoadOrderStatus(): void {
   for (const res of sseClients) writeSseFrame(res, 'load-order-status', { loadOrderStatus });
 }
 
+// The reset ends the mock's streams, and a stream the client reopens while attached is a connect
+// that puts the load order again. A launch left attached by an earlier suite is stopped first.
+async function resetMockBackendDetached(): Promise<void> {
+  const client = ext?.exports.client;
+  if (client?.status === 'attached') {
+    exitEditing();
+    await awaitStatus(client, 'stopped', 'the earlier launch to stop');
+  }
+  resetMockBackend();
+}
+
 function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
@@ -920,14 +931,7 @@ describe('Notification stream connects only while the backend is up', () => {
 
   before(async () => {
     if (!root) return;
-    // The reset ends the mock's streams. A launch left attached by an earlier suite would count
-    // its reconnect as this test's connection, and a PUT sent before that reconnect hears no tick.
-    const client = ext?.exports.client;
-    if (client?.status === 'attached') {
-      exitEditing();
-      await awaitStatus(client, 'stopped', 'the earlier launch to stop');
-    }
-    resetMockBackend();
+    await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
@@ -1450,7 +1454,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   before(async () => {
     if (!root) return;
-    resetMockBackend();
+    await resetMockBackendDetached();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reconcile-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     for (const name of ['TestMod.esp', 'MissingMaster.esp']) {

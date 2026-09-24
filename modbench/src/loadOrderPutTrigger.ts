@@ -15,9 +15,9 @@ export interface LoadOrderPuts extends vscode.Disposable {
   putOnConnect(): Promise<void>;
 }
 
-// update-load-order-file: the load order is put on change and on connect. A value that lands
-// while mEdit is detached is not put, because the connect's own put reads the value current then.
-// A stream reopen is a connect too: the process behind it may be another.
+// update-load-order-file: put on change and on connect. Nothing is put while detached, since the
+// connect's put reads the value current then; a stream reopen is a connect, the process behind it
+// perhaps another.
 export function registerLoadOrderPut(
   instance: Pick<Instance, 'subscribe'>,
   client: ClientConnection,
