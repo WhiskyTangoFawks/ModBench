@@ -41,6 +41,7 @@ import {
   registerViewOnNexusCommand, type ModInstallDeps,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -118,6 +119,21 @@ describe('registerModInstallCommands: the install target', () => {
       { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
     );
     expect(succeeded).toEqual({ installed: true });
+  });
+
+  // The picker's filters name install's own extension list, never a copy of it: a rival that
+  // hardcodes its own array here would drift silently the day install's list changes.
+  it('with no archive path given, the picker offers install\'s own archive extensions', async () => {
+    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+
+    registerModInstallCommands(deps({ promptModName }));
+    await invoke('modbench.modList.installFromArchive');
+
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
+    }));
   });
 
   it('no choice and a cancelled prompt installs nothing', async () => {

@@ -259,6 +259,35 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
   });
 });
 
+// downloads.md, "Which files are rows", story 2: only the files install can take are rows, by
+// install's own extension list.
+describe('DownloadsProvider — only the files install can take are rows', () => {
+  // The view's own filter, defense in depth beside buildDownloadRows already folding a sidecar
+  // into its file's row rather than giving it one of its own.
+  it('keeps the archive; a readme, a subfolder, an .unfinished file and a stray .meta are not rows', async () => {
+    const provider = makeProvider([
+      row({ name: 'ArmorPack-1-0.zip' }),
+      row({ name: 'ReadMe.txt' }),
+      row({ name: 'Textures' }), // a subfolder: no extension of its own
+      row({ name: 'ArmorPack-1-0.rar.unfinished' }),
+      row({ name: 'ArmorPack-1-0.zip.meta' }),
+    ]);
+    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack-1-0.zip']);
+  });
+
+  it('compares the extension case-insensitively', async () => {
+    const provider = makeProvider([row({ name: 'ArmorPack-1-0.ZIP' })]);
+    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack-1-0.ZIP']);
+  });
+
+  it('keeps every extension install can extract', async () => {
+    const provider = makeProvider([
+      row({ name: 'a.zip' }), row({ name: 'b.7z' }), row({ name: 'c.rar' }),
+    ]);
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.7z', 'c.rar'].sort());
+  });
+});
+
 describe('setShowHidden', () => {
   it('includes hidden rows alongside visible ones when turned on', async () => {
     const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
