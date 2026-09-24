@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The Track gesture end to end: deep-parses each plugin under one origin (the load order's
+/// <summary>The Track gesture end to end: deep-parses each plugin of the selection (the load order's
 /// overlay is not always structurally faithful), serializes through the whole-mod door, and
 /// commits. A designated door (ADR-0007).</summary>
 public sealed class TrackService(
@@ -24,119 +24,50 @@ public sealed class TrackService(
     private readonly INotificationPublisher? _notifications = notifications;
 
     // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a copy whose file
-    // cannot be read has no bytes to deep-parse, so Track passes over it rather than failing the
-    // whole origin on it.
+    // cannot be read has no bytes to deep-parse, so Track refuses that plugin and goes on with the
+    // rest.
     private bool Readable(RegisteredCopy copy) => adapter.CanRead(copy);
 
-    public async Task<TrackResult> TrackAsync(
+    /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
+    /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
+    public async Task<TrackSelectionResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
-        string origin,
+        IReadOnlyList<PluginCopyKey> plugins,
         SourcePreset preset,
         CancellationToken cancel = default)
     {
-        var plugins = loadOrder.Copies
-            .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Readable(p))
-            .ToList();
-        if (plugins.Count == 0)
-            return TrackResult.Refused(TrackRefusal.NoPluginWithOrigin, $"No loaded plugin has origin '{origin}' to track.");
-
-        // The load order is the one rule for a plugin's mod folder: null for the game's own Data
-        // directory (PluginOrigin.DataDirectory), where Track must not git-init.
-        if (loadOrder.ModFolderOfOrigin(origin) is not { } modFolder)
-        {
-            return TrackResult.Refused(
-                TrackRefusal.DataDirectoryOrigin,
-                $"{plugins[0].Name} is a base-game plugin loaded from the game's own Data folder, " +
-                "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
-        }
-
-        // Both checks are cheap and both make the whole parse loop pointless if they fail, so they run first.
-        if (SourceRepository.IsTracked(modFolder))
-            return TrackResult.Refused(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
-
         try
         {
             SourceRepository.EnsureTrackable();
-
-            var verified = new List<(string Name, IReadOnlyList<TreeFile> Files, string BinarySha256)>();
-
-            var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
-
-            SetProgress(origin, TrackPhase.Parsing, 0, plugins.Count);
-            var parsedDone = 0;
-            foreach (var plugin in plugins)
-            {
-                cancel.ThrowIfCancellationRequested();
-
-                // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
-                // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-                (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
-                try
-                {
-                    tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
-                    // the innermost RecordException.
-                    var diagnosis = PluginDiagnosis.FromParseException(ex);
-                    logger.LogWarning(ex, "Refused to track {Plugin}: its own binary could not be deep-parsed", plugin.Name);
-                    return TrackResult.Refused(
-                        TrackRefusal.RoundTripFailed,
-                        $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
-                }
-
-                if (tree.MissingStringsFile is { } missingFile)
-                {
-                    return TrackResult.Refused(
-                        TrackRefusal.MissingLocalizationStrings,
-                        $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
-                        $"in {strings.Folder}. Restore the file, then track again.");
-                }
-
-                parsedDone++;
-                SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
-
-                SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
-                // Where the door's tree lands in the mod folder is the repository's answer, and the
-                // round-trip gate below reads the same files the commit will hold.
-                var pluginPristineFiles = SourceRepository.PristineFilesOf(plugin.Name, tree.Files);
-
-                // ADR-0006 decision 2: the gate refuses before a single byte of any plugin in this Track is
-                // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
-                // TrackPhase.
-                if (await VerifyRoundTrip(
-                        plugin.Name, plugin.Path, pluginPristineFiles, loadOrder.GameRelease, strings,
-                        cancel) is { } refusal)
-                    return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
-
-                verified.Add((plugin.Name, pluginPristineFiles, PluginBinaryHash.TrailerFormOfFile(plugin.Path)));
-                SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
-            }
-
-            SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
-            var meta = SourceRepository.MetaFactsIn(modFolder);
-            IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
-            [
-                .. verified.Select(v => (v.Files, new BaselineTrailers(v.Name, meta.UpstreamVersion, meta.MetaSha256, v.BinarySha256))),
-            ];
-
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, verified.Sum(v => v.Files.Count), plugins.Count);
-            }
-            SourceRepository.Track(modFolder, preset, baselines);
-            return TrackResult.Success();
         }
         catch (GitUnavailableException ex)
         {
-            return TrackResult.Refused(TrackRefusal.GitUnavailable, ex.Message);
+            return TrackSelectionResult.WholeSelectionRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
-        catch (SourceAlreadyTrackedException ex)
+
+        var selection = plugins.Distinct(PluginCopyKey.Comparer).ToList();
+        var refused = new List<TrackRefused>();
+        var verified = new List<VerifiedPlugin>();
+        try
         {
-            // The folder was tracked between this gesture's own check and the commit: nothing here
-            // owns the mod folder exclusively.
-            return TrackResult.Refused(TrackRefusal.AlreadyTracked, ex.Message);
+            for (var done = 0; done < selection.Count; done++)
+            {
+                cancel.ThrowIfCancellationRequested();
+                var plugin = selection[done];
+                SetProgress(plugin.Origin, TrackPhase.Parsing, done, selection.Count);
+                var outcome = await VerifyAsync(
+                    loadOrder, plugin, onParsed: () => SetProgress(plugin.Origin, TrackPhase.Serializing, done, selection.Count), cancel);
+                if (outcome.Verified is { } passed) verified.Add(passed);
+                if (outcome.Refused is { } refusal) refused.Add(refusal);
+                SetProgress(plugin.Origin, TrackPhase.Serializing, done + 1, selection.Count);
+            }
+
+            SetProgress(verified.FirstOrDefault()?.Plugin.Origin, TrackPhase.Committing, selection.Count, selection.Count);
+            var landed = new List<PluginCopyKey>();
+            foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
+                Commit(mod.Key, preset, [.. mod], landed, refused);
+
+            return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin));
         }
         finally
         {
@@ -144,6 +75,125 @@ public sealed class TrackService(
             // finished.
             SetProgress(null, TrackPhase.Idle, 0, 0);
         }
+
+        List<T> InSelectionOrder<T>(IEnumerable<T> items, Func<T, PluginCopyKey> keyOf) =>
+            [.. items.OrderBy(item => selection.FindIndex(p => PluginCopyKey.Comparer.Equals(p, keyOf(item))))];
+    }
+
+    private sealed record VerifiedPlugin(PluginCopyKey Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, string BinarySha256);
+
+    private sealed record Verification(VerifiedPlugin? Verified, TrackRefused? Refused);
+
+    // One repository per mod folder: the plugins that passed their gate, committed one at a time.
+    private void Commit(
+        string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
+        List<PluginCopyKey> landed, List<TrackRefused> refused)
+    {
+        var meta = SourceRepository.MetaFactsIn(modFolder);
+        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
+        [
+            .. plugins.Select(v => (v.Files, new BaselineTrailers(v.Plugin.Name, meta.UpstreamVersion, meta.MetaSha256, v.BinarySha256))),
+        ];
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
+                plugins.Count, modFolder, plugins.Sum(v => v.Files.Count));
+        }
+
+        IReadOnlyList<(string Plugin, string Reason)> failed;
+        try
+        {
+            failed = SourceRepository.Track(modFolder, preset, baselines);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogError(ex, "Could not create the repository in {ModFolder}", modFolder);
+            failed = [.. plugins.Select(v => (v.Plugin.Name, ex.Message))];
+        }
+
+        foreach (var plugin in plugins.Select(v => v.Plugin))
+        {
+            if (failed.FirstOrDefault(f => string.Equals(f.Plugin, plugin.Name, StringComparison.OrdinalIgnoreCase)) is { Reason: { } reason })
+            {
+                logger.LogWarning("Refused to track {Plugin} ({Origin}): its baseline commit failed — {Reason}", plugin.Name, plugin.Origin, reason);
+                refused.Add(new TrackRefused(
+                    plugin, TrackRefusal.CommitFailed, $"{plugin.Name}'s baseline could not be committed: {reason}"));
+            }
+            else
+            {
+                landed.Add(plugin);
+            }
+        }
+    }
+
+    // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006 decision 2).
+    private async Task<Verification> VerifyAsync(
+        LoadOrderSnapshot loadOrder, PluginCopyKey key, Action onParsed, CancellationToken cancel)
+    {
+        Verification Refuse(TrackRefusal refusal, string message) => new(null, new TrackRefused(key, refusal, message));
+
+        if (loadOrder.Copy(key) is not { } plugin)
+        {
+            return Refuse(TrackRefusal.PluginNotLoaded,
+                $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");
+        }
+
+        // The load order is the one rule for a plugin's mod folder: null for the game's own Data
+        // directory (PluginOrigin.DataDirectory), where Track must not git-init.
+        if (LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) is not { } modFolder)
+        {
+            return Refuse(TrackRefusal.DataDirectoryOrigin,
+                $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
+                "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
+        }
+
+        if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))
+            return Refuse(TrackRefusal.AlreadyTracked, $"{plugin.Name} is already tracked in '{modFolder}'.");
+
+        if (ExternalChangeClassifier.BlockingQuestion(loadOrder, modFolder) is { } question)
+            return Refuse(TrackRefusal.ExternalChangeUnanswered, question);
+
+        if (!Readable(plugin))
+        {
+            return Refuse(TrackRefusal.RoundTripFailed,
+                $"{plugin.Name} cannot be read from its own binary. Close whatever holds the file, then track again.");
+        }
+
+        // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
+        var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
+
+        // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
+        (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
+        try
+        {
+            tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
+            // the innermost RecordException.
+            var diagnosis = PluginDiagnosis.FromParseException(ex);
+            logger.LogWarning(ex, "Refused to track {Plugin}: its own binary could not be deep-parsed", plugin.Name);
+            return Refuse(TrackRefusal.RoundTripFailed,
+                $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
+        }
+
+        if (tree.MissingStringsFile is { } missingFile)
+        {
+            return Refuse(TrackRefusal.MissingLocalizationStrings,
+                $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
+                $"in {strings.Folder}. Restore the file, then track again.");
+        }
+
+        // Where the door's tree lands in the mod folder is the repository's answer, and the round-trip
+        // gate below reads the same files the commit will hold.
+        onParsed();
+        var pristineFiles = SourceRepository.PristineFilesOf(plugin.Name, tree.Files);
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, pristineFiles, loadOrder.GameRelease, strings, cancel) is { } refusal)
+            return Refuse(TrackRefusal.RoundTripFailed, refusal);
+
+        return new Verification(
+            new VerifiedPlugin(key, modFolder, pristineFiles, PluginBinaryHash.TrailerFormOfFile(plugin.Path)), null);
     }
 
     // ADR-0006 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every

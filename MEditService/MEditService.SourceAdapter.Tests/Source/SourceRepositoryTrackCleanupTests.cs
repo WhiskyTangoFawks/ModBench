@@ -1,91 +1,64 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Cleanup removes more than <c>.git</c>: the <c>.gitignore</c> and the pristine tree under
-/// <c>source/</c> are written before <c>add</c>/<c>commit</c> ever run.</summary>
-public sealed class SourceRepositoryTrackCleanupTests
+/// <summary>Each plugin lands or is refused on its own, with no rollback beyond git's: a refused
+/// plugin leaves nothing of its own, and the commits around it stand (decompile-plugin, Failure).</summary>
+public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 {
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-cleanup-").FullName;
+    private const string ModName = "SomeMod";
+    private readonly string _root = Directory.CreateTempSubdirectory("medit-track-cleanup-").FullName;
+    private readonly string _modFolder;
+
+    public SourceRepositoryTrackCleanupTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     [Fact]
-    public void Track_SuccessfulRun_LeavesGitPresent_PositiveControl()
+    public void Track_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoneOfItsFiles_WhileThePluginsAroundItLand()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            PluginBaselines.Track(
-                modFolder, SourcePreset.Edits,
-                [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())]);
+        var refused = SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [Baseline("A.esp"), UnwritableBaseline("Bad.esp"), Baseline("C.esp")]);
 
-            Assert.True(Directory.Exists(Path.Combine(modFolder, ".git")));
-            // A successful Track still lands .gitignore and the pristine source tree —
-            // the failure-path cleanup must never fire (or otherwise interfere) on
-            // the happy path.
-            Assert.True(File.Exists(Path.Combine(modFolder, ".gitignore")));
-            Assert.True(File.Exists(Path.Combine(modFolder, "source", "Test.esp", "npc_", "Test.esp", "000001.json")));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "source", "Bad.esp")));
+        Assert.True(File.Exists(Path.Combine(_modFolder, "source", "C.esp", "npc_", "C.esp", "000001.json")));
+        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
     [Fact]
-    public void Track_FailureMidway_LeavesNoGitDirectoryBehind()
+    public void Track_IntoAnExistingRepository_RefusesAPluginWhoseFilesCannotAllBeWritten_AndCommitsTheRest()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            // The source root is already a plain file on disk, so Directory.CreateDirectory throws in Track's
-            // write loop, after `git init` and the mod's own commit: the half-done state cleanup must undo.
-            File.WriteAllText(Path.Combine(modFolder, "source"), "not a directory");
-            var poisonedFile = new TreeFile(Path.Combine("source", "Test.esp", "record.json"), "{}"u8.ToArray());
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, Baseline("A.esp").Files);
+        var editBefore = Git("rev-parse", "refs/heads/edit");
 
-            Assert.ThrowsAny<IOException>(() =>
-                PluginBaselines.Track(modFolder, SourcePreset.Edits, [poisonedFile]));
+        var refused = SourceRepository.Track(
+            _modFolder, SourcePreset.Edits, [UnwritableBaseline("Bad.esp"), Baseline("C.esp")]);
 
-            Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
-            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
+        Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
+        Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
+        Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
-    [Fact]
-    public void Track_FailureAfterPartialSourceWrite_LeavesNoSourceResidue()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            // The first entry writes for real, so something legitimate lands on disk before the
-            // failure; the second entry's directory segment is pre-poisoned as a plain file inside
-            // the source tree.
-            Directory.CreateDirectory(Path.Combine(modFolder, "source", "Test.esp"));
-            File.WriteAllText(Path.Combine(modFolder, "source", "Test.esp", "weap_"), "not a directory");
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
+        ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null, null));
 
-            IReadOnlyList<TreeFile> pristineFiles =
-            [
-                new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
-                new TreeFile("source/Test.esp/weap_/Test.esp/000002.json", "{}"u8.ToArray()),
-            ];
+    // The first file lands where the second needs a directory, so the write fails after some of the
+    // plugin's files are already on disk.
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) UnwritableBaseline(string plugin) =>
+        ([
+            new TreeFile($"source/{plugin}/npc_", "{}"u8.ToArray()),
+            new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
+        ], new BaselineTrailers(plugin, null, null, null));
 
-            Assert.ThrowsAny<IOException>(() =>
-                PluginBaselines.Track(modFolder, SourcePreset.Edits, pristineFiles));
+    private string[] SubjectsOnMain() =>
+        Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-            Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")), "a failed Track must not leave a half-initialized repo behind");
-            Assert.False(File.Exists(Path.Combine(modFolder, ".gitignore")), "a failed Track must not leave an orphaned .gitignore behind");
-            Assert.False(
-                File.Exists(Path.Combine(modFolder, "source", "Test.esp", "npc_", "Test.esp", "000001.json")),
-                "a failed Track must not leave any of its partially-written source/ tree behind");
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
+    private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 }

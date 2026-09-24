@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { isRefused, type MEditClient, type CompileResult } from '../client';
+import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { resolveCompileTarget } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
@@ -12,7 +12,8 @@ import {
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
-import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
+import { pluginFileOf, type PluginListNode, type PluginNode } from './PluginsTreeProvider';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
@@ -38,36 +39,56 @@ export function registerTrackCommand(
   progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.plugin.track', async (node: PluginListNode | undefined) => {
-    if (node?.kind !== 'plugin') return;
-    const name = node.plugin.name;
-    const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-    if (!origin) {
-      // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      reporter.report('error', `Could not resolve which mod "${name}" belongs to.`);
-      return;
+  // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
+  // that row is one of several selected, in one call and one pick.
+  return vscode.commands.registerCommand('modbench.plugin.track', async (clicked?: PluginListNode, selected?: readonly PluginListNode[]) => {
+    const nodes = (selected?.length ? selected : [clicked]).filter((node): node is PluginNode => node?.kind === 'plugin');
+    if (nodes.length === 0) return;
+
+    const addressed: PluginAddress[] = [];
+    const unaddressed: ItemRefusal<PluginAddress>[] = [];
+    for (const node of nodes) {
+      const name = node.plugin.name;
+      const origin = node.origin ?? await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
+      if (origin) addressed.push({ name, origin });
+      else unaddressed.push({ item: { name, origin: '' }, reason: 'its mod could not be resolved' });
     }
+    const report = (outcome: SelectionOutcome<PluginAddress>) => {
+      reporter.selectionOutcome(
+        `Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, (plugin) => plugin.name);
+    };
+    const [first] = addressed;
+    if (!first) { report({ landed: [], refused: unaddressed }); return; }
 
     const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { label: 'Edits' | 'Everything' }>(
       [
         { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
         { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
       ],
-      { placeHolder: `Track "${name}" — what should its .gitignore include?` },
+      {
+        placeHolder: nodes.length === 1
+          ? `Track "${first.name}" — what should its .gitignore include?`
+          : `Track ${nodes.length} plugins — what should their .gitignore include?`,
+      },
     );
     if (!choice) return;
 
     await progress.while(async () => {
-      progress.say(trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(origin, choice.label, {
-        onProgress: (status) => { progress.say(trackProgressMessage(origin, status)); },
+      progress.say(trackProgressMessage(first.origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      const result = await client.track(addressed, choice.label, {
+        onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
-      // menu entry's opposite. Not the filter-match set: tracking changes no record.
-      treeProvider.refresh();
-      reporter.landed(`Tracked "${origin}".`);
-      await onTracked();
+      const outcome = { landed: result.landed, refused: [...unaddressed, ...result.refused] };
+      if (outcome.landed.length > 0) {
+        // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
+        // menu entry's opposite. Not the filter-match set: tracking changes no record.
+        treeProvider.refresh();
+        await onTracked();
+      }
+      const [only, ...more] = outcome.landed;
+      if (outcome.refused.length > 0) report(outcome);
+      else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);
     });
   });
 }

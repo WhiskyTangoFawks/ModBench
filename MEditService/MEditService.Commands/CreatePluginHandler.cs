@@ -48,7 +48,14 @@ public sealed class CreatePluginHandler
         var modFolder = LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path);
         if (modFolder is null) return null;
         if (!SourceRepository.IsTracked(modFolder))
-            return await _track.TrackAsync(registered, copy.Origin, SourcePreset.Edits);
+        {
+            var track = await _track.TrackAsync(
+                registered, [.. registered.CopiesOfOrigin(copy.Origin).Select(c => c.Key)], SourcePreset.Edits);
+            return track.SelectionRefusal
+                ?? (track.Refused is [var refused, ..]
+                    ? TrackResult.Refused(refused.Refusal, refused.Message)
+                    : TrackResult.Success());
+        }
 
         // Modbench's own write is never an external change (ADR-0003 invariant 3): parked as the
         // binary this gesture wrote, so the mod's next settle has nothing to ask about it.

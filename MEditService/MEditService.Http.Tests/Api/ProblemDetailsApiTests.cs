@@ -121,7 +121,10 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
-            "track" => await client.PostAsJsonAsync("/plugins/track", new { origin = "NoLoadOrderMod", preset = "Edits" }),
+            "track" => await client.PostAsJsonAsync("/plugins/track", new
+            {
+                plugins = new[] { new { name = "New.esp", origin = "NoLoadOrderMod" } }, preset = "Edits",
+            }),
             "deleteRecord" => await client.PostAsJsonAsync("/records/delete", new
             {
                 records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } },

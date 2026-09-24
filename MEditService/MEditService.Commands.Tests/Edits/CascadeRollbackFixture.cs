@@ -85,7 +85,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
         {
-            track.TrackAsync(LoadOrder, origin, SourcePreset.Edits)
+            track.TrackModAsync(LoadOrder, origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 

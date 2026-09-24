@@ -10,9 +10,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>decompile-plugin to a new repository, fired by track mod: documents from the bytes,
-/// progress per plugin, and the watch carrying a hand edit into the answers. The destinations
-/// main and the working tree are debt #966.</summary>
+/// <summary>decompile-plugin to the repository, fired by track: each plugin applied or refused on
+/// its own, progress per plugin, and a hand edit reaching the answers. The destinations main and
+/// the working tree are debt #966.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class DecompilePluginTraceTests : HostedTests
 {
@@ -29,16 +29,18 @@ public sealed class DecompilePluginTraceTests : HostedTests
     private async Task Loaded() => (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
     [Fact]
-    public async Task TrackingALoadedMod_AnswersWithTheOrigin_ReportsItsProgress_AndLeavesThePluginEditable()
+    public async Task TrackingALoadedPlugin_AnswersItApplied_ReportsItsProgress_AndLeavesItEditable()
     {
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var tracked = await Client.Track(Origin);
+        var tracked = await Client.Track(Plugin, Origin);
 
         tracked.EnsureSuccessStatusCode();
         var body = await tracked.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(Origin, body.GetProperty("origin").GetString());
+        var applied = Assert.Single(body.GetProperty("applied").EnumerateArray());
+        Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
+        Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
             "track-progress", e => e.GetProperty("trackProgress").GetProperty("phase").GetString() == "Idle");
@@ -52,34 +54,53 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task TrackingWithoutAnOrigin_Is400()
+    public async Task TrackingNoPlugin_Is400()
     {
         await Loaded();
 
-        var response = await Client.Track(string.Empty);
+        var response = await Client.Track([]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task TrackingAnOriginNoLoadedPluginHas_Is404()
+    public async Task TrackingAPluginWithoutAnOrigin_Is400()
     {
         await Loaded();
 
-        var response = await Client.Track("NoSuchMod");
+        var response = await Client.Track(Plugin, string.Empty);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task TrackingAModAlreadyTracked_Is409()
+    public async Task TrackingASelection_AnswersEachPluginOnItsOwn_ANotLoadedOneRefusedByName()
     {
         await Loaded();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
 
-        var again = await Client.Track(Origin);
+        var response = await Client.Track([(Plugin, Origin), ("NoSuch.esp", "NoSuchMod")]);
 
-        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
+        Assert.Equal("NoSuch.esp", refused.GetProperty("plugin").GetProperty("name").GetString());
+        Assert.Equal("NoSuchMod", refused.GetProperty("plugin").GetProperty("origin").GetString());
+        Assert.Equal("PluginNotLoaded", refused.GetProperty("refusal").GetString());
+        Assert.Contains("NoSuch.esp", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TrackingAPluginAlreadyTracked_AnswersItRefused()
+    {
+        await Loaded();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+
+        var again = await Client.Track(Plugin, Origin);
+
+        again.EnsureSuccessStatusCode();
+        var refused = Assert.Single((await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
     }
 
     [Fact]
@@ -87,7 +108,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
 
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
@@ -100,7 +121,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheNextQuery_WithNoLoadOrderInBetween()
     {
         await Loaded();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         var formKey = await Client.FirstFormKey(Plugin);
         var before = await Client.Sequence();
 

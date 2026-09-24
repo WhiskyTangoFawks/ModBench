@@ -543,20 +543,3 @@ public enum TrackedFileChangeKind
     Modified,
     Deleted,
 }
-
-/// <summary>Thrown by Track when the mod folder already has a <c>.git</c> — named so the endpoint
-/// layer maps it to a real HTTP conflict.</summary>
-public sealed class SourceAlreadyTrackedException : Exception
-{
-    public SourceAlreadyTrackedException() : base("This mod folder is already tracked.")
-    {
-    }
-
-    public SourceAlreadyTrackedException(string message) : base(message)
-    {
-    }
-
-    public SourceAlreadyTrackedException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
-}

@@ -21,7 +21,9 @@ internal static class ExternalChangeClassifier
         if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
-        var changedPlugins = plugins
+        // An untracked plugin has no source to lose, so it is no part of the question.
+        var trackedPlugins = plugins.Where(p => SourceRepository.IsPluginTracked(modFolder, p.PluginName)).ToList();
+        var changedPlugins = trackedPlugins
             .Where(p => !SourceRepository.MatchesParkedCompileBinary(modFolder, p.PluginName, p.ObservedBytes))
             .Select(p => p.PluginName)
             .ToList();
@@ -31,7 +33,7 @@ internal static class ExternalChangeClassifier
 
         // Each plugin's own baseline carries the meta.ini it was taken with, and plugins sharing a
         // repository are taken at different times: the changed plugins' baselines are the ones asked.
-        IReadOnlyList<string> asked = changedPlugins.Count > 0 ? changedPlugins : [.. plugins.Select(p => p.PluginName)];
+        IReadOnlyList<string> asked = changedPlugins.Count > 0 ? changedPlugins : [.. trackedPlugins.Select(p => p.PluginName)];
         var baselines = asked
             .Select(plugin => SourceRepository.LatestBaselineTrailers(modFolder, plugin))
             .OfType<BaselineTrailers>()
@@ -45,6 +47,30 @@ internal static class ExternalChangeClassifier
         return new ExternalChangeClassification.ExternalChange(
             changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged,
             baselines.FirstOrDefault()?.UpstreamVersion, meta.UpstreamVersion);
+    }
+
+    /// <summary>The mod's unanswered question while its change still stands, or null. The marker caches
+    /// the last verdict (ADR-0003): present means classify again, and a verdict of nothing drops
+    /// it.</summary>
+    public static string? BlockingQuestion(LoadOrderSnapshot loadOrder, string modFolder)
+    {
+        if (SourceRepository.UnansweredExternalChange(modFolder) is not { } question) return null;
+
+        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
+        if (PluginBytesIn(loadOrder, modFolder) is not { } plugins) return question;
+
+        switch (ClassifyMod(modFolder, plugins))
+        {
+            case ExternalChangeClassification.ExternalChange:
+                return question;
+            case null:
+                SourceRepository.ClearExternalChangeQuestion(modFolder);
+                return null;
+            default:
+                // An interrupted compile is the repair offer's state, not this question's; the marker
+                // waits for a verdict either way.
+                return null;
+        }
     }
 
     /// <summary>Every plugin the load order holds in <paramref name="modFolder"/>, read fresh off

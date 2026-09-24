@@ -144,27 +144,10 @@ internal sealed class WriteTargets(
 
         (modFolder, repository) = (folder, opened);
 
-        // Checked before anything else, so the source file is never reached. The marker caches the
-        // classifier's last verdict (ADR-0003): present means classify again, and a verdict
-        // of nothing drops it and lets the write through.
-        if (SourceRepository.UnansweredExternalChange(folder) is not { } question) return null;
-
-        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
-        if (ExternalChangeClassifier.PluginBytesIn(loadOrder.Current, folder) is not { } plugins)
-            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
-
-        switch (ExternalChangeClassifier.ClassifyMod(folder, plugins))
-        {
-            case ExternalChangeClassification.ExternalChange:
-                return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
-            case null:
-                SourceRepository.ClearExternalChangeQuestion(folder);
-                return null;
-            default:
-                // An interrupted compile is the repair offer's state, not this question's; the marker
-                // waits for a verdict either way.
-                return null;
-        }
+        // Checked before anything else, so the source file is never reached.
+        return ExternalChangeClassifier.BlockingQuestion(loadOrder.Current, folder) is { } question
+            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
+            : null;
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

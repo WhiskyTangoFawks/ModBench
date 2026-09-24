@@ -32,57 +32,76 @@ public enum SourcePreset
 
 public sealed partial class SourceRepository
 {
-    /// <summary>Track's git mechanics: <c>Track &lt;mod&gt;</c>, one baseline commit per plugin with its
-    /// last-compile ref there, then the edit branch checked out. A failure removes .git, the .gitignore
-    /// and the source tree.</summary>
-    public static void Track(
+    /// <summary>One baseline commit per plugin on <c>main</c>, answering each plugin whose commit
+    /// failed. A mod with no repository gets one: <c>Track &lt;mod&gt;</c> first, the edit branch
+    /// checked out last.</summary>
+    public static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         GitCli.EnsureOnPath();
-
-        // Refused before touching git: the cleanup below would delete a real, already-tracked repo on its
-        // first failure.
-        if (IsTracked(modFolder))
-            throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
-
         var gitDir = Path.Combine(modFolder, ".git");
+        if (IsTracked(modFolder)) return JoinRepository(gitDir, baselines);
+
+        CreateRepository(gitDir, modFolder, preset);
+        var refused = CommitEachBaseline(gitDir, modFolder, baselines);
+        GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
+        GitCli.Run(gitDir, modFolder, "reset", "-q");
+        return refused;
+    }
+
+    // A scratch work tree: the edit branch does not move, and a baseline written into the real one
+    // would stand in the way of `rebase edit branch` as untracked files.
+    private static List<(string Plugin, string Reason)> JoinRepository(
+        string gitDir, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-track-").FullName;
         try
         {
-            GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
-            GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
-            GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            GitCli.Run(gitDir, modFolder, "config", "gc.autoDetach", "false");
-            // Flat file names routinely carry a space; git's default quotePath=true C-quotes such paths in
-            // porcelain output, and every porcelain reader here expects the raw path. Set once where every
-            // repo is born.
-            GitCli.Run(gitDir, modFolder, "config", "core.quotePath", "false");
-            EnsureCommitIdentity(gitDir, modFolder);
-
-            File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-            GitCli.Run(gitDir, modFolder, "add", "-A");
-            GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
-
-            foreach (var (files, trailers) in baselines)
-            {
-                PristineFileWriter.WriteAll(files, modFolder);
-                CommitBaselineToMain(gitDir, modFolder, TrackSubject(trailers), trailers);
-            }
-
-            GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
-            GitCli.Run(gitDir, modFolder, "reset", "-q");
+            return CommitEachBaseline(gitDir, scratchDir, baselines);
         }
-        catch
+        finally
         {
-            // Cleaning up .git alone would orphan the .gitignore and the source tree, both written before the
-            // commit that makes them real.
-            if (Directory.Exists(gitDir)) Directory.Delete(gitDir, recursive: true);
-            var gitignorePath = Path.Combine(modFolder, ".gitignore");
-            if (File.Exists(gitignorePath)) File.Delete(gitignorePath);
-            var sourceRoot = Path.Combine(modFolder, RootFolderName);
-            if (Directory.Exists(sourceRoot)) Directory.Delete(sourceRoot, recursive: true);
-            throw;
+            Directory.Delete(scratchDir, recursive: true);
         }
+    }
+
+    // No rollback beyond git's: the commits before a failed one stand, and git's own clean takes the
+    // failed plugin's files back out of the work tree.
+    private static List<(string Plugin, string Reason)> CommitEachBaseline(
+        string gitDir, string workTree, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
+    {
+        var refused = new List<(string Plugin, string Reason)>();
+        foreach (var (files, trailers) in baselines)
+        {
+            try
+            {
+                PristineFileWriter.WriteAll(files, workTree);
+                CommitBaselineToMain(gitDir, workTree, TrackSubject(trailers), trailers);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                GitCli.Run(gitDir, workTree, "clean", "-fdq", "--", LiteralPathspec(RootFor(trailers.Plugin)));
+                refused.Add((trailers.Plugin, ex.Message));
+            }
+        }
+        return refused;
+    }
+
+    private static void CreateRepository(string gitDir, string modFolder, SourcePreset preset)
+    {
+        GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
+        GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
+        GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
+        GitCli.Run(gitDir, modFolder, "config", "gc.autoDetach", "false");
+        // Plugin file names carry spaces, which git's default quotePath C-quotes in porcelain output,
+        // and every porcelain reader here expects the raw path.
+        GitCli.Run(gitDir, modFolder, "config", "core.quotePath", "false");
+        EnsureCommitIdentity(gitDir, modFolder);
+
+        File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
+        GitCli.Run(gitDir, modFolder, "add", "-A");
+        GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
     }
 
     /// <summary>Absorb's git mechanics: each plugin's new baseline on main, then every changed tracked

@@ -38,7 +38,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
     }

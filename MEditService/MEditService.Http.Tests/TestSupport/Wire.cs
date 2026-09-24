@@ -31,8 +31,12 @@ internal static class Wire
             ? fx.Plugins
             : fx.Plugins.Where(p => origins.Contains(p.Origin, StringComparer.Ordinal));
 
-    internal static Task<HttpResponseMessage> Track(this HttpClient client, string origin, string preset = "Edits") =>
-        client.PostAsJsonAsync("/plugins/track", new { origin, preset });
+    internal static Task<HttpResponseMessage> Track(this HttpClient client, string plugin, string origin, string preset = "Edits") =>
+        client.Track([(plugin, origin)], preset);
+
+    internal static Task<HttpResponseMessage> Track(
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string preset = "Edits") =>
+        client.PostAsJsonAsync("/plugins/track", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), preset });
 
     internal static Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>
