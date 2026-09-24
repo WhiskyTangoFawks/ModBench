@@ -325,8 +325,8 @@ Offered on Downloads.
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | update-load-order-file |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
 | pause / resume | writes | Downloads: context menu, key | - | downloaded files (running downloads) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
-| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | debt #991 | none |
-| open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | debt #991 | none |
+| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | built | none |
+| open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | built | none |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | planned | - |
 | filter | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | none |
 | sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | debt #967 | none |
