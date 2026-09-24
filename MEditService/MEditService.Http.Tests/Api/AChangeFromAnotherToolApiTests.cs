@@ -81,11 +81,45 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
         OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
 
-        var frames = await stream.FramesThrough("rows-changed", e => Names(e, quest));
+        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // A tool that moves by copying and then deleting: the old path's delete settles in a batch the
+    // new path is not in.
+    [Fact]
+    public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var quest = await Client.FirstFormKey(Plugin, "qust");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+        OtherTool.CopiesASourceDocument(original, "SortedByHand/{0}");
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+
+        OtherTool.DeletesTheFile(original);
+
+        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
+        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame
+    // bounds everything the first batch published.
+    private static async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSettleAnchoredBy(
+        StreamReader stream, string modFolder, string quest)
+    {
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
+        var frames = new List<(string Kind, JsonElement Data)>(
+            await stream.FramesThrough("rows-changed", e => Names(e, quest)));
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "AnchorFilter", "BoundingFilter");
+        frames.AddRange(await stream.FramesThrough("rows-changed", e => Names(e, quest)));
+        return frames;
     }
 
     private static bool Names(JsonElement rowsChanged, string formKey) =>
