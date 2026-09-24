@@ -146,7 +146,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     canSelectMany: true,
     // A drag moves plugins.txt lines, which the same provider owns.
     dragAndDropController: pluginsTree,
-    // Title-bar rule 7 (docs/specs/containers.md): hierarchical trees get Collapse All, and this
+    // commands.md, Chrome: Collapse All is on trees only, and this
     // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   }));
@@ -462,6 +462,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   // in the applied outcome is logged here, because no caller is left to hear it.
   own(instance.subscribe(() => void putCurrentLoadOrder().catch((e: unknown) => outputChannel.error(
     `[toolbox] handing mEdit the load order threw: ${errorMessage(e)}`))));
+  own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putCurrentLoadOrder));
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
@@ -473,8 +474,12 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(registerOverwriteView(instance));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
-  own(registerModSync(instance, (profile, modFolders) => syncMods(instanceRoot, profile, modFolders), outputChannel));
+  const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
+    syncMods(instanceRoot, profile, modFolders);
+  own(registerModSync(instance, runModSync, outputChannel));
+  own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(registerPluginSync(instance, runPluginSync, outputChannel));
+  own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,

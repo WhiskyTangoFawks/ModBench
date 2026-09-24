@@ -35,6 +35,7 @@ export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], show
 export function downloadContextValue(row: DownloadRow): string {
   const flags = [
     row.modID !== undefined && 'hasModID',
+    row.hasMeta && 'hasMeta',
     row.hidden && 'hidden',
   ].filter((f): f is string => f !== false);
   return ['download', ...flags].join(' ');

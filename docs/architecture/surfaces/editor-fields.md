@@ -17,11 +17,11 @@ As a user, I want:
 
 1. A value to read as what it means, never as it is stored: an enum or a flag by its name, a
    reference by its record, never a raw integer, never "null" or "undefined". *ADR-0005, invariant 3;
-   old spec*
+   ruling*
 2. A value the plugin leaves out to read as the field's default, and its editor to open on it. A
    plugin leaves out a value equal to its default, so a blank would say something untrue. *ADR-0005,
-   invariant 1; old spec*
-3. A value too wide for its column cut with an ellipsis, and copied whole. *old spec*
+   invariant 1; ruling*
+3. A value too wide for its column cut with an ellipsis, and copied whole. *ruling*
 4. Ctrl+C to copy the value as the cell reads it. *xEdit*
 5. Ctrl+V to take the text on the clipboard as if I had typed it. Text the field cannot hold is
    refused, naming the field, and nothing changes. *xEdit; Refuse, do not repair*
@@ -48,7 +48,7 @@ As a user, I want:
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON | `{…}` |
 | Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON | `[0]` |
 
-*xEdit's editors by type; xedit.md, divergences 1 and 7; old spec; mEdit's answer*
+*xEdit's editors by type; xedit.md, divergences 1 and 7; ruling; mEdit's answer*
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field.
 *xEdit*
@@ -59,11 +59,11 @@ A placeholder says a struct or array is there and collapsed, so it is drawn for 
 user, I want:
 
 1. A column whose plugin has nothing there, such as an array slot past its own length, an unset
-   struct that may be unset, or a member its kind does not have, to show an empty cell. *old spec*
-2. A struct that cannot be unset to keep its placeholder, with each member at its default. *old
-   spec; ADR-0005, invariant 1*
+   struct that may be unset, or a member its kind does not have, to show an empty cell. *ruling*
+2. A struct that cannot be unset to keep its placeholder, with each member at its default. *ruling;
+   ADR-0005, invariant 1*
 3. A row no column has a value for, which holds only its children, to keep its placeholder in every
-   column. *old spec*
+   column. *ruling*
 
 ## References
 
@@ -72,13 +72,13 @@ As a user, I want:
 1. The record picker to be VS Code's quick pick, opened on the current reference, with that record
    selected. *xedit.md, divergence 1*
 2. Typing to search by EditorID, or by FormKey. When the field allows one record type, the search
-   is among that type only. *xEdit; old spec; mEdit's answer*
+   is among that type only. *xEdit; ruling; mEdit's answer*
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone
-   stale still finds the right record. *old spec*
+   stale still finds the right record. *ruling*
 4. Enter to write the record I chose, and Esc to change nothing. *Esc changes nothing*
 5. A reference that resolves to no record, or to a type the field does not allow, to carry a warning
    in its cell, with the reason in its tooltip. Each cell carries its own. *CONTEXT.md, FormLink;
-   old spec*
+   ruling*
 6. A reference to a record the engine defines, such as the player, to resolve with no warning,
    though no plugin holds it. *xEdit*
 7. Go to record on a reference that resolves, and on one of the wrong type, as xEdit follows both.
@@ -107,9 +107,9 @@ As a user, I want:
    by property name, a perk's fragments by index, a quest's fragments by stage and index, a scene's
    phase fragments by index and flags, a quest's alias bindings by alias number. *xEdit*
 4. Add on an array's row, whether it is collapsed or expanded, to append a new element, empty but
-   for its kind, which is the first the field lists. *xEdit; old spec*
+   for its kind, which is the first the field lists. *xEdit; ruling*
 5. Two elements with the same key refused, naming the key: the key is the element's identity. A
-   second new element in a keyed array meets this until I name the first. *xEdit; old spec*
+   second new element in a keyed array meets this until I name the first. *xEdit; ruling*
 6. Move up absent on the first element, and move down on the last. *No dead entries*
 
 ## A field of several kinds
@@ -118,14 +118,14 @@ Some fields hold one of several kinds of value, such as an alias that is a refer
 a collection. As a user, I want:
 
 1. A Kind row that chooses between them, a dropdown of the kinds named as the schema names them,
-   never a class name. *old spec; xedit.md: the Kind dropdown chooses the member*
-2. Switching the kind to keep the members both kinds have, and to drop the rest. *old spec*
-3. A member the column's kind does not have to show an empty cell. *old spec*
+   never a class name. *ruling; xedit.md: the Kind dropdown chooses the member*
+2. Switching the kind to keep the members both kinds have, and to drop the rest. *ruling*
+3. A member the column's kind does not have to show an empty cell. *ruling*
 
 ## Collapsed readings
 
 A collapsed element reads as xEdit summarises it, where xEdit has a summary for it; otherwise it
-reads `{…}`. *xEdit; old spec*
+reads `{…}`. *xEdit; ruling*
 
 | Element | Reads |
 |---|---|
@@ -138,9 +138,8 @@ As a user, I want:
 
 1. A reading to go one level deep: a property whose value is a list or a struct reads by its name
    and kind. *xEdit*
-2. An element with no reading, inside one that has, to read `{…}`, so the count stays true. *old
-   spec*
-3. The elements joined by `, `, with no length limit: the cell cuts what does not fit. *old spec*
+2. An element with no reading, inside one that has, to read `{…}`, so the count stays true. *ruling*
+3. The elements joined by `, `, with no length limit: the cell cuts what does not fit. *ruling*
 
 ## Conditions
 
@@ -150,12 +149,12 @@ A condition list is an array like any other. As a user, I want:
    losing copy's data is never hidden. *ruling; xedit.md, divergence 15; ADR-0005, invariant 7*
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value
    never reaches the plugin. *ADR-0005, invariant 7*
-3. The function chosen from the ordinary enum dropdown. *old spec*
+3. The function chosen from the ordinary enum dropdown. *ruling*
 
 ## Scripts
 
 A record's script data (its VMAD) is a struct like any other, and its scripts, properties and values
-edit as the fields above. Editing Papyrus source is not the record panel's. *old spec*
+edit as the fields above. Editing Papyrus source is not the record panel's. *ruling*
 
 ## Partial Form
 

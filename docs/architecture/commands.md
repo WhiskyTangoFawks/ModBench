@@ -5,7 +5,9 @@ vocabulary. A gesture or command the code has and this file lacks is a defect in
 A gesture this file has and the model cannot hold is a ticket.
 
 - **Object**: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record,
-  Referrer, Downloaded file. `CONTEXT.md` defines each one.
+  Referrer, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own
+  configuration, which VS Code stores at user and workspace scope. It is the object of
+  `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
 - **Surface**: what a driving box presents to the user. One surface per driving box on the
   Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor
   realizes it.
@@ -203,7 +205,7 @@ Offered on Toolbox. Run entries are not an object yet; the run-list gestures nam
 | deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | planned | - |
 | run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | planned | - |
 | select game | ? | Toolbox: ? | `modbench.instance.selectGame` | game | - | MO2 toolbar | Choose the game the instance is for. | ? | - |
-| open settings | reads | Toolbox: ? | `modbench.instance.openSettings` | - | - | MO2 toolbar | Open the Modbench settings. | ? | none |
+| open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | built | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | debt #967 | load-instance |
 | add executable | writes | Toolbox: context menu | - | run entry | - | MO2 Executables dialog | Add an executable to the run list in `ModOrganizer.ini`, as a task. | planned | - |
 | remove executable | writes | Toolbox: context menu | - | run entries | - | MO2 Executables dialog | Remove an executable from the run list. | planned | - |
@@ -323,8 +325,8 @@ Offered on Downloads.
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | debt #967 | update-load-order-file |
 | download | writes | automatic | - | - | source: an nxm:// link (planned) | MO2 download manager | Fetch a mod file into `downloads/`. Modbench does not do this yet. | word-only | - |
 | pause / resume | writes | Downloads: context menu, key | - | downloaded files (running downloads) | - | MO2 Downloads | Pause a running download, or resume it. | planned | - |
-| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | debt #991 | none |
-| open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | debt #991 | none |
+| open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | built | none |
+| open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | built | none |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | planned | - |
 | filter | reads | Downloads: title icon, key (Ctrl+F) | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | debt #967 | none |
 | sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | debt #967 | none |

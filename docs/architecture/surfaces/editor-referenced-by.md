@@ -23,7 +23,7 @@ As a user, I want:
    last record tab, the list to empty.
 3. The title to count the records that reference it, as xEdit's tab caption does: `Referenced By
    (12)`. With no record, or while the count is not known, the title has no count, so it never
-   shows a zero it has not confirmed. *xEdit; old spec*
+   shows a zero it has not confirmed. *xEdit; ruling*
 4. The description to name the record the list is about, then the name filter's term while one is
    active: `WeapLaserGun · "arm"`. *common, The name filter, story 5*
 5. Several rows selected at once, and a gesture to act on the whole selection. *common, A view,
@@ -34,7 +34,7 @@ As a user, I want:
 As a user, I want:
 
 1. One row for each record that references the active one, however many plugins hold the
-   reference: a referrer overridden in four plugins is one referrer, not four. *old spec*
+   reference: a referrer overridden in four plugins is one referrer, not four. *ruling*
 2. Beneath a referrer, one row for each plugin that holds the reference, in plugin order: each is
    one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xEdit*
 3. Only the copies the game loads to count: a reference held only in a disabled plugin, or in a
@@ -42,7 +42,7 @@ As a user, I want:
 4. A reference counted only where its field is in use: a condition parameter its function does not
    use is not a reference, whatever it holds. *xedit.md, divergence 15*
 5. A child record's references counted as its own: a quest and a dialog topic inside it each list
-   what they reference. *old spec*
+   what they reference. *ruling*
 6. The referrers sorted by record type, then by label, and the title bar's toggle to reverse them.
    *common, A view, story 7*
 7. Every referrer collapsed when the list follows a new record.
@@ -54,7 +54,7 @@ As a user, I want:
 | Part | What it shows | Source |
 |---|---|---|
 | Label | the EditorID, or the FormKey when it has none | Plugins' record row |
-| Description | the record type as xEdit names it, then `· 3 plugins` when more than one plugin holds the reference | xEdit's columns; old spec |
+| Description | the record type as xEdit names it, then `· 3 plugins` when more than one plugin holds the reference | xEdit's columns; ruling |
 | Icon | none | Plugins' record row |
 | Tooltip | `EditorID [FormKey]`, the record type, and the plugins that hold the reference | |
 | Identity | the referrer's FormKey | |
@@ -64,15 +64,15 @@ As a user, I want:
 | Part | What it shows | Source |
 |---|---|---|
 | Label | the plugin's file name | xEdit |
-| Description | the fields that hold the reference, as mEdit gives their paths, joined by `, ` | old spec; mEdit's answer |
+| Description | the fields that hold the reference, as mEdit gives their paths, joined by `, ` | ruling; mEdit's answer |
 | Identity | the referrer's FormKey and the plugin | |
 
 ## States
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no record open, the message "Open a record to see what references it." *old spec*
-2. With a record nothing references, the message "No references found." *old spec*
+1. With no record open, the message "Open a record to see what references it." *ruling*
+2. With a record nothing references, the message "No references found." *ruling*
 3. While mEdit is still indexing plugins, a message that the list may not be complete. *ADR-0019,
    invariant 1*
 4. The list to read again when mEdit reports a change to the records, from an edit of mine or from
