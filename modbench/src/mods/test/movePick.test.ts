@@ -53,6 +53,6 @@ describe('the move pick for separators', () => {
   it('leaves out every selected separator, and each item carries the separator it lands above', () => {
     const items = separatorsMovePick(ENTRIES, 'losingAtTop', ['Late', 'Early']);
 
-    expect(items).toEqual([{ label: 'Middle', target: 'Middle' }]);
+    expect(items).toEqual([{ label: 'Middle', target: { kind: 'separator', name: 'Middle' } }]);
   });
 });
