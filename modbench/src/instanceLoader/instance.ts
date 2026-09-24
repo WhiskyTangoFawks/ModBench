@@ -146,11 +146,20 @@ async function readModFolderNames(instanceRoot: string): Promise<string[] | unde
 // Installed reads every mod folder on disk, not one profile's modlist.txt lines: a folder no
 // profile has synced into its modlist yet still owns its meta.ini's claim.
 async function readInstalledInto(
-  instanceRoot: string, modFolderNames: readonly string[],
+  instanceRoot: string, entries: readonly ModlistEntry[], modFolderNames: readonly string[],
 ): Promise<ReadonlyMap<string, readonly string[]>> {
+  // Read once: an active-profile mod's archiveFilename is already in `entries`.
+  const knownArchiveFilenames = new Map<string, string | undefined>();
+  for (const entry of entries) if (entry.kind === 'mod') knownArchiveFilenames.set(entry.name, entry.archiveFilename);
   const metas = await Promise.all(modFolderNames.map(async (name) => {
-    const meta = await readMeta(instanceRoot, name);
-    return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
+    if (knownArchiveFilenames.has(name)) return { name, archiveFilename: knownArchiveFilenames.get(name) };
+    try {
+      const meta = await readMeta(instanceRoot, name);
+      return { name, archiveFilename: 'archiveFilename' in meta ? meta.archiveFilename : undefined };
+    } catch {
+      // ADR-0003: recover, don't fail — an off-profile folder's own read failure claims nothing.
+      return { name, archiveFilename: undefined };
+    }
   }));
   return modsByInstallationFile(metas);
 }
@@ -368,9 +377,7 @@ export class Instance implements vscode.Disposable {
       })),
     ]);
     const { gameDirectory, dataFolderPlugins } = game;
-    // Every mod folder on disk, not this profile's modlist.txt lines: a folder synced into no
-    // profile yet still owns its meta.ini's Installed claim.
-    const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, modFolderNames ?? []) : undefined;
+    const installedInto = downloadEntries ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? []) : undefined;
     const gameName = readGameName(iniText);
     // An unresolved game directory loses only the Data-folder copies' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line

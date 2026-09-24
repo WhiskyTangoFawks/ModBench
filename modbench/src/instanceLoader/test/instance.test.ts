@@ -602,11 +602,9 @@ describe('Instance — downloads, profile and game directory', () => {
     await rm(join(root, 'mods', 'Unofficial Fallout 4 Patch'), { recursive: true, force: true });
     await instance.refresh();
 
-    // Uncorroborated, the sidecar's own installed=true reads Uninstalled, not Downloaded.
     expect(statusOf()).toBe('Uninstalled');
   });
 
-  // A mod folder can sit on disk with no profile's modlist.txt line for it yet.
   it('reads a download as Installed from a mod folder with no line in the active profile\u2019s modlist', async () => {
     const { root, instance } = await realInstance();
     await mkdir(join(root, 'downloads'), { recursive: true });
@@ -619,6 +617,19 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.modFolders).toContain('Off Profile Mod');
     const download = instance.value.downloads.find((d) => d.name === 'Off-Profile-1.7z');
     expect(download?.status).toBe('Installed');
+  });
+
+  // Rival: letting this folder's read failure propagate like the active-profile "Harder VATS"
+  // case below — the whole recompute would fail over a folder no profile even lists.
+  it('recovers from an unreadable meta.ini in a mod folder no profile lists, rather than failing the whole recompute', async () => {
+    const { root, instance, readFailureLines } = await realInstance();
+    await mkdir(join(root, 'mods', 'Off Profile Mod', 'meta.ini'), { recursive: true }); // present but unreadable (EISDIR)
+
+    await instance.refresh();
+
+    expect(readFailureLines).toEqual([]);
+    expect(instance.value.modFolders).toContain('Off Profile Mod');
+    expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
   });
 
   it('reflects a profile switch made outside Modbench in the next value', async () => {

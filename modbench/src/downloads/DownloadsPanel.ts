@@ -23,8 +23,9 @@ const TIER_LABEL: Record<UpgradeTier, string> = {
   installationFile: 'Installed from this file',
 };
 
-// The top tier, if one exists, is first in `candidates` (selectUpgradeCandidates' own order),
-// which is what makes it VS Code's default-highlighted row — no explicit activeItem.
+const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' as const } };
+
+// The top tier, if one exists, sorts first; the new-mod row is always last.
 function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickItem[] {
   return [
     ...candidates.map((c) => ({
@@ -32,17 +33,34 @@ function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickI
       description: c.tier && TIER_LABEL[c.tier],
       choice: { kind: 'upgrade' as const, name: c.modName },
     })),
-    { label: 'Install as a new mod…', choice: { kind: 'new' as const } },
+    NEW_MOD_ITEM,
   ];
 }
 
-// Esc yields no choice at all, which the caller reads as "install nothing" — never "install as
-// a new mod", which is its own explicit row.
+// Esc: no choice, "install nothing". The active item is set explicitly, not left to list order —
+// with no tier present it is the new-mod row.
 async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandidate[]): Promise<InstallChoice | undefined> {
-  const picked = await vscode.window.showQuickPick(upgradePickItems(candidates), {
-    placeHolder: `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`,
+  const items = upgradePickItems(candidates);
+  const hasTier = candidates.some((c) => c.tier !== undefined);
+  const active = hasTier ? items[0] : items.at(-1);
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<UpgradePickItem>();
+    quickPick.items = items;
+    quickPick.placeholder = `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`;
+    quickPick.activeItems = active ? [active] : [];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked?.choice);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
   });
-  return picked?.choice;
 }
 
 /** The composition root's two answers, which is what lets this view call install itself: the
@@ -67,7 +85,7 @@ async function resolveTarget(
 // no sidecar; install is called for what it is, and install marks the download installed.
 async function installArchive(
   row: DownloadFile, instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
-  deps: DownloadInstallDeps,
+  log: (line: string) => void, deps: DownloadInstallDeps,
 ): Promise<void> {
   const { name } = row;
   let downloadRefusal: string | undefined;
@@ -94,12 +112,8 @@ async function installArchive(
   }
   if (downloadRefusal === undefined) return;
   // ADR-0019 background/recoverable tier: Installed reads off the mod's own meta.ini, never this
-  // sidecar, so the failed mark changes nothing the user sees — Output only, no notification.
-  reporter.insideDialog(
-    'warning',
-    `"${name}" was installed, but its Downloads status could not be updated.`,
-    downloadRefusal,
-  );
+  // sidecar, so the failed mark changes nothing the user sees — one Output line, no notification.
+  log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
@@ -142,11 +156,12 @@ async function deleteSelection(
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, log: (line: string) => void,
+  install: DownloadInstallDeps,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
+      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, log, install);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = node?.row;

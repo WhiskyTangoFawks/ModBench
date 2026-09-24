@@ -75,6 +75,15 @@ describe('selectUpgradeCandidates', () => {
     ]);
   });
 
+  // Tier 2 needs no shared Nexus mod id: a hand-installed mod with none of its own still wins it
+  // on its meta.ini's own installationFile record alone.
+  it('flags an installationFile match from a mod with no Nexus mod id of its own', () => {
+    const value = valueOf([mod({ name: 'Hand Installed', archiveFilename: 'foo.7z' })]); // nexusId undefined
+    expect(selectUpgradeCandidates(value, download({ modID: '111', name: 'foo.7z' }))).toEqual([
+      { modName: 'Hand Installed', version: undefined, tier: 'installationFile' },
+    ]);
+  });
+
   // Tier 2 hidden: an installationFile match sits beside a fileId match elsewhere in the pool, so
   // it never earns the "Installed from this file" label — it lists, but tierless.
   it('drops the installationFile tier when a fileId match exists elsewhere in the pool', () => {

@@ -137,7 +137,7 @@ export function modsByInstallationFile(
 
 /** Hidden rows are built and flagged, never filtered — filtering is a view concern. Sidecars do
  *  not become rows of their own. `installedInto` is what makes a row Installed; unclaimed, the
- *  sidecar's flag is stale, not a status. */
+ *  sidecar's own flag decides Downloaded vs. Uninstalled instead. */
 export function buildDownloadRows(
   entries: DownloadEntry[], installedInto: ReadonlyMap<string, readonly string[]>,
 ): DownloadRow[] {

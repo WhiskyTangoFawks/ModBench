@@ -24,15 +24,18 @@ const isInstallationFileMatch = (mod: Mod, downloadName: string): boolean =>
 
 const TIER_RANK: Record<'fileId' | 'installationFile' | 'none', number> = { fileId: 0, installationFile: 1, none: 2 };
 
-// No mod id, or no installed mod sharing it, empties the pick. A file-id match sorts first; with
-// none, an installation-file match naming this download does; neither still lists, tierless.
+// No mod id empties the pick. Tier 1 scans the mod-id pool; tier 2 scans every mod instead —
+// no Nexus id required on the candidate itself. Neither still lists, tierless.
 export function selectUpgradeCandidates(
   value: { mods: InstanceValue['mods'] },
   download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,
 ): UpgradeCandidate[] {
   if (!download.modID) return [];
-  const pool = value.mods.filter((e): e is Mod => e.kind === 'mod' && e.nexusId === download.modID);
-  const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.fileID));
+  const allMods = value.mods.filter((e): e is Mod => e.kind === 'mod');
+  const modIdPool = allMods.filter((mod) => mod.nexusId === download.modID);
+  const hasFileIdMatch = modIdPool.some((mod) => isFileIdMatch(mod, download.fileID));
+  const installationFileMatches = hasFileIdMatch ? [] : allMods.filter((mod) => isInstallationFileMatch(mod, download.name));
+  const pool = [...modIdPool, ...installationFileMatches.filter((mod) => !modIdPool.includes(mod))];
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
     if (isFileIdMatch(mod, download.fileID)) return 'fileId';
     if (!hasFileIdMatch && isInstallationFileMatch(mod, download.name)) return 'installationFile';

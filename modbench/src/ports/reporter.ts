@@ -13,8 +13,8 @@ export interface Reporter {
   /** A gesture the user invoked landed: ADR-0019's success tier, an information toast and no log
    *  line. Nothing went wrong, so there is no detail to go back and read. */
   landed: (message: string) => void;
-  /** Output only, no notification: a dialog already open says it, or a gesture already reported
-   *  landed does — ADR-0019's dialog and background/recoverable tiers both read this way. */
+  /** A failure inside a dialog the user is answering: an Output line, what and why, and no
+   *  notification, because the dialog already says it. */
   insideDialog: (severity: Severity, message: string, detail?: string) => void;
   /** A gesture over a selection: one error naming each refused item and why, and nothing for the
    *  items that landed, so a fully landed outcome says nothing. */

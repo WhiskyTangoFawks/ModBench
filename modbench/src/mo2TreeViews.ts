@@ -77,6 +77,7 @@ export function registerDownloadsView(
   instanceRoot: string,
   instance: InstanceView,
   reporter: Reporter,
+  log: (line: string) => void,
   ask: AskQuestion,
   trash: MoveToTrash,
   install: DownloadInstallDeps,
@@ -100,7 +101,7 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, log, install),
     ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask, trash),
   ]) own(disposable);
   return downloadsProvider;
