@@ -9,15 +9,13 @@ import {
   moveMods,
   moveSeparators,
   renameSeparator,
-  reorderMod,
-  reorderSeparatorBlock,
   setModsEnabled,
   syncMods,
 } from '../../modlist/modlist';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
 } from './corpusFixture';
-import type { Mod, Separator } from '../../instanceLoader/instance';
+import type { Mod } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
@@ -67,9 +65,9 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(entries.find(isMod('Unofficial Fallout 4 Patch'))?.enabled).toBe(false);
   });
 
-  it('reorderMod moves a mod to the winning end, touching only modlist.txt', async () => {
+  it('moveMods moves a mod to the winning end of mod order, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderMod(dir, PROFILE, 'ENBoost - 12k', { kind: 'winningEnd' });
+    await moveMods(dir, PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -124,36 +122,11 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
   it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], 'Radfall - All-In-One Survival Overhaul', 'losing');
+    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     expect(await separatorNames(dir)).toEqual(['Radfall - All-In-One Survival Overhaul', 'Unassigned (Modlist Development)']);
-  });
-
-  it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {
-    const before = await snapshotTree(dir);
-    // Past the last remaining entry once the block is lifted out: a move large enough that
-    // "the drop ignored" or "children left behind" would be visible.
-    await reorderSeparatorBlock(dir, PROFILE, 'Unassigned (Modlist Development)', { kind: 'losingEnd' });
-    const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([MODLIST]));
-
-    const entries = await readModlistEntries(dir);
-    const last = entries.at(-1);
-    if (last?.kind !== 'separator') throw new Error('expected the last entry to be a separator');
-    const lastSeparator: Separator = last;
-    expect(lastSeparator.name).toBe('Unassigned (Modlist Development)');
-    // Its three (preceding) children moved with it, immediately above it, in order.
-    expect(entries.slice(-4).map((e) => e.name)).toEqual([
-      "Ñoño's Retexture",
-      'Tracked Patch Mod',
-      'SKK Fast Start new game (Fallout 4)',
-      'Unassigned (Modlist Development)',
-    ]);
-    // And everything that followed the block now leads it.
-    const enboostIdx = entries.findIndex((e) => e.name === 'ENBoost - 12k');
-    expect(enboostIdx).toBeLessThan(entries.length - 4);
   });
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {

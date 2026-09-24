@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
-import type { Drop } from '../../mo2Codecs/dropIndex';
-
-// The entry names a splice counts its index among — the same read the command makes.
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ModStatusResult } from '../../instanceLoader/statusChecker';
 import { present } from '../../ports/present';
@@ -11,32 +8,22 @@ import {
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import type {
-  setModsEnabled, reorderMod, moveMods, reorderSeparatorBlock,
-} from '../../modlist/modlist';
+import type { setModsEnabled } from '../../modlist/modlist';
+
+const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
+  commands: { executeCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-// Every modlist.txt gesture the provider fires goes through these free commands now (ADR-0015
-// point 6) rather than an injected source — mocked at the module boundary, in the style already
-// established by recordPanelContextCommands.test.ts.
-const {
-  setModsEnabledMock, reorderModMock, moveModsMock, reorderSeparatorBlockMock,
-} = vi.hoisted(() => ({
+const { setModsEnabledMock } = vi.hoisted(() => ({
   setModsEnabledMock: vi.fn<typeof setModsEnabled>(),
-  reorderModMock: vi.fn<typeof reorderMod>(),
-  moveModsMock: vi.fn<typeof moveMods>(),
-  reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
 vi.mock('../../modlist/modlist', () => ({
   setModsEnabled: (...args: Parameters<typeof setModsEnabledMock>) => setModsEnabledMock(...args),
-  reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
-  moveMods: (...args: Parameters<typeof moveModsMock>) => moveModsMock(...args),
-  reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
@@ -46,7 +33,6 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { Reporter } from '../../ports/reporter';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -54,12 +40,7 @@ const ACTIVE_PROFILE = 'Default';
 beforeEach(() => {
   setModsEnabledMock.mockReset();
   setModsEnabledMock.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
-  moveModsMock.mockReset();
-  moveModsMock.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
-  for (const m of [reorderModMock, reorderSeparatorBlockMock]) {
-    m.mockReset();
-    m.mockResolvedValue({ applied: true, wrote: true });
-  }
+  executeCommand.mockClear();
 });
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
@@ -128,15 +109,9 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 
 const makeProvider = (
   mods: ModlistEntry[],
-  extra: Partial<{
-    instance: FakeInstance;
-    log: (m: string) => void; reporter: Reporter;
-    instanceRoot: string;
-  }> = {},
+  extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
 ) => new ModListProvider({
   instance: extra.instance ?? new FakeInstance(valueOf(mods)),
-  log: extra.log,
-  reporter: extra.reporter,
   instanceRoot: extra.instanceRoot ?? INSTANCE_ROOT,
 });
 
@@ -460,10 +435,9 @@ describe('ModListProvider', () => {
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
   // that threw spinning forever (ADR-0019).
-  it('settles a failed first read on the one error row naming the reason, raises nothing, then renders rows when a value lands', async () => {
+  it('settles a failed first read on the one error row naming the reason, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reporter = recordingReporter();
-    const provider = makeProvider([], { instance, reporter });
+    const provider = makeProvider([], { instance });
 
     const pending = provider.getChildren();
     instance.fail('EACCES: permission denied, open modlist.txt');
@@ -474,14 +448,12 @@ describe('ModListProvider', () => {
     expect(error.label).toBe('Failed to load: EACCES: permission denied, open modlist.txt');
     expect(error.tooltip).toBe('EACCES: permission denied, open modlist.txt');
     expect(error.iconPath).toEqual(new ThemeIcon('error'));
-    expect(reporter.reports).toEqual([]);
 
     instance.publish(valueOf([mod('A')]));
     const after = await within(provider.getChildren(), 500);
 
     expect(after.some((n) => n instanceof ModNode)).toBe(true);
     expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
-    expect(reporter.reports).toEqual([]);
   });
 
   it('renders a genuinely empty modlist immediately, as the Overwrite row alone, when the first landed value already carries none', async () => {
@@ -580,279 +552,113 @@ describe('ModListProvider', () => {
   });
 
   describe('drag-and-drop', () => {
-    const item = (value: unknown): DataTransferItem => new DataTransferItem(value);
     const token = new FakeCancellationToken();
+    const MIME = 'application/vnd.medit.modlist-node';
 
     // A separator wraps the entries that PRECEDE it, so Group A holds Alpha, Group B holds
     // Beta and Gamma, and Delta trails the last separator ungrouped.
     const dndEntries: ModlistEntry[] = [
-      mod('Alpha'),           // index 0 — Group A's member
-      sep('Group A'),         // index 1
-      mod('Beta'),            // index 2 — Group B's member
-      mod('Gamma'),           // index 3 — Group B's member
-      sep('Group B'),         // index 4
-      mod('Delta'),           // index 5 — ungrouped (after the last separator)
+      mod('Alpha'), sep('Group A'), mod('Beta'), mod('Gamma'), sep('Group B'), mod('Delta'),
     ];
 
-    function makeDndProvider() {
+    async function shownRows(provider: ModListProvider): Promise<ModlistNode[]> {
+      const rows: ModlistNode[] = [];
+      for (const root of await provider.getChildren()) {
+        rows.push(root);
+        if (root instanceof SeparatorNode) rows.push(...await provider.getChildren(root));
+      }
+      return rows;
+    }
+    const rowLabelled = (rows: readonly ModlistNode[], label: string): ModlistNode =>
+      present(rows.find((row) => labelOf(row) === label), `the '${label}' row`);
+
+    async function dragAndDrop(provider: ModListProvider, dragged: readonly string[], target: string | undefined): Promise<void> {
+      const rows = await shownRows(provider);
+      const dataTransfer = new DataTransfer();
+      provider.handleDrag(dragged.map((label) => rowLabelled(rows, label)), dataTransfer, token);
+      await provider.handleDrop(target === undefined ? undefined : rowLabelled(rows, target), dataTransfer, token);
+    }
+
+    const movesFired = () => executeCommand.mock.calls.filter(([id]) => id === 'modbench.mod.move');
+    const argumentLabels = (call: readonly unknown[]): string[] => (Array.isArray(call[2]) ? call[2] : [])
+      .filter((row): row is ModNode | SeparatorNode => row instanceof ModNode || row instanceof SeparatorNode).map(labelOf);
+
+    it('a drop fires move with every dragged row as its Argument, and the place the view shows it landing', async () => {
       const provider = makeProvider(dndEntries);
-      return { provider };
-    }
 
-    // What this view owes is the drop it asks for. What modlist.txt then looks like is the
-    // command's, in modlist/test/modlist.test.ts.
-    interface RecordedDrop { command: 'reorderMod' | 'reorderSeparatorBlock'; name: string; drop: Drop }
+      await dragAndDrop(provider, ['Alpha', 'Delta'], 'Gamma');
 
-    function makeRecordingProvider(entries: ModlistEntry[] = dndEntries) {
-      const drops: RecordedDrop[] = [];
-      reorderModMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
-        drops.push({ command: 'reorderMod', name, drop });
-        return Promise.resolve({ applied: true, wrote: true });
-      });
-      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
-        drops.push({ command: 'reorderSeparatorBlock', name, drop });
-        return Promise.resolve({ applied: true, wrote: true });
-      });
-      return { provider: makeProvider(entries), drops };
-    }
-
-    async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === sepName), "the sole SeparatorNode");
-      return expectInstancesOf(await provider.getChildren(sepNode), ModNode);
-    }
-
-    const modItem = (name: string): DataTransferItem => item({ kind: 'mod', name });
-    const sepItem = (name: string): DataTransferItem => item({ kind: 'separator', name });
-    async function drop(provider: ModListProvider, target: ModlistNode | undefined, payload: DataTransferItem): Promise<void> {
-      const dt = new DataTransfer();
-      dt.set('application/vnd.medit.modlist-node', payload);
-      await provider.handleDrop(target, dt, token);
-    }
-
-    it('handleDrag serialises the dragged mod into dataTransfer', async () => {
-      const { provider } = makeDndProvider();
-      // Alpha is Group A's member (the entry preceding it), not a root.
-      const alphaNode = present((await childrenOf(provider, 'Group A')).find((n) => n.label === 'Alpha'), "the 'Alpha' node");
-      const dt = new DataTransfer();
-      provider.handleDrag([alphaNode], dt, token);
-      const got = dt.get('application/vnd.medit.modlist-node');
-      expect(got?.value).toEqual({ kind: 'mod', name: 'Alpha' });
+      const rows = await shownRows(provider);
+      const argument = [rowLabelled(rows, 'Alpha'), rowLabelled(rows, 'Delta')];
+      expect(movesFired()).toEqual([[
+        'modbench.mod.move', argument[0], argument, { place: { kind: 'mod', name: 'Gamma' }, end: 'losing' },
+      ]]);
     });
 
-    it('drop mod onto separator → moveMods, as the separator\'s first mod', async () => {
-      const { provider } = makeDndProvider();
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
-      const dt = new DataTransfer();
-      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
-      await provider.handleDrop(sepNode, dt, token);
-      expect(moveModsMock).toHaveBeenCalledWith(
-        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'losing');
-    });
-
-    it('winning at the top, a mod dropped on a separator becomes its first mod as shown, at the winning end', async () => {
-      const { provider } = makeDndProvider();
+    it('a drop follows the view\'s sort direction', async () => {
+      const provider = makeProvider(dndEntries);
       provider.setViewDirection('winningAtTop');
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
-      const dt = new DataTransfer();
-      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
-      await provider.handleDrop(sepNode, dt, token);
-      expect(moveModsMock).toHaveBeenCalledWith(
-        INSTANCE_ROOT, ACTIVE_PROFILE, ['Alpha'], { kind: 'separator', name: 'Group A' }, 'winning');
+
+      await dragAndDrop(provider, ['Group B'], undefined);
+
+      expect(movesFired().map((call) => call[3])).toEqual([{ place: { kind: 'modOrder' }, end: 'losing' }]);
     });
 
-    it('winning-at-top down-drag: asks for the block before the row it landed on', async () => {
-      const { provider, drops } = makeRecordingProvider();
-      provider.setViewDirection('winningAtTop');
-      const gammaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma'), "the 'Gamma' node");
-      await drop(provider, gammaNode, modItem('Alpha'));
-      expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'before', name: 'Gamma' } }]);
+    it('a drag that mixes kinds takes the kind of the row VS Code last added to the selection', async () => {
+      const provider = makeProvider(dndEntries);
+
+      await dragAndDrop(provider, ['Group B', 'Delta'], 'Group A');
+      await dragAndDrop(provider, ['Delta', 'Group B'], 'Group A');
+
+      expect(movesFired().map(argumentLabels)).toEqual([['Delta'], ['Group B']]);
     });
 
-    // Beta is Group B's member (it precedes Group B's line), not Group A's: a drag up the tree
-    // names its target the same way a drag down does.
-    it('winning-at-top up-drag: asks for the block before the row it landed on', async () => {
-      const { provider, drops } = makeRecordingProvider();
-      provider.setViewDirection('winningAtTop');
-      const betaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta'), "the 'Beta' node");
-      await drop(provider, betaNode, modItem('Delta'));
-      expect(drops).toEqual([{ command: 'reorderMod', name: 'Delta', drop: { kind: 'before', name: 'Beta' } }]);
+    it('a drop where what is dragged cannot go fires nothing', async () => {
+      const provider = makeProvider(dndEntries);
+
+      await dragAndDrop(provider, ['Delta'], 'Overwrite');
+      await dragAndDrop(provider, ['Alpha', 'Delta'], 'Alpha');
+      await dragAndDrop(provider, ['Group B'], 'Delta');
+
+      expect(executeCommand).not.toHaveBeenCalled();
     });
 
-    it('winning-at-top: drop onto empty space asks for the losing end, the view\u2019s own bottom', async () => {
-      const { provider, drops } = makeRecordingProvider();
-      provider.setViewDirection('winningAtTop');
-      await provider.getChildren(); // populate cache
-      await drop(provider, undefined, modItem('Alpha'));
-      expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'losingEnd' } }]);
+    it('Overwrite is carried by no drag', async () => {
+      const provider = makeProvider(dndEntries);
+      const rows = await shownRows(provider);
+      const dataTransfer = new DataTransfer();
+
+      provider.handleDrag([rowLabelled(rows, 'Delta'), rowLabelled(rows, 'Overwrite')], dataTransfer, token);
+      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+
+      expect(movesFired().map(argumentLabels)).toEqual([['Delta']]);
     });
 
-    // A separator drags its whole block, and the view names only the separator: which mods
-    // travel with it is the command's reading of modlist.txt, not the tree's.
-    it('winning-at-top down-drag: a separator asks the block command, naming the separator alone', async () => {
-      const { provider, drops } = makeRecordingProvider();
-      provider.setViewDirection('winningAtTop');
-      const roots = await provider.getChildren();
-      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-      await drop(provider, deltaNode, sepItem('Group A'));
-      expect(drops).toEqual([
-        { command: 'reorderSeparatorBlock', name: 'Group A', drop: { kind: 'before', name: 'Delta' } },
-      ]);
+    it('nothing from outside the view drops here', async () => {
+      const provider = makeProvider(dndEntries);
+      const rows = await shownRows(provider);
+      const dataTransfer = new DataTransfer();
+      dataTransfer.set(MIME, new DataTransferItem({ kind: 'mod', name: 'Delta' }));
+      dataTransfer.set('text/uri-list', new DataTransferItem('file:///downloads/SomeMod.7z'));
+
+      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+
+      expect(provider.dropMimeTypes).toEqual([MIME]);
+      expect(executeCommand).not.toHaveBeenCalled();
     });
 
-    // The pinned Overwrite fixture is not a modlist.txt position — a drop
-    // onto it must be a no-op, never falling through to "move to end".
-    it('drop onto the Overwrite node asks for nothing at all', async () => {
-      const { provider, drops } = makeRecordingProvider();
-      const overwriteNode = new OverwriteNode(1);
-      await drop(provider, overwriteNode, modItem('Alpha'));
-      expect(drops).toEqual([]);
-    });
+    // A drop moves no row on screen by itself: the watch brings the write back (ADR-0015
+    // invariant 2).
+    it('a drop asks for no refresh', async () => {
+      const provider = makeProvider(dndEntries);
+      await shownRows(provider);
+      let fired = false;
+      provider.onDidChangeTreeData(() => { fired = true; });
 
-    // The default view runs losing-at-top while modlist.txt runs winning-first, so "just above
-    // the target in the view" is "just after it in the file".
-    describe('honors the view direction', () => {
-      const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
+      await dragAndDrop(provider, ['Delta'], 'Group A');
 
-      it('sanity: default (losing-at-top) view reverses file order', async () => {
-        const { provider } = makeRecordingProvider(simpleEntries);
-        const labels = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label);
-        expect(labels).toEqual(['Losing', 'Middle', 'Winning']);
-      });
-
-      it('default (losing-at-top): a drop onto a row asks for the block after it', async () => {
-        const { provider, drops } = makeRecordingProvider(simpleEntries);
-        const middle = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle'), "the 'Middle' node");
-        await drop(provider, middle, modItem('Winning'));
-        expect(drops).toEqual([{ command: 'reorderMod', name: 'Winning', drop: { kind: 'after', name: 'Middle' } }]);
-      });
-
-      it('default (losing-at-top): dragging a top row down onto a lower one asks for the same side', async () => {
-        const { provider, drops } = makeRecordingProvider(simpleEntries);
-        const winning = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning'), "the 'Winning' node");
-        await drop(provider, winning, modItem('Losing')); // Losing (view top) dropped onto Winning (view bottom)
-        expect(drops).toEqual([{ command: 'reorderMod', name: 'Losing', drop: { kind: 'after', name: 'Winning' } }]);
-      });
-
-      it('default (losing-at-top): empty space asks for the winning end, the view\u2019s own bottom', async () => {
-        const { provider, drops } = makeRecordingProvider(simpleEntries);
-        await provider.getChildren(); // populate cache
-        await drop(provider, undefined, modItem('Losing'));
-        expect(drops).toEqual([{ command: 'reorderMod', name: 'Losing', drop: { kind: 'winningEnd' } }]);
-      });
-
-      it('default (losing-at-top): a separator block takes the same side as a mod', async () => {
-        const { provider, drops } = makeRecordingProvider();
-        const roots = await provider.getChildren();
-        const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-        await drop(provider, deltaNode, sepItem('Group A'));
-        expect(drops).toEqual([
-          { command: 'reorderSeparatorBlock', name: 'Group A', drop: { kind: 'after', name: 'Delta' } },
-        ]);
-      });
-    });
-  });
-
-  // A failed drop reports on ADR-0019's "explicit action failed" tier, and the tree resyncs
-  // against disk rather than showing a phantom move.
-  describe('drag-and-drop — failure handling', () => {
-    const item = (value: unknown): DataTransferItem => new DataTransferItem(value);
-    const token = new FakeCancellationToken();
-
-    // Same shape as the drag-and-drop fixture above: Group A wraps Alpha,
-    // Group B wraps Beta/Gamma (a separator's real members precede it),
-    // Delta trails the last separator and is ungrouped.
-    const dndEntries: ModlistEntry[] = [
-      mod('Alpha'),
-      sep('Group A'),
-      mod('Beta'),
-      mod('Gamma'),
-      sep('Group B'),
-      mod('Delta'),
-    ];
-
-    function makeFailingProvider() {
-      const reporter = recordingReporter();
-      const logs: string[] = [];
-      const provider = makeProvider(dndEntries, { log: (m) => logs.push(m), reporter });
-      return { provider, reports: reporter.reports, logs };
-    }
-
-    async function drop(provider: ModListProvider, target: ModlistNode | undefined, payload: DataTransferItem): Promise<void> {
-      const dt = new DataTransfer();
-      dt.set('application/vnd.medit.modlist-node', payload);
-      await provider.handleDrop(target, dt, token);
-    }
-
-    it('a throw from the reorder command reports an error and logs the specific operation', async () => {
-      reorderModMock.mockRejectedValue(new Error('disk full'));
-      const { provider, reports, logs } = makeFailingProvider();
-      const roots = await provider.getChildren();
-      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-      await drop(provider, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('reorder failed: disk full'))).toBe(true);
-    });
-
-    // A refusal (`{ applied: false }`), not a throw, must report the same way.
-    it('a refusal from the moveMods command reports an error and logs the specific operation', async () => {
-      moveModsMock.mockResolvedValue({ applied: false, refusal: 'disk full' });
-      const { provider, reports, logs } = makeFailingProvider();
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
-      await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('moveMods failed: disk full'))).toBe(true);
-    });
-
-    it('a dragged mod the moveMods command refuses as gone reports that refusal', async () => {
-      moveModsMock.mockResolvedValue({
-        applied: true, outcome: { landed: [], refused: [{ item: 'Alpha', reason: 'Mod not found in modlist: Alpha' }] },
-      });
-      const { provider, reports } = makeFailingProvider();
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
-      await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(reports).toEqual([
-        { severity: 'error', message: 'Failed to reorder mods.', detail: 'Mod not found in modlist: Alpha' },
-      ]);
-    });
-
-    it('a throw from the reorderSeparatorBlock command reports an error and logs the specific operation', async () => {
-      reorderSeparatorBlockMock.mockRejectedValue(new Error('disk full'));
-      const { provider, reports, logs } = makeFailingProvider();
-      const roots = await provider.getChildren();
-      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-      await drop(provider, deltaNode, item({ kind: 'separator', name: 'Group A' }));
-      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('reorderSeparatorBlock failed: disk full'))).toBe(true);
-    });
-
-    // A drop moves no row on screen by itself, so the view already shows the disk until the watch
-    // lands the write (ADR-0015 invariant 2).
-    it('a drop fires no refresh, whether its write lands or fails', async () => {
-      reorderModMock.mockRejectedValueOnce(new Error('disk full'));
-      const { provider: failing, reports: failingReports } = makeFailingProvider();
-      let failingFired = false;
-      failing.onDidChangeTreeData(() => { failingFired = true; });
-      const roots = await failing.getChildren();
-      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-      await drop(failing, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(failingFired).toBe(false);
-      expect(failingReports).toHaveLength(1);
-
-      const okReporter = recordingReporter();
-      const ok = makeProvider(dndEntries, { reporter: okReporter });
-      let okFired = false;
-      ok.onDidChangeTreeData(() => { okFired = true; });
-      const okRoots = await ok.getChildren();
-      const okDeltaNode = present(okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
-      await drop(ok, okDeltaNode, item({ kind: 'mod', name: 'Alpha' }));
-      expect(reorderModMock).toHaveBeenCalledTimes(2);
-      expect(okFired).toBe(false);
-      expect(okReporter.reports).toEqual([]);
+      expect(movesFired()).toHaveLength(1);
+      expect(fired).toBe(false);
     });
   });
 
