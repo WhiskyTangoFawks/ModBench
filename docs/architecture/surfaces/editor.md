@@ -72,6 +72,7 @@ As a user, I want:
 |---|---|---|---|
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
 | `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | old spec |
+| `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007, invariant 1 |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
@@ -168,7 +169,7 @@ focus. *commands.md, Record*
 | Where | Items, in order |
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element of an unsorted array) · copy value |
-| Column header | track (untracked) · compile (tracked) · copy… · delete (tracked) |
+| Column header | track (untracked, in a mod) · compile (tracked) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:

@@ -53,7 +53,7 @@ As a user, I want:
 5. A target whose folder has gone refused, naming it. *A gone object is refused*
 6. A tracked mod to go on to the external-change question, with the new baseline pre-selected because
    the version moved. *diagram header; ADR-0003, invariant 3;
-   [decompile-plugin_draft.md](decompile-plugin_draft.md)*
+   [decompile-plugin.md](decompile-plugin.md)*
 
 ## Test seam
 
@@ -62,7 +62,7 @@ As a user, I want:
   write, or the refusal.
 
 The external-change question is tested in
-[decompile-plugin_draft.md](decompile-plugin_draft.md).
+[decompile-plugin.md](decompile-plugin.md).
 
 ## Open Questions
 

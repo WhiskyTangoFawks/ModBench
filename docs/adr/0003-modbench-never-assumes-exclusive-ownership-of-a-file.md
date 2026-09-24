@@ -18,15 +18,15 @@ Modbench cannot classify on its own is a question for the user, never a silent r
    ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)
    invariant 4).
 3. **A tracked mod's external change is one question per mod.** A mod has changed externally
-   when a plugin's bytes differ from what Modbench last wrote, or a file git tracks outside
+   when a tracked plugin's bytes differ from what Modbench last wrote, or a file git tracks outside
    `source/` differs from git's view of the edit branch. One classification runs per mod, against
    git and never against the event list, at settle and at the load-time check. While the question
    is open every write to every plugin the mod holds is refused, because a compile would overwrite
    the evidence. The classifier is the authority; a marker only caches its verdict and is dropped
    on a verdict of nothing, so bytes restored by hand end the question without an answer. One
-   dialog asks, and either answer covers the whole mod: upstream update, a new baseline on `main`
-   with the edit branch rebased onto it, or your own edit, working-tree dirt. `meta.ini` is a
-   tell that pre-selects the default, never a trigger.
+   dialog asks, and either answer covers the whole mod: upstream update, a new baseline on `main`,
+   or your own edit, working-tree dirt. The edit branch moves only when the user rebases it.
+   `meta.ini` is a tell that pre-selects the default, never a trigger.
 4. **A third party's concurrent write is preserved and named, never reverted.** A rollback
    restores only what the action still owns
    ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).

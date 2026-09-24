@@ -34,7 +34,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
 
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, decompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
+  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, decompile, compile, rebase, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nimplicit masters, the malformed-plugin diagnosis; the filter in\nforce\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through the Instance adapter and forgets" {
@@ -52,7 +52,7 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
   class: band; grid-rows: 1
   loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: kernel}
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
-  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
+  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default · untracked plugins in a tracked mod\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
