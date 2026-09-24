@@ -171,9 +171,9 @@ export async function renameSeparator(
   }, (text) => renameSeparatorInText(text, newName, oldName));
 }
 
-/** `modbench.separator.delete` over the selection: each separator's line goes, and then its
- *  folder goes to the trash. The mods each one held join the separator above, or become ungrouped.
- *  A separator with no folder goes on its line alone. */
+/** `modbench.separator.delete` over the selection: each line goes, then its folder goes to the
+ *  trash, which nothing here can undo, so a refused trash puts its line back. A separator with no
+ *  folder goes on its line alone. */
 export async function deleteSeparators(
   instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<ModlistSelectionResult> {
