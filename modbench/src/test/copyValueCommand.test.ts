@@ -134,4 +134,17 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
 
     expect(writeText).toHaveBeenCalledWith('Alpha');
   });
+
+  // Referenced By's own Ctrl+C invokes with no arguments (package.json). Mods has no key of its
+  // own here, so a Mods selection sitting in the view must never intercept that invocation.
+  it('a no-argument invocation still copies Referenced By\'s selection, even with a Mods row selected', async () => {
+    const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
+    const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
+    const referencedByStub: CopyValueAdapter = { text: () => 'NPC_ / TestNPC', reporterTag: 'referencedByTree.copy' };
+    registerCopyValueCommand([modsAdapter, referencedByStub], recordingReporter);
+
+    await invokeCommand();
+
+    expect(writeText).toHaveBeenCalledWith('NPC_ / TestNPC');
+  });
 });

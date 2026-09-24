@@ -323,15 +323,12 @@ function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
 }
 
 /** Mods' own text for the catalog's one copy value id (mods.md, Menus and keys, story 7).
- *  `undefined` when `clicked` isn't a Mods row, or the view has nothing selected. */
+ *  `undefined` unless `clicked` is a mod or separator row — a keyless invocation defers to the
+ *  next adapter. */
 export function modsCopyValueText(
   viewSelection: () => readonly ModlistNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
   return (clicked, allSelected) => {
-    if (clicked === undefined || clicked === null) {
-      const rows = selectionArgument(modsGestureEntry(undefined, undefined, viewSelection), 'mod', 'separator');
-      return rows.length === 0 ? undefined : copyValueRowNames(rows);
-    }
     if (!isModlistEntryNode(clicked)) return undefined;
     const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
     return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));

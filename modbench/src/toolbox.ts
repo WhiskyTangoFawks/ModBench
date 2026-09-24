@@ -563,7 +563,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
   // Registered here, not inside buildMo2Side: Referenced By's own copy reaches this regardless
-  // of whether the folder is an instance, the same as before Mods had an adapter of its own.
+  // of whether the folder is an instance.
   own(registerCopyValueCommand(
     [
       { text: mo2 ? modsCopyValueText(() => mo2.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },

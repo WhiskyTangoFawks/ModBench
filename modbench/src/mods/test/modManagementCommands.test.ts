@@ -826,13 +826,10 @@ describe('modsCopyValueText', () => {
     expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
   });
 
-  // A key or the palette invokes with no arguments at all, unlike a context menu.
-  it('with no clicked row, copies the view\'s own current selection', () => {
+  // A key or the palette invokes with no arguments at all, unlike a context menu — and Mods has
+  // no key or palette entry of its own in this slice, so it must never guess this is its row.
+  it('is undefined with no clicked row, even when the view has a selection', () => {
     const viewSelection = (): ModlistNode[] => [alpha, groupA];
-    expect(modsCopyValueText(viewSelection)(undefined, undefined)).toBe('Alpha\nGroup A');
-  });
-
-  it('is undefined with no clicked row and nothing selected in the view, so another surface\'s copy takes over', () => {
-    expect(modsCopyValueText(noSelection)(undefined, undefined)).toBeUndefined();
+    expect(modsCopyValueText(viewSelection)(undefined, undefined)).toBeUndefined();
   });
 });

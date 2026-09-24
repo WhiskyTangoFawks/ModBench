@@ -8,9 +8,8 @@ export interface GestureEntry {
   readonly selection: readonly ModlistNode[];
 }
 
-/** VS Code passes a context menu the right-clicked row, and the selection only when that row is
- *  one of several selected. A key and the palette get nothing, and no stable API names the
- *  focused row. */
+// The entry every Mods gesture is registered with, pulled out so copy value's Mods text can build
+// the same shape without registering a command of its own.
 export function modsGestureEntry(
   clicked: ModlistNode | null | undefined,
   selected: readonly ModlistNode[] | undefined,
@@ -19,6 +18,9 @@ export function modsGestureEntry(
   return clicked ? { clicked, selection: selected ?? [clicked] } : { selection: viewSelection() };
 }
 
+/** VS Code passes a context menu the right-clicked row, and the selection only when that row is
+ *  one of several selected. A key and the palette get nothing, and no stable API names the
+ *  focused row. */
 export function registerModsGesture(
   commandId: string,
   viewSelection: () => readonly ModlistNode[],
