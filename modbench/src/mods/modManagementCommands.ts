@@ -14,7 +14,7 @@ import {
   moveSeparators,
   renameSeparator,
   setModsEnabled,
-  uninstallMod,
+  uninstallMods,
   separatorNameRefusal,
   type ModlistSelectionResult,
   type MovePlace,
@@ -196,27 +196,43 @@ export function registerModMoveCommand(
   });
 }
 
+// One question for the whole selection: naming the mod alone, or listing several, both saying
+// where the folders go (mods.md, Uninstall).
+async function confirmUninstall(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+  const [only] = names;
+  const question = names.length === 1 && only !== undefined
+    ? `Uninstall "${only}"? Its folder will be moved to the system trash.`
+    : `Uninstall ${names.map((n) => `"${n}"`).join(', ')}? Their folders will be moved to the system trash.`;
+  return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
+}
+
 export function registerModContextCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>,
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
-  ask: AskQuestion,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, viewSelection: () => readonly ModlistNode[],
+  reporter: Reporter, ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): vscode.Disposable[] {
   return [
-      vscode.commands.registerCommand('modbench.mod.uninstall', async (node: ModNode | undefined) => {
-        if (node?.kind !== 'mod') return;
-        const answer = await ask(
-          `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
-          { modal: true },
-          'Uninstall',
-        );
-        if (answer !== 'Uninstall') return;
-        await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
-          const profile = instance.value.activeProfile;
-          // The download to mark comes off the row the tree already holds, so the command walks
-          // nothing to find it.
-          applyOrThrow(await uninstallMod(
-            instanceRoot, profile, node.mod.name, instance.value.paths.downloadsDir, node.mod.archiveFilename));
-        });
+      registerModsGesture('modbench.mod.uninstall', viewSelection, async (entry) => {
+        // The download to mark comes off the row the tree already holds, so the command walks
+        // nothing to find it.
+        const mods = pluralArgument(entry, 'mod').map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
+        if (mods.length === 0) return;
+        if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
+        const profile = instance.value.activeProfile;
+        const result = await uninstallMods(instanceRoot, profile, mods, instance.value.paths.downloadsDir, trash);
+        if (!result.applied) {
+          reporter.report('error', 'Failed to uninstall mods.', result.refusal);
+          return;
+        }
+        reporter.selectionOutcome(
+          `Could not uninstall ${result.outcome.refused.length} of ${mods.length} mods.`, result.outcome, (m) => m.name);
+        for (const item of result.outcome.landed) {
+          if (item.lineRefusal !== undefined) {
+            reporter.report('warning',
+              `"${item.name}" was uninstalled, but its modlist.txt line could not be removed.`, item.lineRefusal);
+          } else if (item.markRefusal !== undefined) {
+            log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
+          }
+        }
       }),
   ];
 }
@@ -263,7 +279,14 @@ export function registerSeparatorCommands(
           return;
         }
         reporter.selectionOutcome(
-          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`, result.outcome, (name) => name);
+          `Could not delete ${result.outcome.refused.length} of ${names.length} separators.`,
+          result.outcome, (item) => item.name);
+        for (const item of result.outcome.landed) {
+          if (item.lineRefusal !== undefined) {
+            reporter.report('warning',
+              `"${item.name}" was deleted, but its modlist.txt line could not be removed.`, item.lineRefusal);
+          }
+        }
       }),
   ];
 }

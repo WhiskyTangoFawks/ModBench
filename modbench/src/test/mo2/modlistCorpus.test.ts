@@ -122,7 +122,9 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    expect(outcome).toEqual({ applied: true, outcome: { landed: ['Radfall - All-In-One Survival Overhaul'], refused: [] } });
+    expect(outcome).toEqual({
+      applied: true, outcome: { landed: [{ name: 'Radfall - All-In-One Survival Overhaul' }], refused: [] },
+    });
     expect(await separatorNames(dir)).not.toContain('Radfall - All-In-One Survival Overhaul');
     expect(trashed).toEqual([]);
   });

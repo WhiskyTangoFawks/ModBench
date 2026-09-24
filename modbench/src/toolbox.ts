@@ -505,7 +505,9 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   ownAll(own, registerModListCoreCommands(modListProvider));
   ownAll(own, registerToolboxCommands({ instanceRoot, instance, extensionId, reporterFor }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
-  ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
+  ownAll(own, registerModContextCommands(
+    instanceRoot, instance, () => modListView.selection, reporterFor('mod.uninstall'), ask, trash,
+    (line) => outputChannel.warn(`[modList] ${line}`)));
   ownAll(own, registerModEnableCommands(instanceRoot, instance, () => modListView.selection, reporterFor('mod.enableDisable')));
   own(registerModMoveCommand(
     instanceRoot, instance,
