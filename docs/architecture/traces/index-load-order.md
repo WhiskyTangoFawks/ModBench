@@ -1,4 +1,4 @@
-# index-load-order: contract (draft)
+# index-load-order: contract
 
 Diagram: [index-load-order.d2](index-load-order.d2). Catalog row: the system command `put load
 order` in [commands.md](../commands.md). What the views show while it runs is in
