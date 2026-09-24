@@ -61,7 +61,7 @@ public sealed partial class SourceRepository
 
             File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
             GitCli.Run(gitDir, modFolder, "add", "-A");
-            GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameOf(modFolder)}");
+            GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
 
             foreach (var (files, trailers) in baselines)
             {
@@ -70,8 +70,6 @@ public sealed partial class SourceRepository
             }
 
             GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
-            // The baselines went to main past the real index, which catches up here; the working tree
-            // already holds every byte they committed.
             GitCli.Run(gitDir, modFolder, "reset", "-q");
         }
         catch
@@ -117,16 +115,14 @@ public sealed partial class SourceRepository
         if (trackedFileChanges is { Count: > 0 } changes)
         {
             CommitToMain(
-                gitDir, modFolder, [.. changes.Select(c => ToGitPath(c.RelativePath))], $"Update {ModNameOf(modFolder)}");
+                gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], $"Update {ModNameIn(modFolder)}");
         }
     }
 
-    // One plugin's baseline, the unit every Track and update commits: its source subtree as the work
-    // tree holds it, and its last-compile ref parked at the commit.
     private static void CommitBaselineToMain(string gitDir, string workTree, string subject, BaselineTrailers trailers)
     {
         var commitSha = CommitToMain(
-            gitDir, workTree, [$":(literal){ToGitPath(RootFor(trailers.Plugin))}"], BaselineMessage(subject, trailers));
+            gitDir, workTree, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
         GitCli.Run(gitDir, workTree, "update-ref", LastCompileRef(trailers.Plugin), commitSha);
     }
 
@@ -154,6 +150,9 @@ public sealed partial class SourceRepository
         }
     }
 
+    // Plugin and asset file names carry brackets and asterisks, which git otherwise reads as a glob.
+    private static string LiteralPathspec(string relativePath) => $":(literal){ToGitPath(relativePath)}";
+
     private static string TrackSubject(BaselineTrailers trailers) =>
         trailers.UpstreamVersion is { } version ? $"Track {trailers.Plugin} {version}" : $"Track {trailers.Plugin}";
 
@@ -170,8 +169,6 @@ public sealed partial class SourceRepository
         if (trailers.BinarySha256 is { } binarySha256) lines.Add($"Binary-SHA256: {binarySha256}");
         return string.Join('\n', lines) + "\n";
     }
-
-    private static string ModNameOf(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));
 
     /// <summary>The trailers of the plugin's own latest baseline commit on refs/heads/main, never HEAD:
     /// the edit branch is what is checked out (ADR-0007). Null when untracked or when main holds no

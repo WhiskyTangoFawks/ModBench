@@ -84,6 +84,32 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         }
     }
 
+    // "[a].dds" read as a glob also names "a.dds", which changed on disk but is not in the answer.
+    [Fact]
+    public void CommitPristineToMain_CommitsExactlyTheNamedTrackedFiles_WhenANameHoldsGlobCharacters()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(modFolder, "Textures"));
+            File.WriteAllText(Path.Combine(modFolder, "Textures", "[a].dds"), "old");
+            File.WriteAllText(Path.Combine(modFolder, "Textures", "a.dds"), "old");
+            PluginBaselines.Track(
+                modFolder, SourcePreset.Everything, [new TreeFile($"source/{Plugin}/npc_/{Plugin}/000001.json", "{}"u8.ToArray())]);
+            File.WriteAllText(Path.Combine(modFolder, "Textures", "[a].dds"), "new");
+            File.WriteAllText(Path.Combine(modFolder, "Textures", "a.dds"), "new");
+
+            SourceRepository.CommitPristineToMain(
+                modFolder, [], [new TrackedFileChange("Textures/[a].dds", TrackedFileChangeKind.Modified, StagedAlready: false)]);
+
+            Assert.Equal(["Textures/[a].dds"], PathsIn(modFolder, "main"));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     private static string[] PathsIn(string modFolder, string revision) =>
         GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "show", "--name-only", "--format=", revision)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);

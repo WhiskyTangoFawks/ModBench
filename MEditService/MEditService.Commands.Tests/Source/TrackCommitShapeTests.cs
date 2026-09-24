@@ -44,6 +44,8 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(
             $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nMeta-SHA256: {metaSha256}\nBinary-SHA256: {second}\n",
             TrailersOf("main"));
+        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", "refs/heads/edit"));
     }
 
     [Fact]
