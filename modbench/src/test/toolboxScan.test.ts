@@ -75,6 +75,7 @@ const DISPOSABLE_PRODUCERS = [
   'registerRefreshCommand',
   'registerSeparatorCommands',
   'registerViewOnNexusCommand',
+  'ToolboxProvider',
   'subscribe',
 ];
 

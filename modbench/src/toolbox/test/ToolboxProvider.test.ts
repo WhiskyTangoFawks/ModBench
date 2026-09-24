@@ -4,64 +4,117 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../
 // The Toolbox renders the Instance's value and nothing else: no disk read, no backend state.
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
-import { ToolboxProvider, type ToolboxDeps, type ToolboxState } from '../ToolboxProvider';
+import { ToolboxProvider } from '../ToolboxProvider';
 import { present } from '../../ports/present';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const VALUE: ToolboxState = { activeProfile: 'Default' };
+const GAME_FOLDER = '/games/Fallout 4';
+const VALUE = instanceValueFixture({
+  activeProfile: 'Survival',
+  gameRelease: 'Fallout 4',
+  gameDirectory: { root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
+});
 
-function makeProvider(overrides: Partial<ToolboxDeps> = {}) {
-  return new ToolboxProvider({
-    state: () => VALUE,
-    ...overrides,
-  });
+function rowsOf(instance: FakeInstance | undefined) {
+  return new ToolboxProvider({ instance }).getChildren();
 }
 
-describe('ToolboxProvider', () => {
-  // The view registers even where there is no instance, since it is the container's first view.
-  // On those paths its rows' commands are unregistered, so a row would throw "command not found".
-  it('renders no rows when there is no instance to read', () => {
-    expect(makeProvider({ state: () => undefined }).getChildren()).toEqual([]);
+function row(instance: FakeInstance, label: string) {
+  return present(rowsOf(instance).find((r) => r.label === label), `the ${label} row`);
+}
+
+describe('the Toolbox view, given an instance value', () => {
+  it('shows a Game row, then a Profile row, and nothing else', () => {
+    expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile']);
   });
 
-  // Launch mEdit / Close mEdit belong to the Plugins view — the Toolbox carries no mEdit row.
-  it('never renders an mEdit row', () => {
-    const rows = makeProvider().getChildren();
+  it('reads the game as MO2 names it, with the game folder in its tooltip and no click', () => {
+    const game = row(new FakeInstance(VALUE), 'Game');
 
-    expect(rows.map((r) => r.label)).toEqual(['Profile']);
+    expect(game.description).toBe('Fallout 4');
+    expect(game.iconPath).toEqual(new ThemeIcon('game'));
+    expect(game.tooltip).toBe(GAME_FOLDER);
+    expect(game.command).toBeUndefined();
   });
 
-  it('refresh() fires the change event VS Code re-renders the tree on', () => {
-    const provider = makeProvider();
+  it('reads the active profile, and a click switches profile', () => {
+    const profile = row(new FakeInstance(VALUE), 'Profile');
+
+    expect(profile.description).toBe('Survival');
+    expect(profile.iconPath).toEqual(new ThemeIcon('account'));
+    expect(profile.tooltip).toBe('Switch profile');
+    expect(present(profile.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
+  });
+
+  // The Profile menu's `viewItem` clause keys on this.
+  it('marks the Profile row as the profile, so its menu offers switch', () => {
+    expect(row(new FakeInstance(VALUE), 'Profile').contextValue).toBe('profile');
+  });
+
+  it('follows a landed value', () => {
+    const instance = new FakeInstance(VALUE);
+    const provider = new ToolboxProvider({ instance });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
-    provider.refresh();
+    instance.publish(instanceValueFixture({ ...VALUE, activeProfile: 'Modding' }));
 
     expect(fired).toEqual([undefined]);
+    expect(provider.getChildren().find((r) => r.label === 'Profile')?.description).toBe('Modding');
+  });
+});
+
+describe('the Toolbox view\'s states', () => {
+  it('shows no rows where there is no instance to read', () => {
+    expect(rowsOf(undefined)).toEqual([]);
   });
 
-  it('reads the active profile out of the value as a row that activates Switch Profile', () => {
-    const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival' }) }).getChildren();
-    const row = present(profile, 'the Profile row');
-
-    expect(row.description).toBe('Survival');
-    expect(present(row.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
+  // Rival: a Profile row reading the pre-first-read value's empty profile as `—`.
+  it('shows no rows before the first read lands', () => {
+    expect(rowsOf(new FakeInstance(instanceValueFixture({ activeProfile: '' }), 0))).toEqual([]);
   });
 
-  // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
-  // names no profile, and the row must say so rather than inventing one.
-  it('reads out an em-dash while the value names no profile yet', () => {
-    const [profile] = makeProvider({ state: () => ({ activeProfile: '' }) }).getChildren();
+  it('shows one error row in place of its rows when the first read fails, and rows once a read lands', () => {
+    const instance = new FakeInstance(VALUE, 0);
+    const provider = new ToolboxProvider({ instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
 
-    expect(present(profile, 'the Profile row').description).toBe('—');
+    instance.fail('ModOrganizer.ini names no profile');
+
+    expect(fired).toEqual([undefined]);
+    const rows = provider.getChildren();
+    expect(rows).toHaveLength(1);
+    const error = present(rows[0], 'the error row');
+    expect(error.label).toBe('Failed to load: ModOrganizer.ini names no profile');
+    expect(error.tooltip).toBe('ModOrganizer.ini names no profile');
+    expect(error.iconPath).toEqual(new ThemeIcon('error'));
+
+    instance.publish(VALUE);
+
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile']);
   });
 
-  // The alpha leaves deploy, purge and run with the mod manager, so no value, whatever profile
-  // it names, reads out a deployment or offers one.
-  it.each(['Default', 'Survival', ''])('shows no Deployment row for a value naming profile %j', (activeProfile) => {
-    const rows = makeProvider({ state: () => ({ activeProfile }) }).getChildren();
+  // The last good value stands: a later failed read is not a first read.
+  it('keeps its rows when a read after the first fails', () => {
+    const instance = new FakeInstance(VALUE);
 
-    expect(rows.map((r) => r.label)).toEqual(['Profile']);
-    expect(rows.map((r) => r.command?.command)).toEqual(['modbench.profile.switch']);
+    instance.fail('ModOrganizer.ini is torn');
+
+    expect(rowsOf(instance).map((r) => r.label)).toEqual(['Game', 'Profile']);
+  });
+
+  it('stops following the instance once disposed', () => {
+    const instance = new FakeInstance(VALUE);
+    const provider = new ToolboxProvider({ instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    provider.dispose();
+    instance.publish(VALUE);
+    instance.fail('gone');
+
+    expect(fired).toEqual([]);
   });
 });

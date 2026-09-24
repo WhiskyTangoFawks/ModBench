@@ -3,19 +3,21 @@ import type { Instance } from '../instanceLoader/instance';
 import { switchProfile } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
 import type { Reporter } from '../ports/reporter';
+import { errorMessage } from '../ports/errorMessage';
 
 export interface ToolboxCommandDeps {
   instanceRoot: string;
   /** ADR-0015: the profiles and the active one come from the value. */
   instance: Pick<Instance, 'value'>;
-  updateProfileDescription: () => Promise<void>;
+  /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
+  extensionId: string;
   reporterFor: (tag: string) => Reporter;
 }
 
 // The instance-wide gestures the Toolbox view owns (docs/specs/containers.md rule 1), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { instanceRoot, instance, updateProfileDescription, reporterFor } = deps;
+  const { instanceRoot, instance, extensionId, reporterFor } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
@@ -26,14 +28,11 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       );
       if (!picked || picked.label === active) return;
       const outcome = await switchProfile(instanceRoot, picked.label, profiles);
-      if (!outcome.applied) {
-        profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
-        return;
-      }
-      void updateProfileDescription();
-      // ADR-0013/ADR-0015: the write lands in ModOrganizer.ini, which the Instance already
-      // watches — its own recompute reaches the load order and the Toolbox's profile row.
+      // ADR-0015: the write lands in ModOrganizer.ini, and every view follows through the watch.
+      if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
     }),
+    vscode.commands.registerCommand('modbench.instance.openSettings', () =>
+      vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${extensionId}`)),
   ];
 }
 
@@ -44,16 +43,23 @@ export interface RefreshGestureDeps {
   reporter: Reporter;
 }
 
-// One gesture for all of Modbench, and only the safety net for a missed watcher event. Undefined
-// deps with no instance open: the title icon still shows, so the command exists and does nothing.
-export function registerRefreshCommand(deps: RefreshGestureDeps | undefined): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.instance.refresh', async () => {
-    if (!deps) return;
-    const outcome = await deps.refresh();
+// One gesture for all of Modbench, and only the safety net for a missed watcher event. A failed
+// refresh stops where it failed: nothing is read again, and nothing more is sent.
+export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
+  const run = async (): Promise<void> => {
+    let outcome: RefreshResult;
+    try {
+      outcome = await deps.refresh();
+    } catch (err) {
+      deps.reporter.report('error', 'Could not refresh the instance.', errorMessage(err));
+      return;
+    }
     if (!outcome.applied) {
       deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
       return;
     }
     await deps.instance.refresh();
-  });
+  };
+  return vscode.commands.registerCommand('modbench.instance.refresh', () =>
+    vscode.window.withProgress({ location: { viewId: 'modbench.toolbox' } }, run));
 }

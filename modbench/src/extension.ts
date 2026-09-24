@@ -164,6 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
     loadDiagnostics,
     setStatusText: (t) => { statusBarItem.text = t; },
     notifyConflictsComputed,
+    extensionId: context.extension.id,
   });
   context.subscriptions.push(
     toolbox,

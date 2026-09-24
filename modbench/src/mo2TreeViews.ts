@@ -22,7 +22,7 @@ export function createModListView(
   own: Own,
   modListProvider: ModListProvider,
   instance: Pick<Instance, 'value' | 'subscribe'>,
-): { modListView: vscode.TreeView<ModlistNode>; updateProfileDescription: () => Promise<void> } {
+): { modListView: vscode.TreeView<ModlistNode> } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     canSelectMany: true,
@@ -40,17 +40,12 @@ export function createModListView(
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
-  // Async only because Refresh's own sequence awaits it (ADR-0014); the profile is a field of
-  // the value the Instance already landed, so there is no disk read left to fail.
-  const updateProfileDescription = () => {
-    modListFilter.setBaseDescription(instance.value.activeProfile);
-    return Promise.resolve();
-  };
-  void updateProfileDescription();
+  const showProfile = () => modListFilter.setBaseDescription(instance.value.activeProfile);
+  showProfile();
   // A profile switch rewrites ModOrganizer.ini, which the Instance watches — the recompute it
   // lands is what moves this readout, not the gesture.
-  own(instance.subscribe(() => void updateProfileDescription()));
-  return { modListView, updateProfileDescription };
+  own(instance.subscribe(showProfile));
+  return { modListView };
 }
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
