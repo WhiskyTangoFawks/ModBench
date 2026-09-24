@@ -200,7 +200,7 @@ describe('the Mods view expands a separator a filter shows for its matching mods
 });
 
 describe('the Mods view says when the list is empty', () => {
-  const NO_MODS = 'No mods or separators. Install… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
+  const NO_MODS = 'No mods or separators. Install Mod… or Create Empty Mod…, in the title bar\'s overflow menu, adds one.';
 
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {

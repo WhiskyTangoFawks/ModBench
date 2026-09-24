@@ -1,17 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
-const { registerCommand, executeCommand, showOpenDialog, showInputBox, openExternal } = vi.hoisted(() => ({
+// Narrow enough for what these tests read back off a call: the prompt text and its own
+// validateInput, the one seam a prompt-refusal test can reach without a real VS Code window.
+interface InputBoxOptionsDouble {
+  prompt?: string;
+  value?: string;
+  placeHolder?: string;
+  validateInput?: (value: string) => string | undefined;
+}
+
+const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
-  showInputBox: vi.fn(),
+  showInputBox: vi.fn<(options?: InputBoxOptionsDouble) => Promise<string | undefined>>(),
+  showQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
-  window: { showOpenDialog, showInputBox },
+  window: { showOpenDialog, showInputBox, showQuickPick },
   env: { openExternal },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
@@ -27,18 +37,19 @@ vi.mock('../../install/install', async (importOriginal) => ({
   installFromArchive, installFromFolder,
 }));
 
-const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator } = vi.hoisted(() => ({
+const { uninstallMod, deleteSeparator, renameSeparator, insertSeparator, createEmptyMod } = vi.hoisted(() => ({
   uninstallMod: vi.fn(), deleteSeparator: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
+  createEmptyMod: vi.fn(),
 }));
 
 vi.mock('../../modlist/modlist', () => ({
-  createEmptyMod: vi.fn(), deleteSeparator, insertSeparator,
+  createEmptyMod, deleteSeparator, insertSeparator,
   moveModToSeparator: vi.fn(), renameSeparator, uninstallMod,
 }));
 
 import {
-  registerModContextCommands, registerModInstallCommands, registerModListCoreCommands, registerOpenFolderCommand,
-  registerSeparatorCommands, registerViewOnNexusCommand, type ModInstallDeps,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModInstallCommands, registerModListCoreCommands,
+  registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand, type ModInstallDeps,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
@@ -52,6 +63,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   if (!call) throw new Error(`command not registered: ${commandId}`);
   return Promise.resolve(call[1](...args));
 }
+
 
 // Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
 // against Fallout 4 and reach meta.ini wrong for every other install.
@@ -97,96 +109,191 @@ describe('the sort direction', () => {
   });
 });
 
-describe('registerModInstallCommands: the install target', () => {
+describe('modbench.mod.install: archive or folder, asked first', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('an upgrade choice bypasses the name prompt and installs as an upgrade of that mod', async () => {
-    const promptModName = vi.fn();
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+  it('Esc at the archive-or-folder pick installs nothing', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined);
 
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke(
-      'modbench.modList.installFromArchive', '/archive/foo.7z', '111', '222', '3.0',
-      { kind: 'upgrade', name: 'Existing Mod' },
-    );
+    registerModInstallCommands(deps());
+    const succeeded = await invoke('modbench.mod.install');
 
-    expect(promptModName).not.toHaveBeenCalled();
-    expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'upgrade', name: 'Existing Mod' }, '/archive/foo.7z',
-      { gameName: GAME_RELEASE, modID: '111', fileID: '222', version: '3.0' },
-    );
-    expect(succeeded).toEqual({ installed: true });
+    expect(showOpenDialog).not.toHaveBeenCalled();
+    expect(succeeded).toEqual({ installed: false });
   });
 
-  it('a new-mod choice reaches the name prompt and installs as a new mod', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+  it('asks archive or folder before either OS picker opens', async () => {
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce(undefined);
 
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.modList.installFromArchive', '/archive/foo.7z', undefined, undefined, undefined, { kind: 'new' });
+    registerModInstallCommands(deps());
+    await invoke('modbench.mod.install');
 
-    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
-    expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
-      { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [expect.objectContaining({ sourceKind: 'archive' }), expect.objectContaining({ sourceKind: 'folder' })],
+      expect.anything(),
     );
-    expect(succeeded).toEqual({ installed: true });
+    const [quickPickOrder] = showQuickPick.mock.invocationCallOrder;
+    const [openDialogOrder] = showOpenDialog.mock.invocationCallOrder;
+    if (quickPickOrder === undefined || openDialogOrder === undefined) {
+      throw new Error('expected both showQuickPick and showOpenDialog to have been called');
+    }
+    expect(quickPickOrder).toBeLessThan(openDialogOrder);
   });
 
-  // Rival: default the absent choice to an upgrade of the prompted name. The Mods-view entry
-  // would then adopt any folder that happens to share the name, and this fails.
-  it('the Mods-view entry, invoked with no choice, installs as a new mod', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+  it('archive: Esc at the OS picker installs nothing', async () => {
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce(undefined);
 
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.modList.installFromArchive', '/archive/foo.7z');
+    registerModInstallCommands(deps());
+    const succeeded = await invoke('modbench.mod.install');
 
-    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
-    expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
-      { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
-    );
-    expect(succeeded).toEqual({ installed: true });
+    expect(installFromArchive).not.toHaveBeenCalled();
+    expect(succeeded).toEqual({ installed: false });
   });
 
   // The picker's filters name install's own extension list, never a copy of it: a rival that
   // hardcodes its own array here would drift silently the day install's list changes.
-  it('with no archive path given, the picker offers install\'s own archive extensions', async () => {
+  it('archive: the OS picker offers install\'s own archive extensions', async () => {
     const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerModInstallCommands(deps({ promptModName }));
-    await invoke('modbench.modList.installFromArchive');
+    await invoke('modbench.mod.install');
 
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
       filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
     }));
   });
 
-  it('no choice and a cancelled prompt installs nothing', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce(undefined);
+  it('archive: installs as a new mod under the name prompted, prefilled from the archive', async () => {
+    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.modList.installFromArchive', '/archive/foo.7z');
+    const succeeded = await invoke('modbench.mod.install');
+
+    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
+    expect(installFromArchive).toHaveBeenCalledWith(
+      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_RELEASE },
+    );
+    expect(succeeded).toEqual({ installed: true });
+  });
+
+  it('archive: a cancelled name prompt installs nothing', async () => {
+    const promptModName = vi.fn().mockResolvedValueOnce(undefined);
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
+
+    registerModInstallCommands(deps({ promptModName }));
+    const succeeded = await invoke('modbench.mod.install');
 
     expect(installFromArchive).not.toHaveBeenCalled();
     expect(succeeded).toEqual({ installed: false });
   });
 
-  it('the Mods-view folder entry installs as a new mod under the prompted name', async () => {
+  it('folder: Esc at the OS picker installs nothing', async () => {
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
+    showOpenDialog.mockResolvedValueOnce(undefined);
+
+    registerModInstallCommands(deps());
+    const succeeded = await invoke('modbench.mod.install');
+
+    expect(installFromFolder).not.toHaveBeenCalled();
+    expect(succeeded).toEqual({ installed: false });
+  });
+
+  it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
     const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
     installFromFolder.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerModInstallCommands(deps({ promptModName }));
-    await invoke('modbench.modList.installFromFolder');
+    const succeeded = await invoke('modbench.mod.install');
 
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+    }));
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
       '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
     );
+    expect(succeeded).toEqual({ installed: true });
+  });
+});
+
+describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default', mods: [{ kind: 'mod', name: 'Existing Mod', enabled: true }] }) };
+
+  it('Esc creates nothing', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
+    const reporter = recordingReporter();
+
+    registerCreateEmptyModCommand('/instance', instance, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(createEmptyMod).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
+    registerCreateEmptyModCommand('/instance', instance, recordingReporter());
+    await invoke('modbench.mod.createEmpty');
+
+    const [options] = showInputBox.mock.calls[0] ?? [];
+    const validateInput = options?.validateInput;
+    if (!validateInput) throw new Error('expected validateInput on the input box options');
+    expect(validateInput('Existing Mod')).toMatch(/"Existing Mod" already exists/);
+    expect(validateInput('A New Name')).toBeUndefined();
+  });
+
+  it('creates the folder and its line, and reports nothing when both land', async () => {
+    showInputBox.mockResolvedValueOnce('New Mod');
+    createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: true });
+    const reporter = recordingReporter();
+
+    registerCreateEmptyModCommand('/instance', instance, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(createEmptyMod).toHaveBeenCalledWith('/instance', 'Default', 'New Mod', instance.value.modFolders ?? []);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports a landed-but-partial line failure as a warning, not a failed create', async () => {
+    showInputBox.mockResolvedValueOnce('New Mod');
+    createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
+    const reporter = recordingReporter();
+
+    registerCreateEmptyModCommand('/instance', instance, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"New Mod" was created, but its modlist.txt line could not be written.',
+      detail: 'disk full',
+    }]);
+  });
+
+  it('reports a name-collision refusal as a failed create', async () => {
+    showInputBox.mockResolvedValueOnce('New Mod');
+    createEmptyMod.mockResolvedValueOnce({ applied: false, refusal: 'A mod named "New Mod" already exists.' });
+    const reporter = recordingReporter();
+
+    registerCreateEmptyModCommand('/instance', instance, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Failed to create "New Mod".',
+      detail: 'A mod named "New Mod" already exists.',
+    }]);
   });
 });
 

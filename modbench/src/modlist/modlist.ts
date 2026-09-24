@@ -142,17 +142,37 @@ export async function uninstallMod(
   return outcome;
 }
 
+/** `lineRefusal` is set only when the folder landed and the line did not: the folder stays, and
+ *  `mod sync` adopts it next (common.md, Reporting: "A gesture landed, but part of it failed"). */
+export type CreateEmptyModResult =
+  | { applied: true; wrote: boolean; lineRefusal?: string }
+  | { applied: false; refusal: string };
+
+// Matches install's modNameCollisionRefusal word for word (mods.md: one wording for create and
+// install). Not imported: modlist and install are sibling Core boxes with no reference between
+// them in target-architecture-references.d2.
+function nameCollisionRefusal(name: string): string {
+  return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
+}
+
 /** A folder under `mods/` plus a disabled modlist.txt line — nothing else. `modFolders` is the
  *  value's own listing of `mods/`, handed in rather than read here, and a name already among
  *  them is refused. */
 export async function createEmptyMod(
   instanceRoot: string, profile: string, name: string, modFolders: readonly string[],
-): Promise<ModlistCommandResult> {
+): Promise<CreateEmptyModResult> {
   if (modFolders.includes(name)) {
-    return { applied: false, refusal: `A mod named "${name}" already exists.` };
+    return { applied: false, refusal: nameCollisionRefusal(name) };
   }
   await ensureDir(modDir(instanceRoot, name));
-  return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
+  // Read inside the write lock, so a line mod sync already added for this name is left alone
+  // rather than doubled.
+  const line = await spliceModlist(instanceRoot, profile, (text) => {
+    const alreadyListed = parseModlist(text).some((e) => e.kind === 'mod' && e.name === name);
+    return alreadyListed ? text : insertModAtWinningEnd(text, name);
+  });
+  if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };
+  return { applied: true, wrote: line.wrote };
 }
 
 export type ModSyncResult =

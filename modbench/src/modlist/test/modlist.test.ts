@@ -21,7 +21,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     return result;
   });
   const writeFile = vi.fn(actual.writeFile);
-  return { ...actual, readFile, writeFile };
+  const mkdir = vi.fn(actual.mkdir);
+  return { ...actual, readFile, writeFile, mkdir };
 });
 
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
@@ -37,8 +38,9 @@ import {
   syncMods,
   uninstallMod,
 } from '../modlist';
-import { parseModlist } from '../../mo2Codecs/modlistText';
+import { insertModAtWinningEnd, parseModlist } from '../../mo2Codecs/modlistText';
 import { modsDir } from '../../instanceAdapter/layout';
+import { modNameCollisionRefusal } from '../../install/install';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
@@ -356,6 +358,30 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(entries.find((e) => e.name === 'My New Mod')).toEqual({ kind: 'mod', name: 'My New Mod', enabled: false });
     });
 
+    // insertModAtWinningEnd always lands above whatever is currently first, so the new line is
+    // entries[0] deterministically — the fixture's own winning-most mod moves to entries[1].
+    it('lands the line at the winning end, disabled, exactly once, with the folder on disk', async () => {
+      const outcome = await createEmptyMod(dir, 'Default', 'Winning End Mod', MOD_FOLDERS);
+
+      expect(outcome).toEqual({ applied: true, wrote: true });
+      const entries = await readModlist();
+      expect(entries[0]).toEqual({ kind: 'mod', name: 'Winning End Mod', enabled: false });
+      expect(entries.filter((e) => e.name === 'Winning End Mod')).toHaveLength(1);
+      expect((await stat(join(dir, 'mods', 'Winning End Mod'))).isDirectory()).toBe(true);
+    });
+
+    // The other half of "folder first": a failed folder write leaves no line, proven from the
+    // opposite direction of the line-write-fails test below.
+    // Rival: splice modlist.txt before (or without regard to) the folder write.
+    it('writes no line when the folder write itself fails', async () => {
+      vi.mocked(mkdir).mockRejectedValueOnce(new Error('permission denied'));
+      const beforeModlist = await readFile(modlistPath(), 'utf8');
+
+      await expect(createEmptyMod(dir, 'Default', 'Folder Write Fails', MOD_FOLDERS)).rejects.toThrow(/permission denied/);
+
+      expect(await readFile(modlistPath(), 'utf8')).toBe(beforeModlist);
+    });
+
     // Rival: probe `mods/<name>/` instead of reading the argument. The folder below is on disk
     // with no line of its own, so a probe refuses where the argument lets it through.
     it('refuses only on the folders it is handed, never on what it finds under mods/', async () => {
@@ -376,6 +402,46 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       assertRefusal(outcome, 'Harder VATS');
       expect(await readdir(join(dir, 'mods', 'Harder VATS'))).toEqual(before);
       expect(await readFile(modlistPath(), 'utf8')).toBe(beforeModlist);
+    });
+
+    // On disk and in modFolders, but with no modlist.txt line — mod sync has not caught up yet.
+    // Rival: the old ad hoc text, which read differently from install's own refusal.
+    it('refuses a lineless folder in the words install gives the same collision', async () => {
+      await mkdir(join(dir, 'mods', 'Lineless Folder'));
+
+      const outcome = await createEmptyMod(dir, 'Default', 'Lineless Folder', [...MOD_FOLDERS, 'Lineless Folder']);
+
+      expect(outcome).toEqual({ applied: false, refusal: modNameCollisionRefusal('Lineless Folder') });
+    });
+
+    // Models mod sync winning the race against this command's own line write.
+    // Rival: insert unconditionally. That doubles the line here.
+    it('writes no second line when mod sync already added it, and reports no failure', async () => {
+      const name = 'Synced In First';
+      const before = await readFile(modlistPath(), 'utf8');
+      await writeFile(modlistPath(), insertModAtWinningEnd(before, name));
+
+      const outcome = await createEmptyMod(dir, 'Default', name, MOD_FOLDERS);
+
+      expect(outcome).toEqual({ applied: true, wrote: false });
+      expect((await stat(join(dir, 'mods', name))).isDirectory()).toBe(true);
+      expect((await readModlist()).filter((e) => e.name === name)).toHaveLength(1);
+    });
+
+    // Rival: fold the line's failure back into `applied: false`. The folder is on disk either
+    // way, so that reports a landed create as failed.
+    it('a failed line write leaves the folder in place and answers a partial, not a refusal', async () => {
+      const name = 'Line Write Fails';
+      vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
+
+      const outcome = await createEmptyMod(dir, 'Default', name, MOD_FOLDERS);
+
+      expect(outcome.applied).toBe(true);
+      if (!outcome.applied) throw new Error('expected applied: true');
+      expect(outcome.wrote).toBe(false);
+      expect(outcome.lineRefusal).toMatch(/disk full/);
+      expect((await stat(join(dir, 'mods', name))).isDirectory()).toBe(true);
+      expect((await readModlist()).some((e) => e.name === name)).toBe(false);
     });
   });
 });
