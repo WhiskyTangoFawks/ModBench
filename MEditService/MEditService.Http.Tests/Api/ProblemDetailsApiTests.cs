@@ -14,7 +14,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     private readonly HttpClient _client = loaded.Client;
     private readonly TestPluginFixture _fixture = loaded.Plugin;
 
-    private static void AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
+    private static JsonElement AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
     {
         var ct = response.Content.Headers.ContentType?.MediaType;
         Assert.Equal(ProblemContentType, ct);
@@ -22,6 +22,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         var doc = JsonDocument.Parse(body).RootElement;
         Assert.Equal(expectedStatus, doc.GetProperty("status").GetInt32());
+        return doc;
     }
 
     // --- POST /load-order ---
@@ -128,7 +129,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 
-        AssertIsProblemDetails(resp, expectedStatus);
+        var problem = AssertIsProblemDetails(resp, expectedStatus);
+        Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
 }

@@ -82,10 +82,22 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>An origin no registered copy carries names no repository — Rebase and its
-    /// continuation's own "not found".</summary>
+    /// <summary>A registered copy carries no such origin — a 404, well-formed and addressed at
+    /// nothing real.</summary>
     internal static IResult OriginNotFound(string origin) =>
         Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
+
+    /// <summary>A tracked mod carries no such origin — loaded but untracked, a state conflict
+    /// rather than <see cref="OriginNotFound"/>'s 404.</summary>
+    internal static IResult NotTrackedMod(string origin) =>
+        Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
+
+    /// <summary>An argument the adapter itself refuses — malformed syntax is a 400.</summary>
+    internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
+
+    /// <summary>The adapter's IOException when a write's destination already holds something — a
+    /// state conflict, not <see cref="WriteFailure"/>'s server fault.</summary>
+    internal static IResult DestinationConflict(IOException ex) => Results.Problem(ex.Message, statusCode: 409);
 
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never

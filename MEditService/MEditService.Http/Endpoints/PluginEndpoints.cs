@@ -192,12 +192,12 @@ public static class PluginEndpoints
         {
             // Mutagen refuses the filename the request passed the extension check with.
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
-            return Results.Problem(ex.Message, statusCode: 400);
+            return WriteEndpointMapping.InvalidArgument(ex);
         }
         catch (System.IO.IOException ex)
         {
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
-            return Results.Problem(ex.Message, statusCode: 409);
+            return WriteEndpointMapping.DestinationConflict(ex);
         }
     }
 
@@ -359,7 +359,7 @@ public static class PluginEndpoints
     private static IResult NotATrackedMod(string origin, ILogger logger)
     {
         logger.LogWarning("No tracked mod in the load order has origin {Origin}", origin);
-        return Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
+        return WriteEndpointMapping.NotTrackedMod(origin);
     }
 
     // The manual rebase, origin-scoped — the repo is the unit of baselines and rebase, not

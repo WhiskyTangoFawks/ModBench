@@ -20,8 +20,8 @@ public sealed class DeleteRecordHandler
         (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
 
     /// <summary>Each record is deleted or refused on its own, so one refusal leaves the rest of the
-    /// selection to land. Throws <see cref="NoLoadOrderException"/> (ADR-0013 invariant 4), checked
-    /// once before the loop.</summary>
+    /// selection to land. Throws <see cref="NoLoadOrderException"/> when none is held at all
+    /// (ADR-0013 invariant 4).</summary>
     public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();

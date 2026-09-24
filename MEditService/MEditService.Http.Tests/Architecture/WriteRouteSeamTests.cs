@@ -3,11 +3,14 @@ using System.Text.RegularExpressions;
 namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>Every write route's error mapping goes through WriteEndpointMapping, the write
-/// handlers' one shared seam. Routes are spelled by their answering method, as
-/// <see cref="WriteRouteHandlerTests"/> spells them by their Commands handler.</summary>
+/// handlers' one shared seam. Routes are spelled by their answering method, checked against
+/// <see cref="WriteRouteHandlerTests"/>'s own canonical set so the two cannot drift apart.</summary>
 public sealed class WriteRouteSeamTests
 {
-    private static readonly (string Route, string Method)[] NamedMethodRoutes =
+    // Route, and the internal method answering it — null for the one route with no named method
+    // (PeekNextFreeFormKey, scanned by its call-site span instead). Method + Pattern are joined with
+    // a space, matching how they're compared against WriteRouteHandlerTests.Routes below.
+    private static readonly (string Route, string? Method)[] Routes =
     [
         ("POST /records/{formKey}/edit", "EditRecord"),
         ("POST /records/delete", "DeleteRecord"),
@@ -23,14 +26,55 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/rebase", "Rebase"),
         ("POST /plugins/rebase/continue", "ContinueRebase"),
         ("PUT /load-order", "PutLoadOrder"),
+        ("GET /plugins/{plugin}/records/next-form-key", null),
     ];
 
     private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
+    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
-    public static IEnumerable<object[]> EveryNamedMethodRoute =>
-        NamedMethodRoutes.Select(r => new object[] { r.Route, r.Method });
+    // Every request-shape validation 400 a write route's reach still hand-rolls, normalized
+    // (whitespace collapsed). Anything else found here is a handler outcome, forbidden below.
+    private static readonly string[] ValidationCarveOut =
+    [
+        """Results.Problem("Plugin name and origin are required.", statusCode: 400)""",
+        """Results.Problem("An operation and a path are required.", statusCode: 400)""",
+        """Results.Problem("At least one record is required.", statusCode: 400)""",
+        """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
+        """Results.Problem("Source plugin name and origin are required.", statusCode: 400)""",
+        """Results.Problem("Destination plugin name and origin are required.", statusCode: 400)""",
+        """Results.Problem("Plugin name is required.", statusCode: 400)""",
+        """Results.Problem("Destination path and origin are required.", statusCode: 400)""",
+        """Results.Problem( $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400)""",
+        """Results.Problem("Origin is required.", statusCode: 400)""",
+        """Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400)""",
+        """Results.Problem("A record type is required.", statusCode: 400)""",
+        """Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400)""",
+        """Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400)""",
+        """Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400)""",
+    ];
+
+    public static IEnumerable<object[]> EveryNamedMethodRoute
+    {
+        get
+        {
+            foreach (var (route, method) in Routes)
+                if (method is { } m) yield return [route, m];
+        }
+    }
+
+    [Fact]
+    public void TheGate_CoversExactlyTheCanonicalWriteRoutes()
+    {
+        var canonical = WriteRouteHandlerTests.Routes
+            .Select(r => $"{r.Method} {r.Pattern}")
+            .Order(StringComparer.Ordinal);
+        var covered = Routes.Select(r => r.Route).Order(StringComparer.Ordinal);
+
+        Assert.Equal(canonical, covered);
+    }
 
     [Theory]
     [MemberData(nameof(EveryNamedMethodRoute))]
@@ -38,14 +82,39 @@ public sealed class WriteRouteSeamTests
     {
         Assert.True(MethodBody(method) is not null, $"{route}: no internal/private/public static method named {method} found in {string.Join(", ", EndpointFiles)}.");
         Assert.True(
-            MapsThroughSeam(method),
+            MapsThroughSeamIn(EndpointFiles.Select(EndpointFile), method),
             $"{route}: {method} never reaches WriteEndpointMapping — the write routes' shared error-mapping seam.");
     }
 
-    // PeekNextFreeFormKey answers inline in its own MapGet lambda, not a named method (ruling 7's
-    // read gesture), so its call-site span is asserted directly instead of a method body.
+    [Theory]
+    [MemberData(nameof(EveryNamedMethodRoute))]
+    public void AWriteRoute_NeverHandRollsAResultsProblemForAHandlerOutcome(string route, string method)
+    {
+        var offenders = ReachIn(EndpointFiles.Select(EndpointFile), method)
+            .SelectMany(ExtractProblemCalls)
+            .Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal))
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            $"{route}: {method} hand-rolls a Results.Problem(...) outside the request-shape validation "
+            + $"carve-out — a handler outcome must map through WriteEndpointMapping instead: {string.Join(" | ", offenders)}");
+    }
+
+    // PeekNextFreeFormKey answers inline in its own MapGet lambda, not a named method, so its
+    // call-site span is scanned directly instead of a method body.
     [Fact]
-    public void PeekNextFreeFormKey_MapsThroughTheSharedSeam()
+    public void PeekNextFreeFormKey_MapsThroughTheSharedSeam_AndHandRollsNoResultsProblem()
+    {
+        const string route = "GET /plugins/{plugin}/records/next-form-key";
+        var span = PeekNextFreeFormKeySpan();
+
+        Assert.Contains("WriteEndpointMapping.", span, StringComparison.Ordinal);
+        var offenders = ExtractProblemCalls(span).Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal)).ToArray();
+        Assert.True(offenders.Length == 0, $"{route}: hand-rolls {string.Join(" | ", offenders)}.");
+    }
+
+    private static string PeekNextFreeFormKeySpan()
     {
         const string route = "GET /plugins/{plugin}/records/next-form-key";
         var source = File.ReadAllText(EndpointFile("PluginEndpoints.cs"));
@@ -53,28 +122,17 @@ public sealed class WriteRouteSeamTests
         Assert.True(routeIndex >= 0, $"{route}: route pattern not found in PluginEndpoints.cs.");
         var nameIndex = source.IndexOf(".WithName(\"PeekNextFreeFormKey\")", routeIndex, StringComparison.Ordinal);
         Assert.True(nameIndex >= 0, $"{route}: could not find its own .WithName(\"PeekNextFreeFormKey\") to bound the scan.");
-
-        Assert.True(
-            source[routeIndex..nameIndex].Contains("WriteEndpointMapping.", StringComparison.Ordinal),
-            $"{route}: never calls WriteEndpointMapping — the write routes' shared error-mapping seam.");
-    }
-
-    // Zero offenders and zero files walked read the same: an EndpointFiles typo, or a method this
-    // scan cannot find, would still pass every assertion above.
-    [Fact]
-    public void TheScan_FindsAMethodBodyForEveryNamedRoute()
-    {
-        foreach (var (route, method) in NamedMethodRoutes)
-            Assert.True(MethodBody(method) is not null, $"{route}: no method body found for {method}.");
+        return source[routeIndex..nameIndex];
     }
 
     [Fact]
-    public void TheScan_FindsTheDeclaration_NotACallSite()
+    public void TheScan_FindsTheDeclaration_NotAnEarlierCallSite()
     {
         WithPlantedFile(
             "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult Caller(int x)\n    {\n"
+            + "        return DirectHit(x);\n    }\n\n"
             + "    internal static IResult DirectHit(int x)\n    {\n"
-            + "        // A call site naming DirectHit( must not be mistaken for its own declaration.\n"
             + "        return WriteEndpointMapping.NoLoadOrder(null!);\n    }\n}\n",
             file =>
             {
@@ -82,6 +140,7 @@ public sealed class WriteRouteSeamTests
                 var body = MethodBodyIn(file, "DirectHit");
                 Assert.NotNull(body);
                 Assert.Contains("WriteEndpointMapping.", body, StringComparison.Ordinal);
+                Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
             });
     }
 
@@ -100,7 +159,7 @@ public sealed class WriteRouteSeamTests
     }
 
     // The rival this scan exists to catch: a route whose only sibling call never reaches
-    // WriteEndpointMapping must still fail (Rebase/ContinueRebase, before OriginNotFound existed).
+    // WriteEndpointMapping must still fail.
     [Fact]
     public void TheScan_FailsARouteWhoseSiblingNeverReachesTheSeam()
     {
@@ -110,7 +169,15 @@ public sealed class WriteRouteSeamTests
             + "        return HandRolled(x);\n    }\n\n"
             + "    private static IResult HandRolled(int x)\n    {\n"
             + "        return Results.Problem(\"not found\", statusCode: 404);\n    }\n}\n",
-            file => Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling")));
+            file =>
+            {
+                Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
+                var offenders = ReachIn([file], "ThroughAHandRolledSibling")
+                    .SelectMany(ExtractProblemCalls)
+                    .Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal))
+                    .ToArray();
+                Assert.Single(offenders);
+            });
     }
 
     private static void WithPlantedFile(string source, Action<string> assert)
@@ -131,30 +198,43 @@ public sealed class WriteRouteSeamTests
     private static string EndpointFile(string name) =>
         Path.Combine(ArchitectureTests.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
-    private static bool MapsThroughSeam(string methodName) => MapsThroughSeamIn(EndpointFiles.Select(EndpointFile), methodName);
+    private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
+        ReachIn(files, methodName).Any(body => body.Contains("WriteEndpointMapping.", StringComparison.Ordinal));
 
     // A route's own body is the first place to look; a body that only delegates to a shared private
     // helper is followed one call at a time, bounded by visited so a cycle between two siblings
     // cannot loop forever.
-    private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName)
+    private static IReadOnlyList<string> ReachIn(IEnumerable<string> files, string methodName)
     {
         var fileList = files.ToArray();
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        return Reaches(methodName);
+        var bodies = new List<string>();
+        Collect(methodName);
+        return bodies;
 
-        bool Reaches(string method)
+        void Collect(string method)
         {
-            if (!visited.Add(method)) return false;
+            if (!visited.Add(method)) return;
             var body = fileList.Select(file => MethodBodyIn(file, method)).FirstOrDefault(b => b is not null);
-            if (body is null) return false;
-            if (body.Contains("WriteEndpointMapping.", StringComparison.Ordinal)) return true;
+            if (body is null) return;
+            bodies.Add(body);
 
-            return CallSite.Matches(body)
-                .Select(m => m.Groups[1].Value)
-                .Distinct(StringComparer.Ordinal)
-                .Any(Reaches);
+            foreach (var candidate in CallSite.Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
+                Collect(candidate);
         }
     }
+
+    private static IEnumerable<string> ExtractProblemCalls(string body)
+    {
+        foreach (Match m in ProblemCall.Matches(body))
+        {
+            var openIndex = m.Index + m.Length - 1;
+            var closeIndex = MatchingDelimiter(body, openIndex, '(', ')');
+            yield return Normalize(body[m.Index..(closeIndex + 1)]);
+        }
+    }
+
+    private static string Normalize(string text) => WhitespaceRun.Replace(text, " ").Trim();
 
     private static string? MethodBody(string methodName) =>
         EndpointFiles.Select(file => MethodBodyIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
