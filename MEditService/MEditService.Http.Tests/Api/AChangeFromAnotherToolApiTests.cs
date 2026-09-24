@@ -65,6 +65,32 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("RenamedByAnotherTool", (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
 
+    // The old path is gone and the new one declares the same record: it moved, it did not go. The
+    // quest's edits settle the watch before the rename and anchor the frames after it.
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    public async Task ACommittedDocumentRenamedByHand_KeepsItsRecord(string renamedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var quest = await Client.FirstFormKey(Plugin, "qust");
+        using var stream = await Client.NotificationStream();
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
+
+        var frames = await stream.FramesThrough("rows-changed", e => Names(e, quest));
+        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    private static bool Names(JsonElement rowsChanged, string formKey) =>
+        rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
+
     // An untracked copy's bytes are its only truth, so the Index re-derives the copy itself and
     // names it whole: too many rows to list.
     [Fact]

@@ -50,6 +50,18 @@ internal static class OtherTool
             throw new InvalidOperationException($"chmod {mode} {path} failed: {chmod.StandardError.ReadToEnd()}");
     }
 
+    /// <summary>A document moved by hand to <paramref name="renamedTo"/>, a path relative to its own
+    /// folder in which <c>{0}</c> stands for its current file name.</summary>
+    internal static void RenamesASourceDocument(string modFolder, string plugin, string textItCarries, string renamedTo)
+    {
+        var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
+        var target = Path.Combine(
+            Path.GetDirectoryName(document).Require(),
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, renamedTo, Path.GetFileName(document)));
+        Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
+        File.Move(document, target);
+    }
+
     /// <summary>The user reverting one document to what the repository last saw: a write under the
     /// source tree that git makes rather than Modbench.</summary>
     internal static void RevertsASourceDocument(string modFolder, string plugin, string textItCarries)
