@@ -118,8 +118,6 @@ describe('selectionArgument over a selection mixing mods and separators', () => 
   const groupB = separatorRow('Group B');
   const mixed = [alpha, groupA, beta, groupB];
 
-  // The rival pluralArgument narrows a mixed selection to the anchor's kind; selectionArgument
-  // must not, so copy value copies mods and separators together.
   it('keeps every selected row of the kinds given, regardless of the right-clicked row\'s kind', () => {
     expect(selectionArgument({ clicked: beta, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
     expect(selectionArgument({ clicked: groupB, selection: mixed }, 'mod', 'separator')).toEqual(mixed);

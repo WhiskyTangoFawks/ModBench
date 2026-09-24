@@ -11,7 +11,7 @@ import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance } from './instanceLoader/instance';
 import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
-import { ModListProvider } from './mods/ModListProvider';
+import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
@@ -93,6 +93,9 @@ export interface Toolbox extends vscode.Disposable {
   pluginsTree?: PluginsTreeProvider;
   instance?: Instance;
   enterEditing?: () => Promise<void>;
+  /** The Mods view's current selection, empty on the paths with no instance. The composition
+   *  root's copy value dispatch is its one caller outside this file. */
+  modListSelection: () => readonly ModlistNode[];
 }
 
 
@@ -365,6 +368,7 @@ interface Mo2Side {
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
+  modListSelection: () => readonly ModlistNode[];
 }
 
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
@@ -490,7 +494,10 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
   own(registerRefreshCommand({ refresh: refreshIndex, instance, reporter: reporterFor('refresh') }));
-  return { instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing };
+  return {
+    instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
+    modListSelection: () => modListView.selection,
+  };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
@@ -534,6 +541,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     pluginsTree: mo2?.pluginsTree,
     instance: mo2?.instance,
     enterEditing: mo2?.enterEditing,
+    modListSelection: () => mo2?.modListSelection() ?? [],
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;

@@ -71,6 +71,19 @@ export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): st
     .join('\n');
 }
 
+/** Referenced By's own text for the catalog's one copy value id: the right-clicked row, the
+ *  selection VS Code hands a context menu, or the view's own current selection, in that order. */
+export function referencedByCopyValueText(
+  referencedByTreeView: Pick<vscode.TreeView<ReferencedByTreeNode>, 'selection'>,
+  clicked: unknown, allSelected: readonly unknown[] | undefined,
+): string {
+  const isGroup = (n: unknown): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode;
+  const selected = allSelected?.filter(isGroup) ?? [];
+  if (selected.length) return referencedByCopyText(selected);
+  if (referencedByTreeView.selection.length) return referencedByCopyText(referencedByTreeView.selection);
+  return referencedByCopyText(isGroup(clicked) ? [clicked] : []);
+}
+
 /** A Panel view that follows the active record editor rather than an explicit command, so its
  *  target is set by `showFor`, never by an invocation. */
 export class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode> {

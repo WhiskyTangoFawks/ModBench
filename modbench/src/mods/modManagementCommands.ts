@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
-import { pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from './gestureEntry';
+import { modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -318,11 +318,22 @@ function isModlistEntryNode(node: unknown): node is ModNode | SeparatorNode {
   return node instanceof ModNode || node instanceof SeparatorNode;
 }
 
-/** Mods' own adapter to the catalog's one copy value ID (mods.md, Menus and keys, story 7).
- *  `undefined` when `clicked` is not a mod or separator row, so the caller tries another surface. */
-export function modsCopyValueText(clicked: unknown, allSelected: readonly unknown[] | undefined): string | undefined {
-  if (!isModlistEntryNode(clicked)) return undefined;
-  const selection = (allSelected?.length ? allSelected : [clicked]).filter(isModlistEntryNode);
-  const rows = selectionArgument({ clicked, selection }, 'mod', 'separator');
+function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
   return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
+}
+
+/** Mods' own text for the catalog's one copy value id (mods.md, Menus and keys, story 7).
+ *  `undefined` when `clicked` isn't a Mods row, or the view has nothing selected. */
+export function modsCopyValueText(
+  viewSelection: () => readonly ModlistNode[],
+): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
+  return (clicked, allSelected) => {
+    if (clicked === undefined || clicked === null) {
+      const rows = selectionArgument(modsGestureEntry(undefined, undefined, viewSelection), 'mod', 'separator');
+      return rows.length === 0 ? undefined : copyValueRowNames(rows);
+    }
+    if (!isModlistEntryNode(clicked)) return undefined;
+    const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
+    return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));
+  };
 }

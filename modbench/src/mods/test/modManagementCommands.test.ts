@@ -56,7 +56,7 @@ import {
   modsCopyValueText,
   type ModInstallDeps,
 } from '../modManagementCommands';
-import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -790,41 +790,49 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 });
 
 // mods.md, Menus and keys, story 7: copy value copies each selected mod's or separator's name,
-// one per line — Mods' own adapter to the catalog's one copy value ID.
-describe('modsCopyValueText: Mods\' adapter to copy value', () => {
+// one per line — Mods' own text for the catalog's one copy value id.
+describe('modsCopyValueText', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const beta = new ModNode({ kind: 'mod', name: 'Beta', enabled: true });
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
+  const noSelection = (): ModlistNode[] => [];
 
   it('copies a single right-clicked mod\'s own name', () => {
-    expect(modsCopyValueText(alpha, undefined)).toBe('Alpha');
+    expect(modsCopyValueText(noSelection)(alpha, undefined)).toBe('Alpha');
   });
 
   it('copies a single right-clicked separator\'s own name', () => {
-    expect(modsCopyValueText(groupA, undefined)).toBe('Group A');
+    expect(modsCopyValueText(noSelection)(groupA, undefined)).toBe('Group A');
   });
 
-  // The rival: a plural gesture that narrows a mixed selection to the right-clicked row's kind
-  // (as modbench.mod.move does) would drop the separators here. Copy value must not.
   it('copies every selected mod\'s and separator\'s name, one per line, when the selection mixes kinds', () => {
     const mixed = [alpha, groupA, beta, groupB];
-    expect(modsCopyValueText(beta, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
-    expect(modsCopyValueText(groupB, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
+    expect(modsCopyValueText(noSelection)(beta, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
+    expect(modsCopyValueText(noSelection)(groupB, mixed)).toBe('Alpha\nGroup A\nBeta\nGroup B');
   });
 
   it('falls back to just the right-clicked row when nothing else is selected', () => {
-    expect(modsCopyValueText(alpha, [])).toBe('Alpha');
+    expect(modsCopyValueText(noSelection)(alpha, [])).toBe('Alpha');
   });
 
   it('excludes the Overwrite row from a selection that includes it', () => {
     const withOverwrite = [alpha, new OverwriteNode(3)];
-    expect(modsCopyValueText(alpha, withOverwrite)).toBe('Alpha');
+    expect(modsCopyValueText(noSelection)(alpha, withOverwrite)).toBe('Alpha');
   });
 
   it('is undefined for a row that is not a Mods row, so another surface\'s copy takes over', () => {
-    expect(modsCopyValueText(new OverwriteNode(0), undefined)).toBeUndefined();
-    expect(modsCopyValueText(undefined, undefined)).toBeUndefined();
-    expect(modsCopyValueText({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)(new OverwriteNode(0), undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
+  });
+
+  // A key or the palette invokes with no arguments at all, unlike a context menu.
+  it('with no clicked row, copies the view\'s own current selection', () => {
+    const viewSelection = (): ModlistNode[] => [alpha, groupA];
+    expect(modsCopyValueText(viewSelection)(undefined, undefined)).toBe('Alpha\nGroup A');
+  });
+
+  it('is undefined with no clicked row and nothing selected in the view, so another surface\'s copy takes over', () => {
+    expect(modsCopyValueText(noSelection)(undefined, undefined)).toBeUndefined();
   });
 });

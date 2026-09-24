@@ -9,7 +9,7 @@ import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } 
 import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
+import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { EXTENSION_TO_WEBVIEW } from './wire/messages';
 import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
@@ -17,6 +17,7 @@ import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { modsCopyValueText } from './mods/modManagementCommands';
+import { registerCopyValueCommand } from './copyValueCommand';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
@@ -194,14 +195,22 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, referencedByTreeView, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      modsCopyValueText,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
     }),
+    // The catalog's one copy value id (commands.md, Record: copy value): Mods and Referenced By
+    // each contribute their own text, tried in that order, so neither module names the other.
+    registerCopyValueCommand(
+      [
+        { text: modsCopyValueText(() => toolbox.modListSelection()), reporterTag: 'mod.copyValue' },
+        { text: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected), reporterTag: 'referencedByTree.copy' },
+      ],
+      (tag) => makeReporter(outputChannel, tag),
+    ),
   );
 
   statusBarItem.text = backendStatusText(meditClient.status);

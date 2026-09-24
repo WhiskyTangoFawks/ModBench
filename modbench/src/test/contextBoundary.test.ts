@@ -27,7 +27,7 @@ const WIRE_DIR = 'wire';
 
 // Wires every context together: the activation file and the wiring it calls.
 // `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability — same rule.
-const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts'];
+const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts', 'copyValueCommand.ts'];
 
 // Activation-scoped shared state: holds type-only handles into both contexts so other
 // composition-root code can read them, but does not itself wire anything together.
@@ -141,9 +141,11 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(WIRE_DIR, 'messages.ts'))).toBe(true);
   });
 
-  it('the composition-root allowlist is exactly these six files', () => {
-    expect(COMPOSITION_ROOT.sort()).toEqual(
-      ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts']);
+  it('the composition-root allowlist is exactly these seven files', () => {
+    expect(COMPOSITION_ROOT.sort()).toEqual([
+      'copyValueCommand.ts', 'extension.ts', 'pluginCheckboxHandler.ts', 'session.ts',
+      'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts',
+    ]);
   });
 
   // Each plant runs through the one shared findOffenders(), over a real temporary tree rather

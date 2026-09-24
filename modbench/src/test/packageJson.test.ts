@@ -890,8 +890,6 @@ describe('package.json Mods row menu — copy value', () => {
     expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
   });
 
-  // The catalog's Command ID is a single registered id (commands.md): Mods reuses Referenced
-  // By's existing entry rather than a second command being registered.
   it('registers modbench.record.copyValue exactly once', () => {
     const registrations = pkg.contributes.commands.filter((c) => c.command === 'modbench.record.copyValue');
     expect(registrations).toHaveLength(1);

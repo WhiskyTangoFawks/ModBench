@@ -11,6 +11,7 @@ import {
   ErrorNode,
   NoActiveRecordNode,
   referencedByCopyText,
+  referencedByCopyValueText,
 } from '../ReferencedByTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -226,6 +227,34 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
     const [field] = expectInstancesOf(await provider.getChildren(group), ReferencedByFieldNode);
     expect(referencedByCopyText([present(field, 'the field row')])).toBe('');
+  });
+});
+
+describe('referencedByCopyValueText — Referenced By\'s own text for the shared copy value id', () => {
+  const group = () => new ReferencedByGroupNode('000001:Fallout4.esm', [reference({ formKey: '000001:Fallout4.esm' })]);
+
+  it('prefers the selection VS Code hands a context menu over the view\'s own selection', () => {
+    const clicked = group();
+    const stale = new ReferencedByGroupNode('000002:Fallout4.esm', [reference({ formKey: '000002:Fallout4.esm' })]);
+    expect(referencedByCopyValueText({ selection: [stale] }, clicked, [clicked])).toBe(clicked.displayLabel);
+  });
+
+  it('falls back to the view\'s own current selection with no menu selection', () => {
+    const row = group();
+    expect(referencedByCopyValueText({ selection: [row] }, undefined, undefined)).toBe(row.displayLabel);
+  });
+
+  it('falls back to the clicked row alone with nothing else selected', () => {
+    const row = group();
+    expect(referencedByCopyValueText({ selection: [] }, row, undefined)).toBe(row.displayLabel);
+  });
+
+  it('is empty text when nothing applies', () => {
+    expect(referencedByCopyValueText({ selection: [] }, undefined, undefined)).toBe('');
+  });
+
+  it('ignores a row of another surface, such as a Mods row', () => {
+    expect(referencedByCopyValueText({ selection: [] }, { kind: 'mod' }, undefined)).toBe('');
   });
 });
 
