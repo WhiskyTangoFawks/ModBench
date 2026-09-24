@@ -19,6 +19,7 @@ vi.mock('vscode', () => ({
 
 import { registerCopyValueCommand, type CopyValueAdapter } from '../toolbox';
 import { modsCopyValueText } from '../mods/modManagementCommands';
+import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { ModNode, type ModlistNode } from '../mods/ModListProvider';
 import { recordingReporter, type RecordingReporter } from './surfacingDoubles';
 
@@ -135,8 +136,7 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
     expect(writeText).toHaveBeenCalledWith('Alpha');
   });
 
-  // Referenced By's own Ctrl+C invokes with no arguments (package.json). Mods has no key of its
-  // own here, so a Mods selection sitting in the view must never intercept that invocation.
+  // Referenced By's own Ctrl+C invokes with no arguments (package.json).
   it('a no-argument invocation still copies Referenced By\'s selection, even with a Mods row selected', async () => {
     const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
     const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
@@ -146,5 +146,16 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
     await invokeCommand();
 
     expect(writeText).toHaveBeenCalledWith('NPC_ / TestNPC');
+  });
+
+  it('the Mods key\'s own args copy the Mods selection, not Referenced By\'s', async () => {
+    const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
+    const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
+    const referencedByStub: CopyValueAdapter = { text: () => 'NPC_ / TestNPC', reporterTag: 'referencedByTree.copy' };
+    registerCopyValueCommand([modsAdapter, referencedByStub], recordingReporter);
+
+    await invokeCommand(MODS_KEY_ARGS);
+
+    expect(writeText).toHaveBeenCalledWith('Alpha');
   });
 });
