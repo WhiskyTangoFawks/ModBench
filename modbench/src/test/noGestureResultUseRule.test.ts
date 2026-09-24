@@ -74,7 +74,7 @@ describe('no-gesture-result-use', () => {
   });
 
   it('ignores an executeCommand call whose command is not a modbench.… literal', () => {
-    const messages = lint("const r = vscode.commands.executeCommand('setContext', 'modbench.filterActive', true);\n");
+    const messages = lint("const r = vscode.commands.executeCommand('setContext', 'modbench.record.filterActive', true);\n");
 
     expect(messages).toEqual([]);
   });

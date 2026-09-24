@@ -27,23 +27,9 @@ import {
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import { originFolder, type OriginFolder } from './instanceLoader/loadOrderSnapshot';
-import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
+import { registerLoadMoreCommand, registerFilterCommands, makeShowRecordFilter } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 import { errorMessage } from './ports/errorMessage';
-
-
-
-// The single writer for all three surfaces the record filter drives, so `modbench.filterActive`
-// is written from exactly one place. The filter is named by its *source*, never by its SQL,
-// because a `WHERE` clause is not a readout.
-function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCodeLensProvider) {
-  return (active: boolean, sql?: string, label?: string) => {
-    void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
-    filterProvider.setActiveSql(active ? (sql ?? null) : null);
-    session.pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
-  };
-}
-
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
 // that lifecycle stopped being a user decision (ADR-0002). A config change is the only gesture
@@ -111,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker) },
   );
 
-  session.setFilterActive = makeSetFilterActive(session, filterProvider);
+  session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
@@ -192,7 +178,7 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerFilterCommands({
       scriptsPath, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-      setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
+      showRecordFilter: (filter) => session.showRecordFilter?.(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
@@ -294,8 +280,7 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
   const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
   fs.mkdirSync(scriptsPath, { recursive: true });
 
-  const filterProvider = new FilterCodeLensProvider(scriptsPath);
-  return { scriptsPath, filterProvider };
+  return { scriptsPath, filterProvider: new FilterCodeLensProvider() };
 }
 
 

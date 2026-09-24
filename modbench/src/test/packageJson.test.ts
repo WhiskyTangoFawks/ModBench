@@ -313,18 +313,38 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     expect(entryFor('modbench.plugin.filter').group).toBe('navigation@1');
   });
 
-  it('places the record filter (setFilter/clearFilter) at slot 2', () => {
-    expect(entryFor('modbench.setFilter').group).toBe('navigation@2');
-    const clear = present(
-      titleMenus().find((e) => e.command === 'modbench.clearFilter' && e.when.includes('modbench.pluginListTree')),
-      'a view/title entry for modbench.clearFilter on modbench.pluginListTree',
-    );
-    expect(clear.group).toBe('navigation@2');
-    expect(clear.when).toBe(`view == modbench.pluginListTree && modbench.filterActive && ${IN_AN_INSTANCE}`);
+  // plugins.md, Menus and keys: "3: filter records, or clear the record filter while active".
+  it('shows filter records at slot 3, and the clear in its place while the record filter is active', () => {
+    const filter = entryFor('modbench.record.filter');
+    const clear = entryFor('modbench.record.clearFilter');
+    expect(filter.group).toBe('navigation@3');
+    expect(clear.group).toBe('navigation@3');
+    expect(filter.when).toBe(`view == modbench.pluginListTree && !modbench.record.filterActive && ${IN_AN_INSTANCE}`);
+    expect(clear.when).toBe(`view == modbench.pluginListTree && modbench.record.filterActive && ${IN_AN_INSTANCE}`);
   });
 
-  it('places New Plugin… at slot 3', () => {
-    expect(entryFor('modbench.plugin.create').group).toBe('navigation@3');
+  it('places create plugin at slot 4', () => {
+    expect(entryFor('modbench.plugin.create').group).toBe('navigation@4');
+  });
+
+  // commands.md, the catalog's `filter` under Record: a Plugins title icon and a code lens, the
+  // palette aside.
+  it('offers the record filter pair in no other menu', () => {
+    const menus: Record<string, MenuEntry[]> = pkg.contributes.menus;
+    const elsewhere = Object.entries(menus)
+      .filter(([menu]) => menu !== 'view/title' && menu !== 'commandPalette')
+      .flatMap(([menu, entries]) => entries
+        .filter((e) => e.command === 'modbench.record.filter' || e.command === 'modbench.record.clearFilter')
+        .map((e) => `${menu}: ${e.command}`));
+    expect(elsewhere).toEqual([]);
+  });
+
+  it('gates the pair\'s palette entries to an instance', () => {
+    const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
+    for (const command of ['modbench.record.filter', 'modbench.record.clearFilter']) {
+      const entry = present(palette.find((e) => e.command === command), `a commandPalette entry for ${command}`);
+      expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
+    }
   });
 
   // No dead entries (commands.md): outside an instance the title-bar icon is already absent
@@ -381,7 +401,11 @@ describe('package.json filtering is one UX', () => {
   });
 
   it('keeps $(filter) for the record filter, so the two never read as the same action', () => {
-    expect(commandTitle('modbench.setFilter').icon).toBe('$(filter)');
+    expect(commandTitle('modbench.record.filter').icon).toBe('$(filter)');
+  });
+
+  it('clears the record filter with $(clear-all), as every durable filter clears', () => {
+    expect(commandTitle('modbench.record.clearFilter').icon).toBe('$(clear-all)');
   });
 
   // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
@@ -1079,9 +1103,7 @@ const LEGACY_GESTURES = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'] },
   { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },
   { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
-  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },
-  { gesture: 'record filter', removedBy: '#964', ids: ['modbench.setFilter', 'modbench.clearFilter', 'modbench.setFilterFromDocument'] },
-] as const;
+  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },] as const;
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

@@ -30,6 +30,7 @@ vi.mock('vscode', () => ({
 import { registerPluginsNameFilter } from '../toolbox';
 import { say } from '../editingTeardown';
 import { PluginsTreeProvider, type PluginListSource } from '../plugins/PluginsTreeProvider';
+import { InMemoryMEditClient, type PluginMetadata } from '../client';
 
 class FakeSource implements PluginListSource {
   setPluginEnabled(): Promise<void> { return Promise.resolve(); }
@@ -196,5 +197,55 @@ describe('the Plugins view, given the game folder not found', () => {
     say(session, undefined);
     await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
     expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+  });
+});
+
+// plugins.md, States, story 5.
+describe('the Plugins view, given a record filter that matches nothing', () => {
+  function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
+    return {
+      name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, masters: [], recordCount: 0,
+      isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
+      winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
+    };
+  }
+
+  async function filteredView(testModMatches: boolean) {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [held('Other.esp', false), held('TestMod.esp', testModMatches)]);
+    client.setQueryAnswer('getDiagnoses', []);
+    const instance = new FakeInstance(valueOf([plugin('Other.esp'), plugin('TestMod.esp')]));
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource(), client });
+    const view: { description?: string; message?: string } = {};
+    registerPluginsNameFilter(view, provider);
+    provider.setRecordFilterSource('armor.sql');
+    await provider.refreshFacts();
+    return { client, provider, view };
+  }
+
+  it('says so in its message line, naming the source', async () => {
+    const { view } = await filteredView(false);
+
+    await waitForMessage(view, (m) => m === 'No records match armor.sql.', 'the no-match message');
+    expect(view.message).toBe('No records match armor.sql.');
+  });
+
+  it('says nothing while the filter matches a record in any plugin', async () => {
+    const { view } = await filteredView(true);
+
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  it('takes the message back once the filter clears', async () => {
+    const { client, provider, view } = await filteredView(false);
+    await waitForMessage(view, (m) => m === 'No records match armor.sql.', 'the no-match message');
+
+    provider.setRecordFilterSource(undefined);
+    client.setQueryAnswer('getPlugins', [held('Other.esp', true), held('TestMod.esp', true)]);
+    await provider.refreshFacts();
+
+    await waitForMessage(view, (m) => m === undefined, 'the message clearing');
+    expect(view.message).toBeUndefined();
   });
 });

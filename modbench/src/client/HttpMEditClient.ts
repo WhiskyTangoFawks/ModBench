@@ -13,7 +13,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
-  type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
+  type RecordFilter, type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -578,9 +578,9 @@ export class HttpMEditClient implements MEditClient {
     return data ?? [];
   }
 
-  async setFilter(sql: string): Promise<string | null> {
+  async setFilter(filter: RecordFilter): Promise<string | null> {
     try {
-      const { error, response } = await this.apiClient.POST('/load-order/filter', { body: { sql } });
+      const { error, response } = await this.apiClient.POST('/load-order/filter', { body: filter });
       if (!response.ok) {
         const text = errorText(error);
         this.log(`[HttpMEditClient] setFilter failed (${response.status}): ${text}`);
@@ -593,19 +593,27 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async clearFilter(): Promise<void> {
+  async clearFilter(): Promise<string | null> {
     try {
       const { error, response } = await this.apiClient.DELETE('/load-order/filter', {});
-      if (!response.ok) this.log(`[HttpMEditClient] clearFilter failed (${response.status}): ${errorText(error)}`);
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[HttpMEditClient] clearFilter failed (${response.status}): ${text}`);
+        return text;
+      }
+      return null;
     } catch (e) {
       this.log(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
+      return errorMessage(e);
     }
   }
 
-  async getActiveFilter(): Promise<string | null> {
+  async getActiveFilter(): Promise<RecordFilter | null> {
     const { data, error, response } = await this.apiClient.GET('/load-order/filter', {});
     this.ensureOk('getActiveFilter', response, error);
-    return data?.sql ?? null;
+    if (data?.sql == null) return null;
+    if (data.source == null) throw new Error('mEdit answered a record filter with no source.');
+    return { sql: data.sql, source: data.source };
   }
 
   async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {

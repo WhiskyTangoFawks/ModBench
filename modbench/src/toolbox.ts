@@ -274,7 +274,7 @@ function applySyncedFilterState(
   return syncActiveFilter(() => client.getActiveFilter(), {
     log: (m) => outputChannel.info(`[toolbox] ${m}`),
     warn: (m) => reporter.report('warning', m),
-    setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
+    showRecordFilter: (filter) => session.showRecordFilter?.(filter),
   });
 }
 

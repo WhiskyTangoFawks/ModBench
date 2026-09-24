@@ -9,7 +9,7 @@ export interface NameFilterDeps {
   view: { description?: string; message?: string };
   /** `modbench.<object>`, the catalog's prefix. The two command ids and the context key derive
    *  from it, so the three views cannot drift apart. The key is not the record filter's
-   *  `modbench.filterActive`. */
+   *  `modbench.record.filterActive`. */
   object: string;
   placeholder: string;
   /** Applies the term to the view's provider, which is where the narrowing itself lives. The

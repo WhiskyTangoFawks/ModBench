@@ -236,6 +236,8 @@ export class PluginsTreeProvider
   private lastOrder: string[] = [];
   private filterText = '';
   private filterLower = '';
+  private recordFilterSource?: string;
+  private recordFilterMatchesNothing = false;
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
@@ -290,8 +292,21 @@ export class PluginsTreeProvider
    *  rows of the plugins it holds need (common.md, States, story 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
-    if (this.instance.sequence === 0 || gameFolder.kind === 'found') return undefined;
-    return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
+    if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
+      return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
+    }
+    // plugins.md, States, story 5.
+    if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
+      return `No records match ${this.recordFilterSource}.`;
+    }
+    return undefined;
+  }
+
+  /** The source of the record filter in force, which the no-match message names; undefined while
+   *  none is. */
+  setRecordFilterSource(source: string | undefined): void {
+    this.recordFilterSource = source;
+    this.render();
   }
 
   /** Case-insensitive substring on plugin name; an empty string clears it. Render-only, so the
@@ -571,6 +586,7 @@ export class PluginsTreeProvider
     }
     this.facts = facts;
     this.matches = matches;
+    this.recordFilterMatchesNothing = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
   private async scanDiagnoses(generation: number): Promise<void> {
