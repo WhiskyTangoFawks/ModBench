@@ -705,7 +705,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
     it('trashes the folder, then removes the line, then marks the download uninstalled, in that order', async () => {
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({
         applied: true, outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch' }], refused: [] },
@@ -723,7 +723,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       vi.mocked(writeFile).mockClear();
 
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], trash);
+        dir, 'Default', [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({
         applied: true,
@@ -734,7 +734,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
     it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'No Such Mod' }, { name: 'Harder VATS' }], trash);
+        dir, 'Default', [{ name: 'No Such Mod' }, { name: 'Harder VATS' }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({
         applied: true,
@@ -749,7 +749,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     it('refuses the whole selection once and trashes nothing when modlist.txt cannot be read', async () => {
       await rm(modlistPath());
 
-      const outcome = await uninstallMods(dir, 'Default', [{ name: 'Harder VATS' }], trash);
+      const outcome = await uninstallMods(dir, 'Default', [{ name: 'Harder VATS' }], join(dir, 'downloads'), trash);
 
       assertRefusal(outcome, 'ENOENT');
       expect(trashed).toEqual([]);
@@ -773,7 +773,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
           { name: 'Harder VATS', archiveFilename: HARDER_VATS_ARCHIVE },
           { name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE },
         ],
-        refusingTrash,
+        join(dir, 'downloads'), refusingTrash,
       );
 
       expect(outcome).toEqual({
@@ -793,7 +793,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
 
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({
         applied: true,
@@ -810,7 +810,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       vi.mocked(writeFile).mockImplementationOnce(passthrough).mockRejectedValueOnce(new Error('disk full'));
 
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({
         applied: true,
@@ -820,11 +820,25 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
     });
 
+    // Rival: the default downloads/ folder. `dir`'s own downloads/ holds ARCHIVE, so a sidecar
+    // there would prove the mark used that fallback instead of skipping it while unresolved.
+    it('trashes the folder and removes the line, but marks nothing, when the downloads folder is unresolved', async () => {
+      const outcome = await uninstallMods(
+        dir, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], undefined, trash);
+
+      expect(outcome).toEqual({
+        applied: true, outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch' }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+      await expect(stat(modDir(dir, 'Unofficial Fallout 4 Patch'))).rejects.toThrow();
+      expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
+    });
+
     // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
     // and a sidecar beside no archive is a file MO2 would never write.
     it('writes no sidecar for an archive that is absent from downloads/', async () => {
       const outcome = await uninstallMods(
-        dir, 'Default', [{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], trash);
+        dir, 'Default', [{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], join(dir, 'downloads'), trash);
 
       expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
       await expect(stat(join(dir, 'downloads', 'Long Gone-1-0.7z.meta'))).rejects.toThrow();

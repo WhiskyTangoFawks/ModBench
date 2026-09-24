@@ -15,27 +15,44 @@ describe('scanDownloads', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('reads no downloads/ folder as no downloads, not a failure', async () => {
-    expect(await scanDownloads(root)).toBeUndefined();
+  it('reads an absent folder as no downloads, not a failure', async () => {
+    expect(await scanDownloads(join(root, 'downloads'))).toBeUndefined();
   });
 
-  it('lists a file directly in downloads/', async () => {
-    await mkdir(join(root, 'downloads'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'ArmorPack-1-0.zip'), 'bytes');
+  it('lists a file directly in the given folder', async () => {
+    const downloadsDir = join(root, 'downloads');
+    await mkdir(downloadsDir, { recursive: true });
+    await writeFile(join(downloadsDir, 'ArmorPack-1-0.zip'), 'bytes');
 
-    const entries = await scanDownloads(root);
+    const entries = await scanDownloads(downloadsDir);
 
     expect(entries?.map((e) => e.name)).toEqual(['ArmorPack-1-0.zip']);
   });
 
   // Rival this catches: the scan keeps `dirent.name` alone, dropping `isDirectory()`.
   it('never lists a subfolder, even one named like an archive', async () => {
-    await mkdir(join(root, 'downloads', 'ArmorPack.zip'), { recursive: true });
-    await writeFile(join(root, 'downloads', 'ArmorPack.zip', 'payload.esp'), 'bytes');
-    await writeFile(join(root, 'downloads', 'Real-1-0.zip'), 'bytes');
+    const downloadsDir = join(root, 'downloads');
+    await mkdir(join(downloadsDir, 'ArmorPack.zip'), { recursive: true });
+    await writeFile(join(downloadsDir, 'ArmorPack.zip', 'payload.esp'), 'bytes');
+    await writeFile(join(downloadsDir, 'Real-1-0.zip'), 'bytes');
 
-    const entries = await scanDownloads(root);
+    const entries = await scanDownloads(downloadsDir);
 
     expect(entries?.map((e) => e.name)).toEqual(['Real-1-0.zip']);
+  });
+
+  // downloads.md, Which files are rows, story 1: a folder MO2's configuration points at, even
+  // when it lies entirely outside the instance the caller happens to be scanning.
+  it('lists a folder outside any instance root, since the scan takes it as given', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'medit-downloads-outside-'));
+    try {
+      await writeFile(join(outside, 'External.7z'), 'bytes');
+
+      const entries = await scanDownloads(outside);
+
+      expect(entries?.map((e) => e.name)).toEqual(['External.7z']);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 });

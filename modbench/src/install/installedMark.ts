@@ -9,9 +9,9 @@ export type InstalledMarkResult =
 
 /** Writes only the key MO2's Downloads tab reads. A manually-dropped archive has no sidecar, and
  *  MO2's QSettings creates one on first write, so an absent one splices empty text. */
-export async function markDownloadInstalled(instanceRoot: string, name: string): Promise<InstalledMarkResult> {
+export async function markDownloadInstalled(downloadsDir: string, name: string): Promise<InstalledMarkResult> {
   try {
-    await put(downloadSidecarFile(instanceRoot, name), setInstalledInText, { ifMissing: '' });
+    await put(downloadSidecarFile(downloadsDir, name), setInstalledInText, { ifMissing: '' });
     return { applied: true };
   } catch (err) {
     return refuse(err);

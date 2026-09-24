@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -79,7 +80,10 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
 
   const resolveGameDirectory: GameDirectoryResolver = () =>
     Promise.resolve({ kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
-  const instance = new Instance({ instanceRoot: root, resolveGameDirectory, log: () => {}, logReadFailure: () => {} });
+  const instance = new Instance({
+    instanceRoot: root, resolveGameDirectory, resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    log: () => {}, logReadFailure: () => {},
+  });
   instances.push(instance);
 
   const syncs: Promise<PluginSyncResult>[] = [];

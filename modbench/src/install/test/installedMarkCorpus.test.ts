@@ -30,7 +30,7 @@ describe('installed mark corpus', () => {
     await writeFile(join(dir, MANUAL_META), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 
-    expect(await markDownloadInstalled(dir, MANUAL)).toEqual({ applied: true });
+    expect(await markDownloadInstalled(join(dir, 'downloads'), MANUAL)).toEqual({ applied: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect(await sidecarOf(MANUAL_META)).toMatchObject({ status: 'Installed' });

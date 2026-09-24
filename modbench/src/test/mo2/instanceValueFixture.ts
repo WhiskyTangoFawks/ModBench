@@ -12,7 +12,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     files: new FileConflictLookup(),
     filesByMod: new Map(),
     plugins: [],
-    downloads: [],
+    downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
     gameRelease: 'Fallout4',
     nexusSlug: 'fallout4',

@@ -99,7 +99,7 @@ export function registerDownloadsView(
   // Dims excluded rows once Show excluded is on. VS Code never re-queries a decoration provider
   // on its own, so this refreshes it on every rows change — exclude, include and a disk edit alike.
   const excludedDecorations = new ExcludedDownloadDecorationProvider(
-    instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
+    () => instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
   own(vscode.window.registerFileDecorationProvider(excludedDecorations));
   own(downloadsProvider.onDidChangeTreeData(() => excludedDecorations.refresh()));
   own(registerNameFilter({
@@ -119,7 +119,7 @@ export function registerDownloadsView(
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
     ...registerDownloadsMultiRowCommands(
-      instanceRoot, reporter, ask, trash, install.log,
+      instance, reporter, ask, trash, install.log,
       () => downloadsView.selection.filter((row): row is DownloadNode => row.kind === 'download'),
     ),
   ]) own(disposable);
