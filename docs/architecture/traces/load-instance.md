@@ -1,4 +1,4 @@
-# load-instance: contract (draft)
+# load-instance: contract
 
 Diagram: [load-instance.d2](load-instance.d2). Catalog row: `refresh` under Instance in
 [commands.md](../commands.md). What the views show is in [common.md](../surfaces/common.md),
