@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 
-// The four backend states the status bar item shows (docs/specs/medit.md § Status bar); the
+// The four backend states the status bar item shows (common.md, The status bar); the
 // fifth, Ready, is the reconcile's own (`loadOrderOutcome.ts`).
 const STATUS_TEXT: Record<BackendStatus, string> = {
   starting:     '$(loading~spin) mEdit: Connecting…',

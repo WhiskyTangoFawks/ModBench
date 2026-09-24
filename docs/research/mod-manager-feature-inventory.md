@@ -1,10 +1,10 @@
 # Mod Manager Feature Inventory — MO2 / Vortex / Modbench
 
-A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/specs/](../specs/) and the epics on [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones).
+A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/architecture/surfaces/](../architecture/surfaces/) and the epics on [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones).
 
 **Status legend:** ✅ exists · 🔜 planned (tracked issue) · ❓ open question (needs a grilling session) · ➖ out of scope / covered natively by VS Code
 
-## Mod management (Mods surface — [docs/specs/mods.md](../specs/mods.md))
+## Mod management (Mods surface — [mods.md](../architecture/surfaces/mods.md))
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
@@ -22,7 +22,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Mod merging (assets) | ✓ | ✗ | ❓ plugin-level merge is an Editing concern; asset-folder merge unplanned |
 | Problem detection | missing masters, overwrite files, form-43, SE plugins | similar + BSA/BA2 compat | ✅ missing master/missing mod badges; broader checks ❓ |
 
-## Downloads (implemented surface — [docs/specs/downloads.md](../specs/downloads.md))
+## Downloads (implemented surface — [downloads.md](../architecture/surfaces/downloads.md))
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
@@ -35,7 +35,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Premium vs free download links | ✓ | ✓ | 🔜 modbench-7 open question (direct CDN vs redirect) |
 | Collections | ✗ | ✓ browse + install + author | ➖ long-term idea only; but note Modbench's angle — a modlist repo under git *is* a shareable collection |
 
-## Plugins / load order (Plugins surface — [docs/specs/plugins.md](../specs/plugins.md))
+## Plugins / load order (Plugins surface — [plugins.md](../architecture/surfaces/plugins.md))
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
@@ -60,7 +60,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 
 ## Structural deltas worth remembering
 
-- **Deployment**: Modbench already took Vortex's side of the USVFS-vs-hardlinks fork (rationale in [docs/specs/mods.md](../specs/mods.md), [ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). Editing never requires deploy.
+- **Deployment**: Modbench already took Vortex's side of the USVFS-vs-hardlinks fork (rationale in [ADR-0020](../adr/0020-vortex-is-the-reference-for-deployment.md), [ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). Editing never requires deploy.
 - **Vortex compatibility**: Vortex has no simple text modlist; its staging + `vortex.deployment.json` manifest supports at best a read-only adapter. Full Vortex management remains out of scope unless demand appears.
 - **VS Code-native substitutions**: several MO2 surfaces dissolve into the platform — instance manager → Open Folder; tool launcher → tasks; INI editor → the editor itself; extensions → VS Code extensions. A "tab" is only worth building where VS Code has no native equivalent (Downloads queue, mod tree, record editor).
 
@@ -71,4 +71,4 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 - [Mod Manager Fundamentals (MO2)](https://www.nexusmods.com/skyrimspecialedition/articles/11684)
 - [Mod Manager Fundamentals (Vortex)](https://www.nexusmods.com/skyrimspecialedition/articles/11685)
 - [Vortex — about page](https://www.nexusmods.com/site/about/vortex)
-- Deployment-model research previously captured in `docs/mod-manager.md` (now folded into `docs/specs/mods.md`)
+- Deployment-model research previously captured in `docs/mod-manager.md` (now [ADR-0020](../adr/0020-vortex-is-the-reference-for-deployment.md))

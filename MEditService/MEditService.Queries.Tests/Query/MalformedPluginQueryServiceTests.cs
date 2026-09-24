@@ -55,7 +55,7 @@ public sealed class MalformedPluginQueryServiceTests
             report.Text);
     }
 
-    // medit-repair.md: immutable copies ARE the proof set the tables were built from, so a hit there
+    // Immutable copies are the proof set the tables were built from, so a hit there
     // is a table bug. The Index stamps every copy it hashes, so the load order drops these.
     [Fact]
     public void GetLoadOrderDiagnoses_RowsOfAForcedCopy_AreNeverReported()

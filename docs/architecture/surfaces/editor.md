@@ -41,7 +41,7 @@ As a user, I want:
 ## The header
 
 One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the
-FormKey alone when there is no EditorID. It holds no controls. *old spec*
+FormKey alone when there is no EditorID. It holds no controls. *ruling*
 
 ## Columns
 
@@ -52,34 +52,33 @@ As a user, I want:
 2. A copy the game does not load not to be a column: a losing copy of a plugin, or a copy in a
    disabled plugin. Showing them is deferred, as in Plugins. *ADR-0012, invariant 5; ruling*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
-   It stays collapsed while the tab is open. *old spec*
+   It stays collapsed while the tab is open. *ruling*
 4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
    marks its cells ahead of time. Its header says why. *xEdit; ADR-0018*
 5. Each column sized to fit, and its edge to drag to resize it. *ruling*
 6. The grid to scroll sideways from a scrollbar at the bottom of the panel, wherever I have scrolled
-   to. *old spec*
+   to. *ruling*
 
 ### A column's header
 
 | Part | What it shows | Source |
 |---|---|---|
 | Label | `[XX] File name`: the plugin's load order index in hex, `[FE:XXX]` for a light plugin, and its file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
-| Status | the column's status, from the table below | old spec |
+| Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |
 
 | Status | When | The tooltip says | Source |
 |---|---|---|---|
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
-| `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | old spec |
+| `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, in this header's menu, makes it editable | ADR-0007, invariant 1 |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed,
-header and cells alike, so it reads as outside the conflict after the header scrolls away. *old
-spec*
+header and cells alike, so it reads as outside the conflict after the header scrolls away. *ruling*
 
 ## Rows
 
@@ -152,7 +151,7 @@ As a user, I want:
    invariant 2*
 3. When the conflict colours are not yet computed for every plugin, a message above the grid:
    "This record's comparison is not complete: the colours are not final." It goes by itself once
-   they are, and the grid reads again. *ADR-0019, invariant 1; old spec*
+   they are, and the grid reads again. *ADR-0019, invariant 1; ruling*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
    naming it, in place of the grid. *A gone object is refused*
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from

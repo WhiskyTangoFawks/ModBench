@@ -90,8 +90,8 @@ as it holds game names. Mods, Downloads and Toolbox never see a record.
 
 ## What is left out
 
-Deliberately absent, so that every arrow drawn stays legible: the repair engine
-([medit-repair.md](../specs/medit-repair.md)), and MO2's own UI beyond the trees Modbench renders.
+Deliberately absent, so that every arrow drawn stays legible: the repair engine,
+and MO2's own UI beyond the trees Modbench renders.
 
 ## Rendering
 

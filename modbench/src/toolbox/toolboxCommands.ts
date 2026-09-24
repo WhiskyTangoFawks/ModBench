@@ -13,7 +13,7 @@ export interface ToolboxCommandDeps {
   reporterFor: (tag: string) => Reporter;
 }
 
-// The instance-wide gestures the Toolbox view owns (docs/specs/containers.md rule 1), registered
+// The instance-wide gestures the Toolbox view owns (toolbox.md), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
   const { instanceRoot, instance, extensionId, reporterFor } = deps;

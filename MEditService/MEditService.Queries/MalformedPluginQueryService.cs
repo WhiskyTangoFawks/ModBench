@@ -6,7 +6,7 @@ using MEditService.Ports;
 namespace MEditService.Queries;
 
 /// <summary>Kind B diagnoses as rows, in the load order that holds them. Immutable copies are never
-/// reported: they are the proof set the tables were built from (docs/specs/medit-repair.md).
+/// reported: they are the proof set the tables were built from.
 /// </summary>
 public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
 {
