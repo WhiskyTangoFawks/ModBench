@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import { EventEmitter } from '../../test/vscodeMock';
 
-// `Uri.file`'s `.path` is forward-slash always, the same as real vscode's — a Windows `fsPath`
-// (backslash) still normalizes, which is what lets the provider compare by `.path` and not care.
+// Real `Uri.file` forward-slashes a backslash path only on Windows; this always does, so a
+// Windows-style fixture below exercises that conversion on any host.
 vi.mock('vscode', () => ({
   ThemeColor: class { constructor(public id: string) {} },
   EventEmitter,

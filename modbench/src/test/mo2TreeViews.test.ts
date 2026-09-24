@@ -324,8 +324,8 @@ describe('the Downloads view sets the all-excluded context key', () => {
   });
 });
 
-// downloads.md, Menus and keys story 4: the dim follows exclude and include at once — VS Code
-// never re-queries a FileDecorationProvider on its own.
+// downloads.md, A row, "Excluded": the dim follows exclude and include at once — VS Code never
+// re-queries a FileDecorationProvider on its own.
 describe('the Downloads decoration provider follows a rows change', () => {
   it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
     const root = await cloneCorpusFixture();

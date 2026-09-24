@@ -4,12 +4,20 @@ import * as path from 'path';
 import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
 import { IN_AN_INSTANCE, isRecord, requires } from './manifest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from './vscodeMock';
+import {
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+} from './vscodeMock';
 
-// Only the Mods row menu's own contextValue-vs-when test below needs a live ModNode.
-vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon }));
+// Only the Mods and Downloads row menus' own contextValue-vs-when tests below need a live
+// ModNode/DownloadNode.
+vi.mock('vscode', () => ({
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString,
+  Uri: { file: uriFile },
+}));
 
 import { ModNode } from '../mods/ModListProvider';
+import { DownloadNode } from '../downloads/DownloadsProvider';
+import { downloadRowFixture } from './mo2/downloadRowFixture';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
 // throws rather than handing back an unproven shape.
@@ -697,6 +705,38 @@ describe('package.json Downloads row menu order', () => {
     ].map(slotOf);
     expect(slots).toEqual([...slots].sort((a, b) => a - b));
     expect(new Set(slots).size).toBe(slots.length); // strictly increasing, no ties outside exclude/include
+  });
+
+  // Ties the two halves together, as Mods' own enable/disable test does. Exclude's own clause
+  // negates (`!(...hidden...)`), unlike enable/disable, so satisfies() reads the sign, not just
+  // the flag name.
+  it('an excluded row satisfies include\'s when-clause, and not exclude\'s — and vice versa', () => {
+    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { hidden: true }));
+    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { hidden: false }));
+    const exclude = present(
+      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.exclude'),
+      'a modbench.downloadedFile.exclude row-menu entry',
+    );
+    const include = present(
+      downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.include'),
+      'a modbench.downloadedFile.include row-menu entry',
+    );
+    const conditionsOf = (when: string): { flag: string; negated: boolean }[] =>
+      when.split('&&').map((clause) => clause.trim()).flatMap((clause) => {
+        const negated = clause.startsWith('!(') && clause.endsWith(')');
+        const inner = negated ? clause.slice(2, -1) : clause;
+        const m = /^viewItem =~ \/\\b(\w+)\\b\/$/.exec(inner);
+        return m ? [{ flag: present(m[1], 'a flag name'), negated }] : [];
+      });
+    const satisfies = (when: string, contextValue: string | undefined): boolean => {
+      const tokens = present(contextValue, 'the row\'s own contextValue').split(' ');
+      return conditionsOf(when).every(({ flag, negated }) => tokens.includes(flag) !== negated);
+    };
+
+    expect(satisfies(include.when, excludedRow.contextValue)).toBe(true);
+    expect(satisfies(include.when, includedRow.contextValue)).toBe(false);
+    expect(satisfies(exclude.when, includedRow.contextValue)).toBe(true);
+    expect(satisfies(exclude.when, excludedRow.contextValue)).toBe(false);
   });
 });
 

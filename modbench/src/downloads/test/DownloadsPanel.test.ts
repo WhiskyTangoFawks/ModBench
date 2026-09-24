@@ -664,11 +664,9 @@ describe('registerDownloadsMultiRowCommands', () => {
     const already = await writeMeta(root, 'already-visible.7z');
 
     registerDownloadsMultiRowCommands(root, recordingReporter(), scriptedDialog(), trash);
-    invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
+    await invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
 
-    await vi.waitFor(async () => {
-      expect(await readFile(hidden, 'utf8')).toContain('removed=false');
-    });
+    expect(await readFile(hidden, 'utf8')).toContain('removed=false');
     // Already visible by default: nothing to clear, so its `.meta` gains no `removed` line.
     expect(await readFile(already, 'utf8')).toBe('[General]\r\n');
     expect(showErrorMessage).not.toHaveBeenCalled();

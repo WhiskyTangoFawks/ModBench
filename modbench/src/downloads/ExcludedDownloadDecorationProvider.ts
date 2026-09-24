@@ -3,8 +3,9 @@ import * as vscode from 'vscode';
 /** Colour only, no badge: Show excluded is additive, so excluded rows sit alongside included ones
  *  and this tint is the only cue telling them apart — MO2 itself draws none. */
 export class ExcludedDownloadDecorationProvider implements vscode.FileDecorationProvider {
-  // `.path`, never `.fsPath`: a URI's path is always forward-slash, so a Windows `fsPath`
-  // (backslash) still compares correctly, where a hardcoded `/` prefix never could.
+  // `.path`, never `.fsPath`: on Windows, `Uri.file` turns a backslash-separated path into
+  // `.path`'s forward-slash form, and `.fsPath` turns it back — a hardcoded `/` prefix against
+  // `.fsPath` never survives that round trip.
   private readonly downloadsDirPath: string;
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;

@@ -43,7 +43,7 @@ describe('downloads commands corpus', () => {
   it('exclude writes one sidecar and nothing else, and the row reads back hidden', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(true);
@@ -52,7 +52,7 @@ describe('downloads commands corpus', () => {
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(dir, MANUAL)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, MANUAL)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect((await rowFor(MANUAL)).hidden).toBe(true);
@@ -62,7 +62,7 @@ describe('downloads commands corpus', () => {
     await excludeDownload(dir, NAME);
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await includeDownload(dir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await rowFor(NAME)).hidden).toBe(false);
@@ -71,7 +71,7 @@ describe('downloads commands corpus', () => {
   it('including a metaless archive touches nothing — visible is already its default', async () => {
     const before = await snapshotTree(dir);
 
-    expect(await includeDownload(dir, MANUAL)).toEqual({ applied: true });
+    expect(await includeDownload(dir, MANUAL)).toEqual({ applied: true, wrote: false });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
     expect((await rowFor(MANUAL)).hidden).toBe(false);
@@ -81,7 +81,17 @@ describe('downloads commands corpus', () => {
     await excludeDownload(dir, NAME);
     const before = await snapshotTree(dir);
 
-    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true });
+    expect(await excludeDownload(dir, NAME)).toEqual({ applied: true, wrote: false });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
+
+  it('including an already included download touches nothing, with a real removed=false key on disk', async () => {
+    await excludeDownload(dir, NAME); // removed=true, a real change
+    await includeDownload(dir, NAME); // removed=false, a real change — the key now exists on disk
+    const before = await snapshotTree(dir);
+
+    expect(await includeDownload(dir, NAME)).toEqual({ applied: true, wrote: false });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
   });

@@ -55,7 +55,7 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(root, 'foo.7z');
     await writeSidecar(root, 'foo.7z', '[General]\r\nmodID=123\r\nversion=1.2\r\n');
 
-    expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true });
+    expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true, wrote: true });
 
     expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ hidden: true, modID: '123', version: '1.2' });
     expect(await readFile(sidecarPath(root, 'foo.7z'), 'utf8')).toContain('removed=true');
@@ -66,7 +66,7 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(root, 'foo.7z');
     await writeSidecar(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
-    expect(await includeDownload(root, 'foo.7z')).toEqual({ applied: true });
+    expect(await includeDownload(root, 'foo.7z')).toEqual({ applied: true, wrote: true });
 
     expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ hidden: false });
     expect(await readFile(sidecarPath(root, 'foo.7z'), 'utf8')).toContain('removed=false');
@@ -76,7 +76,7 @@ describe('excludeDownload / includeDownload', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'manual.7z');
 
-    expect(await excludeDownload(root, 'manual.7z')).toEqual({ applied: true });
+    expect(await excludeDownload(root, 'manual.7z')).toEqual({ applied: true, wrote: true });
 
     expect(await sidecarOf(root, 'manual.7z')).toMatchObject({ hidden: true });
   });
@@ -86,7 +86,7 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(root, 'foo.7z');
     await writeSidecar(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
-    expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true });
+    expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true, wrote: false });
     expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ hidden: true });
   });
 
@@ -94,7 +94,7 @@ describe('excludeDownload / includeDownload', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'manual.7z');
 
-    expect(await includeDownload(root, 'manual.7z')).toEqual({ applied: true });
+    expect(await includeDownload(root, 'manual.7z')).toEqual({ applied: true, wrote: false });
 
     await expect(readFile(sidecarPath(root, 'manual.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -108,7 +108,7 @@ describe('excludeDownload / includeDownload', () => {
     await chmod(sidecar, 0o444);
 
     try {
-      expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true });
+      expect(await excludeDownload(root, 'foo.7z')).toEqual({ applied: true, wrote: false });
     } finally {
       await chmod(sidecar, 0o644);
     }
@@ -121,7 +121,7 @@ describe('excludeDownload / includeDownload', () => {
     await chmod(sidecar, 0o444);
 
     try {
-      expect(await includeDownload(root, 'foo.7z')).toEqual({ applied: true });
+      expect(await includeDownload(root, 'foo.7z')).toEqual({ applied: true, wrote: false });
     } finally {
       await chmod(sidecar, 0o644);
     }

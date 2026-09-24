@@ -8,8 +8,10 @@ import { refuse } from '../ports/refuse';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 
+/** `wrote` is false when the gesture was already true of the file: a command that changes no
+ *  byte writes none, so it never fires the downloads watcher (ADR-0014 invariant 4). */
 export type DownloadsCommandResult =
-  | { applied: true }
+  | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
 
 // The one selection loop every plural verb below shares: each name lands or refuses on its own.
@@ -26,20 +28,20 @@ async function selectionOutcomeOf(
   return { landed, refused };
 }
 
-// Splicing to the value already there yields identical text, so `putIfChanged` writes nothing —
-// no `.meta` for a row already at rest. A missing archive is refused first, so a stale row never
-// writes a lone `.meta`.
+// The transform returns `text` untouched when `hidden` already matches, so `putIfChanged` sees no
+// change and writes nothing — no `.meta` for a row already at rest. A missing archive is refused
+// first, so a stale row never writes a lone `.meta`.
 async function spliceHidden(instanceRoot: string, name: string, hidden: boolean): Promise<DownloadsCommandResult> {
   try {
     if (!(await exists(downloadFile(instanceRoot, name)))) {
       return { applied: false, refusal: `"${name}" is gone from disk.` };
     }
-    await putIfChanged(
+    const { wrote } = await putIfChanged(
       downloadSidecarFile(instanceRoot, name),
       (text) => (parseDownloadMeta(text).hidden === hidden ? text : setHiddenInText(text, hidden)),
       { ifMissing: '' },
     );
-    return { applied: true };
+    return { applied: true, wrote };
   } catch (err) {
     return refuse(err);
   }
@@ -82,5 +84,5 @@ async function deleteDownload(
   } catch (err) {
     return refuse(err);
   }
-  return { applied: true };
+  return { applied: true, wrote: true };
 }

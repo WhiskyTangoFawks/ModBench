@@ -57,8 +57,9 @@ export class Diagnostic {
   constructor(public range: Range, public message: string, public severity: number = DiagnosticSeverity.Error) {}
 }
 
-// `.path`, like real vscode's, is forward-slash always — a Windows `fsPath` (backslash) still
-// normalizes, so a decoration provider comparing by `.path` sees the same value on every OS.
+// Real `Uri.file` forward-slashes a backslash path only on Windows (`isWindows` at load time);
+// this always does, so a test on any host can still exercise a decoration provider that compares
+// by `.path`.
 export const uriFile = (p: string) => {
   const path = p.replaceAll('\\', '/');
   return { fsPath: p, path, toString: () => `file://${path}` };

@@ -86,8 +86,8 @@ export function registerDownloadsView(
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
   }));
-  // Dims excluded rows once Show excluded is on. Refreshed on every rows change, so exclude and
-  // include reach the dim without waiting on VS Code's own re-query.
+  // Dims excluded rows once Show excluded is on. VS Code never re-queries a decoration provider
+  // on its own, so this refreshes it on every rows change — exclude, include and a disk edit alike.
   const excludedDecorations = new ExcludedDownloadDecorationProvider(
     instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
   own(vscode.window.registerFileDecorationProvider(excludedDecorations));
