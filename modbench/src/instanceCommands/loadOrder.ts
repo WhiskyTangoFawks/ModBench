@@ -10,7 +10,6 @@ import {
   loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../instanceLoader/loadOrderSnapshot';
 import { gameReleaseForGame } from '../tables/gamePaths';
-import { errorMessage } from '../ports/errorMessage';
 
 /** The slice of the instance value a load order is built from. */
 export interface LoadOrderSource {
@@ -42,28 +41,22 @@ export async function putLoadOrder(
 }
 
 /** ADR-0014: the index is rebuilt before the load order is sent again, so the reconcile that
- *  follows re-indexes everything. A rebuild refused or failed sends nothing. */
+ *  follows re-indexes everything. ADR-0009 invariant 5: held-elsewhere is a refusal apart from
+ *  every other failure, both of which send nothing. */
 export type RefreshResult =
   | { applied: true; loadOrder: PutLoadOrderResult }
-  | { applied: false; refusal: string };
+  | { applied: false; heldElsewhere: true }
+  | { applied: false; heldElsewhere: false; refusal: string };
 
 export async function refresh(
   client: Pick<MEditClient, 'rebuildIndex'>, sender: Pick<LoadOrderSender, 'send'>, instanceRoot: string,
   value: LoadOrderSource, options?: LoadOrderSendOptions,
 ): Promise<RefreshResult> {
-  const refusal = await rebuildRefusal(client, instanceRoot, releaseOf(value.gameName));
-  if (refusal !== undefined) return { applied: false, refusal };
+  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(value.gameName));
+  if (!outcome.rebuilt) {
+    return outcome.heldElsewhere
+      ? { applied: false, heldElsewhere: true }
+      : { applied: false, heldElsewhere: false, refusal: outcome.detail };
+  }
   return { applied: true, loadOrder: await putLoadOrder(sender, instanceRoot, value, options) };
-}
-
-// The port gives its reason only through the failure callback, which answers first when it runs.
-function rebuildRefusal(
-  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, gameRelease: string,
-): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    client.rebuildIndex(instanceRoot, (_message, detail) => resolve(detail), gameRelease).then(
-      (rebuilt) => resolve(rebuilt ? undefined : 'mEdit did not rebuild the index.'),
-      (err: unknown) => resolve(errorMessage(err)),
-    );
-  });
 }

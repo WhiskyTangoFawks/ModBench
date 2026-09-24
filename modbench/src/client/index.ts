@@ -1,5 +1,5 @@
 export type {
-  MEditClient, WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
+  MEditClient, WriteRefused, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
   NotificationKind, NotificationEvent, BackendStatus, CrashRepairOffer, CrashRepairReason, RecordEditOutcome, RecordPage, CellPage,
   PluginRecordTypeCount, PluginCreatedResponse, TrackResponse, RecordCreateResponse, RecordAddress,
   RecordRenumberResponse, RecordCopyAsOverrideResponse, RecordCopyAsNewRecordResponse, ReferenceResult,

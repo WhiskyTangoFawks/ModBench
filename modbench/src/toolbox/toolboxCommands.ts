@@ -39,13 +39,21 @@ export interface RefreshGestureDeps {
   refresh: () => Promise<RefreshResult>;
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
+  /** Names this instance in toolbox.md's Reporting story 1 — Modbench cannot name the other
+   *  window that holds the index, only the one refused here. */
+  instanceRoot: string;
 }
 
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const run = async (): Promise<void> => {
     const outcome = await deps.refresh();
     if (!outcome.applied) {
-      deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
+      if (outcome.heldElsewhere) {
+        // toolbox.md, Reporting story 1: the spec's own words, naming this instance.
+        deps.reporter.report('error', "This instance's index is open in another Modbench window", deps.instanceRoot);
+      } else {
+        deps.reporter.report('error', 'Could not rebuild the index.', outcome.refusal);
+      }
       return;
     }
     const rereadFailure = await deps.instance.refresh();
