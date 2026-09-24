@@ -11,6 +11,7 @@ import {
   parseModlist,
   removeModFromText,
   renameSeparatorInText,
+  restoreSeparatorLinesInText,
   setEnabledInText,
   unlistedModNames,
 } from '../modlistText';
@@ -229,6 +230,41 @@ describe('deleteSeparatorInText', () => {
   it('deletes the top separator without dropping or moving a leading BOM', () => {
     const out = deleteSeparatorInText('\uFEFF+Sep_separator\r\n+A\r\n', 'Sep');
     expect(out).toBe('\uFEFF+A\r\n');
+  });
+});
+
+describe('restoreSeparatorLinesInText — a delete undone for the separators whose folder stayed', () => {
+  const before = '# header\r\n+A\r\n-One_separator\r\n+Two_separator\r\n+B\r\n+Three_separator\r\n';
+
+  it('puts a line back byte for byte where it was, its disabled prefix kept', () => {
+    const deleted = ['One', 'Two'].reduce(deleteSeparatorInText, before);
+
+    expect(restoreSeparatorLinesInText(deleted, before, ['One'])).toBe(
+      '# header\r\n+A\r\n-One_separator\r\n+B\r\n+Three_separator\r\n');
+  });
+
+  it('puts a line whose entry above was deleted too after the nearest entry still listed', () => {
+    const deleted = ['One', 'Two'].reduce(deleteSeparatorInText, before);
+
+    expect(restoreSeparatorLinesInText(deleted, before, ['Two'])).toBe(
+      '# header\r\n+A\r\n+Two_separator\r\n+B\r\n+Three_separator\r\n');
+  });
+
+  it('puts a line with no entry above it first among the entries, after the header', () => {
+    const first = '# header\r\n+Top_separator\r\n+A\r\n';
+
+    expect(restoreSeparatorLinesInText(deleteSeparatorInText(first, 'Top'), first, ['Top'])).toBe(first);
+  });
+
+  it('puts every named line back, in the order they had', () => {
+    const deleted = ['One', 'Two', 'Three'].reduce(deleteSeparatorInText, before);
+
+    expect(restoreSeparatorLinesInText(deleted, before, ['Three', 'Two', 'One'])).toBe(before);
+  });
+
+  // Another tool rewrote the file between the delete and the put-back, dropping its last line ending.
+  it('ends a last line that has no line ending before putting a line back after it', () => {
+    expect(restoreSeparatorLinesInText('+A\r\n+C', '+A\r\n+C\r\n+D_separator', ['D'])).toBe('+A\r\n+C\r\n+D_separator\r\n');
   });
 });
 

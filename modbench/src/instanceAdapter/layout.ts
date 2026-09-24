@@ -5,7 +5,7 @@
 import { join } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
 import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
-import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
+import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from '../mo2Codecs/modlistText';
 import { SETTINGS_FILE_NAME } from '../mo2Codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../mo2Codecs/pluginsText';
 
@@ -22,6 +22,9 @@ export const modsDir = (instanceRoot: string): string => join(instanceRoot, MODS
 
 export const modDir = (instanceRoot: string, modName: string): string =>
   join(modsDir(instanceRoot), modName);
+
+export const separatorDir = (instanceRoot: string, separatorName: string): string =>
+  modDir(instanceRoot, separatorModName(separatorName));
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 

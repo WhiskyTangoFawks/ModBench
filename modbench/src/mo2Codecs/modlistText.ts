@@ -36,6 +36,10 @@ export type ModlistEntry = Mod | Separator;
 
 const SEPARATOR_SUFFIX = '_separator';
 
+/** MO2's own name for a separator: what its line carries after the prefix, and its folder's name
+ *  under `mods/`. */
+export const separatorModName = (name: string): string => name + SEPARATOR_SUFFIX;
+
 // Deliberately state-insensitive: both prefixes match, and a caller that needs to
 // know which one did reads the prefix itself.
 const matchesModLine = (line: string, name: string): boolean =>
@@ -136,6 +140,28 @@ export function deleteSeparatorInText(text: string, name: string): string {
     const idx = lines.findIndex((l) => matchesModLine(l, name + SEPARATOR_SUFFIX));
     if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
     lines.splice(idx, 1);
+    return lines.join('');
+  });
+}
+
+/** Puts back the named separators' lines as `before` had them: each directly after the nearest
+ *  entry above it in `before` that is still listed, or first when none is. */
+export function restoreSeparatorLinesInText(text: string, before: string, names: readonly string[]): string {
+  const bodyOf = (line: string): string => lineContent(line).slice(1);
+  const beforeEntries = splitLinesKeepEol(stripBom(before)).filter(isEntryLine);
+  const restored = new Set(names.map(separatorModName));
+  return withBomPreserved(text, (bomless) => {
+    const eol = detectEol(bomless);
+    const lines = splitLinesKeepEol(bomless);
+    for (const [i, line] of beforeEntries.entries()) {
+      if (!restored.has(bodyOf(line))) continue;
+      const aboveBodies = new Set(beforeEntries.slice(0, i).map(bodyOf));
+      const above = lines.findLastIndex((l) => isEntryLine(l) && aboveBodies.has(bodyOf(l)));
+      const insertAt = above === -1 ? firstEntryLineAt(lines) : above + 1;
+      const prevLine = lines[insertAt - 1];
+      if (prevLine !== undefined && lineContent(prevLine) === prevLine) lines[insertAt - 1] = prevLine + eol;
+      lines.splice(insertAt, 0, lineContent(line) + eol);
+    }
     return lines.join('');
   });
 }
