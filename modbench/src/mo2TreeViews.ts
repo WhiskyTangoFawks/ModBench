@@ -94,16 +94,20 @@ export function selectedInLastSelectedView(
   return () => last?.selection ?? [];
 }
 
+export interface DownloadsViewDeps {
+  own: Own;
+  instanceRoot: string;
+  instance: InstanceView;
+  reporter: Reporter;
+  ask: AskQuestion;
+  trash: MoveToTrash;
+  install: DownloadInstallDeps;
+}
+
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
-  own: Own,
-  instanceRoot: string,
-  instance: InstanceView,
-  reporter: Reporter,
-  ask: AskQuestion,
-  trash: MoveToTrash,
-  install: DownloadInstallDeps,
+  { own, instanceRoot, instance, reporter, ask, trash, install }: DownloadsViewDeps,
 ): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode> } {
   const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {

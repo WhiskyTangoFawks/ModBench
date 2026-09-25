@@ -545,10 +545,13 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const { downloadsProvider, downloadsView } = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
-    nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
-    warnIfFomod,
-    log: (line) => outputChannel.warn(`[downloads] ${line}`),
+  const { downloadsProvider, downloadsView } = registerDownloadsView({
+    own, instanceRoot, instance, reporter: reporterFor('downloadList'), ask, trash,
+    install: {
+      nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
+      warnIfFomod,
+      log: (line) => outputChannel.warn(`[downloads] ${line}`),
+    },
   });
   const selectedInFocus = selectedInLastSelectedView(own, [modListView, downloadsView]);
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), () => {

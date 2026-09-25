@@ -76,7 +76,7 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, registerDownloadsView, selectedInLastSelectedView } from '../mo2TreeViews';
+import { createModListView, registerDownloadsView, selectedInLastSelectedView, type DownloadsViewDeps } from '../mo2TreeViews';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
@@ -87,6 +87,12 @@ import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirector
 import { syncMessageDouble } from './syncMessageDouble';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
+
+const downloadsViewDeps = (instanceRoot: string, instance: Instance): DownloadsViewDeps => ({
+  own, instanceRoot, instance, reporter: recordingReporter(),
+  ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
+  install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ } },
+});
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
@@ -321,9 +327,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
     await command('modbench.downloadedFile.filter')();
@@ -352,9 +356,7 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
     await command('modbench.downloadedFile.filter')();
@@ -384,9 +386,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
 
     await vi.waitFor(() => expect(contextValue()).toBe(true));
 
@@ -401,9 +401,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
 
     await vi.waitFor(() => expect(h.trees.get('modbench.downloads')).toBeDefined());
     expect(contextValue()).not.toBe(true);
@@ -417,9 +415,7 @@ describe('the Downloads decoration provider follows a rows change', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const [provider] = h.decorationProviders;
     const fired = vi.fn();
     present(provider, 'the registered decoration provider').onDidChangeFileDecorations?.(fired);
@@ -443,9 +439,7 @@ describe('the Downloads view tells the palette whether its selection is one file
   it('is true for one selected file with a Nexus id, and false for none, one without, or several', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const { downloadsView } = registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    const { downloadsView } = registerDownloadsView(downloadsViewDeps(root, instance));
     const withId = new DownloadNode(downloadRowFixture('a.7z', { modID: '1' }));
     const withoutId = new DownloadNode(downloadRowFixture('b.7z'));
 
