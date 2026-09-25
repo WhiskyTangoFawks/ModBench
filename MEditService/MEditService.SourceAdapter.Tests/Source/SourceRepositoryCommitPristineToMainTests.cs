@@ -31,12 +31,12 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         {
             Track(modFolder, relativePath, "{\"old\":true}");
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder, [Baseline(relativePath, "{\"new\":true}", new BaselineTrailers(Plugin, "2.0.0", "NEWMETA", "NEWBIN"))]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             Assert.Equal("{\"new\":true}", GitProbe.Run(gitDir, modFolder, "show", $"main:{relativePath}"));
-            Assert.Equal(new BaselineTrailers(Plugin, "2.0.0", "NEWMETA", "NEWBIN"), SourceRepository.LatestBaselineTrailers(modFolder, Plugin));
+            Assert.Equal([new BaselineTrailers(Plugin, "2.0.0", "NEWMETA", "NEWBIN")], SourceRepository.LatestBaselineTrailersNewestFirst(modFolder, [Plugin]));
         }
         finally
         {
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
                 ]);
             File.WriteAllText(Path.Combine(modFolder, "Textures", "Thing.dds"), "new pixels");
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder,
                 [
                     Baseline("source/A.esp/npc_/A.esp/000001.json", "{\"a\":2}", new BaselineTrailers("A.esp", "2.0", null, "AAAA")),
@@ -99,7 +99,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             File.WriteAllText(Path.Combine(modFolder, "Textures", "[a].dds"), "new");
             File.WriteAllText(Path.Combine(modFolder, "Textures", "a.dds"), "new");
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder, [], [new TrackedFileChange("Textures/[a].dds", TrackedFileChangeKind.Modified, StagedAlready: false)]);
 
             Assert.Equal(["Textures/[a].dds"], PathsIn(modFolder, "main"));
@@ -124,7 +124,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             Track(modFolder, relativePath, "{\"old\":true}");
             File.WriteAllText(Path.Combine(modFolder, ".gitignore"), "# edited by hand\n");
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder, [Baseline(relativePath, "{\"new\":true}", new BaselineTrailers(Plugin, null, null, "NEWBIN"))],
                 [new TrackedFileChange(".gitignore", TrackedFileChangeKind.Modified, StagedAlready: false)]);
 
@@ -162,7 +162,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             Assert.Equal(RebaseOutcome.Refused, dirtBefore.Outcome);
             var fileContentBefore = File.ReadAllText(fullPath);
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder, [Baseline(relativePath, "{\"upstream\":true}", new BaselineTrailers(Plugin, null, null, "NEWBIN"))]);
 
             Assert.Equal(branchBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());

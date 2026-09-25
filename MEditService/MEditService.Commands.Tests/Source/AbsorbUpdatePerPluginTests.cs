@@ -120,6 +120,21 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     }
 
     [Fact]
+    public async Task Absorb_WhenOnlyTheParkedRefCannotMove_SaysTheBaselineLandedAndNamesTheRef()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        WritePlugin(Second, heightMax: 2.0f);
+        RefuseEveryMoveOf(SourceRepository.LastCompileRef(Second));
+
+        var result = await Absorb();
+
+        Assert.False(result.Applied);
+        Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
+        Assert.Contains($"landed on main, but {SourceRepository.LastCompileRef(Second)} could not be moved", result.RefusalReason, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be committed", result.RefusalReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Absorb_WithAPluginThatCannotBeRead_RefusesNamingTheMod_AndLeavesMainAlone()
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
@@ -161,6 +176,18 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
             $"  if [ \"$ref\" = refs/heads/main ] && git log -1 --format=%s \"$new\" | grep -qF '{plugin}'; then\n" +
             "    echo 'main is held by another tool' >&2; exit 1\n" +
             "  fi\n" +
+            "done\n");
+        FileModes.Set(ReferenceTransactionHook, "755");
+    }
+
+    private void RefuseEveryMoveOf(string gitRef)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(ReferenceTransactionHook).Require());
+        File.WriteAllText(ReferenceTransactionHook,
+            "#!/bin/sh\n" +
+            "[ \"$1\" = prepared ] || exit 0\n" +
+            "while read old new ref; do\n" +
+            $"  if [ \"$ref\" = '{gitRef}' ]; then echo 'the ref is held by another tool' >&2; exit 1; fi\n" +
             "done\n");
         FileModes.Set(ReferenceTransactionHook, "755");
     }

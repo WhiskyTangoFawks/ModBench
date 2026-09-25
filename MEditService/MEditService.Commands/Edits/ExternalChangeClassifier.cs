@@ -22,7 +22,7 @@ internal static class ExternalChangeClassifier
             return new ExternalChangeClassification.CrashRecovery();
 
         var trackedPlugins = TrackedPlugins(modFolder, plugins);
-        var changedPlugins = ChangedPlugins(modFolder, plugins);
+        var changedPlugins = ChangedAmong(modFolder, trackedPlugins);
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         if (changedPlugins.Count == 0 && trackedFileChanges.Count == 0) return null;
@@ -50,7 +50,11 @@ internal static class ExternalChangeClassifier
     /// given.</summary>
     public static IReadOnlyList<string> ChangedPlugins(
         string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins) =>
-        [.. TrackedPlugins(modFolder, plugins)
+        ChangedAmong(modFolder, TrackedPlugins(modFolder, plugins));
+
+    private static List<string> ChangedAmong(
+        string modFolder, List<(string PluginName, byte[] ObservedBytes)> trackedPlugins) =>
+        [.. trackedPlugins
             .Where(p => !SourceRepository.MatchesParkedCompileBinary(modFolder, p.PluginName, p.ObservedBytes))
             .Select(p => p.PluginName)];
 

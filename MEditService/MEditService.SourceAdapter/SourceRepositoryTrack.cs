@@ -107,8 +107,8 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Absorb's git mechanics, by plumbing so the edit branch is untouched: each plugin's
-    /// baseline on main, then the changed tracked files in one commit. Answers the subject of the
-    /// first failed commit, which stops the run.</summary>
+    /// baseline on main, then the changed tracked files in one commit. The first failure stops the
+    /// run and is answered with the commit's subject and what failed.</summary>
     public static (string Subject, string Reason)? CommitPristineToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
@@ -124,12 +124,17 @@ public sealed partial class SourceRepository
             foreach (var (files, trailers) in baselines)
             {
                 var subject = UpdateSubject(trailers);
-                var failure = FailureOf(() =>
-                {
-                    PristineFileWriter.WriteAll(files, scratchDir);
-                    CommitBaselineToMain(gitDir, scratchDir, subject, trailers);
-                });
-                if (failure is { } reason) return (subject, reason);
+                var commitSha = string.Empty;
+                if (FailureOf(() =>
+                    {
+                        PristineFileWriter.WriteAll(files, scratchDir);
+                        commitSha = CommitToMain(
+                            gitDir, scratchDir, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
+                    }) is { } commitFailure)
+                    return (subject, $"could not be committed to main: {commitFailure}");
+                if (FailureOf(() => GitCli.Run(gitDir, scratchDir, "update-ref", LastCompileRef(trailers.Plugin), commitSha))
+                    is { } refFailure)
+                    return (subject, $"landed on main, but {LastCompileRef(trailers.Plugin)} could not be moved to it: {refFailure}");
             }
         }
         finally
@@ -142,22 +147,22 @@ public sealed partial class SourceRepository
         {
             var subject = $"Update {ModNameIn(modFolder)}";
             var failure = FailureOf(() => CommitToMain(gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
-            if (failure is { } reason) return (subject, reason);
+            if (failure is { } reason) return (subject, $"could not be committed to main: {reason}");
         }
         return null;
     }
 
     // No rollback beyond git's: the commits before a failed one stand.
-    private static string? FailureOf(Action commit)
+    private static string? FailureOf(Action step)
     {
         try
         {
-            commit();
+            step();
             return null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandFailedException)
         {
-            return ex.Message;
+            return ex.Message.Trim();
         }
     }
 
@@ -212,14 +217,8 @@ public sealed partial class SourceRepository
         return string.Join('\n', lines) + "\n";
     }
 
-    /// <summary>The trailers of the plugin's own latest baseline commit on refs/heads/main, never HEAD:
-    /// the edit branch is what is checked out (ADR-0007). Null when untracked or when main holds no
-    /// baseline of it.</summary>
-    public static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin) =>
-        LatestBaselineTrailersNewestFirst(modFolder, [plugin]) is [var latest] ? latest : null;
-
-    /// <summary>Each named plugin's own latest baseline on refs/heads/main, the newest commit first. A
-    /// plugin main holds no baseline of is left out.</summary>
+    /// <summary>Each named plugin's own latest baseline on refs/heads/main, never the checked-out edit
+    /// branch (ADR-0007), the newest commit first. A plugin main holds no baseline of is left out.</summary>
     public static IReadOnlyList<BaselineTrailers> LatestBaselineTrailersNewestFirst(string modFolder, IReadOnlyList<string> plugins)
     {
         if (!IsTracked(modFolder)) return [];

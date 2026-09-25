@@ -61,7 +61,6 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         Assert.Contains("\"HeightMax\": 0.9", newBaseline, StringComparison.Ordinal);
     }
 
-    // Only `rebase edit branch` moves the edit branch (ADR-0003 invariant 3).
     [Fact]
     public async Task Absorb_LeavesTheEditBranchWhereItWas()
     {

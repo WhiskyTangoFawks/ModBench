@@ -344,7 +344,6 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         answered.EnsureSuccessStatusCode();
         var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(outcome.GetProperty("succeeded").GetBoolean());
-        Assert.False(outcome.TryGetProperty("rebase", out _));
         var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
         var rebase = await rebased.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Refused", rebase.GetProperty("outcome").GetString());

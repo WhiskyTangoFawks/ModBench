@@ -112,7 +112,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     // What another tool leaves behind: a new pristine baseline on main, with the edit branch's own
     // history and working tree untouched.
     private void AbsorbUpstream(float heightMax, bool withNewRecord) =>
-        SourceRepository.CommitPristineToMain(
+        PluginBaselines.CommitToMain(
             _modFolder,
             PluginBaselines.Of(TreeOf(Upstream(heightMax, withNewRecord))));
 

@@ -80,7 +80,7 @@ public sealed class AbsorbExternalChangeHandler
         {
             // The question stays open: the next classification finds exactly what did not land.
             if (SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges) is { } failed)
-                return AbsorbResult.Refused($"'{failed.Subject}' could not be committed to main, and nothing after it was: {failed.Reason}");
+                return AbsorbResult.Refused($"'{failed.Subject}' {failed.Reason}. Nothing after it was committed.");
         }
         catch (GitUnavailableException ex)
         {

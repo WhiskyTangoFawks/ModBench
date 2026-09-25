@@ -3,8 +3,6 @@ import type { AskQuestion } from '../ports/dialog';
 import { handleUnanswered } from './externalChangeGestures';
 import { errorMessage } from '../ports/errorMessage';
 
-/** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
- *  merge editor opens would race the very MarkAnswered call that caused this rebase. */
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {

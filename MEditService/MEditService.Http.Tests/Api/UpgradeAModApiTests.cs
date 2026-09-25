@@ -56,8 +56,6 @@ public sealed class UpgradeAModApiTests : HostedTests
         Assert.Equal("2.0.0", question.GetProperty("externalChangeNewVersion").GetString());
     }
 
-    // The baseline answer the version pre-selects makes the upgrade the new history on main; the
-    // user's own rebase brings it onto the edit branch, and the next read is the upgraded content.
     [Fact]
     public async Task TheBaselineAnswerToAnUpgrade_ThenRebaseEditBranch_AnswersTheNextReadWithTheUpgradedContent()
     {

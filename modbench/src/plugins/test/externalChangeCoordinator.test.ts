@@ -67,22 +67,7 @@ describe('subscribeQuestionOpen', () => {
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
-  it('dispatches Absorb; a landed Absorb is silent', async () => {
-    const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeQuestionOpen(deps, client);
-
-    client.emit(pendingEvent());
-    await flush();
-
-    expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
-    expect(deps.showError).not.toHaveBeenCalled();
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
-  });
-
-  // Only `rebase edit branch` moves the edit branch (ADR-0003 invariant 3), so a new baseline
-  // neither rebases nor opens a merge editor, whatever a rebase would find.
-  it('a landed Absorb neither rebases the edit branch nor opens the merge editor', async () => {
+  it('dispatches Absorb; a landed Absorb is silent, and neither rebases the edit branch nor opens the merge editor', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
@@ -93,6 +78,7 @@ describe('subscribeQuestionOpen', () => {
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
     expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
+    expect(deps.showError).not.toHaveBeenCalled();
     expect(deps.openMergeEditor).not.toHaveBeenCalled();
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });

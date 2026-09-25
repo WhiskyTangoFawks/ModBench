@@ -133,7 +133,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
             ModFolder, SourcePreset.Edits,
             [BaselineOver(ModFolder, "First.esp", Convert.ToHexString(SHA256.HashData(unchanged))), BaselineOver(ModFolder, "Second.esp")]);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
-        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
 
         Settled.Handle(loadOrder, ModFolder);
 
@@ -142,8 +142,6 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal("2.0.0", TheQuestion().OldVersion);
     }
 
-    // Both plugins changed, and their baselines were taken at different versions: the old version is
-    // the newer baseline's, whichever order the load order lists them in.
     [Theory]
     [InlineData("First.esp", "Second.esp")]
     [InlineData("Second.esp", "First.esp")]
@@ -153,7 +151,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.5.0\n");
-        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
 
         Settled.Handle(loadOrder, ModFolder);
@@ -163,7 +161,6 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal("2.0.0", TheQuestion().NewVersion);
     }
 
-    // Second's baseline is already at the new version, so the move the question shows is First's.
     [Fact]
     public void ASettle_ShowsTheVersionTheMetaMovedFrom_WhenTheNewestChangedBaselineIsAlreadyAtTheNewVersion()
     {
@@ -171,7 +168,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
-        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
 
         Settled.Handle(loadOrder, ModFolder);
 
@@ -251,6 +248,9 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
         Assert.Empty(_notifications.Notifications);
     }
+
+    private void CommitToMain(IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines) =>
+        Assert.Null(SourceRepository.CommitPristineToMain(ModFolder, baselines));
 
     private static void Track(string modFolder, string plugin)
     {
