@@ -150,7 +150,7 @@ describe('HttpMEditClient — a 503 from a write', () => {
 
     const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not renumber 000800:MyPatch.esp — No load order has been received.' });
+    expect(result).toEqual({ refused: true, message: 'Could not renumber 000800:MyPatch.esp — No load order has been received.' });
   });
 });
 
@@ -212,7 +212,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
 
     const result = await client.deleteRecords([kept, gone]);
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 2 records — Bad Request' });
+    expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
 
   it('resolves a WriteRefused the same way for a thrown request', async () => {
@@ -221,7 +221,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
 
     const result = await client.deleteRecords([kept]);
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not delete 1 record — socket hang up' });
+    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
   });
 });
 
@@ -252,7 +252,7 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
 
     const result = await client.track([first, second], 'Edits');
 
-    expect(result).toEqual({ refused: true, message: 'mEdit: Could not track 2 plugins — git was not found on PATH.' });
+    expect(result).toEqual({ refused: true, message: 'Could not track 2 plugins — git was not found on PATH.' });
   });
 });
 

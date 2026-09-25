@@ -133,7 +133,7 @@ export class HttpMEditClient implements MEditClient {
     if (!response.ok) {
       const text = errorText(error);
       this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
-      return { refused: true, message: `mEdit: Failed to create plugin — ${text}` };
+      return { refused: true, message: `Failed to create plugin — ${text}` };
     }
     return data ?? { name, path, origin, slot: null, version: 0 };
   }
@@ -202,7 +202,7 @@ export class HttpMEditClient implements MEditClient {
       unsubscribe();
       const text = errorText(error);
       this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
-      return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
+      return { outcome: 'failed', message: `Failed to send the load order — ${text}` };
     }
 
     // Applied answers at once; the Index catches up on its own subscription, learned here by
@@ -294,10 +294,10 @@ export class HttpMEditClient implements MEditClient {
     try {
       const answer = await this.mutate({
         op: `track(${counted})`,
-        failMsg: `mEdit: Could not track ${counted}`,
+        failMsg: `Could not track ${counted}`,
         post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset } }),
       });
-      if (answer === undefined) return { refused: true, message: `mEdit: Could not track ${counted} — no answer` };
+      if (answer === undefined) return { refused: true, message: `Could not track ${counted} — no answer` };
       if (isRefused(answer)) return answer;
       return {
         landed: answer.applied,
@@ -317,7 +317,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<RecordCreateResponse | WriteRefused | undefined> {
     return this.mutate<RecordCreateResponse>({
       op: `createRecord(${plugin}, ${recordType})`,
-      failMsg: `mEdit: Could not create a new ${recordType} record in "${plugin}"`,
+      failMsg: `Could not create a new ${recordType} record in "${plugin}"`,
       post: () => this.apiClient.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
         body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
@@ -334,10 +334,10 @@ export class HttpMEditClient implements MEditClient {
     const counted = records.length === 1 ? '1 record' : `${records.length} records`;
     const answer = await this.mutate({
       op: `deleteRecords(${counted})`,
-      failMsg: `mEdit: Could not delete ${counted}`,
+      failMsg: `Could not delete ${counted}`,
       post: () => this.apiClient.POST('/records/delete', { body: { records: [...records] } }),
     });
-    if (answer === undefined) return { refused: true, message: `mEdit: Could not delete ${counted} — no answer` };
+    if (answer === undefined) return { refused: true, message: `Could not delete ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,
@@ -352,7 +352,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<RecordRenumberResponse | WriteRefused | undefined> {
     return this.mutate<RecordRenumberResponse>({
       op: `renumberRecord(${formKey})`,
-      failMsg: `mEdit: Could not renumber ${formKey}`,
+      failMsg: `Could not renumber ${formKey}`,
       post: () => this.apiClient.POST('/records/{formKey}/renumber', {
         params: { path: { formKey } },
         body: { plugin, origin, newFormKey: newFormKey ?? null },
@@ -367,7 +367,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined> {
     return this.mutate<RecordCopyAsOverrideResponse>({
       op: `copyRecordAsOverride(${formKey})`,
-      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
       post: () => this.apiClient.POST('/records/{formKey}/copy-as-override', {
         params: { path: { formKey } },
         body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
@@ -383,7 +383,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined> {
     return this.mutate<RecordCopyAsNewRecordResponse>({
       op: `copyRecordAsNewRecord(${formKey})`,
-      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
       post: () => this.apiClient.POST('/records/{formKey}/copy-as-new-record', {
         params: { path: { formKey } },
         body: {
@@ -407,7 +407,7 @@ export class HttpMEditClient implements MEditClient {
   async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined> {
     return this.mutate<CompileResult>({
       op: `compile(${plugin})`,
-      failMsg: `mEdit: Could not compile "${plugin}"`,
+      failMsg: `Could not compile "${plugin}"`,
       post: () => this.apiClient.POST('/plugins/{plugin}/compile', { params: { path: { plugin } }, body: { origin, ref: atRef ?? null } }),
     });
   }
@@ -418,7 +418,7 @@ export class HttpMEditClient implements MEditClient {
   async absorbUpstreamUpdate(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
     return this.mutate<ExternalChangeActionResult>({
       op: `absorbUpstreamUpdate(${origin})`,
-      failMsg: `mEdit: Could not absorb the upstream update for "${origin}"`,
+      failMsg: `Could not absorb the upstream update for "${origin}"`,
       post: () => this.apiClient.POST('/plugins/external-change/absorb', { body: { origin } }),
     });
   }
@@ -429,7 +429,7 @@ export class HttpMEditClient implements MEditClient {
   async keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
     return this.mutate<ExternalChangeActionResult>({
       op: `keepAsMyEdit(${origin})`,
-      failMsg: `mEdit: Could not keep "${origin}" as your own edit`,
+      failMsg: `Could not keep "${origin}" as your own edit`,
       post: () => this.apiClient.POST('/plugins/external-change/keep', { body: { origin } }),
     });
   }
@@ -450,7 +450,7 @@ export class HttpMEditClient implements MEditClient {
   ): Promise<RebaseResult | WriteRefused | undefined> {
     return this.mutate<RebaseResult>({
       op: `${opName}(${origin})`,
-      failMsg: `mEdit: Could not rebase "${origin}"`,
+      failMsg: `Could not rebase "${origin}"`,
       post: () => this.apiClient.POST(path, { body: { origin } }),
     });
   }

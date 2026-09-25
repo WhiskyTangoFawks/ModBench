@@ -120,7 +120,7 @@ export function registerRebaseCommand(
     }
 
     const result = await runRebase({
-      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
+      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel, reporter),
       showError: (message) => reporter.report('error', message),
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
@@ -128,15 +128,9 @@ export function registerRebaseCommand(
     if (!result) return; // transport failure or refusal already surfaced by runRebase
 
     if (result.outcome === 'Refused') {
-      reporter.report('warning', result.refusalReason ?? 'Rebase refused.');
-    } else if (result.outcome === 'Clean') {
-      reporter.landed(`Rebased "${origin}" onto the updated baseline.`);
-    } else {
-      reporter.report(
-        'warning',
-        `Rebasing "${origin}" hit conflicts — resolve them in the opened merge editor(s), ` +
-          'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
-      );
+      reporter.report('warning', result.refusalReason ?? 'mEdit gave no reason.');
+    } else if (result.outcome === 'Conflicted' && result.refusalReason) {
+      reporter.report('warning', result.refusalReason);
     }
   });
 }

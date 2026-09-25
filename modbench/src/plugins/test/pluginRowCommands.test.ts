@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Captures every registerCommand(id, handler) so each row's handler can be invoked directly —
 // the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
-  handlers, registerCommand, showQuickPick, withProgress,
+  handlers, registerCommand, showQuickPick, withProgress, executeCommand,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -14,6 +14,7 @@ const {
     }),
     showQuickPick: vi.fn(),
     withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
+    executeCommand: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -24,7 +25,7 @@ import {
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  commands: { registerCommand },
+  commands: { registerCommand, executeCommand },
   window: { showQuickPick, withProgress },
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range,
@@ -126,14 +127,14 @@ describe('registerTrackCommand', () => {
   // landed when the backend refused the whole selection.
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the whole selection', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track 1 plugin — git was not found on PATH.' });
+    client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not track 1 plugin — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not track 1 plugin — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(refresh).not.toHaveBeenCalled();
@@ -187,7 +188,7 @@ describe('registerRebaseCommand', () => {
     };
   }
 
-  it('lands the clean-rebase toast and refreshes on a landed rebase', async () => {
+  it('reports nothing on a clean rebase, but still refreshes', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
     const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
@@ -195,7 +196,7 @@ describe('registerRebaseCommand', () => {
     await handler(pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
-    expect(reporter.landings).toEqual(['Rebased "ModA" onto the updated baseline.']);
+    expect(reporter.landings).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
@@ -216,43 +217,86 @@ describe('registerRebaseCommand', () => {
 
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the rebase outright', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' });
+    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'Could not rebase "ModA" — boom' });
     const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not rebase "ModA" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not rebase "ModA" — boom', detail: undefined },
     ]);
     expect(refresh).not.toHaveBeenCalled();
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
-  it('reports a typed rebase refusal at warning, in the reason the backend gave', async () => {
+  it('reports a typed rebase refusal at warning, naming the dirty paths the backend gave', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason: 'the working tree is dirty', conflictedPaths: [] });
+    const refusalReason = 'Cannot rebase: uncommitted changes in source/Scripts/Foo.psc. '
+      + 'Commit, stash, or discard them first, then try again.';
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason, conflictedPaths: [] });
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'the working tree is dirty', detail: undefined }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
   });
 
-  it('reports a conflicted rebase at warning, naming the gesture that resumes it', async () => {
+  it('opens the native merge editor for every conflicted path, and reports nothing when the backend gave no reason', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: [] });
+    client.setCommandResult(
+      'rebaseOntoMain',
+      { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc', 'source/Scripts/Bar.psc'] },
+    );
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Bar.psc' }));
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  // SourceRepository.cs's autostash case: git kept the change in the stash list rather than
+  // losing it, and the reason names the recovery — the merge editor alone does not say that.
+  it('reports the reason a conflicted rebase carries, once the merge editor is open', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    const refusalReason = 'The rebase replayed cleanly, but re-applying its autostashed tracked-file changes '
+      + 'conflicted. Nothing was lost — they are kept in `git stash list` — resolve the conflict markers, '
+      + 'stage them, then run `git stash drop`.';
+    client.setCommandResult(
+      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason, conflictedPaths: ['source/Scripts/Foo.psc'] },
+    );
+    const { handler, reporter } = invokeRebase(client);
+
+    await handler(pluginNode());
+
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  // The rival: falling straight back to `vscode.open` on every path, without trying the real
+  // merge editor first, would leave conflict markers in a plain text editor with no explanation.
+  it('falls back to a plain editor and reports why, when the Git extension cannot open the merge editor', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult(
+      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc'] },
+    );
+    executeCommand.mockImplementation((command: string) => (
+      command === 'git.openMergeEditor' ? Promise.reject(new Error('command not found')) : Promise.resolve(undefined)
+    ));
+    const { handler, reporter } = invokeRebase(client);
+
+    await handler(pluginNode());
+
+    expect(executeCommand).toHaveBeenCalledWith('vscode.open', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
     expect(reporter.reports).toEqual([{
       severity: 'warning',
-      message: 'Rebasing "ModA" hit conflicts — resolve them in the opened merge editor(s), '
-        + 'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
-      detail: undefined,
+      message: 'Could not open the merge editor for "source/Scripts/Foo.psc" — opened it as a text editor instead.',
+      detail: 'command not found',
     }]);
-    expect(reporter.landings).toEqual([]);
   });
 });
 
@@ -269,14 +313,14 @@ describe('compileAndReport', () => {
 
   it('reports the ready-to-show message at error on a transport-level refusal (WriteRefused), never the typed-refusal wording', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" — boom' });
 
     const { run, reporter } = compile(client, undefined);
     await run;
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
   });
@@ -406,14 +450,14 @@ describe('registerSaveAndCompileCommand', () => {
 
   it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" — boom' });
     const { handler, reporter } = invokeSaveAndCompile(client);
 
     await handler(pluginNode('MyPatch.esp'));
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" — boom', detail: undefined },
     ]);
   });
 
@@ -463,7 +507,7 @@ describe('registerCompileAtRefCommand', () => {
 
   it('drives a compile-at-main through the registered command once the dialog confirms, recording the compile call at "main" and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" at "main" — boom' });
     const { handler, reporter, ask } = invokeCompileAtRef(client, 'Compile at main');
 
     await handler(pluginNode('MyPatch.esp'));
@@ -476,7 +520,7 @@ describe('registerCompileAtRefCommand', () => {
     }]);
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', 'main'] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" at "main" — boom', detail: undefined },
     ]);
   });
 

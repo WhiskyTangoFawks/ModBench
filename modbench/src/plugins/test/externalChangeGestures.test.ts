@@ -56,13 +56,13 @@ describe('runRebase', () => {
   });
 
   it('shows the ready-to-show message and refreshes nothing when the backend refuses the rebase outright', async () => {
-    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not rebase "ModA" — boom' }) };
+    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'Could not rebase "ModA" — boom' }) };
     const deps = makeRebaseDeps(client);
 
     const result = await runRebase(deps, 'ModA');
 
     expect(result).toBeNull();
-    expect(deps.showError).toHaveBeenCalledWith('mEdit: Could not rebase "ModA" — boom');
+    expect(deps.showError).toHaveBeenCalledWith('Could not rebase "ModA" — boom');
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });
@@ -121,12 +121,12 @@ describe('handleUnanswered', () => {
   });
 
   it('a WriteRefused Keep shows the ready-to-show message', async () => {
-    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "ModA" as your own edit — boom' }) };
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'Could not keep "ModA" as your own edit — boom' }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('mEdit: Could not keep "ModA" as your own edit — boom');
+    expect(deps.showError).toHaveBeenCalledWith('Could not keep "ModA" as your own edit — boom');
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 

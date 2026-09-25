@@ -19,7 +19,7 @@ export function reportSkippedPlugins(
   }
   const names = failures.map((f) => f.name).join(', ');
   sink.warn(
-    `mEdit: ${failures.length} plugin(s) were skipped — their records are NOT loaded: ${names}. ` +
-      `See the 'mEdit' output for details.`,
+    `${failures.length} plugin(s) were skipped — their records are NOT loaded: ${names}. ` +
+      'See the Modbench output for details.',
   );
 }
