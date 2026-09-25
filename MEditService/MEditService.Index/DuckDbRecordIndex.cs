@@ -759,11 +759,19 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         private string InListingFilter(string formKey) =>
             owner._filterActive ? $" AND {formKey} IN (SELECT form_key FROM {FilterScope})" : "";
 
+        private string FormIdOrder(string formKey) =>
+            NavigatorSql.FormIdOrder(formKey, OpenedPlugins
+                .Where(opened => opened.Value.IsLight)
+                .Select(opened => opened.Key.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+
         public PagedResult<RecordSummary> Search(RecordQuery query)
         {
             using var connection = owner.OpenRead();
             var (where, paramValues) = BuildWhere(
                 query.Plugin?.Name, query.Search, ListingFilter, query.Origin, query.RecordTypes);
+            var dataParams = new List<string>(paramValues);
+            var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
             // Modified is ref='working-tree' with a committed snapshot; Added is the same ref with no
             // snapshot (a create writes nothing into records_committed). has_container_children is the
             // same correlated-EXISTS shape against container_child, which is never duplicated per ref.
@@ -780,10 +788,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 ) AS has_container_children,
                 r.parse_diagnosis,
                 r.parse_diagnosis IS NOT NULL OR EXISTS (
-                    SELECT 1 FROM container_child cc
-                    JOIN {records} cr ON cr.form_key = cc.child_form_key AND cr.plugin = cc.plugin AND cr.origin = cc.origin
-                    WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                      AND cr.parse_diagnosis IS NOT NULL
+                    SELECT 1 FROM above_failure a
+                    WHERE a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
                 ) AS has_parse_failure,
                 {FullNameOf("r")} AS full_name
                 """;
@@ -795,14 +801,15 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             // xEdit's record picker lists a term's matches by EditorID, and its navigator lists a group
             // in FormID order. (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
-            var order = query.Search is null ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
+            var order = query.Search is null ? FormIdOrder("form_key") : "editor_id, form_key";
             using var dataCmd = connection.CreateCommand();
             dataCmd.CommandText = $"""
+                WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings)}
                 SELECT {cols} FROM {records} r{where}
                 ORDER BY {order}, plugin, origin
                 LIMIT {query.Limit} OFFSET {query.Offset}
                 """;
-            AddParams(dataCmd, paramValues);
+            AddParams(dataCmd, dataParams);
 
             var items = new List<RecordSummary>();
             using var reader = dataCmd.ExecuteReader();
@@ -810,6 +817,24 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 items.Add(ReadSummary(reader));
 
             return new PagedResult<RecordSummary>(items, (int)total);
+        }
+
+        // A listing of one plugin walks that plugin's holdings alone, bound after the listing's own
+        // parameters.
+        private static string HoldingsOf(string? plugin, string? origin, List<string> paramValues)
+        {
+            var conditions = new List<string>();
+            if (plugin != null)
+            {
+                paramValues.Add(plugin);
+                conditions.Add($"h.plugin = ${paramValues.Count}");
+            }
+            if (origin != null)
+            {
+                paramValues.Add(origin);
+                conditions.Add($"h.origin = ${paramValues.Count}");
+            }
+            return conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
         }
 
         // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
@@ -854,17 +879,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                WITH RECURSIVE held AS (
-                    SELECT parent, child FROM ({NavigatorSql.Held}) h WHERE h.plugin = $1 AND h.origin = $2
-                ),
-                above(form_key) AS (
-                    SELECT held.parent FROM held
-                    JOIN {records} f ON f.form_key = held.child AND f.plugin = $1 AND f.origin = $2
-                    WHERE f.parse_diagnosis IS NOT NULL
-                    UNION
-                    SELECT held.parent FROM held JOIN above ON held.child = above.form_key
-                )
-                SELECT DISTINCT r.record_type FROM {records} r JOIN above ON above.form_key = r.form_key
+                WITH RECURSIVE {NavigatorSql.AboveAFailure(records, "WHERE h.plugin = $1 AND h.origin = $2")}
+                SELECT DISTINCT r.record_type FROM {records} r
+                JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin
                 WHERE r.plugin = $1 AND r.origin = $2 AND {NavigatorSql.NotHeld("r")}
                 """;
             AddParams(cmd, [plugin.Name, plugin.Origin]);
@@ -981,30 +998,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress plugin)
-        {
-            using var connection = owner.OpenRead();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"""
-                SELECT DISTINCT cl.parent_worldspace
-                FROM cell_location cl
-                LEFT JOIN {records} c
-                  ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-                WHERE cl.parent_worldspace IS NOT NULL AND cl.plugin = $1 AND cl.origin = $2
-                  AND (c.parse_diagnosis IS NOT NULL OR EXISTS (
-                    SELECT 1 FROM placement p
-                    JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
-                    WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
-                      AND pr.parse_diagnosis IS NOT NULL))
-                """;
-            AddParams(cmd, [plugin.Name, plugin.Origin]);
-            using var reader = cmd.ExecuteReader();
-
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            while (reader.Read()) result.Add(reader.GetString(0));
-            return result;
-        }
-
         public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin)
         {
             using var connection = owner.OpenRead();
@@ -1064,7 +1057,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 FROM cell_location cl
                 LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
                 WHERE {where}{InListingFilter("cl.cell_form_key")}
-                ORDER BY {blockOrder}, {NavigatorSql.FormIdOrder("cl.cell_form_key")}
+                ORDER BY {blockOrder}, {FormIdOrder("cl.cell_form_key")}
                 """;
             AddParams(cmd, paramValues);
             using var reader = cmd.ExecuteReader();
@@ -1130,7 +1123,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
                   AND r.record_type IN ({typeList}){InListingFilter("p.form_key")}
-                ORDER BY {NavigatorSql.FormIdOrder("p.form_key")}
+                ORDER BY {FormIdOrder("p.form_key")}
                 """;
             AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
@@ -1169,7 +1162,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
         {
             using var connection = owner.OpenRead();
-            return GetContainerChildren(connection, plugin.Name, plugin.Origin, parentFormKey, InListingFilter("child_form_key"));
+            return GetContainerChildren(
+                connection, plugin.Name, plugin.Origin, parentFormKey, InListingFilter("child_form_key"), FormIdOrder("child_form_key"));
         }
 
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey)
@@ -1341,14 +1335,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         private static List<ContainerChildRow> GetContainerChildren(
-            DuckDBConnection connection, string plugin, string origin, string parentFormKey, string inFilter)
+            DuckDBConnection connection, string plugin, string origin, string parentFormKey, string inFilter, string order)
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT child_form_key, parent_record_type, slot_name, slot_index
                 FROM container_child
                 WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3{inFilter}
-                ORDER BY {NavigatorSql.FormIdOrder("child_form_key")}
+                ORDER BY {order}
                 """;
             AddParams(cmd, [parentFormKey, plugin, origin]);
             using var reader = cmd.ExecuteReader();

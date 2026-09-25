@@ -78,7 +78,6 @@ internal sealed class FakeReads(
 
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => Diagnoses;
     public IReadOnlySet<PluginAddress> GetTrackedPlugins() => Tracked;
-    public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress plugin) => new HashSet<string>();
     public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
     public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];

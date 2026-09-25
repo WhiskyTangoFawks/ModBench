@@ -12,8 +12,7 @@ public class WorldspaceQueryServiceTests
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
-        CellReferences? cellRefs = null,
-        IReadOnlySet<string>? failedWorldspaces = null) : IRecordReads
+        CellReferences? cellRefs = null) : IRecordReads
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
         {
@@ -46,7 +45,6 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin)
@@ -298,12 +296,12 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void GetWorldspaces_MarksOnlyTheWorldspaceWithAFailureBelowIt()
+    public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
         var reader = new StubReader([], [
-            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
+            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
-        ], failedWorldspaces: new HashSet<string>(StringComparer.Ordinal) { "0001:M.esp" });
+        ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetWorldspaces("M.esp");

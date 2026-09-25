@@ -387,6 +387,27 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(["MasterSecond", "APatchLever"], EditorIds(activators.GetProperty("items")));
     }
 
+    // A light plugin's records take xEdit's FE-prefixed FormIDs, so they sort after every full
+    // plugin's whatever the light plugin's load position.
+    [Fact]
+    public async Task AGroupsRecords_ListALightMastersRecordsAfterAFullMastersLoadedAfterIt()
+    {
+        var fixture = Owned(new PluginFixtureBuilder("trace-query-light-order")
+            .WithPlugin("Light.esl", mod => mod.Activators.AddNew("ALightLever"), origin: "LightMod")
+            .WithPlugin("Full.esm", mod => mod.Activators.AddNew("ZFullLever"), origin: "FullMod")
+            .WithPlugin("Patch.esp", (mod, masters) =>
+            {
+                mod.Activators.GetOrAddAsOverride(masters[0].Activators.Single());
+                mod.Activators.GetOrAddAsOverride(masters[1].Activators.Single());
+            }, origin: "PatchMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
+
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
+
+        Assert.Equal(["ZFullLever", "ALightLever"], EditorIds(activators.GetProperty("items")));
+    }
+
     [Fact]
     public async Task APluginsWorldspaces_ListInFormIdOrder()
     {

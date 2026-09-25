@@ -34,13 +34,10 @@ public sealed class WorldspaceQueryService(
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
         var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: plugin, Origin: origin, Limit: WorldspaceListLimit, Offset: 0);
-        // Search answers "on it or below it" through the container relation, which a worldspace's
-        // cells are not part of, so the cell side is a second read rather than a walk from here.
-        var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginAddress(plugin, origin));
         var holdingCells = repo.GetWorldspacesHoldingCells(new PluginAddress(plugin, origin));
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
-                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName, r.ParseDiagnosis,
+                r.FormKey, r.EditorId, r.HasParseFailure, r.FullName, r.ParseDiagnosis,
                 holdingCells.Contains(r.FormKey)))];
     }
 
