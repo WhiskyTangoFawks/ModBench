@@ -59,8 +59,12 @@ function plugin(
 
 // Only `.plugins` is ever read for rows — the rest of InstanceValue is Mods-tree/Downloads
 // territory.
+// Every origin these fixtures name, but Data and Overwrite, is one of the instance's mods.
 function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue {
-  return instanceValueFixture({ plugins });
+  const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data' && origin !== 'overwrite');
+  return instanceValueFixture({
+    plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
+  });
 }
 
 // A hang must fail on an explicit assertion, not the test runner's own timeout.
@@ -1767,6 +1771,14 @@ describe('PluginsTreeProvider — the row states where track, rebase edit branch
 
       expect(await flags(h)).toEqual(['plugin']);
     }
+  });
+
+  // Generalize across mod managers: which origins are mods is the instance value's answer.
+  it('offers neither on a plugin whose origin the instance value names no mod folder for', async () => {
+    const h = makeTree([A_ROW()], { instance: new FakeInstance(instanceValueFixture({ plugins: [A_ROW()] })) });
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+
+    expect(await flags(h)).toEqual(['plugin']);
   });
 
   it('says whether any plugin compiles, which compile\'s palette entry reads', async () => {

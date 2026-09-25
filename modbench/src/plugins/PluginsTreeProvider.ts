@@ -12,7 +12,6 @@ import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './Pl
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
-import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -86,8 +85,6 @@ export interface PluginsTreeProviderOptions {
   rebaseInProgress?: (plugin: string, origin: string) => boolean;
 }
 
-// A plugin in Data or Overwrite is in no mod, so it has no repository to track into or rebase.
-const IN_NO_MOD = new Set<string>([DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN]);
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Overridden plugins are registered
@@ -502,7 +499,7 @@ export class PluginsTreeProvider
   // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, rebase on a tracked
   // one's mod while none is in progress, compile on a tracked, editable one. None before mEdit answers.
   private contextValueOf(file: string, joinedOrigin: string | undefined): string {
-    if (joinedOrigin === undefined || IN_NO_MOD.has(joinedOrigin)) return 'plugin';
+    if (joinedOrigin === undefined || !this.inMod(joinedOrigin)) return 'plugin';
     const facts = this.facts?.get(file, joinedOrigin);
     if (facts?.tracked === undefined) return 'plugin';
     if (!facts.tracked) return 'plugin untrackedInMod';
@@ -512,6 +509,12 @@ export class PluginsTreeProvider
     return flags.join(' ');
   }
 
+  // The instance value names each mod's folder, whatever the mod manager calls the others.
+  private inMod(origin: string): boolean {
+    const folded = origin.toLowerCase();
+    return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded);
+  }
+
   /** Whether compile applies to any plugin, which compile's palette entry reads. */
   anyCompilable(): boolean {
     return this.someCompilable;
@@ -519,7 +522,7 @@ export class PluginsTreeProvider
 
   // Compile applies to a tracked plugin in a mod that is not read-only for editing.
   private compilable(file: string, origin: string): boolean {
-    if (IN_NO_MOD.has(origin)) return false;
+    if (!this.inMod(origin)) return false;
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;
   }
