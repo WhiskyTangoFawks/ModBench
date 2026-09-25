@@ -448,7 +448,7 @@ export class HttpMEditClient implements MEditClient {
       params: { path: { formKey } },
       body: { plugin, origin, ...envelope },
     });
-    if (response.ok && data?.applied) return { applied: true };
+    if (response.ok && data?.applied) return data.newFormKey ? { applied: true, newFormKey: data.newFormKey } : { applied: true };
 
     // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
     // from the status: only it tells "not tracked" from "no folder", whose ways out differ.

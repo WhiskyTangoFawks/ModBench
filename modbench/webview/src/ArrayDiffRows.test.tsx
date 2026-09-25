@@ -274,7 +274,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶')); // expand
     await waitFor(() => screen.getByText('X1'));
-    fireEvent.click(screen.getByText('▼')); // collapse again
+    fireEvent.click(within(required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row")).getByText('▼')); // collapse again
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
 
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");

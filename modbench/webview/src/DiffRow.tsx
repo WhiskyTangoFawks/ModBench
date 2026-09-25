@@ -6,6 +6,7 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
+import { formKeyLabel } from './FormKeyLink';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
@@ -93,6 +94,8 @@ function renderCell(
       // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
       editable={onCommit != null && !meta.readOnly}
       onCommit={onCommit}
+      // A FormKey typed as text, as the record's own FormID is, reads as the record it names.
+      displayOverride={resolution && typeof value === 'string' ? formKeyLabel(value, resolution) : undefined}
     />
   );
 }

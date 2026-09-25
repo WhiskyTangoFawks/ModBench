@@ -258,6 +258,35 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
   });
 });
 
+describe('HttpMEditClient — an applied edit', () => {
+  it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'FormKey', newFormKey: '000900:MyPatch.esp',
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA',
+      { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' },
+    );
+
+    expect(outcome).toEqual({ applied: true, newFormKey: '000900:MyPatch.esp' });
+  });
+
+  it('editRecord answers no new FormKey for an edit of any other field', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'EditorID', newFormKey: null,
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    );
+
+    expect(outcome).toEqual({ applied: true });
+  });
+});
+
 describe('HttpMEditClient — the not-OK response text', () => {
 
   it('editRecord leaves an ordinary typed refusal exactly as the backend worded it', async () => {

@@ -34,6 +34,7 @@ const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), 
 // each test starts with `editRecord` answering `{ applied: true }`.
 let meditClient: InMemoryMEditClient;
 const onRecordEdited = vi.fn();
+const followRecord = vi.fn();
 
 beforeEach(() => {
   meditClient = new InMemoryMEditClient();
@@ -47,7 +48,7 @@ function editRecordCalls() {
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
-    meditClient, onRecordEdited,
+    meditClient, onRecordEdited, followRecord,
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     ...overrides,
@@ -222,6 +223,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   beforeEach(() => {
     fakeReporter.report.mockReset();
     onRecordEdited.mockReset();
+    followRecord.mockReset();
   });
 
   it('sends the edit through the single write path with its compound plugin identity', async () => {
@@ -255,6 +257,20 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
 
     expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     expect(fakeReporter.report).not.toHaveBeenCalled();
+  });
+
+  it('follows the record to the new FormKey an edit of its FormID answers with', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(followRecord).toHaveBeenCalledWith('000800:Mod.esp', '000900:Mod.esp');
+  });
+
+  it('follows nothing after an edit that leaves the FormKey as it was', async () => {
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(followRecord).not.toHaveBeenCalled();
   });
 
   it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {

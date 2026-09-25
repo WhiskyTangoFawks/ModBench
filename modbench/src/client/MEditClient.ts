@@ -91,9 +91,9 @@ export interface LoadOrderOptions {
 
 /** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
  *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'` is
- *  this side's own addition. */
+ *  this side's own addition. `newFormKey` is the record's FormKey after an edit of its FormID. */
 export type RecordEditOutcome =
-  | { applied: true }
+  | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0009 invariant 5): a 423 — this instance's index held by

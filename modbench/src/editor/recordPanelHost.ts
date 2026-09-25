@@ -9,6 +9,7 @@ import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './rec
 import type { RecordWriteDeps } from './applyRecordEdit';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
+import { followRecordInPanels } from './followRecord';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
@@ -55,6 +56,8 @@ function recordPanelWriteDeps(
       () => { deps.refreshMatchingPlugins(); },
       (plugin) => deps.refreshSourceControlFor(plugin),
     ),
+    followRecord: (formKey, newFormKey) =>
+      followRecordInPanels(deps.recordPanels, deps.activeRecordTracker, formKey, newFormKey),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),
   };

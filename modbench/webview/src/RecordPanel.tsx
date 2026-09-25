@@ -6,7 +6,7 @@ import {
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
-import type { PathSegment } from './recordUtils';
+import type { Column, PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
@@ -25,6 +25,33 @@ const mEditWindow = window as Window & typeof globalThis & {
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
+
+// editor.md, The FormID: the record's FormID is the grid's first row, under Record Header. The
+// document holds it as its FormKey member, which is the path an edit of it names.
+const RECORD_HEADER = 'Record Header';
+const FORM_ID_ROW = `${RECORD_HEADER}.FormID`;
+const FORM_ID_MEMBER = 'FormKey';
+
+const leafOfNoKind = { isArray: false, validFormKeyTypes: [], enumMembers: [], allowsNull: false, isDiscriminator: false };
+
+function formIdMeta(readOnly: boolean): FieldMetadata {
+  return { ...leafOfNoKind, name: 'FormID', type: 'string', readOnly };
+}
+
+function recordHeaderMeta(formId: FieldMetadata): FieldMetadata {
+  return { ...leafOfNoKind, name: RECORD_HEADER, type: 'struct', fields: [formId] };
+}
+
+// Each column reads its own copy's FormKey, which resolves to the record itself.
+function formIdDiff(columns: readonly Column[], winnerColumn: string): FieldDiff {
+  return {
+    fieldName: 'FormID', winnerColumn, cellStates: {}, conflictAll: 'NoConflict',
+    values: Object.fromEntries(columns.map(c => [c.key, c.override.formKey])),
+    resolutions: Object.fromEntries(columns.map(c => [c.key, {
+      state: 'ResolvedValidType' as const, recordType: c.override.recordType, editorId: c.override.editorId ?? null,
+    }])),
+  };
+}
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
@@ -56,7 +83,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
+  const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set([RECORD_HEADER]));
   // ADR-0018: one source of truth for "which value cell is focused," so at most one cell across
   // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
@@ -257,24 +284,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const { overrides, diffs } = result;
 
   const winner = overrides.find(o => o.isWinner);
+  const winnerKey = winner ? columnKey(winner.plugin, winner.origin) : '';
   const displayId = (winner ?? overrides.at(0))?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
-  // One recursive builder for every nesting depth — including the recursion a script property's
-  // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
-  // columns carry the object this row is a member of.
-  function buildRows(
-    diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rowKey: string, present: (column: ColumnKey) => boolean, depth = 0,
+  // One row of the grid: its label, and a cell for each column.
+  function rowOf(
+    diff: FieldDiff, meta: FieldMetadata, path: PathSegment[], rootField: string, rowKey: string,
+    present: (column: ColumnKey) => boolean, depth: number,
     collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
-  ): React.ReactNode[] {
-    // A diff node naming a member no override's schema declares has no shape to render against, so
-    // it and its subtree are dropped rather than rendered against a guessed one.
-    if (!meta) return [];
-    const hasChildren = (diff.children?.length ?? 0) > 0;
-    const isExpanded = expandedStructs.has(rowKey);
-
-    const rows: React.ReactNode[] = [
+  ): React.ReactNode {
+    return (
       <DiffRow
         key={rowKey}
         diff={diff}
@@ -291,7 +311,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         rowKey={rowKey}
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
-        isExpanded={isExpanded}
+        isExpanded={expandedStructs.has(rowKey)}
         collapsedSummary={collapsedSummary}
         ownerPresent={present}
         cellMetas={cellMetas}
@@ -300,7 +320,40 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
           return next;
         })}
-      />,
+      />
+    );
+  }
+
+  // The Record Header and the FormID under it. The FormID's row is a subtree of its own, rooted at
+  // the document's FormKey member, so an edit of it names that member.
+  function recordHeaderRows(): React.ReactNode[] {
+    const formId = formIdMeta(isHeaderRecord);
+    const formIdRow = formIdDiff(columns, winnerKey);
+    const header: FieldDiff = { ...formIdRow, fieldName: RECORD_HEADER, values: {}, resolutions: null, children: [formIdRow] };
+    const everyColumn = () => true;
+    const rows = [rowOf(header, recordHeaderMeta(formId), [], RECORD_HEADER, RECORD_HEADER, everyColumn, 0)];
+    if (expandedStructs.has(RECORD_HEADER)) {
+      rows.push(...buildRows(formIdRow, formId, [], FORM_ID_MEMBER, FORM_ID_ROW, everyColumn, 1));
+    }
+    return rows;
+  }
+
+  // One recursive builder for every nesting depth — including the recursion a script property's
+  // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
+  // columns carry the object this row is a member of.
+  function buildRows(
+    diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
+    rootField: string, rowKey: string, present: (column: ColumnKey) => boolean, depth = 0,
+    collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
+  ): React.ReactNode[] {
+    // A diff node naming a member no override's schema declares has no shape to render against, so
+    // it and its subtree are dropped rather than rendered against a guessed one.
+    if (!meta) return [];
+    const hasChildren = (diff.children?.length ?? 0) > 0;
+    const isExpanded = expandedStructs.has(rowKey);
+
+    const rows: React.ReactNode[] = [
+      rowOf(diff, meta, path, rootField, rowKey, present, depth, collapsedSummary, cellMetas),
     ];
 
     if (!hasChildren || !isExpanded) return rows;
@@ -415,6 +468,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           <tbody>
             {/* A Partial Form column's own fields are nulled by the classifier: none is absent by
                 default, since the record's own fields are not there to be members of. */}
+            {recordHeaderRows()}
             {diffs.flatMap(
               diff => buildRows(
                 diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName,

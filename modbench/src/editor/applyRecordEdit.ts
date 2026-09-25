@@ -12,6 +12,8 @@ export interface RecordWriteDeps {
   // plugin/origin ride along because a FormKey names a record, not which plugin's copy of it this
   // edit landed on.
   onRecordEdited: (formKey: string, plugin: string, origin: string) => void;
+  // An edit of the FormID moves the record to a new FormKey, and the tabs showing it go with it.
+  followRecord: (formKey: string, newFormKey: string) => void;
   reporter: Reporter;
 }
 
@@ -25,6 +27,7 @@ export async function applyRecordEdit(
     const outcome = await deps.meditClient.editRecord(formKey, plugin, origin, envelope);
     if (outcome.applied) {
       deps.onRecordEdited(formKey, plugin, origin);
+      if (outcome.newFormKey) deps.followRecord(formKey, outcome.newFormKey);
       return;
     }
     deps.reporter.report('warning', outcome.message);
