@@ -105,7 +105,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeIndexer(holder);
-        var ex = Assert.Throws<NoLoadOrderException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
+        var ex = Assert.Throws<NoLoadOrderException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql"));
         Assert.Contains("No load order", ex.Message);
     }
 
@@ -123,7 +123,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeLoadedManager(holder);
-        manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.FilterSql);
     }
 
@@ -132,7 +132,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeLoadedManager(holder);
-        manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         manager.ClearFilter();
         Assert.Null(manager.FilterSql);
     }
@@ -156,7 +156,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var reads = manager.RequireReads();
 
-            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'", "filter.sql");
             Assert.Equal(0, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
@@ -184,7 +184,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var reads = manager.RequireReads();
 
-            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'", "filter.sql");
             Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
@@ -218,7 +218,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             using var manager = Indexes.Open(holder, loggerFactory: loggerFactory);
 
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            manager.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7");
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7", "filter.sql");
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 

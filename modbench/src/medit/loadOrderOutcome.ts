@@ -1,7 +1,6 @@
 import type {
-  LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress, PluginLoadFailure, WriteRefused,
+  LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress, PluginLoadFailure, RecordFilter,
 } from '../client';
-import { isRefused } from '../client';
 import { reportSkippedPlugins } from './pluginFailures';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -56,33 +55,20 @@ export async function settleReconciled(status: LoadOrderProgress, deps: Reconcil
   await deps.applyReconciled(status.failures, status.totalPlugins);
 }
 
-// What a synced filter read needs reported once it resolves — a read failure degrades to
-// inactive and warns (never throws); otherwise the readout just states what the backend holds.
-function applyFilterSyncResult(
-  result: string | null | WriteRefused,
-  deps: { warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },
-): void {
-  if (isRefused(result)) {
-    deps.warn(result.message);
-    deps.setFilterActive(false);
-    return;
-  }
-  deps.setFilterActive(result !== null, result ?? undefined, undefined);
-}
-
-/** `getActiveFilter` is a plain port query with no `WriteRefused` wrapping of its own — this is
- *  that wrapping (ADR-0019: a read failure both logs and warns, never throws out of the sync). */
+/** ADR-0019: a read failure logs and warns, and never throws. The filter clears only on purpose
+ *  (plugins.md, Order and view state, story 5), so a failed read leaves the view as it was. */
 export async function syncActiveFilter(
-  getActiveFilter: () => Promise<string | null>,
-  deps: { log: (msg: string) => void; warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },
+  getActiveFilter: () => Promise<RecordFilter | null>,
+  deps: { log: (msg: string) => void; warn: (msg: string) => void; showRecordFilter: (filter: RecordFilter | null) => void },
 ): Promise<void> {
-  let result: string | null | WriteRefused;
+  let filter: RecordFilter | null;
   try {
-    result = await getActiveFilter();
+    filter = await getActiveFilter();
   } catch (e) {
     const detail = errorMessage(e);
-    deps.log(`syncing the active filter failed: ${detail}`);
-    result = { refused: true, message: `mEdit: Could not read the active filter — treating the filter as inactive. ${detail}` };
+    deps.log(`syncing the record filter failed: ${detail}`);
+    deps.warn(`mEdit: Could not read the record filter — the Plugins view shows it as it last was. ${detail}`);
+    return;
   }
-  applyFilterSyncResult(result, deps);
+  deps.showRecordFilter(filter);
 }
