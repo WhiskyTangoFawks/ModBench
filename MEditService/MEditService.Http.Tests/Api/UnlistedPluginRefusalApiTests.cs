@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -8,9 +6,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record's Refusals table: a plugin with no plugins.txt line is read-only (ADR-0012
-/// invariant 5), refused before any source write. A disabled line is still a line, so its plugin
-/// stays writable.</summary>
+/// <summary>edit-record's Refusals table: a plugin with no plugins.txt line, a mod's or an Overwrite
+/// stray, is read-only (ADR-0012 invariant 5). A disabled line is still a line, so its plugin stays
+/// writable.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class UnlistedPluginRefusalApiTests : HostedTests
 {
@@ -18,6 +16,8 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     private const string UnlistedOrigin = "UnlistedMod";
     private const string DisabledPlugin = "Disabled.esp";
     private const string DisabledOrigin = "DisabledMod";
+    private const string StrayPlugin = "Stray.esp";
+    private const string OverwriteOrigin = "overwrite";
 
     private async Task<ScatteredFixtureData> Loaded()
     {
@@ -35,34 +35,45 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
         var track = await Client.Track([(UnlistedPlugin, UnlistedOrigin), (DisabledPlugin, DisabledOrigin)]);
         track.EnsureSuccessStatusCode();
-        Assert.Empty((await Body(track)).GetProperty("refused").EnumerateArray());
+        Assert.Empty((await track.Body()).GetProperty("refused").EnumerateArray());
         return fx;
     }
 
-    private static async Task<JsonElement> Body(HttpResponseMessage response) =>
-        await response.Content.ReadFromJsonAsync<JsonElement>();
-
-    private async Task<string> FormKeyOf(string plugin, string origin)
+    // The stray sits in the instance's overwrite/ folder, where no mod manager adds a line for it.
+    private async Task<ScatteredFixtureData> LoadedWithAnOverwriteStray()
     {
-        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
-            ?? throw new InvalidOperationException($"Expected {plugin} ({origin}) to hold an npc_ record.");
+        var built = new PluginFixtureBuilder("api-overwrite-stray")
+            .WithPlugin(StrayPlugin, mod => mod.Npcs.AddNew("StrayNpc"), origin: OverwriteOrigin)
+            .BuildScattered();
+        var overwrite = Path.Combine(built.InstanceRoot, OverwriteOrigin);
+        Directory.Move(OtherTool.ModFolderOf(built, OverwriteOrigin), overwrite);
+        var fx = built with
+        {
+            Plugins = [.. built.Plugins.Select(p => p with { Path = Path.Combine(overwrite, StrayPlugin), Slot = null })],
+        };
+
+        (await Client.PutLoadOrder(fx, fx.Plugins)).EnsureSuccessStatusCode();
+        var track = await Client.Track(StrayPlugin, OverwriteOrigin);
+        track.EnsureSuccessStatusCode();
+        Assert.Empty((await track.Body()).GetProperty("refused").EnumerateArray());
+        return fx;
     }
 
     [Fact]
     public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndPluginSync()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(UnlistedPlugin, UnlistedOrigin);
+        var formKey = await Client.FirstFormKeyIn(UnlistedPlugin, UnlistedOrigin);
 
         var response = await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await Body(response);
+        var problem = await response.Body();
         Assert.Equal("UnlistedPlugin", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(UnlistedPlugin, detail, StringComparison.Ordinal);
         Assert.Contains(UnlistedOrigin, detail, StringComparison.Ordinal);
+        Assert.Contains("does not load", detail, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("plugin sync", detail, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -70,7 +81,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(UnlistedPlugin, UnlistedOrigin);
+        var formKey = await Client.FirstFormKeyIn(UnlistedPlugin, UnlistedOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UnlistedOrigin));
 
         await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
@@ -82,11 +93,25 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginOnADisabledLine_Lands()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(DisabledPlugin, DisabledOrigin);
+        var formKey = await Client.FirstFormKeyIn(DisabledPlugin, DisabledOrigin);
 
         var response = await Client.Edit(formKey, DisabledPlugin, DisabledOrigin, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
-        Assert.True((await Body(response)).GetProperty("applied").GetBoolean());
+        Assert.True((await response.Body()).GetProperty("applied").GetBoolean());
+    }
+
+    [Fact]
+    public async Task EditingAnOverwriteStray_IsAConflictAsUnlisted_WritingNothing()
+    {
+        using var fx = await LoadedWithAnOverwriteStray();
+        var formKey = await Client.FirstFormKeyIn(StrayPlugin, OverwriteOrigin);
+        var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverwriteOrigin));
+
+        var response = await Client.Edit(formKey, StrayPlugin, OverwriteOrigin, "HeightMax", 0.75);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("UnlistedPlugin", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverwriteOrigin)));
     }
 }

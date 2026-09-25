@@ -33,9 +33,7 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: result.Refusal switch
         {
-            // State conflicts: the request is well-formed, and the answer is "not while this plugin
-            // is untracked", "not while it is overridden", "not while it has no plugins.txt line"
-            // or "not while a change is unanswered".
+            // The request is sound; the plugin's present state refuses it until that state changes.
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
                 or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin
                 or RecordEditRefusal.ExternalChangeUnanswered => 409,

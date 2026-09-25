@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -39,26 +37,16 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
         return fx;
     }
 
-    private static async Task<JsonElement> Body(HttpResponseMessage response) =>
-        await response.Content.ReadFromJsonAsync<JsonElement>();
-
-    private async Task<string> FormKeyOf(string origin)
-    {
-        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={PluginName}&origin={origin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
-            ?? throw new InvalidOperationException($"Expected {origin}'s copy to hold an npc_ record.");
-    }
-
     [Fact]
     public async Task EditingTheOverriddenPlugin_IsRefused_NamingThePluginItsOriginAndThatTheGameDoesNotLoadIt()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(OverriddenOrigin);
+        var formKey = await Client.FirstFormKeyIn(PluginName, OverriddenOrigin);
 
         var response = await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await Body(response);
+        var problem = await response.Body();
         Assert.Equal("OverriddenPlugin", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(PluginName, detail, StringComparison.Ordinal);
@@ -70,7 +58,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheOverriddenPlugin_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(OverriddenOrigin);
+        var formKey = await Client.FirstFormKeyIn(PluginName, OverriddenOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin));
 
         await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
@@ -82,11 +70,11 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheWinningPlugin_OfTheSameName_Lands()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(WinningOrigin);
+        var formKey = await Client.FirstFormKeyIn(PluginName, WinningOrigin);
 
         var response = await Client.Edit(formKey, PluginName, WinningOrigin, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
-        Assert.True((await Body(response)).GetProperty("applied").GetBoolean());
+        Assert.True((await response.Body()).GetProperty("applied").GetBoolean());
     }
 }

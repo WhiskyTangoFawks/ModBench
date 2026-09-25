@@ -6,9 +6,10 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>An overridden plugin is read-only (ADR-0012 invariant 5), refused before any source write.
-/// The same write against the winning plugin of the same name lands.</summary>
-public sealed class OverriddenPluginRefusalTests
+/// <summary>A plugin the game does not load, overridden or with no plugins.txt line, is read-only
+/// (ADR-0012 invariant 5), refused before any source write. The same write against the winning
+/// plugin of the same name lands.</summary>
+public sealed class OverriddenAndUnlistedRefusalTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -171,5 +172,102 @@ public sealed class OverriddenPluginRefusalTests
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.OverriddenNpc.ToString()));
+    }
+
+    [Fact]
+    public void ElementOpsOnAPluginWithNoLine_AreRefused_ThroughEditRecordHandler()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+        var npc = mod.UnlistedNpc.ToString();
+
+        var add = mod.EditHandler.Edit(mod.UnlistedPlugin, npc, AddAt(Member("Keywords")));
+        var remove = mod.EditHandler.Edit(mod.UnlistedPlugin, npc, RemoveAt(Member("Keywords"), At(0)));
+        var move = mod.EditHandler.Edit(mod.UnlistedPlugin, npc, MoveTo(0, Member("Keywords"), At(1)));
+
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, add.Refusal);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, remove.Refusal);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, move.Refusal);
+    }
+
+    [Fact]
+    public void CreatingARecord_InAPluginWithNoLine_IsRefused()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+
+        var result = mod.CreateHandler.CreateRecord(mod.UnlistedPlugin, "npc_", "NewNpc");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+    }
+
+    [Fact]
+    public void DeletingARecord_InAPluginWithNoLine_IsRefused()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+
+        var result = mod.DeleteHandler.DeleteRecords(
+            [new RecordAt(mod.UnlistedPlugin, mod.UnlistedNpc.ToString())]);
+
+        Assert.Empty(result.Applied);
+        var refusal = Assert.Single(result.Refused);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, refusal.Refusal);
+        Assert.NotNull(mod.Document(mod.UnlistedPlugin, mod.UnlistedNpc.ToString()));
+    }
+
+    [Fact]
+    public void RenumberingARecord_InAPluginWithNoLine_IsRefused()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+
+        var result = mod.RenumberHandler.RenumberRecord(mod.UnlistedPlugin, mod.UnlistedNpc.ToString());
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+    }
+
+    [Fact]
+    public void CopyingAsOverride_IntoAPluginWithNoLine_IsRefused()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+
+        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+    }
+
+    [Fact]
+    public void CopyingAsNewRecord_IntoAPluginWithNoLine_IsRefused()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+            mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+    }
+
+    [Fact]
+    public void EditingAnOverriddenPlugin_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+        mod.RaiseExternalChangeOn(mod.OverriddenPlugin, "unanswered");
+
+        var result = mod.EditHandler.Set(mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
+    }
+
+    [Fact]
+    public void EditingAPluginWithNoLine_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+        mod.RaiseExternalChangeOn(mod.UnlistedPlugin, "unanswered");
+
+        var result = mod.EditHandler.Set(mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
     }
 }
