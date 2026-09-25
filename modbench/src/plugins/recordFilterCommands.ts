@@ -60,7 +60,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   const apply = async (filter: RecordFilter): Promise<void> => {
     const error = await client.setFilter(filter);
     if (error !== null) {
-      reporter.report('error', `mEdit: Filter failed — ${error}`);
+      reporter.report('error', `Filter failed — ${error}`);
       return;
     }
     show(filter);
@@ -95,7 +95,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {
       const error = await client.clearFilter();
       if (error !== null) {
-        reporter.report('error', `mEdit: Could not clear the record filter — ${error}`);
+        reporter.report('error', `Could not clear the record filter — ${error}`);
         return;
       }
       show(null);

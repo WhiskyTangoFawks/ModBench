@@ -19,7 +19,7 @@ export function registerRevealInExplorerCommand(
     const filePath = await pluginsTree.resolvePluginPath(name);
     if (!filePath) {
       // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      reporter.report('error', `Could not resolve a file location for "${name}".`);
+      reporter.report('error', `Could not resolve a file location for "${name}" — no mod or Overwrite holds this file.`);
       return;
     }
     try {
@@ -67,7 +67,7 @@ async function appendCreatedPluginToLoadOrder(
   if (!result.applied) {
     reporter.report(
       'error',
-      `Created "${pluginName}", but could not add it to the load order; add it manually in the Plugins tree.`,
+      `Created "${pluginName}", but could not add it to the load order.`,
       result.refusal,
     );
     return;
@@ -82,7 +82,7 @@ export function registerCreatePluginCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
     if (!mo2) {
-      reporter.report('error', 'New Plugin needs an open MO2 instance workspace.');
+      reporter.report('error', 'Creating a plugin needs an open MO2 instance workspace.');
       return;
     }
 

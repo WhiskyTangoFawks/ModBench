@@ -21,7 +21,7 @@ export function reportPutOutcome(
   // so a non-empty one can still have nothing that participates (ADR-0013).
   if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
     deps.warn(
-      'mEdit: The active profile has no enabled plugins — only base-game masters are held. ' +
+      'The active profile has no enabled plugins — only base-game masters are held. ' +
         'Enable plugins in the mod list (or check the profile\'s plugins.txt).',
     );
   }
@@ -67,7 +67,7 @@ export async function syncActiveFilter(
   } catch (e) {
     const detail = errorMessage(e);
     deps.log(`syncing the record filter failed: ${detail}`);
-    deps.warn(`mEdit: Could not read the record filter — the Plugins view shows it as it last was. ${detail}`);
+    deps.warn(`Could not read the record filter — the Plugins view shows it as it last was. ${detail}`);
     return;
   }
   deps.showRecordFilter(filter);

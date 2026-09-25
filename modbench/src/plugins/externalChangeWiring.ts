@@ -7,6 +7,7 @@ import {
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import { errorMessage } from '../ports/errorMessage';
 
 // Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
 // lives in ./externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
@@ -29,7 +30,7 @@ export function wireQuestionOpen(
   return subscribeQuestionOpen({
     client,
     showDialog: askQuestion,
-    openMergeEditor: makeMergeEditorOpener(client, outputChannel),
+    openMergeEditor: makeMergeEditorOpener(client, outputChannel, reporter),
     showError: (message) => reporter.report('error', message),
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
@@ -38,11 +39,11 @@ export function wireQuestionOpen(
   }, client);
 }
 
-/** Resolved fresh per call rather than bound to one origin: the dialog-driven path has no single
- *  resolved origin in scope, since several repositories can be mid-answer at once. `vscode.open`
- *  is git's own merge-editor gesture, scripted. */
+/** Resolved fresh per call: several repositories can be mid-answer at once. `git.mergeEditor`
+ *  defaults off, so only `git.openMergeEditor` opens the real merge editor; `vscode.open` is
+ *  its fallback, reported, when that command is unavailable or throws. */
 export function makeMergeEditorOpener(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
+  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
 ): OpenMergeEditor {
   return async (origin, relativePath) => {
     const plugins = await client.getPlugins();
@@ -52,6 +53,18 @@ export function makeMergeEditorOpener(
       outputChannel.error(`[extension] openMergeEditor: could not resolve "${origin}"'s mod folder`);
       return;
     }
-    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(modFolder, relativePath)));
+    const uri = vscode.Uri.file(path.join(modFolder, relativePath));
+    try {
+      await vscode.commands.executeCommand('git.openMergeEditor', uri);
+    } catch (err) {
+      const detail = errorMessage(err);
+      outputChannel.error(`[extension] git.openMergeEditor failed for "${relativePath}": ${detail}`);
+      await vscode.commands.executeCommand('vscode.open', uri);
+      reporter.report(
+        'warning',
+        `Could not open the merge editor for "${relativePath}" — opened it as a text editor instead.`,
+        detail,
+      );
+    }
   };
 }
