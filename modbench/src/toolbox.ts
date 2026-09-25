@@ -18,7 +18,7 @@ import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { loadOrderSnapshotOf, originFolder, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
+import { loadOrderSnapshotOf, originFolder, providedPluginsOf } from './instanceLoader/loadOrderSnapshot';
 import { DownloadNode, DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -487,18 +487,16 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginSync = (
-    profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
-    folder: string | undefined, gameName: string,
-  ) => syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName));
+  const runPluginSync = (value: InstanceValue) => syncPlugins(
+    instanceRoot, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
+    () => implicitMastersIn(dataFolderOf(value.gameFolder), value.gameRelease));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });
-  const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
-    syncMods(instanceRoot, profile, modFolders);
+  const runModSync = (value: InstanceValue) => syncMods(instanceRoot, value.activeProfile, value.modFolders);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView } = createModListView(
     own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);

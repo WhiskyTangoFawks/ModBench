@@ -18,6 +18,7 @@ import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
 import { syncMods } from '../modlist/modlist';
+import { providedPluginsOf } from '../instanceLoader/loadOrderSnapshot';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -94,9 +95,10 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
   const games: string[] = [];
-  const trigger = registerPluginSync(instance, (profile, provided, inData, _dataFolder, gameName) => {
-    games.push(gameName);
-    const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
+  const trigger = registerPluginSync(instance, (value) => {
+    games.push(value.gameRelease);
+    const run = syncPlugins(
+      root, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins, () => Promise.resolve([]));
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
@@ -208,9 +210,10 @@ describe('the game folder not found, across the whole instance', () => {
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
-    const pluginSync = registerPluginSync(instance, (profile, provided, inData) =>
-      syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined)), channel);
-    const modSync = registerModSync(instance, (profile, modFolders) => syncMods(root, profile, modFolders), channel);
+    const pluginSync = registerPluginSync(instance, (value) => syncPlugins(
+      root, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
+      () => Promise.resolve(undefined)), channel);
+    const modSync = registerModSync(instance, (value) => syncMods(root, value.activeProfile, value.modFolders), channel);
 
     await instance.refresh();
     pluginSync.runOnConnect();
@@ -272,9 +275,9 @@ function firedAnswering(answer: (profile: string, call: number) => Promise<Plugi
   const messageChanged = vi.fn();
   const calls: Promise<PluginSyncResult>[] = [];
   const profiles: string[] = [];
-  const trigger = registerPluginSync(instance, (profile) => {
-    profiles.push(profile);
-    const run = answer(profile, calls.length);
+  const trigger = registerPluginSync(instance, ({ activeProfile }) => {
+    profiles.push(activeProfile);
+    const run = answer(activeProfile, calls.length);
     calls.push(run);
     return run;
   }, channel);

@@ -512,6 +512,26 @@ describe('modbench command registration', () => {
   });
 });
 
+// commands.md, The system commands: mod sync takes the instance value as its Argument.
+describe('modbench.mod.sync syncs the instance value it is handed', () => {
+  // A profile the landed value does not name, so no run of the trigger writes its modlist.txt.
+  const PROFILE = 'Handed Profile';
+  const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
+  const profileDir = path.join(root, 'profiles', PROFILE);
+
+  after(() => fs.rmSync(profileDir, { recursive: true, force: true }));
+
+  it('drops the line of a gone folder from the profile the handed value names', async () => {
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'modlist.txt'), '+Gone Mod\r\n');
+    const instance = present(instanceExport(), "the activated extension's instance export");
+
+    await vscode.commands.executeCommand('modbench.mod.sync', { ...instance.value, activeProfile: PROFILE });
+
+    assert.strictEqual(fs.readFileSync(path.join(profileDir, 'modlist.txt'), 'utf8'), '');
+  });
+});
+
 // ── openEditor ────────────────────────────────────────────────────────────────
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
@@ -1463,6 +1483,17 @@ describe('Plugin sync says why it wrote nothing, and runs again on connect', () 
 
     await waitFor('the refusal to leave the message line', () =>
       !(messageLine()?.includes('plugins.txt is not synced') ?? false));
+  });
+
+  // commands.md, The system commands: plugin sync takes the instance value as its Argument.
+  it('modbench.plugin.sync syncs the instance value it is handed: a Data folder it lists empty drops the line', async () => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
+    const instance = present(instanceExport(), "the activated extension's instance export");
+    const handed = { ...instance.value, dataFolderPlugins: { kind: 'listed', names: new Set<string>() } };
+
+    await vscode.commands.executeCommand('modbench.plugin.sync', handed);
+
+    assert.ok(!fs.readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'), 'the line the handed value drops');
   });
 });
 
