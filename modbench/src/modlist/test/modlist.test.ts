@@ -1074,8 +1074,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   });
 });
 
-// ADR-0015 invariant 1: a command never reads the Instance, the read model built only by watching.
-// src/test/commandInstanceScan.test.ts scans every command box too; this is this file's own guard.
 // A separator gesture writes its line, then makes or renames its folder. A mod sync whose value
 // was listed in between must leave both alone until the gesture is done.
 describe('a mod sync between a separator gesture\'s line and its folder', () => {
@@ -1135,6 +1133,8 @@ describe('a mod sync between a separator gesture\'s line and its folder', () => 
   });
 });
 
+// ADR-0015 invariant 1: a command never reads the Instance, the read model built only by watching.
+// src/test/commandInstanceScan.test.ts scans every command box too; this is this file's own guard.
 describe('modlist commands never import the Instance', () => {
   it('names no import from ../instanceLoader and no `Instance` identifier', () => {
     const path = join(__dirname, '..', 'modlist.ts');
