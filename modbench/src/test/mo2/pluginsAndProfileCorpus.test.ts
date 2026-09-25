@@ -29,15 +29,25 @@ describe('plugins.txt + profile corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('setPluginsEnabled(false) touches only the active profile\'s plugins.txt', async () => {
+  // commands.md, "A selection is one gesture": several plugins flip in the one splice this
+  // touches, not one write per plugin.
+  it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await setPluginsEnabled(dir, PROFILE, ['Tracked Patch Mod.esp'], false);
+    const result = await setPluginsEnabled(dir, PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    expect(await enabledPlugins(dir)).not.toContain('Tracked Patch Mod.esp');
-    // Order is preserved — only the marker changed.
-    expect(await pluginOrder(dir)).toContain('Tracked Patch Mod.esp');
+    expect(result).toEqual({
+      applied: true,
+      outcome: { landed: ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], refused: [] },
+    });
+    const enabled = await enabledPlugins(dir);
+    expect(enabled).not.toContain('Tracked Patch Mod.esp');
+    expect(enabled).not.toContain('Unofficial Fallout 4 Patch.esp');
+    // Order is preserved — only the markers changed.
+    const order = await pluginOrder(dir);
+    expect(order).toContain('Tracked Patch Mod.esp');
+    expect(order).toContain('Unofficial Fallout 4 Patch.esp');
   });
 
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
