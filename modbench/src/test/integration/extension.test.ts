@@ -1287,7 +1287,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     provider.setFilter(''); // undo the previous test's filter so both rows are addressable
     await enterEditing();
 
-    await provider.setPluginEnabled('Other.esp', false);
+    const other = findRow(await provider.getChildren(), 'Other.esp');
+    await vscode.commands.executeCommand('modbench.plugin.disable', other);
 
     const written = fs.readFileSync(pluginsTxtPath, 'utf8');
     assert.ok(written.includes('Other.esp'), 'plugins.txt should still list Other.esp, just disabled');

@@ -1,24 +1,20 @@
 import * as vscode from 'vscode';
-import type { PluginsTreeProvider, PluginsTreeNode } from './plugins/PluginsTreeProvider';
-import { makeReporter } from './reporter';
-import { errorMessage } from './ports/errorMessage';
+import type { PluginsTreeNode } from './plugins/PluginsTreeProvider';
+import { reportPluginsParticipation } from './plugins/pluginParticipationCommands';
+import { setPluginsParticipation } from './pluginsCommands/plugins';
+import type { Reporter } from './ports/reporter';
 
-/** ADR-0019: a failed toggle must surface and resync, never leave the checkbox disagreeing with
- *  plugins.txt. At the composition root because the event is the `TreeView`'s, not the
- *  provider's. */
+/** ADR-0019: a failed toggle must surface and resync, never leave a checkbox disagreeing with
+ *  plugins.txt. Every toggled box, however many and whichever state each asks for, is one call
+ *  to `setPluginsParticipation`'s core: one splice, one report. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  pluginsTree: Pick<PluginsTreeProvider, 'setPluginEnabled' | 'invalidate'>,
-  outputChannel: vscode.LogOutputChannel,
+  instanceRoot: string, profile: () => string, reporter: Reporter, invalidate: () => void,
 ): Promise<void> {
-  for (const [node, state] of e.items) {
-    if (node.kind !== 'plugin') continue;
-    try {
-      await pluginsTree.setPluginEnabled(node.plugin.name, state === vscode.TreeItemCheckboxState.Checked);
-    } catch (err) {
-      makeReporter(outputChannel, 'pluginListTree.checkbox').report(
-        'error', `Failed to update "${node.plugin.name}".`, errorMessage(err));
-      pluginsTree.invalidate();
-    }
-  }
+  const entries = e.items
+    .filter((item): item is [Extract<PluginsTreeNode, { kind: 'plugin' }>, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
+    .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
+  if (entries.length === 0) return;
+  const result = await setPluginsParticipation(instanceRoot, profile(), entries);
+  if (reportPluginsParticipation(result, entries, reporter)) invalidate();
 }

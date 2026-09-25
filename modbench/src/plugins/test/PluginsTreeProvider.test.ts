@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reorderPlugins, setPluginEnabled, type PluginsDrop } from '../../pluginsCommands/plugins';
+import { reorderPlugins, type PluginsDrop } from '../../pluginsCommands/plugins';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
@@ -70,13 +70,8 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 ]);
 
 class FakeSource implements PluginListSource {
-  setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   reorderPluginsCalls: { names: string[]; drop: PluginsDrop }[] = [];
   reorderPluginsError?: Error;
-  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
-    this.setPluginEnabledCalls.push({ pluginName, enabled });
-    return Promise.resolve();
-  }
   reorderPlugins(names: string[], drop: PluginsDrop): Promise<void> {
     if (this.reorderPluginsError) return Promise.reject(this.reorderPluginsError);
     this.reorderPluginsCalls.push({ names, drop });
@@ -86,10 +81,6 @@ class FakeSource implements PluginListSource {
 
 // What the composition root binds: the reorder command against one instance root and profile.
 const writesTo = (instanceRoot: string): PluginListSource => ({
-  setPluginEnabled: async (pluginName, enabled) => {
-    const result = await setPluginEnabled(instanceRoot, 'Default', pluginName, enabled);
-    if (!result.applied) throw new Error(result.refusal);
-  },
   reorderPlugins: async (names, drop) => {
     const result = await reorderPlugins(instanceRoot, 'Default', names, drop);
     if (!result.applied) throw new Error(result.refusal);
@@ -399,42 +390,6 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(fired).toBe(true); // not just the first render — a second, later value re-renders too
     expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
-  });
-
-  it('setPluginEnabled delegates to the source and fires a refresh', async () => {
-    const source = new FakeSource();
-    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })], { source });
-    let fired = false;
-    tree.onDidChangeTreeData(() => { fired = true; });
-
-    await tree.setPluginEnabled('A.esp', false);
-
-    expect(source.setPluginEnabledCalls).toEqual([{ pluginName: 'A.esp', enabled: false }]);
-    expect(fired).toBe(true);
-  });
-
-  // The event carries the only source of truth the composition root has for which plugin and
-  // which state, so it must match exactly what was written (ADR-0017).
-  it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })]);
-    const seen: { plugin: string; enabled: boolean }[] = [];
-    tree.onDidChangeParticipation((e) => seen.push(e));
-
-    await tree.setPluginEnabled('A.esp', false);
-
-    expect(seen).toEqual([{ plugin: 'A.esp', enabled: false }]);
-  });
-
-  // Firing from invalidate() would also fire for a filter keystroke or a watcher-observed edit,
-  // neither of which is a participation change a backend should be told about.
-  it('invalidate() alone does not fire onDidChangeParticipation', () => {
-    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })]);
-    let fired = false;
-    tree.onDidChangeParticipation(() => { fired = true; });
-
-    tree.invalidate();
-
-    expect(fired).toBe(false);
   });
 
   it('invalidate() fires onDidChangeTreeData so the Refresh button can re-read', () => {
@@ -816,7 +771,7 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
   });
 
   // The Plugin load order is Mod Management's own artifact — a disconnected client must not stop
-  // either write from reaching disk.
+  // the write from reaching disk.
   it('a drag-reorder still writes plugins.txt with the client reporting disconnected', async () => {
     const tree = new PluginsTreeProvider({
       instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
@@ -828,16 +783,6 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
     await tree.handleDrop(node('D.esp'), dt, NONE);
 
     expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\nB.esp\r\n*C.esp\r\n*A.esp\r\nD.esp\r\nE.esp\r\n');
-  });
-
-  it('a checkbox toggle still writes plugins.txt with the client reporting disconnected', async () => {
-    const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
-    });
-
-    await tree.setPluginEnabled('B.esp', true);
-
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\n*A.esp\r\n*B.esp\r\n*C.esp\r\nD.esp\r\nE.esp\r\n');
   });
 });
 

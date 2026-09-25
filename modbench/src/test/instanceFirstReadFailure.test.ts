@@ -65,7 +65,7 @@ async function fourViewsOverOneInstance() {
   const mods = new ModListProvider({ instance, instanceRoot: root });
   const plugins = new PluginsTreeProvider({
     instance,
-    source: { setPluginEnabled: () => Promise.resolve(), reorderPlugins: () => Promise.resolve() },
+    source: { reorderPlugins: () => Promise.resolve() },
     log: (level, msg) => { channel[level](msg); },
     reporter: makeReporter(channel, 'pluginList'),
   });
