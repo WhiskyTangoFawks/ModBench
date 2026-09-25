@@ -15,9 +15,13 @@ public enum RecordEditRefusal
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
     PluginHasNoModFolder,
 
-    /// <summary>The Mod override order does not resolve this copy's name to it (ADR-0012 invariant
-    /// 5); the way out is raising its mod's priority above the winner's.</summary>
-    LosingCopy,
+    /// <summary>Another mod's plugin of the same name wins it in the Mod override order (ADR-0012
+    /// invariant 5); the way out is raising its mod's priority above the winner's.</summary>
+    OverriddenPlugin,
+
+    /// <summary>A winning plugin no plugins.txt line names, so the game does not load it (ADR-0012
+    /// invariant 5); the way out is plugin sync, which gives it a line.</summary>
+    UnlistedPlugin,
 
     RecordNotFound,
 
