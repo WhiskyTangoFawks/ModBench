@@ -1,12 +1,23 @@
 import eslint from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
+import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 
 // ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
     'Surfacing goes through an injected reporter, never raw window calls in business logic (ADR-0019 invariant 3).';
+
+// One object for every block that enables a rule from it: ESLint refuses a plugin name
+// redefined by a second, different object.
+const local = {
+    rules: {
+        'no-gesture-result-use': noGestureResultUse,
+        'no-leading-medit': noLeadingMEdit,
+    },
+};
 
 const MESSAGE_API = /^show(Information|Warning|Error)Message$/;
 
@@ -19,7 +30,7 @@ const MESSAGE_API_SITES = [
 
 const VIEW_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor'];
 
-export default tseslint.config(
+export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
@@ -132,9 +143,18 @@ export default tseslint.config(
     // place `vscode.commands.executeCommand('modbench.…')` appears is `src/`, entry-point wiring.
     {
         files: ['src/**/*.ts'],
-        plugins: { local: { rules: { 'no-gesture-result-use': noGestureResultUse } } },
+        plugins: { local },
         rules: {
             'local/no-gesture-result-use': 'error',
+        },
+    },
+
+    // Tests are in scope: a fixture carrying a stale message is copied into the next one.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        plugins: { local },
+        rules: {
+            'local/no-leading-medit': 'error',
         },
     },
 
@@ -174,6 +194,32 @@ export default tseslint.config(
                     './src/plugins/tsconfig.json',
                     './src/editor/tsconfig.json',
                 ],
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
+
+    // The lint rules, as `tsc -b` type-checks them.
+    {
+        files: ['eslint-rules/*.mjs'],
+        languageOptions: {
+            parserOptions: {
+                project: './eslint-rules/tsconfig.json',
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
+
+    // The lint config and the rules' declarations sit in no tsconfig, so typed linting reads them
+    // through the project service's default project, under the base tsconfig's strict options.
+    {
+        files: ['eslint-rules/*.d.mts', 'eslint.config.mjs'],
+        languageOptions: {
+            parserOptions: {
+                projectService: {
+                    allowDefaultProject: ['eslint-rules/*.d.mts', 'eslint.config.mjs'],
+                    defaultProject: './tsconfig.base.json',
+                },
                 tsconfigRootDir: import.meta.dirname,
             },
         },

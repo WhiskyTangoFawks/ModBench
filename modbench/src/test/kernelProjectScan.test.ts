@@ -52,6 +52,7 @@ const ROOT_PROJECT = join('src', 'tsconfig.json');
 const TEST_PROJECT = 'tsconfig.test.json';
 const WEBVIEW_PROJECT = join('webview', 'tsconfig.json');
 const INTEGRATION_PROJECT = 'tsconfig.integration.json';
+const LINT_RULES = 'eslint-rules';
 
 const boxProject = (box: string): string => join('src', box, 'tsconfig.json');
 
@@ -274,9 +275,9 @@ describe('the webview references the wire box and nothing else in the extension'
 });
 
 describe('the root solution builds every project', () => {
-  it('references every box, the composition root, the test project and the webview, and nothing else', () => {
+  it('references every box, the composition root, the test project, the webview and the lint rules, and nothing else', () => {
     expect(referencePaths(ROOT_SOLUTION))
-      .toEqual([...BOXES.map((box) => join('src', box)), 'src', TEST_PROJECT, 'webview'].sort());
+      .toEqual([...BOXES.map((box) => join('src', box)), 'src', TEST_PROJECT, 'webview', LINT_RULES].sort());
   });
 
   // A solution file lists projects, never sources: an empty file list is what stops `tsc -b`

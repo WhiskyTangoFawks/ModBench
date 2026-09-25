@@ -1035,7 +1035,7 @@
     "test:mutation": "stryker run",
     "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a vscode-test",
-    "lint": "eslint src webview/src",
+    "lint": "eslint src webview/src eslint-rules eslint.config.mjs",
     "prepackage": "cp ../LICENSE ./LICENSE",
     "package": "vsce package --no-dependencies"
   },
@@ -1053,6 +1053,7 @@
     "@types/vscode": "^1.85.0",
     "@vitejs/plugin-react": "^4.0.0",
     "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "3.9.2",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
