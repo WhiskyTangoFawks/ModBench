@@ -183,6 +183,21 @@ export default tseslint.config(
         },
     },
 
+    // The lint rules sit in no tsconfig, so typed linting reads them through the project service's
+    // default project, under the base tsconfig's strict options.
+    {
+        files: ['eslint-rules/**'],
+        languageOptions: {
+            parserOptions: {
+                projectService: {
+                    allowDefaultProject: ['eslint-rules/*.mjs', 'eslint-rules/*.d.mts'],
+                    defaultProject: './tsconfig.base.json',
+                },
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
+
     // Comprehension heuristics mirroring the backend Sonar rules, at `warn` because the
     // code-quality Stop hook is their channel, not the lint gate: an honestly long function may
     // stay. `--max-warnings 0` must not come back.

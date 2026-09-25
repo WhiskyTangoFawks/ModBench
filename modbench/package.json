@@ -1067,7 +1067,7 @@
     "test:mutation": "stryker run",
     "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a vscode-test",
-    "lint": "eslint src webview/src",
+    "lint": "eslint src webview/src eslint-rules",
     "prepackage": "cp ../LICENSE ./LICENSE",
     "package": "vsce package --no-dependencies"
   },

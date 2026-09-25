@@ -1,6 +1,9 @@
 // common.md, The status bar, spells the status bar item's text out verbatim, "mEdit:" after its
 // icon; every other surface speaks as Modbench.
 
+/** @import { Rule } from 'eslint' */
+/** @import { SourceLocation } from 'estree' */
+
 export const LEADING_MEDIT_MESSAGE =
     'A message never begins "mEdit:". Every notification, Output line, tree row and webview text is '
     + "Modbench's own voice, and the Output channel is called Modbench. mEdit is named in a sentence "
@@ -9,6 +12,7 @@ export const LEADING_MEDIT_MESSAGE =
 
 const LEADING_MEDIT = /^\s*mEdit:/i;
 
+/** @type {Rule.RuleModule} */
 export const noLeadingMEdit = {
     meta: {
         type: 'problem',
@@ -19,6 +23,10 @@ export const noLeadingMEdit = {
         messages: { prefixed: LEADING_MEDIT_MESSAGE },
     },
     create(context) {
+        /**
+         * @param {Rule.Node} node
+         * @param {string} text
+         */
         const check = (node, text) => {
             if (LEADING_MEDIT.test(text)) context.report({ node, messageId: 'prefixed' });
         };
@@ -30,8 +38,10 @@ export const noLeadingMEdit = {
                 const [head] = node.quasis;
                 if (head !== undefined) check(node, head.value.raw);
             },
+            // ESTree has no JSX, so ESLint's types carry no JSXText node.
+            /** @param {{ value: string, loc: SourceLocation }} node */
             JSXText(node) {
-                check(node, node.value);
+                if (LEADING_MEDIT.test(node.value)) context.report({ loc: node.loc, messageId: 'prefixed' });
             },
         };
     },
