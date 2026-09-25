@@ -80,7 +80,7 @@ Instance loader; a value a command needs, the mod lines and plugin lines to sync
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox offers the gesture and
 keeps the first-deploy consent.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
-keeps the last value on a parse failure. It validates on activation and on refresh, through the
+keeps the last value on a read failure, and publishes the reason beside it. It validates on activation and on refresh, through the
 same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
 holds it. Modbench does not depend on one mod manager. The game owns the format of `plugins.txt`.
