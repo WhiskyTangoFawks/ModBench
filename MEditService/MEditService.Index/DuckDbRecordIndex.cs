@@ -1165,9 +1165,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10),
                 reader.IsDBNull(11) ? null : reader.GetString(11));
 
-        // '$.Name.Value' is what the codec emits for an unlocalized plugin's FULL; a localized plugin
-        // serializes '$.Name.Values' instead, which this misses. An empty FULL names nothing.
-        private static string FullNameOf(string alias) => $"NULLIF(json_extract_string({alias}.body, '$.Name.Value'), '')";
+        // The codec writes a FULL read in one language as '$.Name.Value', and one whose strings hold
+        // several as '$.Name.Values', each entry with its Language; the read's TargetLanguage picks the
+        // entry. An empty FULL names nothing.
+        private static string FullNameOf(string alias) => $"""
+            NULLIF(COALESCE(
+                json_extract_string({alias}.body, '$.Name.Value'),
+                json_extract_string(list_filter(
+                    CAST(json_extract({alias}.body, '$.Name.Values') AS JSON[]),
+                    lambda entry: json_extract_string(entry, '$.Language')
+                        = json_extract_string({alias}.body, '$.Name.TargetLanguage'))[1], '$.String')), '')
+            """;
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.

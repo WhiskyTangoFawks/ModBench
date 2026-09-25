@@ -5,6 +5,7 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Strings;
 using Noggog;
 
 namespace MEditService.Http.Tests.Traces;
@@ -116,6 +117,28 @@ public sealed class QueryIndexTraceTests : HostedTests
 
         Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
         Assert.Equal(JsonValueKind.Null, keywords.GetProperty("items")[0].GetProperty("fullName").ValueKind);
+    }
+
+    // A localized plugin whose strings hold more than one language is written with every language
+    // beside its target, the way a game install with several languages' strings reads.
+    [Fact]
+    public async Task ALocalizedPluginsRecords_CarryTheirNameInTheTargetLanguage()
+    {
+        var localized = Owned(new PluginFixtureBuilder("trace-query-localized")
+            .WithPlugin("Localized.esp", mod =>
+            {
+                mod.UsingLocalization = true;
+                mod.Activators.AddNew("LocalizedLever").Name = new TranslatedString(
+                    Language.English,
+                    new KeyValuePair<Language, string>(Language.French, "Levier"),
+                    new KeyValuePair<Language, string>(Language.English, "Lever"));
+            }, origin: "LocalizedMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(localized)).EnsureSuccessStatusCode();
+
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
+
+        Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
     }
 
     [Fact]
