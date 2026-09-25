@@ -4,7 +4,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
-import { renumberConfirmMessage } from './renumberConfirm';
+import { danglingReferencers, renumberConfirmMessage } from './renumberConfirm';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { RecordTreeSync } from './onRecordEdited';
@@ -69,37 +69,165 @@ function recordLabel(record: RecordIdentity): string {
   return `${named} in ${where}`;
 }
 
-function askToRemove(records: readonly RecordIdentity[], ask: AskQuestion): PromiseLike<string | undefined> {
+function askToDelete(records: readonly RecordIdentity[], ask: AskQuestion): PromiseLike<string | undefined> {
   const [only] = records;
   if (records.length === 1 && only) {
-    return ask(`Are you sure you want to permanently remove ${recordLabel(only)}?`, { modal: true }, 'Remove');
+    return ask(
+      `Delete ${recordLabel(only)}? It leaves its plugin source as a working-tree change you can review.`,
+      { modal: true }, 'Delete');
   }
   return ask(
-    `Are you sure you want to permanently remove ${records.length} records?`,
+    `Delete ${records.length} records? They leave their plugin source as working-tree changes you can review.`,
     { modal: true, detail: records.map(recordLabel).join('\n') },
-    'Remove',
+    'Delete',
   );
 }
+
+function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefined): RecordIdentity[] {
+  const nodes: readonly unknown[] = selected?.length ? selected : [clicked];
+  return nodes.map(recordIdentity).filter((i): i is RecordIdentity => i !== undefined);
+}
+
+// The FormID half of a FormKey, before the plugin it is native to.
+function formIdLength(formKey: string): number {
+  const colon = formKey.indexOf(':');
+  return colon < 0 ? formKey.length : colon;
+}
+
+const UNRESOLVED_ORIGIN = 'could not resolve which mod it belongs to';
 
 // A record whose mod cannot be named is refused here and writes nothing; the rest still go.
 async function addressRecords(
   records: readonly RecordIdentity[], resolve: (plugin: string) => Promise<string | undefined>,
-): Promise<{ addressed: RecordAddress[]; unaddressed: ItemRefusal<RecordIdentity>[] }> {
-  const addressed: RecordAddress[] = [];
+): Promise<{ addressed: { record: RecordIdentity; address: RecordAddress }[]; unaddressed: ItemRefusal<RecordIdentity>[] }> {
+  const addressed: { record: RecordIdentity; address: RecordAddress }[] = [];
   const unaddressed: ItemRefusal<RecordIdentity>[] = [];
   for (const record of records) {
     const origin = record.origin ?? await resolve(record.plugin);
-    if (origin) addressed.push({ formKey: record.formKey, plugin: record.plugin, origin });
-    else unaddressed.push({ item: record, reason: 'could not resolve which mod it belongs to' });
+    if (origin) addressed.push({ record, address: { formKey: record.formKey, plugin: record.plugin, origin } });
+    else unaddressed.push({ item: record, reason: UNRESOLVED_ORIGIN });
   }
   return { addressed, unaddressed };
 }
 
 type RecordLifecycleClient = Pick<MEditClient,
   | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'getPlugins' | 'peekNextFreeFormKey' | 'getReferences'
+  | 'status'
   // `editRecord`: create's own ESL-flag-removal retry (`offerEslFlagRemoval`), not a record write
   // of its own.
   | 'editRecord'>;
+
+// Each record takes the next free FormID the backend draws for it. A refusal that leaves mEdit
+// unreachable stops the loop, and every record after it is named as not attempted.
+async function renumberEach(
+  client: Pick<MEditClient, 'renumberRecord' | 'status'>,
+  addressed: readonly { record: RecordIdentity; address: RecordAddress }[],
+): Promise<{ landed: RecordIdentity[]; refused: ItemRefusal<RecordIdentity>[]; lostMEdit: boolean }> {
+  const landed: RecordIdentity[] = [];
+  const refused: ItemRefusal<RecordIdentity>[] = [];
+  for (const [i, { record, address }] of addressed.entries()) {
+    const result = await client.renumberRecord(address.formKey, address.plugin, address.origin, undefined);
+    if (result === undefined) refused.push({ item: record, reason: 'mEdit gave no answer' });
+    else if (!isRefused(result)) landed.push(record);
+    else {
+      refused.push({ item: record, reason: result.message });
+      if (client.status !== 'attached') {
+        for (const { record: rest } of addressed.slice(i + 1)) {
+          refused.push({ item: rest, reason: 'not attempted: mEdit stopped answering' });
+        }
+        return { landed, refused, lostMEdit: true };
+      }
+    }
+  }
+  return { landed, refused, lostMEdit: false };
+}
+
+interface RenumberDeps {
+  client: RecordLifecycleClient;
+  outputChannel: vscode.LogOutputChannel;
+  reporter: Reporter;
+  ask: AskQuestion;
+  resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>;
+  onWritten: () => void;
+}
+
+function makeRenumber(
+  { client, outputChannel, reporter, ask, resolveOriginOrReport, onWritten }: RenumberDeps,
+): (identities: readonly RecordIdentity[]) => Promise<void> {
+  async function referencesTo(records: readonly RecordIdentity[]): Promise<number | undefined> {
+    try {
+      const referencesByTarget = [];
+      for (const record of records) referencesByTarget.push([record, await client.getReferences(record.formKey)] as const);
+      return danglingReferencers(referencesByTarget);
+    } catch (e) {
+      reporter.insideDialog('warning', 'Could not count the references for the confirmation.', errorMessage(e));
+      return undefined;
+    }
+  }
+
+  // Renumber leaves every reference to the records pointing at nothing, so it asks only when one exists.
+  async function confirmRenumber(records: readonly RecordIdentity[]): Promise<boolean> {
+    const message = renumberConfirmMessage(records.map(recordLabel), await referencesTo(records));
+    return message === null || await ask(message, { modal: true }, 'Renumber') === 'Renumber';
+  }
+
+  // xEdit's own "Change FormID": a native InputBox filled with the next free FormKey and its FormID
+  // selected, so accepting the default is one Enter; typing over it is validated server-side.
+  async function renumberOne(identity: RecordIdentity): Promise<void> {
+    const origin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
+    if (!origin) return;
+
+    let suggested: string | undefined;
+    try {
+      suggested = await client.peekNextFreeFormKey(identity.plugin, origin);
+    } catch (e) {
+      // The input box still opens with no prefill, so the command is not blocked on it.
+      reporter.insideDialog('warning', 'Could not fetch a suggested FormKey.', errorMessage(e));
+    }
+
+    const input = await vscode.window.showInputBox({
+      prompt: `New FormID for ${identity.formKey}`,
+      value: suggested,
+      valueSelection: suggested === undefined ? undefined : [0, formIdLength(suggested)],
+    });
+    if (input === undefined) return;
+    if (!await confirmRenumber([identity])) return;
+
+    const result = await client.renumberRecord(identity.formKey, identity.plugin, origin, input || suggested);
+    if (!result) { reporter.report('error', `mEdit: Could not renumber ${identity.formKey} — no answer`); return; }
+    if (isRefused(result)) { reporter.report('error', result.message); return; }
+    onWritten();
+    reporter.landed(`Renumbered to ${result.newFormKey}.`);
+  }
+
+  // A cause no record can escape refuses the selection once, before any record is written
+  // (commands.md, A selection is one gesture).
+  async function renumberSelection(identities: readonly RecordIdentity[]): Promise<void> {
+    if (client.status !== 'attached') {
+      reporter.report('error', 'mEdit is not answering, so no record was renumbered.');
+      return;
+    }
+    if (!await confirmRenumber(identities)) return;
+
+    const { addressed, unaddressed } = await addressRecords(
+      identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
+    const { landed, refused, lostMEdit } = await renumberEach(client, addressed);
+    refused.unshift(...unaddressed);
+    if (landed.length > 0) onWritten();
+    reporter.selectionOutcome(
+      lostMEdit
+        ? `mEdit stopped answering after renumbering ${landed.length} of ${identities.length} records; `
+          + 'the rest were not renumbered.'
+        : `Could not renumber ${refused.length} of ${identities.length} records.`,
+      { landed, refused }, recordLabel);
+  }
+
+  return async (identities) => {
+    const [only] = identities;
+    if (identities.length === 1 && only) await renumberOne(only);
+    else if (identities.length > 1) await renumberSelection(identities);
+  };
+}
 
 /** ADR-0018: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
  *  the titles match its captions exactly. No ambient fallback is worth a QuickPick, so all three
@@ -113,6 +241,8 @@ export function registerRecordLifecycleCommands(
   // A create/delete/renumber landed: the same re-derive every write in this file needs
   // (plugins.md) — a changed record can start or stop matching the active filter.
   const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
+
+  const renumber = makeRenumber({ client, outputChannel, reporter, ask, resolveOriginOrReport, onWritten });
 
   return [
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
@@ -133,18 +263,16 @@ export function registerRecordLifecycleCommands(
       reporter.landed(`Added ${result.formKey}.`);
     }),
 
-    // xEdit's own "Remove": MessageDlg('Are you sure you want to permanently remove <Name>?',
-    // mtConfirmation, [mbYes, mbNo]) — the native modal equivalent, asked once for the whole
-    // selection and naming each record, so the user confirms the right thing.
+    // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
-      const nodes: readonly unknown[] = selected?.length ? selected : [clicked];
-      const identities = nodes.map(recordIdentity).filter((i): i is RecordIdentity => i !== undefined);
+      const identities = selectedRecords(clicked, selected);
       if (identities.length === 0) return;
-      if (await askToRemove(identities, ask) !== 'Remove') return;
+      if (await askToDelete(identities, ask) !== 'Delete') return;
 
       const { addressed, unaddressed } = await addressRecords(
         identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
-      const answer = addressed.length > 0 ? await client.deleteRecords(addressed) : { landed: [], refused: [] };
+      const answer = addressed.length > 0
+        ? await client.deleteRecords(addressed.map((a) => a.address)) : { landed: [], refused: [] };
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       if (answer.landed.length > 0) onWritten();
       const outcome: SelectionOutcome<RecordIdentity> = {
@@ -154,51 +282,8 @@ export function registerRecordLifecycleCommands(
         `Could not remove ${outcome.refused.length} of ${identities.length} records.`, outcome, recordLabel);
     }),
 
-    // xEdit's own "Change FormID": a native InputBox prefilled with the next-free suggestion, so
-    // accepting the default is one Enter; typing over it is validated server-side.
-    vscode.commands.registerCommand('modbench.record.renumber', async (arg?: unknown) => {
-      const identity = recordIdentity(arg);
-      if (!identity) return;
-      const origin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
-      if (!origin) return;
-
-      let suggested: string | undefined;
-      try {
-        suggested = await client.peekNextFreeFormKey(identity.plugin, origin);
-      } catch (e) {
-        // The input box still opens with no prefill, so the command is not blocked on it.
-        reporter.insideDialog('warning', 'Could not fetch a suggested FormKey.', errorMessage(e));
-      }
-
-      const input = await vscode.window.showInputBox({
-        prompt: `New FormID for ${identity.formKey}`,
-        value: suggested,
-        valueSelection: undefined,
-      });
-      if (input === undefined) return; // cancelled
-
-      // A renumber with referencers cascades behind one up-front confirm stating the blast radius.
-      // A fetch failure degrades to a confirm with no counts: the backend re-checks referencers
-      // regardless of what this preview said.
-      let confirmMessage: string | null;
-      try {
-        confirmMessage = renumberConfirmMessage(
-          identity.formKey, input || suggested || '(next free)', await client.getReferences(identity.formKey));
-      } catch (e) {
-        reporter.insideDialog('warning', 'Could not count the references for the confirmation.', errorMessage(e));
-        confirmMessage = `Change FormID of ${identity.formKey}? Its references could not be counted — ` +
-          'every referencing record in a tracked plugin will be updated with it.';
-      }
-      if (confirmMessage !== null) {
-        const choice = await ask(confirmMessage, { modal: true }, 'Change FormID');
-        if (choice !== 'Change FormID') return;
-      }
-
-      const result = await client.renumberRecord(identity.formKey, identity.plugin, origin, input || undefined);
-      if (!result) return;
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      onWritten();
-      reporter.landed(`Renumbered to ${result.newFormKey}.`);
+    vscode.commands.registerCommand('modbench.record.renumber', async (clicked?: unknown, selected?: unknown[]) => {
+      await renumber(selectedRecords(clicked, selected));
     }),
   ];
 }

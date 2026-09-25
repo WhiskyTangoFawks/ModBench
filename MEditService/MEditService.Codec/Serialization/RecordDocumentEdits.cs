@@ -56,46 +56,28 @@ public static class RecordDocumentEdits
         return Named(codec, duplicate, release);
     }
 
-    /// <summary>Every link to <paramref name="oldFormKey"/> moved to <paramref name="newFormKey"/>
-    /// and the record's own key left where it is — what a renumber writes for a document that
-    /// references the record being renumbered.</summary>
-    public static string WithLinksRemapped(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType,
-        string oldFormKey, string newFormKey)
-    {
-        var record = codec.Deserialize(text, release, recordType);
-        RemapLinks(record, oldFormKey, newFormKey);
-        return codec.SerializeToText(record, release);
-    }
-
-    /// <summary>The record moved to <paramref name="newFormKey"/>, its links included — what a
+    /// <summary>The record under <paramref name="newFormKey"/> and otherwise as it was: what a
     /// renumber writes for the record it was asked about.</summary>
-    public static string WithSelfRenumbered(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType,
-        string oldFormKey, string newFormKey)
+    public static string WithFormKey(
+        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey)
     {
         var record = codec.Deserialize(text, release, recordType);
-        RemapLinks(record, oldFormKey, newFormKey);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
         return codec.SerializeToText(record, release);
     }
 
-    /// <summary>The owner's text with the embedded child <paramref name="oldFormKey"/> names moved
-    /// to <paramref name="newFormKey"/>, and that child's own document. Null when the text carries
-    /// no such child.</summary>
-    public static (string Text, string ChildText)? WithEmbeddedChildRenumbered(
+    /// <summary>The owner's text with the embedded child <paramref name="oldFormKey"/> under
+    /// <paramref name="newFormKey"/>, and nothing else changed. Null when the text carries no such
+    /// child.</summary>
+    public static string? WithEmbeddedChildFormKey(
         RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
         string oldFormKey, string newFormKey)
     {
         var owner = codec.Deserialize(ownerText, release, ownerRecordType);
         if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found) return null;
 
-        // Remapped on the owner, not the child: a sibling embedded in the same document may hold
-        // the self-link, and its own file is this same one.
-        RemapLinks(owner, oldFormKey, newFormKey);
         ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
-
-        return (codec.SerializeToText(owner, release), codec.SerializeToText(found.Child, release));
+        return codec.SerializeToText(owner, release);
     }
 
     private static NamedDocument Named(RecordTextCodec codec, IMajorRecordGetter record, GameRelease release) =>
@@ -125,15 +107,11 @@ public static class RecordDocumentEdits
         }
     }
 
-    // A record holding no links at all is left alone rather than refused: a duplicate's self-link
-    // is optional, unlike a renumber's remap.
+    // A record holding no links at all is left alone: a duplicate's self-link is optional.
     private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)
     {
         if (record is IFormLinkContainer links) links.RemapLinks(Mapping(oldFormKey, newFormKey));
     }
-
-    private static void RemapLinks(IMajorRecord record, string oldFormKey, string newFormKey) =>
-        ((IFormLinkContainer)record).RemapLinks(Mapping(oldFormKey, newFormKey));
 
     private static Dictionary<FormKey, FormKey> Mapping(string oldFormKey, string newFormKey) =>
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };

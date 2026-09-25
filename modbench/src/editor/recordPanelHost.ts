@@ -29,7 +29,7 @@ export interface EditorCommandDeps {
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
-    | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences'>;
+    | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences' | 'status'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];

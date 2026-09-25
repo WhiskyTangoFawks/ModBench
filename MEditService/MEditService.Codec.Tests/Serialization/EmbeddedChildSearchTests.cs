@@ -10,22 +10,27 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The search descends every embedded slot at every level, verified through
-/// ContainerDocumentEdits, since the search itself is Codec's internal.</summary>
+/// RecordDocumentEdits' renumber of an embedded child, since the search itself is Codec's internal.</summary>
 public sealed class EmbeddedChildSearchTests
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+    private const string NewFormKey = "FFF000:EmbedSearch.esp";
 
     private static Fallout4Mod NewMod() =>
         new(ModKey.FromFileName("EmbedSearch.esp"), Fallout4Release.Fallout4);
 
-    private static (string RecordType, string Text)? EmbeddedChildIn(IMajorRecordGetter owner, string formKey)
+    private static string? Rekeyed(IMajorRecordGetter owner, string formKey) =>
+        RecordDocumentEdits.WithEmbeddedChildFormKey(
+            Codec, Codec.SerializeToText(owner, GameRelease.Fallout4), GameRelease.Fallout4,
+            RecordTableName.Of(owner, Schemas), formKey, NewFormKey);
+
+    private static void AssertRekeyed(string? text, string formKey)
     {
-        var ownerType = RecordTableName.Of(owner, Schemas);
-        var ownerText = Codec.SerializeToText(owner, GameRelease.Fallout4);
-        return ContainerDocumentEdits.EmbeddedChildIn(
-            Codec, ownerText, GameRelease.Fallout4, ownerType, formKey, Schemas);
+        Assert.NotNull(text);
+        Assert.Contains($"\"FormKey\": \"{NewFormKey}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(formKey, text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -36,10 +41,7 @@ public sealed class EmbeddedChildSearchTests
         var placed = new PlacedObject(mod) { EditorID = "Ref" };
         cell.Temporary.Add(placed);
 
-        var found = EmbeddedChildIn(cell, placed.FormKey.ToString());
-
-        Assert.NotNull(found);
-        Assert.Contains("\"Ref\"", found.Value.Text, StringComparison.Ordinal);
+        AssertRekeyed(Rekeyed(cell, placed.FormKey.ToString()), placed.FormKey.ToString());
     }
 
     [Fact]
@@ -54,10 +56,7 @@ public sealed class EmbeddedChildSearchTests
         topCell.Temporary.Add(placed);
         worldspace.TopCell = topCell;
 
-        var found = EmbeddedChildIn(worldspace, placed.FormKey.ToString());
-
-        Assert.NotNull(found);
-        Assert.Contains("\"TopRef\"", found.Value.Text, StringComparison.Ordinal);
+        AssertRekeyed(Rekeyed(worldspace, placed.FormKey.ToString()), placed.FormKey.ToString());
     }
 
     [Fact]
@@ -70,10 +69,7 @@ public sealed class EmbeddedChildSearchTests
         topic.Responses.Add(response);
         quest.DialogTopics.Add(topic);
 
-        var found = EmbeddedChildIn(quest, response.FormKey.ToString());
-
-        Assert.NotNull(found);
-        Assert.Contains("\"Response\"", found.Value.Text, StringComparison.Ordinal);
+        AssertRekeyed(Rekeyed(quest, response.FormKey.ToString()), response.FormKey.ToString());
     }
 
     [Fact]
@@ -83,6 +79,6 @@ public sealed class EmbeddedChildSearchTests
         var cell = new Cell(mod) { EditorID = "Cell" };
         var stranger = new PlacedObject(mod) { EditorID = "Elsewhere" };
 
-        Assert.Null(EmbeddedChildIn(cell, stranger.FormKey.ToString()));
+        Assert.Null(Rekeyed(cell, stranger.FormKey.ToString()));
     }
 }

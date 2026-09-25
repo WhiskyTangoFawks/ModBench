@@ -144,18 +144,21 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     // ---- renumber an embedded child ----
 
     [Fact]
-    public void RenumberingAnEmbeddedChild_ChangesItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
+    public void RenumberingAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+        var before = File.ReadAllText(file);
+        var formKeyLine = $"\"FormKey\": \"{_fixture.TemporaryRef}\"";
+        Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
 
         var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
 
         Assert.True(result.Applied, result.Message);
         // Same file — an embedded record has no leaf of its own to move.
         Assert.Equal(file, _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
-        var text = File.ReadAllText(file);
-        Assert.Contains(result.NewFormKey.Require(), text, StringComparison.Ordinal);
-        Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), text, StringComparison.Ordinal);
+        Assert.Equal(
+            before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
+            File.ReadAllText(file));
 
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
         Assert.NotNull(_fixture.CommittedDocument(
@@ -166,7 +169,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     // ---- renumbering a record a container references ----
 
     [Fact]
-    public void RenumberingARecordReferencedByAContainer_RewritesTheContainersOwnFileCleanly()
+    public void RenumberingARecordReferencedByAContainer_LeavesTheContainersFileAsItWas()
     {
         // A self-contained mod rather than the shared fixture: none of ContainerModFixture's embedded refs
         // point anywhere, and giving one a real Base is a riskier change to a fixture four other suites
@@ -192,14 +195,54 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
                 Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
                 SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
-        Assert.Contains(referenced.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
+        var before = File.ReadAllText(file);
+        Assert.Contains(referenced.ToString(), before, StringComparison.Ordinal);
 
         var result = referencer.RenumberHandler.RenumberRecord(referencer.Plugin, referenced.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var text = File.ReadAllText(file);
-        Assert.DoesNotContain(referenced.ToString(), text, StringComparison.Ordinal);
-        Assert.Contains(result.NewFormKey.Require(), text, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(file));
+    }
+
+    [Fact]
+    public void RenumberingAnEmbeddedChild_LeavesASiblingThatLinksIt_AsItWas()
+    {
+        const string pluginName = "SiblingReferencer.esp";
+        var enabler = FormKey.Null;
+        using var mod = SourceModFixture.Tracked(pluginName, "SiblingReferencerMod", m =>
+        {
+            var cell = new Cell(m) { EditorID = "SiblingCell", WaterHeight = 0f };
+            var first = new PlacedObject(m) { EditorID = "EnablerRef", Position = new Noggog.P3Float(0, 0, 0) };
+            var second = new PlacedObject(m)
+            {
+                EditorID = "EnabledRef",
+                Position = new Noggog.P3Float(1, 0, 0),
+                EnableParent = new EnableParent { Reference = new FormLink<IPlacedGetter>(first.FormKey), Unknown = new byte[3] },
+            };
+            cell.Temporary.Add(first);
+            cell.Temporary.Add(second);
+            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+            subBlock.Cells.Add(cell);
+            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+            block.SubBlocks.Add(subBlock);
+            m.Cells.Records.Add(block);
+            enabler = first.FormKey;
+        });
+        var file = Directory.EnumerateFiles(
+                Path.Combine(mod.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
+                SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"EnablerRef\"", StringComparison.Ordinal));
+        var before = File.ReadAllText(file);
+        var formKeyLine = $"\"FormKey\": \"{enabler}\"";
+        Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
+        Assert.Contains($"\"Reference\": \"{enabler}\"", before, StringComparison.Ordinal);
+
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, enabler.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(
+            before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
+            File.ReadAllText(file));
     }
 
     // ---- order preservation ----
