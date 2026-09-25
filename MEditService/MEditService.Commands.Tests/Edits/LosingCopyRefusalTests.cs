@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -38,8 +39,6 @@ public sealed class LosingCopyRefusalTests
         Assert.Equal(LosingCopyFixture.LosingNpcEditorId, document.EditorId);
     }
 
-    // The positive control: a name-keyed gate would refuse (or allow) both copies together, so this
-    // proves the gate reads this copy's own Winning flag.
     [Fact]
     public void EditingTheWinningCopy_OfTheSameName_Lands()
     {
@@ -48,6 +47,45 @@ public sealed class LosingCopyRefusalTests
         var result = mod.EditHandler.Set(mod.WinningPlugin, mod.WinningNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public void ElementOpsOnALosingCopy_AreRefused_ThroughEditRecordHandler()
+    {
+        using var mod = LosingCopyFixture.Create();
+        var npc = mod.LosingNpc.ToString();
+
+        var add = mod.EditHandler.Edit(mod.LosingPlugin, npc, AddAt(Member("Keywords")));
+        var remove = mod.EditHandler.Edit(mod.LosingPlugin, npc, RemoveAt(Member("Keywords"), At(0)));
+        var move = mod.EditHandler.Edit(mod.LosingPlugin, npc, MoveTo(0, Member("Keywords"), At(1)));
+
+        Assert.Equal(RecordEditRefusal.LosingCopy, add.Refusal);
+        Assert.Equal(RecordEditRefusal.LosingCopy, remove.Refusal);
+        Assert.Equal(RecordEditRefusal.LosingCopy, move.Refusal);
+    }
+
+    [Fact]
+    public void EditingAnUnlistedWinningCopy_IsNotRefusedAsLosingCopy()
+    {
+        using var mod = LosingCopyFixture.Create();
+
+        var result = mod.EditHandler.Set(mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public async Task CompilingALosingCopy_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered_WritingNothing()
+    {
+        using var mod = LosingCopyFixture.Create();
+        mod.RaiseExternalChangeOn(mod.LosingPlugin, "unanswered");
+        var before = mod.PluginBytes(mod.LosingPlugin);
+
+        var result = await mod.CompileHandler.CompileAsync(mod.LosingPlugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
+        Assert.Equal(before, mod.PluginBytes(mod.LosingPlugin));
     }
 
     [Fact]
@@ -110,7 +148,6 @@ public sealed class LosingCopyRefusalTests
         Assert.Equal(RecordEditRefusal.LosingCopy, result.Refusal);
     }
 
-    // The positive control for the copy routes: the same gesture into the winning copy lands.
     [Fact]
     public void CopyingAsOverride_IntoTheWinningCopy_Lands()
     {
@@ -121,5 +158,17 @@ public sealed class LosingCopyRefusalTests
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(mod.Document(mod.WinningPlugin, mod.CopySourceNpc.ToString()));
+    }
+
+    [Fact]
+    public void CopyingFromALosingCopy_IntoAWinningPlugin_IsAllowed()
+    {
+        using var mod = LosingCopyFixture.Create();
+
+        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+            mod.LosingPlugin, mod.LosingNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.LosingNpc.ToString()));
     }
 }
