@@ -108,7 +108,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Absorb's git mechanics, by plumbing so the edit branch is untouched: each plugin's
     /// baseline on main, then the changed tracked files in one commit. The first failure stops the
-    /// run and is answered with the commit's subject and what failed.</summary>
+    /// run, answered by its subject.</summary>
     public static (string Subject, string Reason)? CommitPristineToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
