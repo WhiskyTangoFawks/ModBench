@@ -774,7 +774,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     JOIN {records} cr ON cr.form_key = cc.child_form_key AND cr.plugin = cc.plugin AND cr.origin = cc.origin
                     WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
                       AND cr.parse_diagnosis IS NOT NULL
-                ) AS has_parse_failure
+                ) AS has_parse_failure,
+                {FullNameOf("r")} AS full_name
                 """;
 
             using var countCmd = connection.CreateCommand();
@@ -990,12 +991,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
-            // full_name is read from the joined row's JSON. '$.Name.Value' is what the codec emits for
-            // an unlocalized plugin's FULL; a localized plugin serializes '$.Name.Values' instead, which
-            // this misses, falling back to the grid/EditorID label.
             cmd.CommandText = $"""
                 SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
-                       json_extract_string(c.body, '$.Name.Value'),
+                       {FullNameOf("c")},
                        c.parse_diagnosis IS NOT NULL OR EXISTS (
                            SELECT 1 FROM placement p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
@@ -1043,7 +1041,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // a sufficient tiebreak.
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y,
+                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y, {FullNameOf("c")},
                        c.parse_diagnosis IS NOT NULL OR EXISTS (
                            SELECT 1 FROM placement p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
@@ -1068,7 +1066,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(1) ? null : reader.GetString(1),
                     reader.IsDBNull(2) ? null : reader.GetInt32(2),
                     reader.IsDBNull(3) ? null : reader.GetInt32(3),
-                    HasParseFailure: reader.GetBoolean(4)));
+                    FullName: reader.IsDBNull(4) ? null : reader.GetString(4),
+                    HasParseFailure: reader.GetBoolean(5)));
             }
 
             return new PagedResult<CellSummary>(items, (int)total);
@@ -1085,13 +1084,18 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             // ADR-0007: the placed ref's base form comes out of the document rather than a `base`
             // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
-            // base reads NULL.
+            // base reads NULL. The base's EditorID is its winning copy's, else any copy's: a base in a
+            // plugin the game does not load has no winner.
             var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
-                       json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL
+                       json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
+                       (SELECT b.editor_id FROM {records} b
+                        WHERE b.form_key = json_extract_string(r.body, '$.Base')
+                        ORDER BY b.is_winner DESC
+                        LIMIT 1)
                 FROM placement p
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
@@ -1111,7 +1115,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
                     reader.GetString(1),
-                    reader.GetBoolean(5));
+                    reader.GetBoolean(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7));
                 (group == "persistent" ? persistent : temporary).Add(summary);
             }
             return new CellReferences(persistent, temporary);
@@ -1150,12 +1156,18 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // Column 8 is the correlated container_child EXISTS Search's SELECT adds, 9 this record's
-        // own diagnosis and 10 the same fact widened to its children, read positionally like 6/7.
+        // own diagnosis, 10 the same fact widened to its children and 11 its FULL, read
+        // positionally like 6/7.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
                 ReadWorkingTreeState(reader), reader.GetBoolean(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10));
+                reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11));
+
+        // '$.Name.Value' is what the codec emits for an unlocalized plugin's FULL; a localized plugin
+        // serializes '$.Name.Values' instead, which this misses.
+        private static string FullNameOf(string alias) => $"json_extract_string({alias}.body, '$.Name.Value')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.

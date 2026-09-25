@@ -39,7 +39,7 @@ public sealed class WorldspaceQueryService(
         var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginAddress(plugin, origin));
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
-                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey)))];
+                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)

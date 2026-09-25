@@ -146,7 +146,8 @@ public sealed class RecordQueryService(
         return [.. reads.GetRecordTypeCounts(new PluginAddress(plugin, origin))
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
-            .OrderBy(r => r.Type)];
+            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
