@@ -4,6 +4,7 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
@@ -49,8 +50,7 @@ public sealed class CreatePluginApiTests : HostedTests
             $"/plugins/{Uri.EscapeDataString(plugin)}/records",
             new { origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null });
 
-    private async Task<long> HeldVersion() =>
-        (await Client.GetFromJsonAsync<JsonElement>("/load-order/status")).GetProperty("version").GetInt64();
+    private long HeldVersion() => Services.GetRequiredService<LoadOrderHolder>().Version;
 
     [Fact]
     public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndRegistersNothing()
@@ -91,13 +91,13 @@ public sealed class CreatePluginApiTests : HostedTests
     public async Task CreatingAPlugin_AnswersNoSlotOrVersion_AndLeavesTheHeldLoadOrderVersion()
     {
         var fx = Owned(await Loaded());
-        var version = await HeldVersion();
+        var version = HeldVersion();
 
         var created = await Created("Slotted.esp", NewModFolder(fx, "mod-slotted"), "SlottedMod");
 
         Assert.False(created.TryGetProperty("slot", out _));
         Assert.False(created.TryGetProperty("version", out _));
-        Assert.Equal(version, await HeldVersion());
+        Assert.Equal(version, HeldVersion());
     }
 
     [Fact]

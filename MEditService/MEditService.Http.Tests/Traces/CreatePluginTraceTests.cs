@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -28,10 +30,13 @@ public sealed class CreatePluginTraceTests : HostedTests
     private static Task<HttpResponseMessage> Create(HttpClient client, string name, string folder) =>
         client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder });
 
-    // What the held snapshot shows a client: its version and every plugin row.
-    private async Task<(long Version, string Plugins)> Held() =>
-        ((await Client.GetFromJsonAsync<JsonElement>("/load-order/status")).GetProperty("version").GetInt64(),
-         JsonSerializer.Serialize(await Client.Plugins()));
+    // Read off the host's own holder: the Index reconciles a change later, so no read over the wire
+    // shows one at once.
+    private (LoadOrderSnapshot Snapshot, long Version) Held()
+    {
+        var holder = Services.GetRequiredService<LoadOrderHolder>();
+        return (holder.Current, holder.Version);
+    }
 
     [Theory]
     [InlineData("Created.esp", false, false)]
@@ -59,13 +64,13 @@ public sealed class CreatePluginTraceTests : HostedTests
         var fx = Owned(await Loaded());
         var folder = OtherTool.ModFolderOf(fx, Origin);
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = await Held();
+        var held = Held();
 
         (await Create(Client, "Created.esp", folder)).EnsureSuccessStatusCode();
 
         var created = Path.GetRelativePath(fx.Root, Path.Combine(folder, "Created.esp")).Replace('\\', '/');
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root).Where(line => !line.StartsWith($"file {created} ", StringComparison.Ordinal)));
-        Assert.Equal(held, await Held());
+        Assert.Equal(held, Held());
     }
 
     [Fact]
@@ -75,14 +80,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var folder = OtherTool.ModFolderOf(fx, Origin);
         OtherTool.WritesTheFile(Path.Combine(folder, "Occupied.esp"), "not a plugin");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = await Held();
+        var held = Held();
 
         var created = await Create(Client, "Occupied.esp", folder);
 
         Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
         Assert.Equal("FileExists", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, await Held());
+        Assert.Equal(held, Held());
     }
 
     [Fact]
@@ -91,14 +96,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var fx = Owned(await Loaded());
         var gone = Path.Combine(fx.Root, "GoneMod");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = await Held();
+        var held = Held();
 
         var created = await Create(Client, "Created.esp", gone);
 
         Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
         Assert.Equal("FolderGone", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, await Held());
+        Assert.Equal(held, Held());
     }
 
     [Fact]
