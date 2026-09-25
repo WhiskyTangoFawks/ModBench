@@ -34,8 +34,10 @@ vi.mock('vscode', () => ({
 
 import {
   registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
-  registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerSaveAndCompileCommand, registerCompileAtRefCommand, rebaseInProgressIn, watchRepositoryStates,
+  type MinimalRepository,
 } from '../pluginRowCommands';
+import { pluginAddressKey } from '../trackedRepositories';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
@@ -587,5 +589,50 @@ describe('registerCompileAtRefCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
+  });
+});
+
+// plugins.md, Menus and keys, story 6: rebase edit branch is offered only while no rebase is in
+// progress, which the mod's repository in vscode.git says, and says again as it changes.
+describe('a tracked mod\'s rebase in progress', () => {
+  function fakeRepository(rebasing: boolean) {
+    const listeners: (() => void)[] = [];
+    const repository: MinimalRepository = {
+      status: () => Promise.resolve(),
+      state: {
+        rebaseCommit: rebasing ? { hash: 'abc' } : undefined,
+        onDidChange: (listener: () => void) => {
+          listeners.push(listener);
+          return { dispose: () => { listeners.splice(listeners.indexOf(listener), 1); } };
+        },
+      },
+    };
+    return { repository, change: () => { for (const listener of [...listeners]) listener(); } };
+  }
+
+  it('is the plugin\'s own mod repository\'s answer, and none with no repository', () => {
+    const repos = new Map([
+      [pluginAddressKey('A.esp', 'ModA'), fakeRepository(true).repository],
+      [pluginAddressKey('B.esp', 'ModB'), fakeRepository(false).repository],
+    ]);
+
+    expect(rebaseInProgressIn(repos, 'a.ESP', 'moda')).toBe(true);
+    expect(rebaseInProgressIn(repos, 'B.esp', 'ModB')).toBe(false);
+    expect(rebaseInProgressIn(repos, 'C.esp', 'ModC')).toBe(false);
+    expect(rebaseInProgressIn(undefined, 'A.esp', 'ModA')).toBe(false);
+  });
+
+  it('hears each repository\'s state change until disposed', () => {
+    const a = fakeRepository(false);
+    const b = fakeRepository(false);
+    const heard = vi.fn();
+    const watch = watchRepositoryStates(new Map([['a', a.repository], ['b', b.repository]]), heard);
+
+    a.change();
+    b.change();
+    watch.dispose();
+    a.change();
+
+    expect(heard).toHaveBeenCalledTimes(2);
   });
 });

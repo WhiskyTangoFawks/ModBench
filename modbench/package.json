@@ -533,7 +533,7 @@
         },
         {
           "command": "modbench.plugin.track",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsPlugin"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsUntrackedInMod"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
@@ -541,7 +541,7 @@
         },
         {
           "command": "modbench.mod.rebaseEditBranch",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRebasable"
         },
         {
           "command": "modbench.record.create",
@@ -885,27 +885,27 @@
         },
         {
           "command": "modbench.plugin.reveal",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
           "group": "pluginActions@1"
         },
         {
           "command": "modbench.plugin.track",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\buntrackedInMod\\b/",
           "group": "pluginActions@2"
         },
         {
           "command": "modbench.saveAndCompile",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
           "group": "pluginActions@3"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
           "group": "pluginActions@4"
         },
         {
           "command": "modbench.mod.rebaseEditBranch",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\brebasable\\b/",
           "group": "pluginActions@5"
         },
         {

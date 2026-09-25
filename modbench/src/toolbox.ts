@@ -48,6 +48,7 @@ import { withPluginsViewProgress, type ExtensionSession, type Own } from './sess
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { pluginsKeyContext } from './plugins/gestureEntry';
+import { rebaseInProgressIn } from './plugins/pluginRowCommands';
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
@@ -222,6 +223,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
+    rebaseInProgress: (plugin, origin) => rebaseInProgressIn(session.pluginRepositories, plugin, origin),
     publishDiagnoses: (reports) => publishLoadDiagnoses(
       deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
   }));

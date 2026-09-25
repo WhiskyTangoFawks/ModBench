@@ -167,6 +167,7 @@ function makeTree(
     dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
+    rebaseInProgress: (plugin: string, origin: string) => boolean;
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
@@ -181,6 +182,7 @@ function makeTree(
     dataFolderFile: extra.dataFolderFile,
     implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
+    rebaseInProgress: extra.rebaseInProgress,
   });
   return { tree, client, records, instance, source, logged };
 }
@@ -1724,6 +1726,48 @@ function expectString(value: unknown): string {
   return value;
 }
 
+// plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and rebase edit
+// branch on a tracked plugin's mod while no rebase is in progress, each offered only there.
+describe('PluginsTreeProvider — the row states where track and rebase edit branch apply', () => {
+  const flags = async (h: Harness): Promise<string[]> => String((await rowItem(h)).contextValue).split(' ');
+
+  it('offers track on an untracked plugin in a mod, and not rebase', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+
+    expect(await flags(h)).toEqual(['plugin', 'untrackedInMod']);
+  });
+
+  it('offers rebase on a tracked plugin\'s mod, and not track', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+
+    expect(await flags(h)).toEqual(['plugin', 'rebasable']);
+  });
+
+  it('offers no rebase while the mod\'s rebase is in progress', async () => {
+    const h = makeTree([A_ROW()], { rebaseInProgress: (plugin, origin) => plugin === 'A.esp' && origin === 'SomeMod' });
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+
+    expect(await flags(h)).toEqual(['plugin']);
+  });
+
+  it('offers neither on a plugin in no mod: Data or Overwrite', async () => {
+    for (const origin of ['Data', 'overwrite']) {
+      const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin })]);
+      await reconcile(h, [held('A.esp', { origin })]);
+
+      expect(await flags(h)).toEqual(['plugin']);
+    }
+  });
+
+  it('offers neither before mEdit says whether the plugin is tracked', async () => {
+    const h = makeTree([A_ROW()]);
+
+    expect(await flags(h)).toEqual(['plugin']);
+  });
+});
+
 // ADR-0017: read-only-for-editing is never an icon; it is the absent actions and this note.
 // plugins.md, A row: the tooltip always carries the file name and the mod, whatever else it says.
 describe('PluginsTreeProvider — read-only tooltip', () => {
@@ -2142,7 +2186,7 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
 });
 
 // A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0013),
-// so `contextValue: 'plugin'` is the only value a healthy row carries.
+// so a healthy row's contextValue says only its kind and where track and rebase apply.
 describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
   it('renders every plugin row plainly, whatever the load order state', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
@@ -2151,7 +2195,7 @@ describe('PluginsTreeProvider applies no decoration of its own to a healthy plug
     const names = ['A.esp', 'B.esp'];
     for (const index of [0, 1]) {
       const item = await rowItem(h, index);
-      expect(item.contextValue).toBe('plugin');
+      expect(item.contextValue).toBe('plugin untrackedInMod');
       expect(item.description).toBeUndefined();
       expect(item.tooltip).toBe(`${names[index]}\nSomeMod`);
     }

@@ -80,11 +80,14 @@ export function onlySelected<K extends ArgumentKind>(selection: readonly Plugins
   return rest.length === 0 && only !== undefined && isOf([kind])(only) ? only : undefined;
 }
 
+const flagsOf = (row: PluginsTreeNode | undefined): string[] => (row?.contextValue ?? '').split(' ');
+
 /** What the Plugins palette entries' `when` clauses read off the selection, since the palette is
  *  handed no row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
-  readonly holdsPlugin: boolean;
+  readonly holdsUntrackedInMod: boolean;
+  readonly singleRebasable: boolean;
   readonly singleRecordType: boolean;
   readonly holdsDeletableRecord: boolean;
 }
@@ -92,7 +95,8 @@ export interface PluginsKeyContext {
 export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): PluginsKeyContext {
   return {
     singlePlugin: onlySelected(selection, 'plugin') !== undefined,
-    holdsPlugin: selection.some(isOf(['plugin'])),
+    holdsUntrackedInMod: selection.some((row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
+    singleRebasable: flagsOf(onlySelected(selection, 'plugin')).includes('rebasable'),
     singleRecordType: onlySelected(selection, 'recordType') !== undefined,
     holdsDeletableRecord: selection.some((row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
   };

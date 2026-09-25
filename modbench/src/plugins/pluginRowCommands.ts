@@ -277,11 +277,29 @@ export function publishCompileDiagnostics(
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
- *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
- *  manual Refresh button has. */
+/** The shape this extension needs from a `vscode.git` `Repository`: `status()`, the SCM panel's
+ *  own Refresh, and the state's rebase commit, set while a rebase is in progress. */
 export interface MinimalRepository {
   status(): Thenable<unknown>;
+  readonly state: {
+    readonly rebaseCommit: unknown;
+    onDidChange(listener: () => void): vscode.Disposable;
+  };
+}
+
+/** Whether the plugin's mod is mid-rebase, as its repository says; a plugin with none is not. */
+export function rebaseInProgressIn(
+  pluginRepositories: ReadonlyMap<string, MinimalRepository> | undefined, plugin: string, origin: string,
+): boolean {
+  return pluginRepositories?.get(pluginAddressKey(plugin, origin))?.state.rebaseCommit !== undefined;
+}
+
+/** Hears every repository's state change, a rebase starting or ending among them. */
+export function watchRepositoryStates(
+  pluginRepositories: ReadonlyMap<string, MinimalRepository>, onChange: () => void,
+): vscode.Disposable {
+  const subscriptions = [...new Set(pluginRepositories.values())].map((repo) => repo.state.onDidChange(onChange));
+  return { dispose: () => { for (const s of subscriptions) s.dispose(); } };
 }
 // Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can
 // drift against an API this extension otherwise never touches. `openRepository` resolves `null`

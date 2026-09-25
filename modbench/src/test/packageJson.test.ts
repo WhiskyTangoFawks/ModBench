@@ -619,18 +619,36 @@ describe('package.json record-row context menu', () => {
 describe('package.json plugin-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
+  const forPluginRows = () => contextMenus().filter((e) => requires(e.when, 'view == modbench.pluginListTree')
+    && /viewItem =~ \/\\b(plugin|untrackedInMod|rebasable)\\b\//.test(e.when));
 
-  // Every command reachable from a plugin row, listed, with exactly one contextValue (`plugin`).
-  // Open Header has no entries: it opens via row click, not a menu entry.
+  // Every command reachable from a plugin row, listed, with the row flag it needs. Open Header has
+  // no entries: it opens via row click, not a menu entry.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
+    const ON = 'view == modbench.pluginListTree && viewItem =~ ';
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
-      ['modbench.plugin.reveal', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.plugin.track', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.mod.rebaseEditBranch', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.plugin.reveal', String.raw`${ON}/\bplugin\b/`],
+      ['modbench.plugin.track', String.raw`${ON}/\buntrackedInMod\b/`],
+      ['modbench.saveAndCompile', String.raw`${ON}/\bplugin\b/`],
+      ['modbench.pluginListTree.compileAtMain', String.raw`${ON}/\bplugin\b/`],
+      ['modbench.mod.rebaseEditBranch', String.raw`${ON}/\brebasable\b/`],
     ]);
+  });
+
+  // plugins.md, Menus and keys, story 6: offered only where the catalog's condition holds.
+  it('offers track only on an untracked plugin in a mod, and rebase only on a rebasable one', () => {
+    const offered = (command: string, contextValue: string) => {
+      const entry = present(forPluginRows().find((e) => e.command === command), command);
+      const pattern = present(/viewItem =~ \/(.*)\/$/.exec(entry.when)?.[1], `the viewItem pattern of ${command}`);
+      return new RegExp(pattern).test(contextValue);
+    };
+    expect(offered('modbench.plugin.track', 'plugin untrackedInMod')).toBe(true);
+    expect(offered('modbench.plugin.track', 'plugin rebasable')).toBe(false);
+    expect(offered('modbench.plugin.track', 'plugin')).toBe(false);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin rebasable')).toBe(true);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin untrackedInMod')).toBe(false);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin')).toBe(false);
+    expect(offered('modbench.plugin.reveal', 'pluginImplicit')).toBe(false);
   });
 });
 
@@ -774,8 +792,8 @@ describe('package.json field gestures\' palette entries', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
-    ['modbench.plugin.track', 'modbench.plugin.holdsPlugin'],
-    ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singlePlugin'],
+    ['modbench.plugin.track', 'modbench.plugin.holdsUntrackedInMod'],
+    ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singleRebasable'],
     ['modbench.record.create', 'modbench.plugin.singleRecordType'],
     ['modbench.record.delete', 'modbench.plugin.holdsDeletableRecord'],
   ] as const;

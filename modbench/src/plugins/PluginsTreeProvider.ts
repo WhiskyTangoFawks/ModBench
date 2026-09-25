@@ -12,6 +12,7 @@ import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './Pl
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -81,7 +82,12 @@ export interface PluginsTreeProviderOptions {
   /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
    *  could not be reached — renders no implicit row rather than a guessed one. */
   implicitMasters?: ImplicitMasterSource;
+  /** Whether the mod holding this plugin is mid-rebase, as its repository says. Absent: none is. */
+  rebaseInProgress?: (plugin: string, origin: string) => boolean;
 }
+
+// A plugin in Data or Overwrite is in no mod, so it has no repository to track into or rebase.
+const IN_NO_MOD = new Set<string>([DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN]);
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Overridden plugins are registered
@@ -159,6 +165,7 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
 // parallel collections: they arrive together, change together, and are keyed the same way.
 interface PluginFacts {
   readOnly?: boolean;
+  tracked?: boolean;
   masterIssues?: MasterIssue[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
@@ -278,12 +285,15 @@ export class PluginsTreeProvider
   private cache?: { rows: PluginListNode[] };
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
+  private readonly rebaseInProgress: (plugin: string, origin: string) => boolean;
+
   constructor(options: PluginsTreeProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
     this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
+    this.rebaseInProgress = options.rebaseInProgress ?? (() => false);
     this.instance = options.instance;
     this.records = options.records;
     this.client = options.client;
@@ -486,6 +496,17 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
+    row.contextValue = this.contextValueOf(file, joinedOrigin);
+  }
+
+  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and rebase edit
+  // branch on a tracked plugin's mod while no rebase is in progress. Neither until mEdit answers.
+  private contextValueOf(file: string, joinedOrigin: string | undefined): string {
+    if (joinedOrigin === undefined || IN_NO_MOD.has(joinedOrigin)) return 'plugin';
+    const tracked = this.facts?.get(file, joinedOrigin)?.tracked;
+    if (tracked === undefined) return 'plugin';
+    if (!tracked) return 'plugin untrackedInMod';
+    return this.rebaseInProgress(file, joinedOrigin) ? 'plugin' : 'plugin rebasable';
   }
 
   // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
@@ -613,7 +634,7 @@ export class PluginsTreeProvider
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
-        readOnly: p.isImmutable, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);
     }

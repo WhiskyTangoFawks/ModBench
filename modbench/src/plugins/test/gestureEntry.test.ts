@@ -173,15 +173,22 @@ describe('what the Plugins palette entries read off the selection', () => {
   const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
   const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true);
 
-  it('reveal and rebase see exactly one selected plugin', () => {
+  it('reveal sees exactly one selected plugin', () => {
     expect(pluginsKeyContext([alpha]).singlePlugin).toBe(true);
     expect(pluginsKeyContext([alpha, beta]).singlePlugin).toBe(false);
     expect(pluginsKeyContext([lockedRow('Fallout4.esm')]).singlePlugin).toBe(false);
   });
 
-  it('track sees any selected plugin', () => {
-    expect(pluginsKeyContext([alpha, weapons]).holdsPlugin).toBe(true);
-    expect(pluginsKeyContext([weapons]).holdsPlugin).toBe(false);
+  it('track sees a selected untracked plugin in a mod, and rebase exactly one rebasable plugin', () => {
+    const untracked = pluginRow('Gamma.esp', 'ModC');
+    untracked.contextValue = 'plugin untrackedInMod';
+    const rebasable = pluginRow('Delta.esp', 'ModD');
+    rebasable.contextValue = 'plugin rebasable';
+
+    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ holdsUntrackedInMod: true, singleRebasable: false });
+    expect(pluginsKeyContext([alpha])).toMatchObject({ holdsUntrackedInMod: false, singleRebasable: false });
+    expect(pluginsKeyContext([rebasable])).toMatchObject({ holdsUntrackedInMod: false, singleRebasable: true });
+    expect(pluginsKeyContext([rebasable, alpha]).singleRebasable).toBe(false);
   });
 
   it('create sees exactly one selected record type', () => {
