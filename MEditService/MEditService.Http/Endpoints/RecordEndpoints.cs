@@ -110,16 +110,16 @@ public static class RecordEndpoints
         .WithDescription(
             "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
             "collision-safe, or an explicit target) as a working-tree delete of the old source file " +
-            "plus a create of the new one, cascading the FormKey change into every tracked plugin that " +
-            "references it.")
+            "plus a create of the new one. Nothing else changes: the records that reference it are left " +
+            "as they are.")
         .WithTags("Records")
         .Produces<RecordRenumberResponse>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // A rolled-back cascade surfaces here too — same shape as every other write path's I/O
-        // failure, with a richer message naming what the rollback deliberately left standing (ADR-0007).
+        // A rolled-back renumber surfaces here too — same shape as every other write path's I/O
+        // failure, with a richer message naming what the rollback deliberately left standing.
         .ProducesProblem(500)
         .ProducesProblem(503);
 
@@ -278,8 +278,8 @@ public static class RecordEndpoints
             onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
             onWriteFailure: ex =>
             {
-                // A rolled-back cascade lands here too, with the richer message
-                // RenumberRecordHandler already built naming the paths it left standing (ADR-0007) —
+                // A rolled-back renumber lands here too, with the richer message
+                // RenumberRecordHandler already built naming the paths it left standing —
                 // ex.Message goes straight through, unwrapped, unlike every sibling's own
                 // onWriteFailure here.
                 logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
