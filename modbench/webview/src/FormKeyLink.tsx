@@ -51,10 +51,10 @@ function useCtrlHeld(): boolean {
   return useSyncExternalStore(subscribe, getCtrlHeld, getCtrlHeld);
 }
 
-// "EditorID [FormKey]" when the reference resolves, the bare FormKey when it doesn't. Exported so
+// "EditorID [FormKey]" when the record is named, the bare FormKey when it isn't. Exported so
 // the Ctrl+C copy path produces exactly what the link displays — a cell must never show one
 // string and hand over another.
-export function formKeyLabel(value: string, resolution?: FormKeyResolution): string {
+export function formKeyLabel(value: string, resolution?: Pick<FormKeyResolution, 'editorId'>): string {
   return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
 }
 

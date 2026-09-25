@@ -19,6 +19,7 @@ import {
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
+import { EditsInFlight } from '../followRecord';
 import type { RecordSummary } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
@@ -34,7 +35,6 @@ const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), 
 // each test starts with `editRecord` answering `{ applied: true }`.
 let meditClient: InMemoryMEditClient;
 const onRecordEdited = vi.fn();
-const followRecord = vi.fn();
 
 beforeEach(() => {
   meditClient = new InMemoryMEditClient();
@@ -48,7 +48,7 @@ function editRecordCalls() {
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
-    meditClient, onRecordEdited, followRecord,
+    meditClient, onRecordEdited, editInFlight: undefined,
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     ...overrides,
@@ -223,7 +223,6 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   beforeEach(() => {
     fakeReporter.report.mockReset();
     onRecordEdited.mockReset();
-    followRecord.mockReset();
   });
 
   it('sends the edit through the single write path with its compound plugin identity', async () => {
@@ -259,40 +258,49 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     expect(fakeReporter.report).not.toHaveBeenCalled();
   });
 
-  it('follows the record to the new FormKey an edit of its FormID answers with', async () => {
+  function tabsOn(formKey: string, ...titles: string[]) {
+    const formKeys = new Map<unknown, string>();
+    const tracker = {
+      setFormKey(panel: unknown, key: string) { formKeys.set(panel, key); },
+      formKeyOf(panel: unknown) { return formKeys.get(panel); },
+    };
+    const tabs = titles.map(title => ({ title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } }));
+    for (const tab of tabs) tracker.setFormKey(tab, formKey);
+    return { tracker, tabs, edits: new EditsInFlight(tracker) };
+  }
+
+  it('takes the tab to the new FormKey an edit of its FormID answers with', async () => {
     meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
 
-    await routeRecordPanelMessage(editMessage, makeDeps());
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
 
-    expect(followRecord).toHaveBeenCalledWith('000800:Mod.esp', '000900:Mod.esp');
+    expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
   });
 
   // ADR-0012 invariant 1: two copies of Mod.esp, in two mods, each shown in a tab of its own under
   // one FormKey. The edit lands on the copy its own tab's column names, and only that tab follows.
   it('follows only the tab the edit came from, not a tab showing the other copy of the plugin', async () => {
     meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
-    const formKeys = new Map<unknown, string>();
-    const tracker = {
-      setFormKey(panel: unknown, formKey: string) { formKeys.set(panel, formKey); },
-      formKeyOf(panel: unknown) { return formKeys.get(panel); },
-    };
-    const tabOf = (title: string) => ({ title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } });
-    const editedCopy = tabOf('Mod.esp (SomeMod)');
-    const otherCopy = tabOf('Mod.esp (OtherMod)');
-    tracker.setFormKey(editedCopy, '000800:Mod.esp');
-    tracker.setFormKey(otherCopy, '000800:Mod.esp');
+    const { tracker, tabs: [edited, other], edits } = tabsOn('000800:Mod.esp', 'Mod.esp (SomeMod)', 'Mod.esp (OtherMod)');
+    const editedCopy = present(edited, 'the edited tab');
+    const otherCopy = present(other, 'the other tab');
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedCopy, tracker));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedCopy, edits));
 
     expect(tracker.formKeyOf(editedCopy)).toBe('000900:Mod.esp');
     expect(tracker.formKeyOf(otherCopy)).toBe('000800:Mod.esp');
     expect(otherCopy.webview.postMessage).not.toHaveBeenCalled();
   });
 
-  it('follows nothing after an edit that leaves the FormKey as it was', async () => {
-    await routeRecordPanelMessage(editMessage, makeDeps());
+  it('leaves the tab where it is after an edit that keeps the FormKey', async () => {
+    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
 
-    expect(followRecord).not.toHaveBeenCalled();
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+
+    expect(tracker.formKeyOf(panel)).toBe('000800:Mod.esp');
   });
 
   it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {

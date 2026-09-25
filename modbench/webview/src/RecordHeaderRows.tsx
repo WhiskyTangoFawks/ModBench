@@ -5,15 +5,14 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
-import type { ColumnKey } from './types';
+import type { ColumnKey, CompareOverride } from './types';
 
 export const RECORD_HEADER_ROW = 'Record Header';
 const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
 const INDENT = 24;
 
 interface FormIdCellProps {
-  formKey: string;
-  editorId: string | null | undefined;
+  record: CompareOverride;
   editable: boolean;
   isFocused: boolean;
   onCommit: (formKey: string) => void;
@@ -21,9 +20,10 @@ interface FormIdCellProps {
 
 // xEdit's FormID reads as the record it names, and edits as the ID typed; mEdit spells both as
 // the FormKey (xedit.md, divergence 12).
-function FormIdCell({ formKey, editorId, editable, isFocused, onCommit }: Readonly<FormIdCellProps>) {
+function FormIdCell({ record, editable, isFocused, onCommit }: Readonly<FormIdCellProps>) {
+  const { formKey } = record;
   const [draft, setDraft] = useState<string | null>(null);
-  const label = formKeyLabel(formKey, { state: 'ResolvedValidType', editorId });
+  const label = formKeyLabel(formKey, record);
   if (!editable) return <span>{label}</span>;
   if (draft === null) {
     return (
@@ -107,10 +107,10 @@ export function RecordHeaderRows({
               <DiskCell
                 key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                 onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
-                onCopy={() => copyToClipboard(formKeyLabel(override.formKey, { state: 'ResolvedValidType', editorId: override.editorId }))}
+                onCopy={() => copyToClipboard(formKeyLabel(override.formKey, override))}
               >
                 <FormIdCell
-                  formKey={override.formKey} editorId={override.editorId}
+                  record={override}
                   editable={!isPluginHeader && editableColumns.has(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />

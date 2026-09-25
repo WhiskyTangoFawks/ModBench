@@ -6,7 +6,7 @@ import {
 import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import { followRecordInPanel } from './followRecord';
+import type { EditsInFlight, FollowedPanel } from './followRecord';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
@@ -23,24 +23,22 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
   formKeyPicker: FormKeyPickerDeps | undefined;
-  // An edit of the FormID takes the tab it came from to the new FormKey: that tab's column names
-  // the plugin copy the edit landed on (ADR-0012), so it is the one that follows.
-  followRecord: ((formKey: string, newFormKey: string) => void) | undefined;
+  // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
+  // that tab along: its column names the plugin copy the edit landed on (ADR-0012).
+  editInFlight: ((formKey: string, write: () => Promise<string | undefined>) => Promise<void>) | undefined;
 }
 
-type RecordPanel = Parameters<typeof followRecordInPanel>[0];
-
-/** The router's bundle for one panel's messages: the picker replies to it, and an edit of its
- *  record's FormID takes it along. */
-export function routerDepsForPanel<Panel extends RecordPanel>(
+/** The router's bundle for one panel's messages: the picker replies to it, and its edits are
+ *  held in flight for it. */
+export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: RouteRecordPanelMessageDeps,
   panel: Panel,
-  activeRecordTracker: Parameters<typeof followRecordInPanel<Panel>>[1],
+  edits: EditsInFlight<Panel>,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
-    followRecord: (formKey, newFormKey) => followRecordInPanel(panel, activeRecordTracker, formKey, newFormKey),
+    editInFlight: (formKey, write) => edits.edit(panel, formKey, write),
   };
 }
 
@@ -191,6 +189,7 @@ async function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  const newFormKey = await applyRecordEdit(deps, m.formKey, m.plugin, m.origin, m.envelope);
-  if (newFormKey) deps.followRecord?.(m.formKey, newFormKey);
+  const write = () => applyRecordEdit(deps, m.formKey, m.plugin, m.origin, m.envelope);
+  if (deps.editInFlight) await deps.editInFlight(m.formKey, write);
+  else await write();
 }
