@@ -184,14 +184,25 @@ export default defineConfig(
         },
     },
 
-    // The lint config and its rules sit in no tsconfig, so typed linting reads them through the
-    // project service's default project, under the base tsconfig's strict options.
+    // The lint rules, as `tsc -b` type-checks them.
     {
-        files: ['eslint-rules/**', 'eslint.config.mjs'],
+        files: ['eslint-rules/*.mjs'],
+        languageOptions: {
+            parserOptions: {
+                project: './eslint-rules/tsconfig.json',
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
+
+    // The lint config and the rules' declarations sit in no tsconfig, so typed linting reads them
+    // through the project service's default project, under the base tsconfig's strict options.
+    {
+        files: ['eslint-rules/*.d.mts', 'eslint.config.mjs'],
         languageOptions: {
             parserOptions: {
                 projectService: {
-                    allowDefaultProject: ['eslint-rules/*.mjs', 'eslint-rules/*.d.mts', 'eslint.config.mjs'],
+                    allowDefaultProject: ['eslint-rules/*.d.mts', 'eslint.config.mjs'],
                     defaultProject: './tsconfig.base.json',
                 },
                 tsconfigRootDir: import.meta.dirname,
