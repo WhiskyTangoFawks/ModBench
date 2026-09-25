@@ -22,7 +22,7 @@ import {
 } from '../mo2Codecs/modlistText';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
 import {
-  downloadFile, downloadSidecarFile, mo2FolderName, modDir, modlistFile, modsDir, separatorDir,
+  downloadFile, downloadSidecarFile, mo2FolderName, modDir, modFolderName, modlistFile, modsDir, separatorDir,
   separatorFolderName,
 } from '../instanceAdapter/layout';
 import { ensureDir, exists, get, put, putIfChanged, rename } from '../instanceAdapter/files';
@@ -333,7 +333,10 @@ export async function uninstallMods(
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
   const result = await trashThenUnlist(
     instanceRoot, profile, 'mod', mods.map((m) => m.name),
-    (name) => modDir(instanceRoot, name), trash,
+    (name) => {
+      const folder = modFolderName(name);
+      return folder === undefined ? undefined : modDir(instanceRoot, folder);
+    }, trash,
     (text, name) => removeModFromText(text, name),
   );
   if (!result.applied) return result;
@@ -400,10 +403,10 @@ export type ModSyncResult =
 const lineNameOf = (entry: ModlistEntry): string =>
   (entry.kind === 'mod' ? entry.name : separatorModName(entry.name));
 
-// A separator whose name MO2 never gives a folder names none: MO2 has no mod by that name, so its
-// line goes (ADR-0017), and no path is built from it.
+// A separator whose name MO2 never gives a folder, or a mod whose name escapes mods/, names none:
+// MO2 has no mod by that name, so its line goes (ADR-0017), and no path is built from it.
 const listedFolderOf = (entry: ModlistEntry): string | undefined =>
-  (entry.kind === 'mod' ? entry.name : separatorFolderName(entry.name));
+  (entry.kind === 'mod' ? modFolderName(entry.name) : separatorFolderName(entry.name));
 
 async function keepWhere<T>(items: readonly T[], keep: (item: T) => Promise<boolean>): Promise<T[]> {
   const kept = await Promise.all(items.map(keep));

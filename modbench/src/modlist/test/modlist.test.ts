@@ -741,6 +741,21 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(writeOrderOf(modlistPath())).toBeLessThan(writeOrderOf(metaPath()));
     });
 
+    // A line another tool wrote with a `/` names no folder under mods/. Rival: joining the raw
+    // name onto mods/, which trashes a folder outside it.
+    it('trashes nothing outside mods/ for a mod whose name escapes it, and still drops its line', async () => {
+      const outside = join(dir, 'Escaped');
+      await mkdir(outside);
+      await writeFile(modlistPath(), `+../Escaped\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+      const outcome = await uninstallMods(dir, 'Default', [{ name: '../Escaped' }], undefined, trash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: '../Escaped' }], refused: [] } });
+      expect(trashed).toEqual([]);
+      expect((await stat(outside)).isDirectory()).toBe(true);
+      expect((await readModlist()).some((e) => e.name === '../Escaped')).toBe(false);
+    });
+
     it('removes every selected mod\'s line in one write', async () => {
       vi.mocked(writeFile).mockClear();
 
@@ -1044,6 +1059,18 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['Weapons/Armor_separator'] });
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
     expect(vi.mocked(access).mock.calls.map(([path]) => String(path)).filter((p) => p.includes('Weapons'))).toEqual([]);
+  });
+
+  // A line another tool wrote with a `/` names no folder under mods/, and MO2 has no mod by that
+  // name. Rival: joining the raw name onto mods/, which finds a folder outside it and keeps the line.
+  it('drops a mod line whose name escapes mods/, looking at nothing outside it', async () => {
+    const outside = join(dir, 'Escaped');
+    await mkdir(outside);
+    await writeFile(modlistPath(), '+../Escaped\r\n+Harder VATS\r\n');
+    vi.mocked(access).mockClear();
+
+    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
+    expect(vi.mocked(access).mock.calls.map(([path]) => String(path))).not.toContain(outside);
   });
 
   // MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator), and a
