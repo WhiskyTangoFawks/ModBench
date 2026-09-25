@@ -42,16 +42,29 @@ public sealed class TrackedModSettled
                 return TrackedModSettledOutcome.QuestionOpened;
 
             case ExternalChangeClassification.CompileUnfinished unfinished:
-                // Neither opens nor clears the external-change question (compile-plugin, Failure).
-                var origin = OriginOf(loadOrder, modFolder);
-                foreach (var plugin in unfinished.Plugins)
-                    _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
-                return TrackedModSettledOutcome.CompileUnfinished;
+                return Warn(loadOrder, modFolder, unfinished);
 
             default:
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return TrackedModSettledOutcome.NoQuestion;
         }
+    }
+
+    /// <summary>A tracked binary the caller could not read is no verdict: the question is neither
+    /// opened nor cleared, and an interrupted compile's mark is still published.</summary>
+    public TrackedModSettledOutcome HandleUnreadable(LoadOrderSnapshot loadOrder, string modFolder) =>
+        ExternalChangeClassifier.UnfinishedCompile(modFolder) is { } unfinished
+            ? Warn(loadOrder, modFolder, unfinished)
+            : TrackedModSettledOutcome.NoQuestion;
+
+    // Neither opens nor clears the external-change question (compile-plugin, Failure).
+    private TrackedModSettledOutcome Warn(
+        LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.CompileUnfinished unfinished)
+    {
+        var origin = OriginOf(loadOrder, modFolder);
+        foreach (var plugin in unfinished.Plugins)
+            _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
+        return TrackedModSettledOutcome.CompileUnfinished;
     }
 
     private void Raise(LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.ExternalChange change)

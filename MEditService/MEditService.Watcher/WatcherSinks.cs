@@ -30,9 +30,17 @@ internal sealed class WatcherSinks
     /// readability probe already read. Logging only: whichever question or warning Commands found, it
     /// already published.</summary>
     public void SettleAtLoad(
-        LoadOrderSnapshot order, string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins)
+        LoadOrderSnapshot order, string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins) =>
+        LogAtLoad(modFolder, _settled.Handle(order, modFolder, plugins));
+
+    /// <summary>The same verb at load when one of the mod's tracked binaries could not be read: no
+    /// verdict on the question, but an interrupted compile's mark is still published.</summary>
+    public void SettleAtLoadUnreadable(LoadOrderSnapshot order, string modFolder) =>
+        LogAtLoad(modFolder, _settled.HandleUnreadable(order, modFolder));
+
+    private void LogAtLoad(string modFolder, TrackedModSettledOutcome outcome)
     {
-        switch (_settled.Handle(order, modFolder, plugins))
+        switch (outcome)
         {
             case TrackedModSettledOutcome.QuestionOpened:
                 if (_logger.IsEnabled(LogLevel.Information))

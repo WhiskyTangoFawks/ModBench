@@ -101,11 +101,11 @@ public sealed class ModFolderWatcher : IDisposable
 
     // One read of each tracked binary serves the readability probe and the classification. An
     // unreadable binary is the reconcile's "failed to load", and a partial set would classify the
-    // rest as the whole mod, so nothing is classified.
+    // rest as the whole mod, so only the compile journal is read.
     private void SettleAtLoad(LoadOrderSnapshot order, TrackedMod mod)
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
-        var unreadable = new List<string>();
+        var allRead = true;
         foreach (var plugin in mod.Plugins)
         {
             try
@@ -115,11 +115,12 @@ public sealed class ModFolderWatcher : IDisposable
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
-                unreadable.Add(plugin.Name);
+                allRead = false;
             }
         }
 
-        if (unreadable.Count == 0) _sinks.SettleAtLoad(order, mod.ModFolder, observed);
+        if (allRead) _sinks.SettleAtLoad(order, mod.ModFolder, observed);
+        else _sinks.SettleAtLoadUnreadable(order, mod.ModFolder);
 
         if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", mod.ModFolder);
     }

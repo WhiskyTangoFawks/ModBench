@@ -134,7 +134,6 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Empty(Questions(tree));
     }
 
-    // An unreadable binary is no verdict: the marker it would have cleared stands.
     [Fact]
     public async Task ALoad_KeepsAStaleMarker_WhenTheTrackedPluginCannotBeRead()
     {
@@ -146,10 +145,9 @@ public sealed class LoadOrderChangeSettleTests
         await tree.ApplyLoadOrder();
 
         Assert.NotNull(SourceRepository.UnansweredExternalChange(modFolder));
+        Assert.Empty(tree.Notifications.Published);
     }
 
-    // compile-plugin, test seam: given the mark from an interrupted compile, the warning and no
-    // question.
     [Fact]
     public async Task ALoad_WarnsCompileUnfinished_AndOpensNoQuestion_WhenAJournalMarkerIsUnanswered()
     {
@@ -168,8 +166,6 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Equal(PluginName, unfinished.Plugin);
     }
 
-    // The repo and source survive, only the plugin's own binary is gone: the reconcile's "failed to
-    // load" says so, and the settle asks nothing.
     [Fact]
     public async Task ALoad_PublishesNothing_WhenTheTrackedPluginsBinaryIsMissing()
     {
@@ -182,9 +178,8 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Empty(tree.Notifications.Published);
     }
 
-    // An untracked plugin takes the indexed-binary route and never the settle.
     [Fact]
-    public async Task ALoad_PublishesNothing_ForAnUntrackedPlugin_EvenWithAMissingBinary()
+    public async Task ALoad_LeavesAnUntrackedPluginsMissingBinaryToTheReconcile_AndNeverReadsItForTheSettle()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod("Untracked", PluginName);
@@ -192,6 +187,8 @@ public sealed class LoadOrderChangeSettleTests
 
         await tree.ApplyLoadOrder();
 
+        Assert.Single(tree.Index.Reconciles);
+        Assert.Empty(tree.LogEntries);
         Assert.Empty(tree.Notifications.Published);
     }
 
