@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Http.Tests.Api;
 
 // ADR-0012 through the real load path, so bugs at the joins between phases are reachable. Both
-// copies need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
+// plugins need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
 // default-origin fixture passes either way.
 [Collection(WebHostCollection.Name)]
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
@@ -20,9 +20,9 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both NPCs land on the same FormKey (each copy runs its own NextFormID sequence from the
+    // Both NPCs land on the same FormKey (each plugin runs its own NextFormID sequence from the
     // same ModKey), which makes this a delta comparison rather than two unrelated files.
-    private static ScatteredFixtureData BuildTwoCopies() =>
+    private static ScatteredFixtureData BuildTwoPlugins() =>
         new PluginFixtureBuilder("api-duplicate-filename")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
@@ -33,10 +33,10 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
                 origin: "TargetMod")
             .BuildScattered();
 
-    private async Task PutBothCopies(ScatteredFixtureData fx)
+    private async Task PutBothPlugins(ScatteredFixtureData fx)
     {
-        // ADR-0013: both copies travel in the one snapshot, ModB as the losing copy at the same
-        // slot; only the winning, enabled, listed one participates.
+        // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
+        // same slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
             ? p with { Slot = winner.Slot, Winning = false }
@@ -53,28 +53,28 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task LosingCopy_IsAHeldPluginAlongsideTheCopyThatShadowsIt()
+    public async Task OverriddenPlugin_IsAHeldPluginAlongsideThePluginThatOverridesIt()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var copies = plugins.EnumerateArray()
+        var origins = plugins.EnumerateArray()
             .Where(p => p.GetProperty("name").GetString() == "Shared.esp")
             .Select(p => p.GetProperty("origin").GetString())
             .ToList();
 
-        Assert.Equal(["ModA", "ModB"], copies);
+        Assert.Equal(["ModA", "ModB"], origins);
     }
 
     [Fact]
-    public async Task LosingCopy_IndexesItsOwnRecordsNotTheOtherCopys()
+    public async Task OverriddenPlugin_IndexesItsOwnRecordsNotTheOtherPlugins()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
         // Deliberately unfiltered by plugin: `?plugin=` resolves origin from the filename
-        // server-side, so it can only answer for one of two same-filename copies.
+        // server-side, so it can only answer for one of two plugins that share a filename.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
         var byOrigin = records.GetProperty("items").EnumerateArray()
             .Where(r => r.GetProperty("plugin").GetString() == "Shared.esp")
@@ -87,12 +87,12 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task BrowsingByOrigin_ReturnsThatCopysOwnRecordsAndCounts()
+    public async Task BrowsingByOrigin_ReturnsThatPluginsOwnRecordsAndCounts()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
-        // The tree row names the copy it stands for, since a filename alone cannot identify it.
+        // The tree row names the plugin it stands for, since a filename alone cannot identify it.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?plugin=Shared.esp&origin=ModB&type=npc_&limit=10");
         var editorIds = records.GetProperty("items").EnumerateArray()
             .Select(r => r.GetProperty("editorId").GetString())
@@ -104,10 +104,10 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task LosingCopy_IsNotACompareColumn()
+    public async Task OverriddenPlugin_IsNotACompareColumn()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
         var compare = await _client.GetFromJsonAsync<JsonElement>(
             $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
@@ -115,25 +115,25 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             .ToDictionary(o => DocumentNodes.StringValueOf(o.GetProperty("origin")), o => o);
 
         // ADR-0012: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
-        // one file named Shared.esp, so the discarded copy stays indexed and browsable but never
+        // one file named Shared.esp, so the overridden plugin stays indexed and browsable but never
         // columns.
         var column = Assert.Single(columns);
         Assert.Equal("ModA", column.Key);
         Assert.Equal("FromModA", column.Value.GetProperty("editorId").GetString());
         Assert.True(column.Value.GetProperty("isWinner").GetBoolean());
-        // OnlyOne, not NoConflict: classification sees a single participating copy, so this record
-        // is exactly as unconflicted as a single-copy record — which is the whole claim, that a
-        // losing copy changes no classification.
+        // OnlyOne, not NoConflict: classification sees a single participating plugin, so this record
+        // is exactly as unconflicted as a single-plugin record — which is the whole claim, that an
+        // overridden plugin changes no classification.
         Assert.Equal("OnlyOne", compare.GetProperty("conflictAll").GetString());
     }
 
     [Fact]
-    public async Task ASnapshotWithoutTheLosingCopy_LeavesNoRowNoColumnAndNoRecords()
+    public async Task ASnapshotWithoutTheOverriddenPlugin_LeavesNoRowNoColumnAndNoRecords()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
-        // ADR-0013: a copy absent from the snapshot is unregistered, while the copy that wins is
+        // ADR-0013: a plugin absent from the snapshot is unregistered, while the plugin that wins is
         // untouched, because a reconcile is not a reload.
         var without = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -160,11 +160,11 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task TheSameSnapshotTwice_LeavesOneEntryPerCopyAndAWorkingCompare()
+    public async Task TheSameSnapshotTwice_LeavesOneEntryPerPluginAndAWorkingCompare()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
+        await PutBothPlugins(fx);
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
@@ -177,24 +177,25 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     }
 
     [Fact]
-    public async Task LosingCopy_IsReadOnlyAndOutsideTheLoadOrder()
+    public async Task OverriddenPlugin_IsReadOnlyAndOutsideTheLoadOrder()
     {
-        using var fx = BuildTwoCopies();
-        await PutBothCopies(fx);
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var shadowed = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
+        var overridden = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
 
         // ADR-0012: read-only, because an edit to a file the game does not load produces no
         // observable change anywhere. ADR-0013: non-participating, so it can never take a winner
-        // from the copy that shadows it.
-        Assert.True(shadowed.GetProperty("isImmutable").GetBoolean());
-        Assert.False(shadowed.GetProperty("participates").GetBoolean());
-        Assert.False(shadowed.GetProperty("inLoadOrder").GetBoolean());
-        // It shares the winning copy's slot — the registration fact a future show-losing-copies
-        // toggle would render the pair adjacent from (the grid itself excludes it today).
+        // from the plugin that overrides it.
+        Assert.True(overridden.GetProperty("isImmutable").GetBoolean());
+        Assert.False(overridden.GetProperty("participates").GetBoolean());
+        Assert.False(overridden.GetProperty("inLoadOrder").GetBoolean());
+        // It shares the winning plugin's slot — the registration fact a future
+        // show-overridden-plugins toggle would render the pair adjacent from (the grid itself
+        // excludes it today).
         Assert.Equal(
             plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModA").GetProperty("loadOrderIndex").GetInt32(),
-            shadowed.GetProperty("loadOrderIndex").GetInt32());
+            overridden.GetProperty("loadOrderIndex").GetInt32());
     }
 }

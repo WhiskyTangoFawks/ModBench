@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0013: the held set of plugin copies, opened one at a time from the copies a snapshot
-// registers, and mutated in place as copies arrive, leave, or move, as the reads and the status
+// ADR-0013: the held set of plugins, opened one at a time from the plugins a snapshot
+// registers, and mutated in place as plugins arrive, leave, or move, as the reads and the status
 // report it.
 public sealed class HeldPluginsTests
 {
@@ -21,7 +21,7 @@ public sealed class HeldPluginsTests
 
     // ── Open ────────────────────────────────────────────────────────────────────
 
-    // The slots PutLoadOrderHandler would assign (ADR-0013 invariant 2): a forced copy at slot 0,
+    // The slots PutLoadOrderHandler would assign (ADR-0013 invariant 2): a forced plugin at slot 0,
     // the sent entries offset behind it.
     [Fact]
     public void Open_ForcedMaster_LoadsBeforeTheSnapshotPlugin()
@@ -84,17 +84,17 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Open_LosingCopyUnparseable_TheFailureNamesTheLosingOrigin()
+    public void Open_OverriddenPluginUnparseable_TheFailureNamesTheOverriddenPluginsOrigin()
     {
         using var fx = new PluginFixtureBuilder("lo-losing-garbage")
             .WithPlugin("Shared.esp", origin: "ModA")
             .WithPlugin("Shared.esp", origin: "ModB")
             .BuildScattered();
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
-        File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
+        var overridden = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        File.WriteAllBytes(overridden.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
 
-        using var held = Indexes.Reconciled(fx.GameDirectory, [winner, loser]);
+        using var held = Indexes.Reconciled(fx.GameDirectory, [winner, overridden]);
 
         Assert.Equal("ModA", Assert.Single(held.RequireReads().OpenedPlugins.Keys).Origin);
         var failure = Assert.Single(held.Status.Failures);
@@ -168,7 +168,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Registers_TheHeldCopy_AndFalseForAnUnknownCopyOrOrigin()
+    public void Registers_TheHeldPlugin_AndFalseForAnUnknownPluginOrOrigin()
     {
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
         using var held = Open(data);
@@ -198,7 +198,7 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Remove_DropsTheCopy_AndWhatItAnswered()
+    public void Remove_DropsThePlugin_AndWhatItAnswered()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
         var holder = new LoadOrderHolder();

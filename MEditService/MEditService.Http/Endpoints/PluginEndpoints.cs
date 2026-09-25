@@ -18,9 +18,9 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        // Every mutable copy in the load order, diagnosed off its original bytes — the session-load
-        // complement of Track's refusal. With no load order applied the refusal is a 503, never an
-        // unmapped 500.
+        // Every mutable plugin in the load order, diagnosed off its original bytes — the
+        // session-load complement of Track's refusal. With no load order applied the refusal is a
+        // 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -163,8 +163,8 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            var copy = result.Plugin;
-            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, result.Version));
+            var plugin = result.Plugin;
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Path, plugin.Origin, plugin.Slot, result.Version));
         }
         catch (NoLoadOrderException ex)
         {
@@ -381,7 +381,7 @@ public static class PluginEndpoints
             handler.ContinueRebase(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
     }
 
-    // An origin no registered copy carries names no repository, which is a 404 rather than one of
+    // An origin no registered plugin carries names no repository, which is a 404 rather than one of
     // the three outcomes a rebase reports.
     private static IResult Rebased(RebaseResult? result, string origin, ILogger logger)
     {
@@ -401,7 +401,7 @@ public static class PluginEndpoints
 public record CreatePluginRequest(string Name, string Path, string Origin);
 
 // What the create gesture wrote and registered, not a plugin row: masters, flags and record count
-// are the Index's to state, and it has not seen this copy yet. Slot is 0 off a bare load order.
+// are the Index's to state, and it has not seen this plugin yet. Slot is 0 off a bare load order.
 public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
 
 /// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the

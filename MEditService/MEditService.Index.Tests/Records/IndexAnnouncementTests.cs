@@ -115,7 +115,7 @@ public sealed class IndexAnnouncementTests : IDisposable
     }
 
     [Fact]
-    public void AValidateThatRebuiltACopy_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
+    public void AValidateThatRebuiltAPlugin_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();

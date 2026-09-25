@@ -44,7 +44,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// its binary: tracked-ness as a row, in the mirror because it is the rows' own fact.</summary>
     internal const string PluginDerivationTable = "plugin_derivation";
 
-    /// <summary>The Kind B diagnoses a copy's binary proved when it was hashed, one row each, in
+    /// <summary>The Kind B diagnoses a plugin's binary proved when it was hashed, one row each, in
     /// record order.</summary>
     internal const string PluginDiagnosisTable = "plugin_diagnosis";
 
@@ -52,13 +52,13 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// state, not a file mirror: it lives in <c>main</c> beside <c>registrations</c>.</summary>
     internal const string WinnersRelation = "winners";
 
-    /// <summary>One row per physical plugin copy the load order holds, carrying ADR-0013's three
+    /// <summary>One row per plugin file the load order holds, carrying ADR-0013's three
     /// facts. Registration is visibility (ADR-0009): every registered view joins it. Participation
     /// is never a column here.</summary>
     internal const string RegistrationsRelation = "registrations";
 
     /// <summary>ADR-0013: who competes for winner, as the load order value answered it, with each
-    /// copy's slot so the sweep can order by it. Load-order-owned state, so it lives in
+    /// plugin's slot so the sweep can order by it. Load-order-owned state, so it lives in
     /// <c>main</c>.</summary>
     internal const string ParticipatingRelation = "participating";
 
@@ -120,7 +120,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // ADR-0009: the one "registered" predicate — a row answers iff a registrations row names its
     // (plugin, origin) — so C# reads and the SQL door cannot scope differently. Registered, not
-    // participating: a losing or disabled copy stays visible (ADR-0013).
+    // participating: an overridden or disabled plugin stays visible (ADR-0013).
     private static void CreateRegisteredViews(DuckDBConnection connection)
     {
         foreach (var relation in RegisteredRelations)
@@ -253,7 +253,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0013: one row per physical plugin copy, carrying the three facts participation derives
+    // ADR-0013: one row per plugin file, carrying the three facts participation derives
     // from; participation itself is never a column here. ADR-0009: not cleared at open — the first
     // reconcile corrects these rows.
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>

@@ -46,9 +46,9 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     // The rival this test rules out: the watcher's own hash bookkeeping deciding not-yet-indexed
-    // copies are nothing to look at, the way it did before this poke moved the comparison here.
+    // plugins are nothing to look at, the way it did before this poke moved the comparison here.
     [Fact]
-    public async Task RefreshBinary_ForACopyThatFailedToOpenAtTheLastReconcile_IndexesItNow()
+    public async Task RefreshBinary_ForAPluginThatFailedToOpenAtTheLastReconcile_IndexesItNow()
     {
         File.WriteAllText(_pluginPath, "not a plugin");
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
@@ -64,7 +64,7 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     [Fact]
-    public async Task RefreshBinary_ForACopyAlreadyIndexed_UnchangedBytesSettlingAgainIsNotReindexed()
+    public async Task RefreshBinary_ForAPluginAlreadyIndexed_UnchangedBytesSettlingAgainIsNotReindexed()
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
@@ -75,7 +75,7 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     [Fact]
-    public async Task RefreshBinary_ForACopyAlreadyIndexed_BytesThatArrivedExternallyAreReindexed()
+    public async Task RefreshBinary_ForAPluginAlreadyIndexed_BytesThatArrivedExternallyAreReindexed()
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
@@ -89,7 +89,7 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     [Fact]
-    public async Task RefreshBinary_ForACopyGoneFromDisk_UnindexesIt()
+    public async Task RefreshBinary_ForAPluginGoneFromDisk_UnindexesIt()
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
@@ -102,9 +102,9 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     // The rival this pins: answering true for any missing path, which would tell a reader
-    // something was re-fetched when a copy never indexed left nothing to remove.
+    // something was re-fetched when a plugin never indexed left nothing to remove.
     [Fact]
-    public async Task RefreshBinary_ForACopyNeverIndexed_MissingFromDisk_AnswersFalse() =>
+    public async Task RefreshBinary_ForAPluginNeverIndexed_MissingFromDisk_AnswersFalse() =>
         Assert.False(await _index.RefreshBinary(_key, _pluginPath));
 
     // The bool itself, across every branch: true only for the two that actually changed something a
@@ -130,7 +130,7 @@ public sealed class RefreshBinaryTests : IDisposable
     // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it
     // already was — ADR-0019 bans a failure a subscriber has no way to learn about.
     [Fact]
-    public async Task RefreshBinary_PublishesStatus_WhenACopyStillFailsToOpen()
+    public async Task RefreshBinary_PublishesStatus_WhenAPluginStillFailsToOpen()
     {
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Open(_holder, notifications: notifications);

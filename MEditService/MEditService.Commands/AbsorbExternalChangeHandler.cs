@@ -67,16 +67,16 @@ public sealed class AbsorbExternalChangeHandler
         IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredPlugin> plugins, LoadOrderSnapshot loadOrder)
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
-        foreach (var copy in ExternalChangeClassifier.CopiesIn(loadOrder, modFolder))
+        foreach (var plugin in ExternalChangeClassifier.PluginsIn(loadOrder, modFolder))
         {
             try
             {
-                observed.Add((copy.Name, await PluginBinaryHash.ExactBytesOfFileAsync(copy.Path)));
+                observed.Add((plugin.Name, await PluginBinaryHash.ExactBytesOfFileAsync(plugin.Path)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return AbsorbResult.WholeAnswerRefused(
-                    TrackRefusal.RoundTripFailed, $"{copy.Name} ({copy.Origin}) could not be read: {ex.Message}");
+                    TrackRefusal.RoundTripFailed, $"{plugin.Name} ({plugin.Origin}) could not be read: {ex.Message}");
             }
         }
 

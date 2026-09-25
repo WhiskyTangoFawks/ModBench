@@ -62,7 +62,7 @@ public static class LoadOrderEndpoints
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         // Every registration fact is Mod Management's to state, never defaulted here: a missing
-        // bool silently bound to false would make every copy non-participating.
+        // bool silently bound to false would make every plugin non-participating.
         if (req.Plugins is not { } plugins
             || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null))
         {

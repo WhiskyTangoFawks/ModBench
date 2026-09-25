@@ -50,7 +50,7 @@ public sealed class ReconcileRequestTests : IDisposable
     }
 
     [Fact]
-    public void ReconcilingEveryPlugin_CoversEveryRegisteredCopy()
+    public void ReconcilingEveryPlugin_CoversEveryRegisteredPlugin()
     {
         using var index = Indexes.Reconciled(_fixture);
 

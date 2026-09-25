@@ -35,7 +35,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // The plugin's bytes as the load order finds them: on disk, at the copy's path.
+    // The plugin's bytes as the load order finds them: on disk, at the plugin's path.
     private LoadOrderSnapshot WithPlugin(byte[] bytes)
     {
         var path = Path.Combine(ModFolder, PluginName);

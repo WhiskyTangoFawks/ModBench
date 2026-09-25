@@ -20,10 +20,10 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both copies build in the same order from a fresh Fallout4Mod against the same ModKey, so
-    // they land on identical FormKeys: one captured FormKey addresses both copies' routes,
+    // Both plugins build in the same order from a fresh Fallout4Mod against the same ModKey, so
+    // they land on identical FormKeys: one captured FormKey addresses both plugins' routes,
     // distinguished only by `origin`.
-    private static (string WorldspaceFk, string CellFk) ConfigureCopy(Fallout4Mod mod, string tag)
+    private static (string WorldspaceFk, string CellFk) ConfigurePlugin(Fallout4Mod mod, string tag)
     {
         var wrld = mod.Worldspaces.AddNew($"World{tag}");
         var extCell = new Cell(mod) { EditorID = $"Cell{tag}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
@@ -46,29 +46,29 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         return (wrld.FormKey.ToString(), extCell.FormKey.ToString());
     }
 
-    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoCopies()
+    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoPlugins()
     {
         string? worldspaceFk = null;
         string? cellFk = null;
         var fx = new PluginFixtureBuilder("api-spatial-origin")
             .WithPlugin("Shared.esp", mod =>
             {
-                var (wrld, cell) = ConfigureCopy(mod, "ModA");
+                var (wrld, cell) = ConfigurePlugin(mod, "ModA");
                 worldspaceFk = wrld;
                 cellFk = cell;
             }, origin: "ModA")
-            .WithPlugin("Shared.esp", mod => ConfigureCopy(mod, "ModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
             .BuildScattered();
         return (
             fx,
-            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigureCopy to have set the worldspace FormKey."),
-            cellFk ?? throw new InvalidOperationException("Expected ConfigureCopy to have set the cell FormKey."));
+            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the worldspace FormKey."),
+            cellFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the cell FormKey."));
     }
 
-    private async Task PutBothCopies(ScatteredFixtureData fx)
+    private async Task PutBothPlugins(ScatteredFixtureData fx)
     {
-        // ADR-0013: both copies travel in the one snapshot, ModB as the losing copy at the same
-        // slot; only the winning, enabled, listed one participates.
+        // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
+        // same slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
             ? p with { Slot = winner.Slot, Winning = false }
@@ -85,27 +85,27 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatCopysOwnWorldspaces_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatPluginsOwnWorldspaces_OmittedOrigin_ReturnsLoadOrderWinners()
     {
-        var (fx, _, _) = BuildTwoCopies();
+        var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothCopies(fx);
+        await PutBothPlugins(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
         Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
 
-        // Omitted origin still resolves via the load order — the winning copy (ModA) — since
+        // Omitted origin still resolves via the load order — the winning plugin (ModA) — since
         // that is the path every current caller takes.
         var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces");
         Assert.Equal(["WorldModA"], omitted.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
     }
 
     [Fact]
-    public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatCopysOwnCells_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatPluginsOwnCells_OmittedOrigin_ReturnsLoadOrderWinners()
     {
-        var (fx, worldspaceFk, _) = BuildTwoCopies();
+        var (fx, worldspaceFk, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothCopies(fx);
+        await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks?origin=ModB");
@@ -118,11 +118,11 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task GetCellReferences_ExplicitOrigin_ReturnsThatCopysOwnPlacedRefs_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetCellReferences_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs_OmittedOrigin_ReturnsLoadOrderWinners()
     {
-        var (fx, _, cellFk) = BuildTwoCopies();
+        var (fx, _, cellFk) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothCopies(fx);
+        await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(cellFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModB");
@@ -133,11 +133,11 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatCopysOwnInteriorCells_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatPluginsOwnInteriorCells_OmittedOrigin_ReturnsLoadOrderWinners()
     {
-        var (fx, _, _) = BuildTwoCopies();
+        var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothCopies(fx);
+        await PutBothPlugins(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB&limit=50&offset=0");
         Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());

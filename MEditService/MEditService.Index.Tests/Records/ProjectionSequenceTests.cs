@@ -85,7 +85,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACopyLeaving_AdvancesTheSequence()
+    public void Reconcile_APluginLeaving_AdvancesTheSequence()
     {
         Reconcile(_fixture.Plugins);
         var before = _index.Sequence;

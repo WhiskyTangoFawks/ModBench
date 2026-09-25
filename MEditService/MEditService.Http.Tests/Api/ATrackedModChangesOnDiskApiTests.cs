@@ -61,7 +61,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 
     private int _markers;
 
-    // Moves every copy one slot, since an identical resend publishes nothing: its load-order-status
+    // Moves every plugin one slot, since an identical resend publishes nothing: its load-order-status
     // carries its own version, so we skip any unread frame an earlier PUT left on this stream.
     private async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThroughAMarkerPut(
         StreamReader stream, ScatteredFixtureData fx)

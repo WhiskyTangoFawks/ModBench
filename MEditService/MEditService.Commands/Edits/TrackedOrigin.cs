@@ -3,8 +3,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What a gesture the mod is the unit of (Absorb, Keep) acts on: the copies under the
-/// origin and the tracked folder they share. Null for an origin no copy carries, or an untracked
+/// <summary>What a gesture the mod is the unit of (Absorb, Keep) acts on: the plugins under the
+/// origin and the tracked folder they share. Null for an origin no plugin carries, or an untracked
 /// folder.</summary>
 internal sealed record TrackedOrigin(string ModFolder, IReadOnlyList<RegisteredPlugin> Plugins)
 {

@@ -35,17 +35,17 @@ public sealed class GoneReportChecksDiskTests : IDisposable
     private int HeldRows() => _index.Projected().GetRecordTypeCounts(Key).Sum(c => c.Count);
 
     [Fact]
-    public async Task AGoneReport_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()
+    public async Task AGoneReport_WhileTheHeldPluginIsStillOnDisk_KeepsItsRows()
     {
         Assert.True(HeldRows() > 0, "positive control: the plugin indexed");
 
         await _index.RefreshBinary(Key, Path.Combine(_data.DataFolder, "a-superseded-path", Key.Name));
 
-        Assert.True(HeldRows() > 0, "a stale 'gone from disk' report removed a copy that is still on disk");
+        Assert.True(HeldRows() > 0, "a stale 'gone from disk' report removed a plugin that is still on disk");
     }
 
     [Fact]
-    public async Task AGoneReport_OnceTheHeldCopyIsGone_RemovesItsRows()
+    public async Task AGoneReport_OnceTheHeldPluginIsGone_RemovesItsRows()
     {
         File.Delete(HeldPath);
 

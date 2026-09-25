@@ -158,14 +158,14 @@ public sealed class CopyRecordAsOverrideHandler
     // beaten at runtime. A plugin the load order does not place passes.
     private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
     {
-        var copies = _loadOrder.Current.Plugins;
+        var plugins = _loadOrder.Current.Plugins;
 
-        // A FormKey carries only a filename, so with two same-named copies (ADR-0012) the winning one
-        // is the origin.
+        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
+        // winning one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var sameNamed = copies.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
         var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.Slot;
-        var destinationIndex = copies.FirstOrDefault(
+        var destinationIndex = plugins.FirstOrDefault(
             p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
                 && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.Slot;
         if (originIndex is not { } origin || destinationIndex is not { } destination || destination >= origin)

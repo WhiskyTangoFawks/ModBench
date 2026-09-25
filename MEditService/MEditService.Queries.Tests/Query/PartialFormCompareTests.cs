@@ -53,12 +53,12 @@ public sealed class PartialFormCompareTests
             [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 1),
             [OverridePlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),
         };
-        var copies = new[]
+        var plugins = new[]
         {
             new RegisteredPlugin("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
             new RegisteredPlugin("Partial.esp", "Data", "Partial.esp", 1, Enabled: true, Winning: true),
         };
-        var holder = FakeLoadOrder.Of(Release, copies);
+        var holder = FakeLoadOrder.Of(Release, plugins);
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 

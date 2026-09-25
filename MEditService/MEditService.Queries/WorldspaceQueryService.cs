@@ -7,7 +7,7 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // ADR-0012: origin — stated by a caller that knows which copy of `plugin` it's
+    // ADR-0012: origin — stated by a caller that knows which plugin named `plugin` it's
     // browsing (a tree row does; it was built from one), else resolved from the load order.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
@@ -105,7 +105,7 @@ public sealed class WorldspaceQueryService(
     }
 
     // An ordinary load-order row has no origin to give, so this stays the fallback; callers that
-    // do know (a tree row built from a specific copy) pass an explicit origin instead.
+    // do know (a tree row built from a specific plugin) pass an explicit origin instead.
     private string ResolveOrigin(string plugin) =>
         PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
 }

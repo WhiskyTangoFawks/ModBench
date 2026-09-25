@@ -86,7 +86,7 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>A registered copy carries no such origin — a 404, well-formed and addressed at
+    /// <summary>A registered plugin carries no such origin — a 404, well-formed and addressed at
     /// nothing real.</summary>
     internal static IResult OriginNotFound(string origin) =>
         Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);

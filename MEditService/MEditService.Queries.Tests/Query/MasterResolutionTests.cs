@@ -20,10 +20,10 @@ public class MasterResolutionTests
         params PluginLoadFailure[] failures)
     {
         var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer);
-        var copies = plugins
+        var registered = plugins
             .Select((p, slot) => new RegisteredPlugin(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
             .ToList();
-        var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. copies]);
+        var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. registered]);
         var status = new LoadOrderStatus(state, plugins.Length, [], ConflictsComputed: state == LoadOrderState.Ready, failures);
         var svc = new RecordQueryService(
             new FakeIndex(new FakeReads(opened, []), status), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -47,9 +47,9 @@ public class MasterResolutionTests
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — each copy answers for its own masters.
+    // ADR-0012 invariant 1: a filename is not an identity — each plugin answers for its own masters.
     [Fact]
-    public void GetPlugins_TwoCopiesOfOneName_EachCarriesItsOwnMasterIssues()
+    public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
     {
         var missingAMaster = (new PluginAddress("Patch.esp", "WinningMod"),
             new PluginContent(IsLight: false, IsMaster: false, ["Ghost.esm"], RecordCount: 0));

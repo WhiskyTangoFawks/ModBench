@@ -94,7 +94,7 @@ public sealed class RefreshByKeysTests : IDisposable
 
         Refresh(formKey);
 
-        // A document alone cannot say where the tree puts a record, so the copy is re-derived whole
+        // A document alone cannot say where the tree puts a record, so the plugin is re-derived whole
         // — and the record, its identity row and its EditorID all arrive with it.
         Assert.Equal("HandCreated", Reads.GetDocument(formKey, _mod.KeyOf())?.EditorId);
         Assert.Contains(formKey, Reads.GetNativeFormKeys(_mod.KeyOf()));

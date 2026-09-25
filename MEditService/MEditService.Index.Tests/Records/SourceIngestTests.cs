@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A tracked copy's truth is its tree: what the Index answers after an ingest is what the
+/// <summary>A tracked plugin's truth is its tree: what the Index answers after an ingest is what the
 /// working tree holds, what HEAD holds, and what it says when the tree cannot be read.</summary>
 public sealed class SourceIngestTests : IDisposable
 {
@@ -204,7 +204,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public async Task ABinaryChangeOnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
+    public async Task ABinaryChangeOnATrackedPlugin_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
         using var index = Opened();
 
@@ -298,7 +298,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void ACopyWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
+    public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
         using var index = Opened();

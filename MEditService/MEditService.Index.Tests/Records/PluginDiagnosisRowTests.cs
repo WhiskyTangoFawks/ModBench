@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index.Tests.Records;
 
 // The malformed-plugin diagnosis is a row: projected in the pass that hashes the binary, read
-// through the reads, validated by that hash, re-derived with the copy and gone with its rows.
+// through the reads, validated by that hash, re-derived with the plugin and gone with its rows.
 public sealed class PluginDiagnosisRowTests : IDisposable
 {
     private const string MalformedFixture = "LitR - TrueStorms.esp";
@@ -51,7 +51,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     }
 
     [Fact]
-    public void AMalformedCopy_ReadsAsDiagnosisRows_WordedAsTheScanWordsThem()
+    public void AMalformedPlugin_ReadsAsDiagnosisRows_WordedAsTheScanWordsThem()
     {
         using var index = Reconciled(new LoadOrderHolder());
 
@@ -100,7 +100,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     // Registered answers, unregistered answers nothing (ADR-0009 invariant 1): the row is scoped
     // like every other.
     [Fact]
-    public void ADiagnosisRow_OfACopyTheSnapshotStoppedNaming_AnswersNothing()
+    public void ADiagnosisRow_OfAPluginTheSnapshotStoppedNaming_AnswersNothing()
     {
         var holder = new LoadOrderHolder();
         using var index = Reconciled(holder);

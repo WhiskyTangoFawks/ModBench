@@ -106,16 +106,16 @@ public sealed class ModFolderWatcher : IDisposable
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
         var unreadable = new List<string>();
-        foreach (var copy in mod.Plugins)
+        foreach (var plugin in mod.Plugins)
         {
             try
             {
-                observed.Add((copy.Name, File.ReadAllBytes(copy.Path)));
+                observed.Add((plugin.Name, File.ReadAllBytes(plugin.Path)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", copy.Name);
-                unreadable.Add(copy.Name);
+                _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
+                unreadable.Add(plugin.Name);
             }
         }
 

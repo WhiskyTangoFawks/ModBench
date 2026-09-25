@@ -120,7 +120,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
     // cell_location.ParentWorldspace is derived by walking the whole Worldspaces/blocks/sub-blocks
     // tree top-down (SourceTreeDocuments), which RefreshKeys' narrow per-record re-parse does not
-    // do; ReindexPlugin re-derives the copy whole from source.
+    // do; ReindexPlugin re-derives the plugin whole from source.
     [Fact]
     public async Task ChangingTheFormIdOfAWorldspace_RepointsItsExteriorCellsCellLocationRow_AndTheOldKeyAnswersNothing()
     {
@@ -139,7 +139,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Empty(fixture.Reads.GetWorldspaceCells(fixture.Plugin, fixture.Worldspace));
     }
 
-    // The rival this pins: without ReindexPlugin (or an equivalent whole-copy re-derivation), the
+    // The rival this pins: without ReindexPlugin (or an equivalent whole-plugin re-derivation), the
     // exterior cell's row is exactly the stale one from before the move.
     [Fact]
     public void ChangingTheFormIdOfAWorldspace_WithNoReindexCall_LeavesItsCellLocationRowStale()

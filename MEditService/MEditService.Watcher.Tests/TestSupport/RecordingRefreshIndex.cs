@@ -9,7 +9,7 @@ internal sealed record RecordedProjection(
     string Verb, PluginAddress? Plugin, IReadOnlyList<string> Keys, int Scope);
 
 /// <summary>The Index as a recorder: the watcher's routing is what it asked for, so a test reads the
-/// verb and the copy rather than the delegate that carried it.</summary>
+/// verb and the plugin rather than the delegate that carried it.</summary>
 internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : IRefreshIndex
 {
     private readonly object _gate = new();
@@ -88,7 +88,7 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
         return [];
     }
 
-    /// <summary>Seeds this copy as already indexed with this hash — the state a prior reconcile
+    /// <summary>Seeds this plugin as already indexed with this hash — the state a prior reconcile
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
     public void SeedIndexed(PluginAddress key, string hash) => _indexedHashes[key] = hash;
 

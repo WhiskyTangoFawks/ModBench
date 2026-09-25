@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>The Index's scope — the store it opens, the copies it holds open in it, and the filter
+/// <summary>The Index's scope — the store it opens, the plugins it holds open in it, and the filter
 /// materialized over it — across a reconcile, a replacement, a close and a dispose.</summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public class IndexScopeTests(TestPluginFixture fixture)

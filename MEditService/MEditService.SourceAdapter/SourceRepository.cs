@@ -51,7 +51,7 @@ public sealed partial class SourceRepository
         return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
     }
 
-    // Read off the ref store's files, not by running git: every read of a tracked copy asks this.
+    // Read off the ref store's files, not by running git: every read of a tracked plugin asks this.
     // A branch is a loose ref file until git packs it into packed-refs.
     private static bool HasMainBranch(string gitDir) =>
         File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
@@ -74,8 +74,8 @@ public sealed partial class SourceRepository
             .OfType<string>()];
     }
 
-    /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a copy's origin
-    /// and path.</summary>
+    /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a plugin's
+    /// origin and path.</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder && IsTracked(modFolder);
 

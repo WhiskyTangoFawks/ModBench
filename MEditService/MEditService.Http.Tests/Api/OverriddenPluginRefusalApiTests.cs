@@ -26,7 +26,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
             .BuildScattered();
 
-        // BuildScattered gives every explicit copy Winning: true and its own slot; an overridden
+        // BuildScattered gives every explicit plugin Winning: true and its own slot; an overridden
         // plugin of a listed name carries the winning one's own slot instead (PluginMetadata).
         var winningSlot = fx.Plugins.First(p => p.Origin == WinningOrigin).Slot;
         var plugins = fx.Plugins.Select(p => p.Origin == OverriddenOrigin

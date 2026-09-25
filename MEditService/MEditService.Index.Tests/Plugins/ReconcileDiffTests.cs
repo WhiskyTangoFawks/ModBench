@@ -114,8 +114,8 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        // Still registered and still in the load order — browsable at its slot — but a disabled copy
-        // competes for nothing.
+        // Still registered and still in the load order — browsable at its slot — but a disabled
+        // plugin competes for nothing.
         Assert.True(index.Registers(bKey));
         var b = OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey));
         Assert.Equal(1, b.LoadOrderIndex);
@@ -127,10 +127,10 @@ public sealed class ReconcileDiffTests
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
-    // A losing copy and the winning copy of one filename are both held and both registered
-    // (ADR-0013: the snapshot is every physical copy); only the winning one can win.
+    // An overridden plugin and the winning plugin that share a filename are both held and both
+    // registered (ADR-0013: the snapshot is every plugin file); only the winning one can win.
     [Fact]
-    public void LosingCopy_IsRegisteredBesideTheWinner_AndNeverWins()
+    public void OverriddenPlugin_IsRegisteredBesideTheWinner_AndNeverWins()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-losing")
@@ -155,11 +155,11 @@ public sealed class ReconcileDiffTests
         Assert.False(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
         Assert.Equal(stack.Single(e => e.Plugin.Equals(modA)).LoadOrderIndex, stack.Single(e => e.Plugin.Equals(modB)).LoadOrderIndex);
 
-        // Both copies are registered — the losing one is browsable, not absent.
+        // Both plugins are registered — the overridden one is browsable, not absent.
         Assert.True(index.Registers(modB));
         Assert.NotEmpty(ReadsOf(index).GetDocuments(modB));
 
-        // Reprioritising the mods flips which copy wins — SQL-only, like every other move.
+        // Reprioritising the mods flips which plugin wins — SQL-only, like every other move.
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
@@ -169,9 +169,9 @@ public sealed class ReconcileDiffTests
         Assert.Equal(opened, opens.OpenedTotal);
     }
 
-    // Uninstall: a copy absent from the snapshot is unregistered, its rows kept for its return.
+    // Uninstall: a plugin absent from the snapshot is unregistered, its rows kept for its return.
     [Fact]
-    public void CopyAbsentFromSnapshot_IsUnregistered_AndReturnsWithoutAReindex()
+    public void PluginAbsentFromSnapshot_IsUnregistered_AndReturnsWithoutAReindex()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-leave");
@@ -237,7 +237,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void FailedCopy_IsAFailureOnTheRow_AndRecoversOnceItsBytesChange()
+    public void FailedPlugin_IsAFailureOnTheRow_AndRecoversOnceItsBytesChange()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-failed").WithPlugin("Good.esp").BuildScattered();

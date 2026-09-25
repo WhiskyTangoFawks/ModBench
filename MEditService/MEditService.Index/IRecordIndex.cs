@@ -14,7 +14,7 @@ internal interface IRecordIndex : IDisposable
     IRecordReads At(RecordRef recordRef);
 
     /// <summary>Where <see cref="IRecordReads.OpenedPlugins"/> reads from. The store holds no header
-    /// flag, master list or record count, so the Indexer points it at the copies it holds
+    /// flag, master list or record count, so the Indexer points it at the plugins it holds
     /// open.</summary>
     void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened);
 
@@ -44,7 +44,7 @@ internal interface IRecordIndex : IDisposable
     string? IndexedContentHash(PluginAddress key);
 
     /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009:
-    /// the file-gone verb — never the meaning of a copy leaving the load order, which is
+    /// the file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
     void Unindex(PluginAddress key);
 
@@ -53,7 +53,7 @@ internal interface IRecordIndex : IDisposable
     /// upsert. Winner state is stale until the next sweep.</summary>
     void Register(PluginAddress key, Registration registration);
 
-    /// <summary>ADR-0013: every copy the index currently registers — what a reconcile diffs the
+    /// <summary>ADR-0013: every plugin the index currently registers — what a reconcile diffs the
     /// incoming snapshot against, since a freshly opened file still carries the last run's
     /// registrations.</summary>
     IReadOnlyList<PluginAddress> RegisteredPlugins();
@@ -90,7 +90,7 @@ internal interface IRecordIndex : IDisposable
 
     /// <summary>ADR-0015 invariant 3: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
     /// both refs from the Source repository, idempotent by content. A key held at neither ref
-    /// re-derives the whole copy.</summary>
+    /// re-derives the whole plugin.</summary>
     void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0015 invariant 4: compares <paramref name="key"/>'s rows against the system of

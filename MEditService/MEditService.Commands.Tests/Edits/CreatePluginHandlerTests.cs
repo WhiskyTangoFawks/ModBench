@@ -33,7 +33,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Handler.CreatePlugin(name, Path.Combine(modFolder, name), origin);
 
     [Fact]
-    public async Task CreatePlugin_WritesTheFileAtTheCopysPath()
+    public async Task CreatePlugin_WritesTheFileAtThePluginsPath()
     {
         var modFolder = ModFolder("StateMod");
 
@@ -44,10 +44,10 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(File.Exists(result.Plugin.Path));
     }
 
-    // A created plugin reaches every reader through this one snapshot change; a copy the
+    // A created plugin reaches every reader through this one snapshot change; a plugin the
     // reconcile cannot open is not a row, so the file comes first.
     [Fact]
-    public async Task CreatePlugin_RegistersTheCopy_OnlyOnceItsFileExists()
+    public async Task CreatePlugin_RegistersThePlugin_OnlyOnceItsFileExists()
     {
         var existedWhenApplied = new List<bool>();
         _holder.Changed += (snapshot, _) =>

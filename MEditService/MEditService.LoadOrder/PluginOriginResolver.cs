@@ -8,7 +8,7 @@ namespace MEditService.LoadOrder;
 // is what makes a bare filename a safe write target. Membership, not participation: a disabled line
 // is still a legitimate write target (ADR-0013).
 
-// Scoping, not ordering: unlisted copies are appended after the load order is built, so a plain
+// Scoping, not ordering: unlisted plugins are appended after the load order is built, so a plain
 // first-match returns the right plugin today only by accident of list order.
 public static class PluginOriginResolver
 {

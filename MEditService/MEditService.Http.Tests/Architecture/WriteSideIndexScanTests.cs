@@ -135,7 +135,7 @@ public sealed class WriteSideIndexScanTests
     private const string DoorMappingFile = "MEditService.Http/Endpoints/IndexEndpoints.cs";
 
     // The Index's doors as the zoom-out captions them, by the member each route calls. Registers
-    // answers the 404 before validate is asked for a copy nobody holds.
+    // answers the 404 before validate is asked for a plugin nobody holds.
     private static readonly string[] IndexDoors =
     [
         "Status", "RequireReads", "ActiveFilter", "SetFilter", "ClearFilter", "Sequence",

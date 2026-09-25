@@ -101,12 +101,12 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal("Bad.esp", failure.Name);
     }
 
-    // ADR-0013: two copies of one name are two rows, so a failure that named only the file would
-    // land on whichever row the reader looked up first.
+    // ADR-0013: two plugins that share a filename are two rows, so a failure that named only the
+    // file would land on whichever row the reader looked up first.
     [Fact]
-    public async Task PutLoadOrder_LosingCopyUnparseable_TheFailureNamesTheLosingOrigin()
+    public async Task PutLoadOrder_OverriddenPluginUnparseable_TheFailureNamesTheOverriddenPluginsOrigin()
     {
-        using var fx = new PluginFixtureBuilder("api-losing-copy-bad")
+        using var fx = new PluginFixtureBuilder("api-overridden-plugin-bad")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .WithPlugin("Shared.esp", origin: "ModB")
             .BuildScattered();

@@ -121,8 +121,8 @@ internal sealed class WatcherSinks
         }
     }
 
-    /// <summary>ADR-0015 invariant 4: one git listing for the whole copy, compared by content hash.
-    /// The Index announces a copy it re-derives.</summary>
+    /// <summary>ADR-0015 invariant 4: one git listing for the whole plugin, compared by content hash.
+    /// The Index announces a plugin it re-derives.</summary>
     public void ValidateWholePlugin(PluginAddress key, string reason)
     {
         foreach (var report in _index.ValidateIndex(key))
@@ -134,7 +134,7 @@ internal sealed class WatcherSinks
 
     // A file declaring nothing is named by HEAD's document at its path. Null when neither names a
     // key, or another path in the batch declares the key HEAD named: a rename, which only a
-    // whole-copy validate keys right.
+    // whole-plugin validate keys right.
     private static List<string>? FormKeysOf(SourceChangeEvent change)
     {
         var declared = new List<string>();

@@ -99,7 +99,7 @@ public sealed class IndexedModFixture : IDisposable
     /// Index over the same instance starts warm — the shape a restart has.</summary>
     public static IndexedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
 
-    /// <summary>The load order snapshot this fixture's one plugin copy is, for a caller reconciling a
+    /// <summary>The load order snapshot this fixture's one plugin is, for a caller reconciling a
     /// second Index over the same instance.</summary>
     public LoadOrderEntry Entry =>
         new(ActualPluginName, Path.Combine(ModFolder, ActualPluginName), ModFolderOrigin, Slot: 0, Enabled: true, Winning: true);

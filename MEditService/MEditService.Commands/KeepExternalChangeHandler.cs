@@ -88,7 +88,7 @@ public sealed class KeepExternalChangeHandler
         return ExternalChangeLandResult.Success(landed);
     }
 
-    // The mod's own name travels on RegisteredPlugin.Origin already (ADR-0009): every copy in
+    // The mod's own name travels on RegisteredPlugin.Origin already (ADR-0009): every plugin in
     // plugins shares it, so nothing here re-derives a name from the folder path.
     private static string CollisionMessage(
         IReadOnlyList<RegisteredPlugin> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)

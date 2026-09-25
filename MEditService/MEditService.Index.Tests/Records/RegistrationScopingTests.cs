@@ -10,7 +10,7 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009: registration is visibility. A copy the snapshot stops naming keeps its rows and
+// ADR-0009: registration is visibility. A plugin the snapshot stops naming keeps its rows and
 // answers nothing anywhere; naming it again makes them answer with no re-read.
 public class RegistrationScopingTests
 {
@@ -169,7 +169,7 @@ public class RegistrationScopingTests
         Assert.Null(reads.GetContainerParent(BetaKey, fx.BetaTopicFk));
 
         // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either. The
-        // shared NPC's FormKey sits in both copies, so a leaked Beta row would surface Alpha's copy.
+        // shared NPC's FormKey sits in both plugins, so a leaked Beta row would surface Alpha's copy.
         fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'", "filter.sql");
         Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
         Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
@@ -210,7 +210,7 @@ public class RegistrationScopingTests
     }
 
     // Unindex is the file-gone verb: the inverse of indexing, rows and registration alike, so the
-    // copy's return is a fresh read of the binary.
+    // plugin's return is a fresh read of the binary.
     [Fact]
     public async Task Unindex_RemovesTheRowsThemselves()
     {

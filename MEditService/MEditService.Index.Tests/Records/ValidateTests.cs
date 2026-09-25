@@ -70,7 +70,7 @@ public sealed class ValidateTests : IDisposable
     }
 
     [Fact]
-    public void ValidatingEveryCopy_WhenOneCopysTreeCannotBeRead_StillValidatesTheOthers()
+    public void ValidatingEveryPlugin_WhenOnePluginsTreeCannotBeRead_StillValidatesTheOthers()
     {
         FormKey other = default;
         using var fixture = new PluginFixtureBuilder("validate-two-tracked")

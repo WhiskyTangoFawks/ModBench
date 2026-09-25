@@ -22,7 +22,7 @@ public sealed class RecordQueryService(
         var reads = RequireReads();
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
-        // Index's. A copy the Index has not opened has none of the latter and is not a row.
+        // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
         // ADR-0012: classified once per call, and only once the projection is complete: a partial
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
@@ -34,9 +34,9 @@ public sealed class RecordQueryService(
                 : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedPlugins();
-        PluginRow ToRow(RegisteredPlugin copy, bool hasMatchingRecords) =>
-            new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Key) ?? [], hasMatchingRecords,
-                parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)), tracked.Contains(copy.Key));
+        PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords) =>
+            new(plugin, opened[plugin.Key], masterIssues.GetValueOrDefault(plugin.Key) ?? [], hasMatchingRecords,
+                parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
         if (_index.FilterSql is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];
@@ -64,7 +64,7 @@ public sealed class RecordQueryService(
         string? resolvedOrigin = null;
         if (plugin != null)
         {
-            // The caller states which copy when it knows (a tree row does); otherwise resolve from
+            // The caller states which plugin when it knows (a tree row does); otherwise resolve from
             // the load order, since a bare filename is all most callers have.
             pluginFilter = plugin;
             resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
@@ -90,23 +90,23 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var copies = _loadOrder.Require().Plugins;
-        // ADR-0012: the grid is the record's in-game resolution stack, so a file-level loser is
-        // not a column. Winning alone, never Participates — a disabled copy still columns.
-        // Fail-open on a copy the load order lacks.
-        var pluginWinning = copies.ToDictionary(c => ColumnKey.Of(c.Name, c.Origin), c => c.Winning);
+        var plugins = _loadOrder.Require().Plugins;
+        // ADR-0012: the grid is the record's in-game resolution stack, so an overridden plugin is
+        // not a column. Winning alone, never Participates — a disabled plugin still columns.
+        // Fail-open on a plugin the load order lacks.
+        var pluginWinning = plugins.ToDictionary(c => ColumnKey.Of(c.Name, c.Origin), c => c.Winning);
         var committedOverrides = stack.Entries
             .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin), true))
             .Select(e => ToRecordDetail(e.Effective))
             .ToList();
 
-        // ADR-0012: keyed by the compound column identity — with a second copy of one filename
+        // ADR-0012: keyed by the compound column identity — with a second plugin of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = reads.OpenedPlugins.ToDictionary(
             kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin), kv => kv.Value.Masters);
         // ADR-0013: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
-        var pluginParticipates = copies.ToDictionary(
+        var pluginParticipates = plugins.ToDictionary(
             c => ColumnKey.Of(c.Name, c.Origin), c => c.Registration.Participates);
         var (classification, conflictAll) =
             ClassifyStack(committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
@@ -136,7 +136,7 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
     {
         var reads = RequireReads();
-        // Stated by the caller when it knows which copy it is browsing (a tree row does),
+        // Stated by the caller when it knows which plugin it is browsing (a tree row does),
         // else resolved server-side from the load order.
         origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var schemas = RequireSchemas();

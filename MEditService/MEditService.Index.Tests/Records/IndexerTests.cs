@@ -61,10 +61,10 @@ public sealed class IndexerTests
     }
 
     // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the copies the Index has open still carry the old winner: an Indexer
+    // next snapshot here, so the plugins the Index has open still carry the old winner: an Indexer
     // reading them answers B.esp.
     [Fact]
-    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()
+    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-winners-from-holder");
@@ -81,7 +81,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public void Reconcile_RegistersExactlyTheLoadOrdersCopies()
+    public void Reconcile_RegistersExactlyTheLoadOrdersPlugins()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-registrations");
@@ -90,17 +90,18 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Plugins, copy => Assert.True(indexer.Registers(copy.Key)));
+        Assert.All(snapshot.Plugins, plugin => Assert.True(indexer.Registers(plugin.Key)));
         Assert.Equal(
             snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
             indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
         Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
-    // Header flags, the master list and the record count are read out of the file when the copy is
-    // opened and are stored in no row, so the reads answer them from the copies the Index holds open.
+    // Header flags, the master list and the record count are read out of the file when the plugin is
+    // opened and are stored in no row, so the reads answer them from the plugins the Index holds
+    // open.
     [Fact]
-    public void TheReads_CarryTheContentFactsOfEveryCopyTheIndexOpened()
+    public void TheReads_CarryTheContentFactsOfEveryPluginTheIndexOpened()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-opened-content");
@@ -117,10 +118,10 @@ public sealed class IndexerTests
         Assert.True(opened[snapshot.Plugins.Single(c => c.Name == "A.esm").Key].IsMaster);
     }
 
-    // A copy the Index could not open has no content to report, and the plugin listing is built by
-    // joining the load order's copies to exactly this set.
+    // A plugin the Index could not open has no content to report, and the plugin listing is built by
+    // joining the load order's plugins to exactly this set.
     [Fact]
-    public void TheReads_OmitACopyTheIndexCouldNotOpen()
+    public void TheReads_OmitAPluginTheIndexCouldNotOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-unopenable-content");
@@ -170,7 +171,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public void AnArrivingCopy_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
+    public void AnArrivingPlugin_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-arriving-filter");

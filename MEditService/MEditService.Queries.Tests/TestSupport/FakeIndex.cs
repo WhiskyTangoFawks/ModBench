@@ -70,7 +70,7 @@ internal sealed class FakeReads(
         rows.Where(r => r.Document.ParseDiagnosis != null).Select(r => ColumnKey.Of(r.Plugin.Name, r.Plugin.Origin))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-    // Projecting a diagnosis and deciding which copies were derived from a source tree are the real
+    // Projecting a diagnosis and deciding which plugins were derived from a source tree are the real
     // Index's own behaviour; a test states the rows it wants read back.
     public IReadOnlyList<PluginDiagnosisRow> Diagnoses { get; set; } = [];
 
@@ -105,7 +105,7 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     /// <summary>A whole fixture, opened: the index and the load order it was built against.</summary>
     internal static (FakeIndex Index, LoadOrderHolder Holder) From(FakeFixtureData fixture)
     {
-        var holder = FakeLoadOrder.Of(fixture.Release, [.. fixture.Copies]);
+        var holder = FakeLoadOrder.Of(fixture.Release, [.. fixture.Plugins]);
         return (new FakeIndex(new FakeReads(fixture.OpenedPlugins, fixture.Rows)), holder);
     }
 }

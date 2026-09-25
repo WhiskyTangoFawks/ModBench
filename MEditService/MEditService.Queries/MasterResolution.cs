@@ -21,8 +21,8 @@ public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 // so there is nothing to propagate.
 internal static class MasterResolution
 {
-    /// <summary>Per-copy master issues; a copy with every master resolved has no entry (never an
-    /// empty list). A master is named by filename, so any copy of that name resolves it.</summary>
+    /// <summary>Per-plugin master issues; a plugin with every master resolved has no entry (never an
+    /// empty list). A master is named by filename, so any plugin of that name resolves it.</summary>
     public static IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> Classify(
         IReadOnlyDictionary<PluginAddress, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
     {

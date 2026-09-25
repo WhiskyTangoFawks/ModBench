@@ -42,7 +42,7 @@ public sealed class ArchitectureTests
         (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
-    // ADR-0012: a bare filename compiles and passes single-copy tests, then misidentifies.
+    // ADR-0012: a bare filename compiles and passes single-plugin tests, then misidentifies.
     [Fact]
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
@@ -132,7 +132,7 @@ public sealed class ArchitectureTests
     public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheWatcher()
     {
         var root = SolutionDirectory();
-        // Create never reconciles: its copy reaches the Index through the next snapshot. The
+        // Create never reconciles: its plugin reaches the Index through the next snapshot. The
         // watcher, the one listener to the change, is the one caller of the reconcile door.
         string[] reconcilers = ["ModFolderWatcher.cs", "WatcherSinks.cs"];
         string[] writers = ["CreatePluginHandler.cs", "PutLoadOrderHandler.cs"];
@@ -258,7 +258,7 @@ public sealed class ArchitectureTests
     }
 
     // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
-    // answer to "which copy wins". As a parameter it is the snapshot going in, the allowed
+    // answer to "which plugin wins". As a parameter it is the snapshot going in, the allowed
     // direction.
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()

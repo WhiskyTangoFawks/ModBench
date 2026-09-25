@@ -281,11 +281,11 @@ public class ConflictClassifierTests
         Assert.Empty(result.Diffs);
     }
 
-    // ADR-0013: a losing copy of one filename is registered beside the winner and reaches the
-    // classifier as a second column with the same name. Keyed by ColumnKey, so the two are distinct
-    // and the loser is filtered out first.
+    // ADR-0013: an overridden plugin is registered beside the winner and reaches the classifier as
+    // a second column with the same name. Keyed by ColumnKey, so the two are distinct
+    // and the overridden one is filtered out first.
     [Fact]
-    public void Classify_LosingCopyOfTheSameFilename_IsExcluded_NotAConflictWithTheWinner()
+    public void Classify_OverriddenPluginOfTheSameFilename_IsExcluded_NotAConflictWithTheWinner()
     {
         var winning = MakeOverrideWithOrigin("Shared.esp", "ModA", 3, true, ("Name", "FromModA"));
         var losing = MakeOverrideWithOrigin("Shared.esp", "ModB", 3, false, ("Name", "FromModB"));

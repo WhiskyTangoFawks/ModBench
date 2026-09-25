@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Watcher;
 
-/// <summary>ADR-0015 invariant 4: an operating-system overflow dropped events, so every copy under
+/// <summary>ADR-0015 invariant 4: an operating-system overflow dropped events, so every plugin under
 /// the watch is compared by content hash rather than trusted. The Index announces what it
 /// re-derives.</summary>
 internal sealed class OverflowValidation

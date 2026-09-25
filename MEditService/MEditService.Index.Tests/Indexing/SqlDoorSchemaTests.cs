@@ -82,16 +82,16 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     // records_committed holds only the committed snapshots of records the working tree has moved,
-    // so on a clean copy the column is provable by acceptance alone.
+    // so on a clean plugin the column is provable by acceptance alone.
     [Theory]
     [InlineData("records", true)]
     [InlineData("records_committed", false)]
     [InlineData("form_lookup", true)]
-    public void ARelation_ExposesLoadOrderIndex(string relation, bool holdsACleanCopysRows)
+    public void ARelation_ExposesLoadOrderIndex(string relation, bool holdsACleanPluginsRows)
     {
         _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
 
-        if (holdsACleanCopysRows) Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
+        if (holdsACleanPluginsRows) Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
         else Assert.Empty(Listing());
     }
 

@@ -125,7 +125,7 @@ public sealed class SpatialParseFailurePrefixTests
         }
 
         // The record's document arrives as an identity-only stub carrying a diagnosis, the shape
-        // the adapter hands over for a record it could not read, and the copy is re-derived.
+        // the adapter hands over for a record it could not read, and the plugin is re-derived.
         internal void MarkUnreadable(string formKey)
         {
             _adapter.Unreadable = formKey;

@@ -175,7 +175,7 @@ public class HeaderIndexingTests
     }
 
     // ADR-0012: two origins holding the same filename — a filename-only delete step would make
-    // indexing ModB's copy silently delete ModA's header document before inserting ModB's.
+    // indexing ModB's plugin silently delete ModA's header document before inserting ModB's.
     [Fact]
     public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
     {

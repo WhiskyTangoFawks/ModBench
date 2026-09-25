@@ -139,7 +139,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
     }
 
-    // The Index answered this from its global lookup; the link cache answers it from the copy the
+    // The Index answered this from its global lookup; the link cache answers it from the plugin the
     // load order loads, so what the author sees in the Problems panel is unchanged.
     [Fact]
     public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()

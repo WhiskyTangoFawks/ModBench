@@ -68,14 +68,14 @@ public class ContainerChildQueryServiceTests
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
     }
 
-    private static LoadOrderHolder Holder(params RegisteredPlugin[] copies)
+    private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, plugins));
         return holder;
     }
 
-    private static RegisteredPlugin Copy(string name, string origin) =>
+    private static RegisteredPlugin Plugin(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     // Mixed rows come back Topics, then Branches, then Scenes (xEdit's DIAL, DLBR, SCEN order), never
@@ -168,7 +168,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
@@ -200,7 +200,7 @@ public class ContainerChildQueryServiceTests
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
-        // Origin is omitted here (no copy of that name), so PluginOriginResolver resolves it to the
+        // Origin is omitted here (no plugin of that name), so PluginOriginResolver resolves it to the
         // reserved PluginOrigin.DataDirectory value ("Data") — the same fallback every other
         // caller of that resolver gets.
         Assert.Equal(

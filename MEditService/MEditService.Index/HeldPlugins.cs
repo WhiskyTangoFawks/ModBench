@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>The copies the Index has open (ADR-0013), keyed by identity: what the adapter read out
+/// <summary>The plugins the Index has open (ADR-0013), keyed by identity: what the adapter read out
 /// of each file. Not a load order — who wins and who participates is the kernel's value. Reconcile
 /// mutates it in place.</summary>
 internal sealed class HeldPlugins
@@ -19,9 +19,9 @@ internal sealed class HeldPlugins
     private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
-    // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
-    // ordinarily held at once. Compared as every other keyed lookup compares it, the kernel's own
-    // comparer.
+    // ADR-0012: keyed by the compound (origin, filename) identity — two plugins that share a
+    // filename are ordinarily held at once. Compared as every other keyed lookup compares it, the
+    // kernel's own comparer.
     private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
@@ -42,10 +42,10 @@ internal sealed class HeldPlugins
 
     public GameRelease GameRelease { get; }
 
-    /// <summary>The metadata of every copy currently open, in the order they were opened.</summary>
+    /// <summary>The metadata of every plugin currently open, in the order they were opened.</summary>
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
-    /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>
+    /// <summary>What reading each open plugin told the Index, for the reads to hand out.</summary>
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => Volatile.Read(ref _openedSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
@@ -63,9 +63,9 @@ internal sealed class HeldPlugins
     public PluginMetadata? Find(PluginAddress key) =>
         Plugins.FirstOrDefault(p => PluginAddress.Comparer.Equals(p.Key, key));
 
-    /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
+    /// <summary>A plugin that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
-    /// earlier failure for the same copy.</summary>
+    /// earlier failure for the same plugin.</summary>
     public PluginMetadata? Open(RegisteredPlugin plugin)
     {
         if (!File.Exists(plugin.Path))
@@ -123,8 +123,8 @@ internal sealed class HeldPlugins
         }
     }
 
-    // Republishes the snapshot readers see, so a copy is never half-held from a reader's point of
-    // view. Replaces any copy already held under the same key: two PluginMetadata under one
+    // Republishes the snapshot readers see, so a plugin is never half-held from a reader's point of
+    // view. Replaces any plugin already held under the same key: two PluginMetadata under one
     // (origin, filename) would make every keyed lookup ambiguous.
     private void Hold(PluginMetadata metadata)
     {
@@ -139,14 +139,14 @@ internal sealed class HeldPlugins
     }
 
     // Both views of what is held are republished together, under _mutation, so a reader can never
-    // see a copy in one and not the other.
+    // see a plugin in one and not the other.
     private void PublishPlugins()
     {
         Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
         Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer));
     }
 
-    /// <summary>The load order's half of a copy leaving the snapshot. The index side is
+    /// <summary>The load order's half of a plugin leaving the snapshot. The index side is
     /// the Index's own unregister: the rows stay for the next snapshot that wants them.</summary>
     public bool Remove(PluginAddress key)
     {
@@ -204,7 +204,7 @@ internal sealed class HeldPlugins
         }
     }
 
-    /// <summary>Drops the failure an earlier read recorded, for a copy that has just read cleanly.
+    /// <summary>Drops the failure an earlier read recorded, for a plugin that has just read cleanly.
     /// False when none was recorded.</summary>
     internal bool ClearFailure(PluginAddress key)
     {
@@ -216,8 +216,8 @@ internal sealed class HeldPlugins
         }
     }
 
-    /// <summary>Held, and its last read failed: a copy the open itself failed on is not held, and has
-    /// nothing to read again.</summary>
+    /// <summary>Held, and its last read failed: a plugin the open itself failed on is not held, and
+    /// has nothing to read again.</summary>
     internal bool IsHeldWithAFailure(PluginAddress key)
     {
         lock (_mutation)

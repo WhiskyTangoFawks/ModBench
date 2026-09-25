@@ -259,10 +259,10 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
-    public async Task ANewCopyInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
+    public async Task ANewPluginInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
     {
         var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("sm-progressive-arriving-copy")
+        using var fx = new PluginFixtureBuilder("sm-progressive-arriving-plugin")
             .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
@@ -278,15 +278,15 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
         var readsWhileParked = manager.RequireReads();
 
-        // ADR-0007: a create registers its copy on the holder before the Index hears of it, so the
-        // arriving snapshot names a copy the parked reconcile never knew about.
+        // ADR-0007: a create registers its plugin on the holder before the Index hears of it, so the
+        // arriving snapshot names a plugin the parked reconcile never knew about.
         var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
-        // The five-copy snapshot reaches the holder before the gate opens, so the second reconcile
+        // The five-plugin snapshot reaches the holder before the gate opens, so the second reconcile
         // is genuinely mid-flight rather than a sequential third act the release let through.
         Assert.True(
             await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
-        // Caught in flight: the holder already names five copies while the parked Index still
+        // Caught in flight: the holder already names five plugins while the parked Index still
         // answers for four, which is the instant this test exists to cover.
         Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
         Assert.Equal(0, readsWhileParked.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -303,7 +303,7 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(
             ["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
             manager.Status.IndexedPlugins.Select(p => p.Name));
-        // Opened once each across both reconciles: the arriving snapshot adds a copy to the scope
+        // Opened once each across both reconciles: the arriving snapshot adds a plugin to the scope
         // rather than restarting it.
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
         Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));

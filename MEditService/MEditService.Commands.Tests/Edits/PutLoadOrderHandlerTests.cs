@@ -65,7 +65,7 @@ public sealed class PutLoadOrderHandlerTests
     }
 
     [Fact]
-    public void Put_RegistersEachForcedPlugin_AsAWinningEnabledCopyOfTheDataDirectory()
+    public void Put_RegistersEachForcedPlugin_AsAWinningEnabledPluginOfTheDataDirectory()
     {
         _adapter.Forced = ["Fallout4.esm"];
 
@@ -80,8 +80,8 @@ public sealed class PutLoadOrderHandlerTests
         Assert.False(_holder.Current.Plugins[1].IsForced);
     }
 
-    // A sent entry naming a forced plugin would give one file two copies; the forced row is the
-    // one the game loads, so it is the one kept.
+    // A sent entry naming a forced plugin would register two plugins that share a filename; the
+    // forced row is the one the game loads, so it is the one kept.
     [Fact]
     public void Put_DropsASentEntry_ThatNamesAForcedPlugin()
     {
@@ -93,7 +93,7 @@ public sealed class PutLoadOrderHandlerTests
         Assert.Equal([0, 2], _holder.Current.Plugins.Select(c => c.Slot));
     }
 
-    // An unlisted copy has no slot to offset: it stays unlisted.
+    // An unlisted plugin has no slot to offset: it stays unlisted.
     [Fact]
     public void Put_LeavesAnUnslottedEntryUnslotted_PastTheForcedPlugins()
     {

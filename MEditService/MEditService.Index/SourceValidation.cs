@@ -56,8 +56,8 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
             foreach (var formKey in deleted) held.Remove(formKey);
         }
 
-        // The tree files the records the rows hold, so from here the copy loads from it (ADR-0007
-        // invariant 3): a copy tracked after it was indexed needs no more than the stamp.
+        // The tree files the records the rows hold, so from here the plugin loads from it (ADR-0007
+        // invariant 3): a plugin tracked after it was indexed needs no more than the stamp.
         if (treeFullyRead) index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A set, not a list: a document that disagrees at both refs is one drifted document and one

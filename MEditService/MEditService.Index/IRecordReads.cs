@@ -40,12 +40,12 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey);
 
-    /// <summary>Every copy at least one filtered record matches, restricted to
-    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every copy
+    /// <summary>Every plugin at least one filtered record matches, restricted to
+    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>
     IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
 
-    /// <summary>Every Kind B diagnosis the registered copies' binaries prove, projected when each
+    /// <summary>Every Kind B diagnosis the registered plugins' binaries prove, projected when each
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses();
 

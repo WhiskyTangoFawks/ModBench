@@ -113,10 +113,10 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0013: a registered copy the game does not load is not where the link points, so its file
+    // ADR-0013: a registered plugin the game does not load is not where the link points, so its file
     // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
-    public async Task Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
+    public async Task Compile_ForALinkIntoATrackedPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of([Target(enabled: false), Referrer]));

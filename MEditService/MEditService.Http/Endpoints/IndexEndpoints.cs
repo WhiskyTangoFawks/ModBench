@@ -4,7 +4,7 @@ using MEditService.Ports;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>What one reconcile request found. PluginsRebuilt names the copies that had moved too
+/// <summary>What one reconcile request found. PluginsRebuilt names the plugins that had moved too
 /// far for a per-key refresh and were re-derived whole, whose rows RowsChanged cannot name.</summary>
 public sealed record ReconcileResponse(
     int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);
@@ -184,7 +184,7 @@ public static class IndexEndpoints
             logger.LogInformation("Received ReconcileIndex for {Plugin} ({Origin})", plugin ?? "every plugin", origin);
         }
 
-        // ADR-0012 invariant 1: a copy is (origin, plugin) together, so half an identity names nothing.
+        // ADR-0012 invariant 1: a plugin is (origin, filename) together, so half an identity names nothing.
         if (string.IsNullOrEmpty(plugin) != string.IsNullOrEmpty(origin))
             return Results.Problem("Name a plugin with both plugin and origin, or neither to check every plugin.", statusCode: 400);
 

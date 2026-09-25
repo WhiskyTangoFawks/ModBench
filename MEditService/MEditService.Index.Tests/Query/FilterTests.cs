@@ -128,12 +128,12 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, "Data"), plugins);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — a match in one copy is not a match in
-    // another copy of the same name.
+    // ADR-0012 invariant 1: a filename is not an identity — a match in one plugin is not a match
+    // in another plugin of the same name.
     [Fact]
-    public void GetPluginsWithMatchingRecords_TwoCopiesOfOneName_AnswersTheCopyThatMatches()
+    public void GetPluginsWithMatchingRecords_TwoPluginsOfOneName_AnswersThePluginThatMatches()
     {
-        using var copies = new PluginFixtureBuilder("filter-two-copies")
+        using var plugins = new PluginFixtureBuilder("filter-two-plugins")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("InBoth"), origin: "ModA")
             .WithPlugin("Shared.esp", mod =>
             {
@@ -141,7 +141,7 @@ public class FilterTests(TestPluginFixture fixture)
                 mod.Npcs.AddNew("OnlyInModB");
             }, origin: "ModB")
             .BuildScattered();
-        using var index = Indexes.Reconciled(copies);
+        using var index = Indexes.Reconciled(plugins);
 
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'", "filter.sql");
 

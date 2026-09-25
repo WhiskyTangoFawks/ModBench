@@ -14,7 +14,7 @@ namespace MEditService.Index;
 /// indexing call.</summary>
 internal static class SourceIngest
 {
-    /// <summary>Whether this copy has a tree to ingest from; false reads the binary instead.
+    /// <summary>Whether this plugin has a tree to ingest from; false reads the binary instead.
     /// Re-derived every call — MO2's Replace install shell-deletes the folder.</summary>
     internal static bool HoldsTree(string origin, string pluginPath, string pluginName) =>
         LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder

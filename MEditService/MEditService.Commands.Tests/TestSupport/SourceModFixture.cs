@@ -62,7 +62,7 @@ internal sealed class SourceModFixture : IDisposable
         new(pluginName, origin, build);
 
     /// <summary>A master in the game's Data folder holding one NPC: registered and loaded, with no
-    /// mod folder at all, which is a different refusal from an untracked copy.</summary>
+    /// mod folder at all, which is a different refusal from an untracked plugin.</summary>
     internal static SourceModFixture VanillaMaster(out FormKey npc)
     {
         var formKey = FormKey.Null;

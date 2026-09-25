@@ -273,11 +273,11 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
     {
-        var copies = Directory.GetFiles(_modFolder, "*.esp")
+        var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
             .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
             .ToList();
-        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(copies));
+        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(entries));
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
             .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits);
     }

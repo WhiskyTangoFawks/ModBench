@@ -26,7 +26,7 @@ public sealed class PluginCompileService(
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Plugins.Count == 0)
             return CompileResult.Refused("No load order has been received.");
-        if (loadOrder.Plugin(plugin) is not { } copy)
+        if (loadOrder.Plugin(plugin) is not { } registered)
             return CompileResult.Refused($"{plugin.Name} is not in the load order.");
         if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is not { } modFolder)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
@@ -116,7 +116,7 @@ public sealed class PluginCompileService(
         {
             try
             {
-                await tree.SaveThroughAsync(writer, copy.Path, loadOrderNames);
+                await tree.SaveThroughAsync(writer, registered.Path, loadOrderNames);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -131,7 +131,7 @@ public sealed class PluginCompileService(
             // parks too: otherwise the parked trailer still names the old working-tree hash and
             // Modbench's own write reads as an external change.
             SourceRepository.ParkCompileSnapshot(
-                modFolder, plugin.Name, atRef, PluginBinaryHash.TrailerFormOfFile(copy.Path));
+                modFolder, plugin.Name, atRef, PluginBinaryHash.TrailerFormOfFile(registered.Path));
             return true;
         });
         if (writeRefusal != null)
@@ -142,18 +142,18 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(Reported(content, plugin, copy, loadOrder, repository, atRef), content.Masters);
+        return CompileResult.Success(Reported(content, plugin, registered, loadOrder, repository, atRef), content.Masters);
     }
 
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     private List<CompileDiagnostic> Reported(
-        Content content, PluginAddress plugin, RegisteredPlugin copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         try
         {
-            return LinkDiagnostics(content, plugin, copy, loadOrder, repository, atRef);
+            return LinkDiagnostics(content, plugin, registered, loadOrder, repository, atRef);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -210,11 +210,11 @@ public sealed class PluginCompileService(
     // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
     // it afterwards, answered by the files the game loads with the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
-        Content content, PluginAddress plugin, RegisteredPlugin copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         var answers = adapter.LinkTargets(
-            loadOrder, copy, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
+            loadOrder, registered, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
         ResolvedFormKey? Resolve(string formKey) =>
             answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
 
@@ -286,10 +286,10 @@ public sealed class PluginCompileService(
         if (masters.Count == 0) return [];
 
         var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var copy in loadOrder.Plugins)
+        foreach (var plugin in loadOrder.Plugins)
         {
-            if (copy.Slot is not { } slot) continue;
-            if (!slots.TryGetValue(copy.Name, out var held) || slot < held) slots[copy.Name] = slot;
+            if (plugin.Slot is not { } slot) continue;
+            if (!slots.TryGetValue(plugin.Name, out var held) || slot < held) slots[plugin.Name] = slot;
         }
 
         return [.. masters

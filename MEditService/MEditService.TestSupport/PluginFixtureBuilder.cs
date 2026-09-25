@@ -50,7 +50,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         }
 
         // No plugins.txt is written: the ordered snapshot is the load order. `Listed` puts a plugin
-        // in it and `Enabled` is the `*` prefix; every copy wins (ADR-0013) unless a test says so.
+        // in it and `Enabled` is the `*` prefix; every plugin wins (ADR-0013) unless a test says so.
         var explicitPlugins = _plugins
             .Where(p => p.Listed)
             .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))

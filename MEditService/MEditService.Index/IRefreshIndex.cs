@@ -18,14 +18,14 @@ public interface IRefreshIndex
     IDisposable BeginProjection();
 
     /// <summary>ADR-0013 invariant 1's one verb: registrations made equal to the snapshot, never-held
-    /// copies indexed, one winner sweep. Runs on the caller's thread and never throws.</summary>
+    /// plugins indexed, one winner sweep. Runs on the caller's thread and never throws.</summary>
     void Reconcile(LoadOrderSnapshot snapshot, long version);
 
     /// <summary>The narrow signal: re-project exactly these keys from the source tree.</summary>
     void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys);
 
     /// <summary>The wide signal: compare by content hash and repair what differs. <c>NeedsRebuild</c>
-    /// names a copy this call re-derived whole.</summary>
+    /// names a plugin this call re-derived whole.</summary>
     IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin);
 
     /// <summary>ADR-0009: a binary watch's own settle, key and path only — the Index owns the

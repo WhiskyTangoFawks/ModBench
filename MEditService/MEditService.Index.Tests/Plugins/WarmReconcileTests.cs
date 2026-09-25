@@ -83,7 +83,7 @@ public sealed class WarmReconcileTests
         Assert.Equal([0, 1, 2], observed);
     }
 
-    // Every copy's open, the step before its registration, is asked how much progress the load
+    // Every plugin's open, the step before its registration, is asked how much progress the load
     // order was reporting at that moment.
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {

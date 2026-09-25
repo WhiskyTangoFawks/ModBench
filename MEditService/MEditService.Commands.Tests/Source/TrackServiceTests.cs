@@ -46,10 +46,10 @@ public sealed class TrackServiceTests
         }
     }
 
-    // A copy the Plugin adapter cannot read has no bytes to deep-parse, so Track refuses it on its
+    // A plugin the Plugin adapter cannot read has no bytes to deep-parse, so Track refuses it on its
     // own. The adapter answers, not the disk: this file exists.
     [Fact]
-    public async Task TrackAsync_RefusesACopyTheAdapterCannotRead_AndTracksTheRest()
+    public async Task TrackAsync_RefusesAPluginTheAdapterCannotRead_AndTracksTheRest()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-unopened-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-track-unopened-game-").FullName;
@@ -266,9 +266,9 @@ public sealed class TrackServiceTests
                 modFolder, SourcePreset.Edits,
                 [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())]);
 
-            // The load order already parsed a good copy; the file on disk is corrupted afterward —
-            // exactly the state TrackService's own fresh deep parse must fail against if it is
-            // ever reached.
+            // The load order already parsed a good plugin file; the file on disk is corrupted
+            // afterward — exactly the state TrackService's own fresh deep parse must fail against if
+            // it is ever reached.
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
@@ -284,11 +284,11 @@ public sealed class TrackServiceTests
         }
     }
 
-    // The only copy under this origin resolves to the game's own Data directory (PluginOrigin.
+    // The only plugin under this origin resolves to the game's own Data directory (PluginOrigin.
     // DataDirectory), which LoadOrderSnapshot.ModFolderOf returns null for — Track must refuse rather than
     // Path.GetDirectoryName'ing its way to a repository inside Data.
     [Fact]
-    public async Task TrackAsync_WithOnlyADataOriginCopy_RefusesWithoutInitializingARepository()
+    public async Task TrackAsync_WithOnlyADataOriginPlugin_RefusesWithoutInitializingARepository()
     {
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-dataorigin-").FullName;
         try

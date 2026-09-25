@@ -58,8 +58,8 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
-    // The plugin row's "has a failure below it" comes from the Index's own set of copies holding an
-    // unreadable record, so one copy carries the flag and its neighbour does not.
+    // The plugin row's "has a failure below it" comes from the Index's own set of plugins holding an
+    // unreadable record, so one plugin carries the flag and its neighbour does not.
     [Fact]
     public void GetPlugins_MarksOnlyThePluginHoldingAnUnreadableRecord()
     {
@@ -82,9 +82,9 @@ public sealed class RecordQueryServiceTests
     }
 
     // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
-    // from is the Index's answer. Keyed by copy, never by filename.
+    // from is the Index's answer. Keyed by plugin, never by filename.
     [Fact]
-    public void GetPlugins_MarksOnlyTheCopiesTheIndexDerivedFromASourceTree()
+    public void GetPlugins_MarksOnlyThePluginsTheIndexDerivedFromASourceTree()
     {
         const string otherPlugin = "Other.esp";
         var fixture = new FakeFixtureBuilder(Release)
@@ -93,7 +93,7 @@ public sealed class RecordQueryServiceTests
             .Build("Aggression");
         var (manager, svc) = Build(fixture);
         ((FakeReads)manager.RequireReads()).Tracked =
-            new HashSet<PluginAddress>(fixture.Copies.Where(c => c.Name == PluginName).Select(c => c.Key),
+            new HashSet<PluginAddress>(fixture.Plugins.Where(c => c.Name == PluginName).Select(c => c.Key),
                 PluginAddress.Comparer);
 
         var plugins = svc.GetPlugins();
@@ -769,9 +769,9 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
-        var copy = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
+        var address = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
         _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { copy };
+        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { address };
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins, p => p.Plugin.Name == PluginName);

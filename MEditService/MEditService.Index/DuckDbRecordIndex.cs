@@ -197,8 +197,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
 
         RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
-        // The copy's facts go with the rows they describe — Unindex is the file-gone verb, so leaving
-        // them behind would leave the files table asserting rows the index does not hold.
+        // The plugin's facts go with the rows they describe — Unindex is the file-gone verb, so
+        // leaving them behind would leave the files table asserting rows the index does not hold.
         _store.DeletePluginFacts(plugin, origin);
         DeleteRegistration(plugin, origin);
         _store.BumpSequence();
@@ -206,7 +206,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0013: one row per registered copy. ADR-0013: participation is derived from the three facts
+    // ADR-0013: one row per registered plugin. ADR-0013: participation is derived from the three facts
     // here by Registration.Participates, never a column.
     private void UpsertRegistration(string plugin, string origin, Registration registration)
     {
@@ -296,17 +296,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private void ReplaceParticipating(IReadOnlyList<RegisteredPlugin> participating)
     {
         Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
-        foreach (var copy in participating)
+        foreach (var plugin in participating)
         {
             using var cmd = Connection.CreateCommand();
             cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
-            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Name });
-            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Origin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             cmd.Parameters.Add(new DuckDBParameter
             {
-                Value = copy.Slot
+                Value = plugin.Slot
                     ?? throw new InvalidOperationException(
-                        $"Expected participating plugin '{copy.Name}' from '{copy.Origin}' to carry a load-order slot."),
+                        $"Expected participating plugin '{plugin.Name}' from '{plugin.Origin}' to carry a load-order slot."),
             });
             cmd.ExecuteNonQuery();
         }
@@ -421,8 +421,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // One signal, one advance, however many documents and refs it moves.
         using var projection = BeginProjection();
 
-        // The tree is what these rows are re-derived from, so it is what the copy is derived from
-        // (ADR-0007 invariant 3), bytes moved or not: a copy tracked after indexing arrives here
+        // The tree is what these rows are re-derived from, so it is what the plugin is derived from
+        // (ADR-0007 invariant 3), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
         if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
             _store.RestampDerivation(key, DerivedFrom.SourceTree);
@@ -496,7 +496,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private void RederiveWholePluginFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
-        // copy's rows came from its binary and a source key is not its to answer for.
+        // plugin's rows came from its binary and a source key is not its to answer for.
         if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
         if (RegistrationOf(key) is not { } registration) return;
 
@@ -530,8 +530,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return hashes;
     }
 
-    // The three facts the copy's registration row carries (ADR-0013), read back for a re-ingest that
-    // must not change what the load order said about this copy.
+    // The three facts the plugin's registration row carries (ADR-0013), read back for a re-ingest that
+    // must not change what the load order said about this plugin.
     private Registration? RegistrationOf(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
@@ -569,11 +569,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
-    // ADR-0009's load-time check, asked of one copy: the stored hash against the bytes on disk. A
+    // ADR-0009's load-time check, asked of one plugin: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(PluginAddress key)
     {
-        // Nothing vouches for these rows (an in-memory mod, or a tracked copy whose folder went
+        // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
         // away), so there is nothing to compare them against.
         if (_store.IndexedFile(key) is not { } claim) return ValidationReport.Clean(key);
 
@@ -589,7 +589,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return ValidationReport.Clean(key);
         }
 
-        // Reached only for a copy no repository holds, so rows stamped from a source tree came from
+        // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
         // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport(key, [], NeedsRebuild: true, []);
@@ -612,7 +612,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private IRecordReads? _headReads;
 
     // Empty until the Indexer points it somewhere: a store opened by a test that never reconciles
-    // has no copies open, which is what an empty set says.
+    // has no plugins open, which is what an empty set says.
     private Func<IReadOnlyDictionary<PluginAddress, PluginContent>> _openedPlugins =
         () => new Dictionary<PluginAddress, PluginContent>();
 
@@ -923,7 +923,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         /// <summary>Both halves of "could not be read": a record whose own document failed, and a
         /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
-        /// filename, which two loaded copies can share.</summary>
+        /// filename, which two loaded plugins can share.</summary>
         public IReadOnlySet<string> GetPluginsWithParseFailures()
         {
             using var connection = owner.OpenRead();

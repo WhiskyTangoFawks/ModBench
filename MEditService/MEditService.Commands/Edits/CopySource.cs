@@ -9,8 +9,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>What a copy reads of the record it is copying (ADR-0015 invariant 5): a tracked source
-/// answers from its working tree, an untracked one from the loaded copy through the codec. One per
-/// gesture, not thread-safe.</summary>
+/// answers from its working tree, an untracked one from the loaded plugin through the codec. One
+/// per gesture, not thread-safe.</summary>
 internal sealed class CopySource(
     PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)
     : IDisposable
@@ -39,7 +39,7 @@ internal sealed class CopySource(
         _tree != null ? _tree.IdentityOf(plugin, formKey, _schemas) : Loaded()?.IdentityOf(formKey);
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
-    /// copy's record through the codec — byte for byte what Track would have written.</summary>
+    /// plugin's record through the codec — byte for byte what Track would have written.</summary>
     internal string Body(RecordIdentity identity)
     {
         if (_tree == null) return Loaded()?.TextOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
@@ -93,13 +93,13 @@ internal sealed class CopySource(
 
     public void Dispose() => _loaded?.Dispose();
 
-    // Null when the load order registers no such copy: it holds nothing, which is an answer.
+    // Null when the load order registers no such plugin: it holds nothing, which is an answer.
     private IPluginRecordLookup? Loaded()
     {
         if (_opened) return _loaded;
         _opened = true;
-        if (loadOrder.Plugin(plugin) is { } copy)
-            _loaded = adapter.OpenRecordLookup(copy, _release, _schemas);
+        if (loadOrder.Plugin(plugin) is { } registered)
+            _loaded = adapter.OpenRecordLookup(registered, _release, _schemas);
         return _loaded;
     }
 

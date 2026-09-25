@@ -51,7 +51,7 @@ internal sealed class WatchedTree : IDisposable
     // as a single rename.
     private readonly string _staging;
 
-    private readonly List<RegisteredPlugin> _copies = [];
+    private readonly List<RegisteredPlugin> _plugins = [];
 
     /// <summary>The watcher's verb as the composition root builds it, over the port this tree
     /// reads.</summary>
@@ -80,21 +80,21 @@ internal sealed class WatchedTree : IDisposable
     internal string AddMod(string origin, string pluginName, byte[]? bytes = null)
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", origin)).FullName;
-        AddCopy(origin, modFolder, pluginName, bytes);
+        AddPlugin(origin, modFolder, pluginName, bytes);
         return modFolder;
     }
 
     /// <summary>A second plugin in a mod folder that already exists.</summary>
-    internal void AddCopy(string origin, string modFolder, string pluginName, byte[]? bytes = null)
+    internal void AddPlugin(string origin, string modFolder, string pluginName, byte[]? bytes = null)
     {
         var pluginPath = Path.Combine(modFolder, pluginName);
         File.WriteAllBytes(pluginPath, bytes ?? "a plugin binary"u8.ToArray());
-        _copies.Add(new RegisteredPlugin(pluginName, origin, pluginPath, Slot: _copies.Count, Enabled: true, Winning: true));
+        _plugins.Add(new RegisteredPlugin(pluginName, origin, pluginPath, Slot: _plugins.Count, Enabled: true, Winning: true));
     }
 
     internal static string PluginPath(string modFolder, string pluginName) => Path.Combine(modFolder, pluginName);
 
-    /// <summary>The bytes on disk as the Index would hash them, for seeding a copy as already
+    /// <summary>The bytes on disk as the Index would hash them, for seeding a plugin as already
     /// indexed and for parking a compile.</summary>
     internal static string ContentHashOf(string path) =>
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
@@ -154,13 +154,13 @@ internal sealed class WatchedTree : IDisposable
         if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(repositoryFolder, plugin, "HEAD", ContentHashOf(path));
     }
 
-    /// <summary>Drops a copy from the load order this tree applies, for a reconcile whose plugin
+    /// <summary>Drops a plugin from the load order this tree applies, for a reconcile whose plugin
     /// set has shrunk.</summary>
-    internal void RemoveCopy(string pluginName) =>
-        _copies.RemoveAll(c => c.Name.Equals(pluginName, StringComparison.Ordinal));
+    internal void RemovePlugin(string pluginName) =>
+        _plugins.RemoveAll(c => c.Name.Equals(pluginName, StringComparison.Ordinal));
 
     internal LoadOrderSnapshot Snapshot() =>
-        new(GameDirectory, InstanceRoot, GameRelease.Fallout4, [.. _copies]);
+        new(GameDirectory, InstanceRoot, GameRelease.Fallout4, [.. _plugins]);
 
     /// <summary>Hands the load order to the holder and returns once the watcher has reconciled it
     /// and every tracked mod's load-time settle has run, the two awaited on their own since they
@@ -175,7 +175,7 @@ internal sealed class WatchedTree : IDisposable
     }
 
     private int TrackedModsInSnapshot() =>
-        _copies.Select(c => LoadOrderSnapshot.ModFolderOf(c.Origin, c.Path))
+        _plugins.Select(c => LoadOrderSnapshot.ModFolderOf(c.Origin, c.Path))
             .Where(folder => folder is not null && SourceRepository.IsTracked(folder))
             .Distinct(StringComparer.Ordinal)
             .Count();
@@ -196,7 +196,7 @@ internal sealed class WatchedTree : IDisposable
         return path;
     }
 
-    /// <summary>A document naming no record, so the batch it lands in can only be a whole-copy
+    /// <summary>A document naming no record, so the batch it lands in can only be a whole-plugin
     /// validate.</summary>
     internal string WriteUnnamedDocument(string modFolder, string plugin, string name = "record.json")
     {

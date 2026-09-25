@@ -23,10 +23,10 @@ public sealed class TrackService(
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a copy whose file
+    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a plugin whose file
     // cannot be read has no bytes to deep-parse, so Track refuses that plugin and goes on with the
     // rest.
-    private bool Readable(RegisteredPlugin copy) => adapter.CanRead(copy);
+    private bool Readable(RegisteredPlugin plugin) => adapter.CanRead(plugin);
 
     /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
     /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
