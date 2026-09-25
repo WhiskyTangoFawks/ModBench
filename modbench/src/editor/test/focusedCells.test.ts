@@ -34,6 +34,16 @@ describe('the focused cell of the record tab in focus', () => {
     expect(shown).toEqual([undefined, element]);
   });
 
+  it('takes a cell for the panel in focus, and none while no panel is', () => {
+    const { cells } = tracked();
+    cells.setActiveCell(element);
+    expect(cells.current()).toBeUndefined();
+
+    cells.setActivePanel('A');
+    cells.setActiveCell(text);
+    expect(cells.current()).toBe(text);
+  });
+
   it('is gone with the panel that held it', () => {
     const { cells, shown } = tracked();
     cells.setActivePanel('A');

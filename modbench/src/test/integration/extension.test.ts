@@ -111,6 +111,8 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+// Each POST /records/{formKey}/edit the extension sends: the FormKey and the body, as mEdit gets them.
+const recordEdits: { formKey: string; body: unknown }[] = [];
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -196,6 +198,7 @@ function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
   putLoadOrders.length = 0;
+  recordEdits.length = 0;
   mockPluginsOverride = null;
   mockImplicitMasters = [];
   implicitMastersShouldFail = false;
@@ -351,6 +354,17 @@ function createMockBackend(): http.Server {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockImplicitMasters));
+      return;
+    }
+    const edit = /^\/records\/([^/]+)\/edit$/.exec(url);
+    if (method === 'POST' && edit) {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        recordEdits.push({ formKey: decodeURIComponent(edit[1] ?? ''), body: JSON.parse(body) });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ applied: true }));
+      });
       return;
     }
     // A plugin row's children come from here once the backend is running.
@@ -2320,3 +2334,31 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
     });
   }
 });
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
+// in focus. The palette hands the command no argument, as this test does.
+describe('A field gesture from the palette acts on the focused cell of the record tab in focus', () => {
+  before(async () => {
+    await resetMockBackendDetached();
+    await enterEditing();
+  });
+
+  after(() => { exitEditing(); });
+
+  it('removes the element the focused cell holds', async () => {
+    const formKey = '000801:TestMod.esp';
+    await vscode.commands.executeCommand('modbench.openEditor', { formKey, label: 'Focused Record' });
+    await waitFor('the record tab', () => openTabs().some((t) => t.label === 'Focused Record') || undefined);
+    const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
+    present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({
+      webviewSection: 'arrayElement', formKey, plugin: 'TestMod.esp', origin: 'Data', path,
+      canMoveUp: false, canMoveDown: true, preventDefaultContextMenuItems: true,
+    });
+
+    await vscode.commands.executeCommand('modbench.record.removeElement');
+
+    const sent = await waitFor('the edit to reach mEdit', () => recordEdits.at(-1));
+    assert.deepStrictEqual(sent, { formKey, body: { plugin: 'TestMod.esp', origin: 'Data', op: 'remove', path } });
+  });
+});
+

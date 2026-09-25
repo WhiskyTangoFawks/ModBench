@@ -19,6 +19,11 @@ export class FocusedCells<TPanel> {
     if (panel === this.active) this.show(cell);
   }
 
+  /** The cell the panel in focus reports; nothing while no panel is. */
+  setActiveCell(cell: FocusedCellContext | undefined): void {
+    if (this.active !== undefined) this.setCell(this.active, cell);
+  }
+
   setActivePanel(panel: TPanel): void {
     this.active = panel;
     this.show(this.current());

@@ -19,6 +19,7 @@ import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './ed
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
+import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
@@ -104,6 +105,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
+  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
+    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
+      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
+    }
+  });
   context.subscriptions.push({ dispose: () => { session.pluginRepositoryStates?.dispose(); } });
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
@@ -190,7 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
@@ -223,6 +229,8 @@ export function activate(context: vscode.ExtensionContext) {
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
+    // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
+    focusRecordCell: (cell: FocusedCellContext) => { focusedCells.setActiveCell(cell); },
   };
 }
 

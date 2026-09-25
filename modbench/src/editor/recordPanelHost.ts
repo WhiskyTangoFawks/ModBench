@@ -5,7 +5,7 @@ import type { EditsInFlight } from './followRecord';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
-import { FocusedCells, focusedCellKeys } from './focusedCells';
+import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
@@ -26,6 +26,8 @@ export interface EditorCommandDeps {
   // Each panel's edits in flight, which hold its reads until the answer; the same instance gates
   // the notification wiring.
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
+  // Each panel's focused cell, which a field gesture from the palette acts on.
+  focusedCells: FocusedCells<vscode.WebviewPanel>;
   port: number;
   // Editor's own view of the Plugins tree, structural rather than the tree's own type — see
   // `RecordTreeSync`'s own doc comment.
@@ -68,7 +70,7 @@ function recordPanelWriteDeps(
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync, meditClient,
+    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync, meditClient,
     outputChannel, mergedTreeSelection, refreshMatchingPlugins,
   } = deps;
   // One decoration provider per activation: its lookup reads treeSync's cache live, so it
@@ -76,11 +78,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
   const panelsById = new Map<string, vscode.WebviewPanel>();
-  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
-    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
-      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
-    }
-  });
   const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
   // The picker and the edit gate are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
