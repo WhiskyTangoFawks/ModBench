@@ -26,7 +26,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.CopyAsOverrideHandler.CopyRecordAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -38,7 +38,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -51,7 +51,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.CopyAsOverrideHandler.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopyAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_mod.DestinationDocument(readable));
@@ -62,7 +62,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyHandler.CopyAsNew(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_mod.DestinationDocument(result.NewFormKey.Require()));
@@ -84,8 +84,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-        public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
-        public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
+        public CopyRecordHandler CopyHandler { get; }
 
         public ParseFailedCopyFixture()
         {
@@ -119,8 +118,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
                 .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);
-            CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
-            CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);
+            CopyHandler = TestEditService.CopyHandler(holder);
         }
 
         public SourceDocument? DestinationDocument(string formKey) =>
@@ -185,7 +183,7 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
                 $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
                 StringComparison.Ordinal));
 
-        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = _mod.CopyHandler.CopyAsNew(
             _mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
 
         Assert.False(result.Applied);

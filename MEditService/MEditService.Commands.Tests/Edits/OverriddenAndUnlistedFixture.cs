@@ -54,8 +54,7 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
-    public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
-    public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
+    public CopyRecordHandler CopyHandler { get; }
     public CompilePluginHandler CompileHandler { get; }
 
     private OverriddenAndUnlistedFixture()
@@ -118,8 +117,7 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
-        CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
-        CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);
+        CopyHandler = TestEditService.CopyHandler(holder);
         CompileHandler = TestEditService.CompileHandler(holder);
     }
 
