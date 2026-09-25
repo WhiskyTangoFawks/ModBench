@@ -26,7 +26,7 @@ $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
 # Two backend gate runs per machine, measured: a third leaves no memory headroom, and api-drift
-# kills every MEditService.Http and binds 5172, so it takes a slot too. -o keeps the lock out of
+# builds and boots a backend, so it takes a slot too. -o keeps the lock out of
 # child processes, so a lingering build server cannot hold it. A waiter queues on the first slot
 # rather than whichever frees first, which costs a wait, never correctness.
 GATE_SLOTS=2
