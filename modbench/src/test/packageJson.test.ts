@@ -572,7 +572,6 @@ describe('package.json command titles and categories', () => {
     // same posture as the tree-row-gated commands above.
     'modbench.record.create',
     'modbench.record.delete',
-    'modbench.record.renumber',
     // Reached from a plugins-tree record row or the record editor's column header, neither with an
     // ambient fallback worth a QuickPick-over-QuickPick.
     'modbench.record.copyAsOverride',
@@ -580,7 +579,7 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(23);
+    expect(PALETTE_GATED).toHaveLength(22);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter(
@@ -611,18 +610,12 @@ describe('package.json command titles and categories', () => {
   });
 });
 
-// Change FormID exists only on a master record in a tracked plugin, and is absent — not greyed,
-// not offered-then-refused — everywhere else. Both halves are contextValue facts the row states
-// for itself.
-describe('package.json record-row context menu — renumber gated to native tracked rows', () => {
+// Which record rows offer each gesture are contextValue facts the row states for itself.
+describe('package.json record-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
   const whenOf = (command: string) =>
     present(contextMenus().find((e) => e.command === command), `a view/item/context entry for ${command}`).when;
-
-  it('offers Change FormID only on viewItem == recordTracked', () => {
-    expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == recordTracked');
-  });
 
   it('offers Remove on override and untracked rows too', () => {
     expect(whenOf('modbench.record.delete')).toContain('recordOverride');
@@ -1144,7 +1137,7 @@ describe('package.json registers every command under its catalog Command ID', ()
 });
 
 // The Plugins PRD retitles the record lifecycle menus, so their titles are its to set.
-const TITLES_SET_ELSEWHERE = new Set(['modbench.record.create', 'modbench.record.delete', 'modbench.record.renumber']);
+const TITLES_SET_ELSEWHERE = new Set(['modbench.record.create', 'modbench.record.delete']);
 
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 

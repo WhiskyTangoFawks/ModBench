@@ -40,9 +40,9 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         var held = HeldDocuments(key);
 
         // A document the index never saw moves which records the plugin has, which only a rebuild
-        // expresses. Concluded from a whole tree only.
-        if (treeFullyRead && onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).Any())
-            return new ValidationReport(key, [], NeedsRebuild: true, failures);
+        // expresses; the report names the records gained. Concluded from a whole tree only.
+        var gained = treeFullyRead ? onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).ToList() : [];
+        if (gained.Count > 0) return new ValidationReport(key, gained, NeedsRebuild: true, failures);
 
         // A held record with no document was deleted in the working tree: refreshed by key, so the
         // rows-changed it publishes names it (ADR-0015 invariant 3).

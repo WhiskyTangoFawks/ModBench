@@ -62,7 +62,7 @@ public static class RecordDocumentEdits
     }
 
     /// <summary>The record under <paramref name="newFormKey"/> and otherwise as it was: what a
-    /// renumber writes for the record it was asked about.</summary>
+    /// FormID edit writes for the record it was asked about.</summary>
     public static string WithFormKey(
         RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey)
     {

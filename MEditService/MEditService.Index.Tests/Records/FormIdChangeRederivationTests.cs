@@ -11,10 +11,10 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A renumber writes trees and nothing else (ADR-0015 invariant 2): container_child, placement and
+/// <summary>A FormID edit writes trees and nothing else (ADR-0015 invariant 2): container_child, placement and
 /// cell_location rows are the Index's own re-derivation, driven here through RefreshKeys and
 /// ReindexPlugin, the write side's signals for it.</summary>
-public sealed class RenumberRederivationTests : IDisposable
+public sealed class FormIdChangeRederivationTests : IDisposable
 {
     private readonly IndexedContainerMod _mod = new();
     private IRecordReads Reads => _mod.Reads;
@@ -27,9 +27,9 @@ public sealed class RenumberRederivationTests : IDisposable
     private string NavmeshKey =>
         Reads.GetContainerChildren(_mod.Plugin, _mod.EmbedCell).Single(c => c.SlotName == "NavigationMeshes").ChildFormKey;
 
-    // A record's own document renumbered: put the new key, remove the old, then name both keys to
-    // RefreshKeys — the same two-sided write a real renumber makes.
-    private void Renumber(string oldFormKey, string newFormKey, string newBody)
+    // A record's own document under a new FormKey: put the new key, remove the old, then name both keys to
+    // RefreshKeys — the same two-sided write a real FormID edit makes.
+    private void ChangeFormId(string oldFormKey, string newFormKey, string newBody)
     {
         var repository = TrackedMods.RepositoryOf(_mod.Entry);
         var current = Reads.DocumentOf(oldFormKey, _mod.Plugin);
@@ -39,16 +39,16 @@ public sealed class RenumberRederivationTests : IDisposable
     }
 
     [Fact]
-    public void RenumberingAContainersOwnRecord_RepointsItsChildrensRows_AndTheOldKeyAnswersNothing()
+    public void ChangingTheFormIdOfAContainersOwnRecord_RepointsItsChildrensRows_AndTheOldKeyAnswersNothing()
     {
         var oldCellKey = _mod.EmbedCell;
         var navmesh = NavmeshKey;
         const string newCellKey = "F00010:ContainerFixture.esp";
         var before = Reads.DocumentOf(oldCellKey, _mod.Plugin).BodyOf();
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
-        Assert.NotEqual(before, newBody); // the fixture body really does carry the key being renumbered
+        Assert.NotEqual(before, newBody); // the fixture body really does carry the key being changed
 
-        Renumber(oldCellKey, newCellKey, newBody);
+        ChangeFormId(oldCellKey, newCellKey, newBody);
 
         // The container's own children follow it to the new key.
         Assert.Contains(Reads.GetContainerChildren(_mod.Plugin, newCellKey), c => c.ChildFormKey == navmesh);
@@ -63,7 +63,7 @@ public sealed class RenumberRederivationTests : IDisposable
     }
 
     [Fact]
-    public void RenumberingAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
     {
         var cellKey = _mod.EmbedCell;
         var oldNavmeshKey = NavmeshKey;
@@ -83,9 +83,9 @@ public sealed class RenumberRederivationTests : IDisposable
     }
 
     // The rival this pins for both tests above: without RefreshKeys naming the changed key, the
-    // stale row from before the renumber is exactly what stays.
+    // stale row from before the FormID edit is exactly what stays.
     [Fact]
-    public void RenumberingAnEmbeddedNavigationMesh_WithNoRefreshKeysCall_LeavesTheStaleRowInPlace()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithNoRefreshKeysCall_LeavesTheStaleRowInPlace()
     {
         var cellKey = _mod.EmbedCell;
         var oldNavmeshKey = NavmeshKey;
@@ -101,9 +101,9 @@ public sealed class RenumberRederivationTests : IDisposable
     }
 
     // A worldspace's exterior cell is a nested directory-per-record child (unlike a navmesh,
-    // embedded inline): the renumber is SourceTransaction's public Move of the whole subtree, then
+    // embedded inline): the FormID edit is SourceTransaction's public Move of the whole subtree, then
     // a Put fixing the moved document's own FormKey text.
-    private static void RenumberWorldspace(WorldspaceFixture fixture, string newWorldspaceKey)
+    private static void ChangeWorldspaceFormId(WorldspaceFixture fixture, string newWorldspaceKey)
     {
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var current = fixture.Reads.DocumentOf(fixture.Worldspace, fixture.Plugin);
@@ -122,14 +122,14 @@ public sealed class RenumberRederivationTests : IDisposable
     // tree top-down (SourceTreeDocuments), which RefreshKeys' narrow per-record re-parse does not
     // do; ReindexPlugin re-derives the copy whole from source.
     [Fact]
-    public async Task RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_AndTheOldKeyAnswersNothing()
+    public async Task ChangingTheFormIdOfAWorldspace_RepointsItsExteriorCellsCellLocationRow_AndTheOldKeyAnswersNothing()
     {
         using var fixture = new WorldspaceFixture();
         var before = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(fixture.Worldspace, before.ParentWorldspace);
-        const string newWorldspaceKey = "F00020:WorldspaceRenumber.esp";
+        const string newWorldspaceKey = "F00020:WorldspaceFormId.esp";
 
-        RenumberWorldspace(fixture, newWorldspaceKey);
+        ChangeWorldspaceFormId(fixture, newWorldspaceKey);
         PluginBinaries.Touch(fixture.Entry.Path);
         Assert.True(await fixture.Index.RefreshBinary(fixture.Plugin, fixture.Entry.Path));
 
@@ -142,12 +142,12 @@ public sealed class RenumberRederivationTests : IDisposable
     // The rival this pins: without ReindexPlugin (or an equivalent whole-copy re-derivation), the
     // exterior cell's row is exactly the stale one from before the move.
     [Fact]
-    public void RenumberingAWorldspace_WithNoReindexCall_LeavesItsCellLocationRowStale()
+    public void ChangingTheFormIdOfAWorldspace_WithNoReindexCall_LeavesItsCellLocationRowStale()
     {
         using var fixture = new WorldspaceFixture();
-        const string newWorldspaceKey = "F00021:WorldspaceRenumber.esp";
+        const string newWorldspaceKey = "F00021:WorldspaceFormId.esp";
 
-        RenumberWorldspace(fixture, newWorldspaceKey);
+        ChangeWorldspaceFormId(fixture, newWorldspaceKey);
 
         var stale = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(fixture.Worldspace, stale.ParentWorldspace);
@@ -157,10 +157,10 @@ public sealed class RenumberRederivationTests : IDisposable
     // worldspace holds only a top cell).
     private sealed class WorldspaceFixture : IDisposable
     {
-        private const string PluginName = "WorldspaceRenumber.esp";
-        // Not the default Data origin: Track (and so a source tree to renumber against) only
+        private const string PluginName = "WorldspaceFormId.esp";
+        // Not the default Data origin: Track (and so a source tree to change a FormID against) only
         // applies to a plugin that names its own mod folder (LoadOrderSnapshot.ModFolderOf).
-        private const string Origin = "WorldspaceRenumberMod";
+        private const string Origin = "WorldspaceFormIdMod";
         private readonly ScatteredFixtureData _fixture;
 
         public LoadOrderEntry Entry { get; }
@@ -173,7 +173,7 @@ public sealed class RenumberRederivationTests : IDisposable
         public WorldspaceFixture()
         {
             FormKey worldspace = default, exteriorCell = default;
-            _fixture = new PluginFixtureBuilder("worldspace-renumber")
+            _fixture = new PluginFixtureBuilder("worldspace-formid")
                 .WithPlugin(PluginName, mod =>
                 {
                     var world = new Worldspace(mod) { EditorID = "TestWorld" };

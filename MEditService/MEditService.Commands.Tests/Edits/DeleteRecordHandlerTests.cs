@@ -27,7 +27,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal([npc, otherNpc], result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(header, refused.Record);
-        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, refused.Refusal);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.False(string.IsNullOrWhiteSpace(refused.Message));
         Assert.False(result.AllApplied);
         Assert.Null(mod.Document(mod.Npc.ToString()));
@@ -199,7 +199,7 @@ public sealed class DeleteRecordHandlerTests
         var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, headerFormKey)]);
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, refused.Refusal);
+        Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
         Assert.True(
             Directory.Exists(Path.Combine(mod.ModFolder, "source", mod.ActualPluginName)),

@@ -739,9 +739,13 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // A moved record set is re-derived whole (ADR-0007 invariant 3), and so is a copy whose
+            // A tree that gained records is refreshed by their keys, so the rows that moved are named
+            // (edit-record.md, Hand-off). A moved record set is re-derived whole, and so is a copy whose
             // last read failed: that read is what lifts the failure once the tree is sound (ADR-0003).
-            if (report.NeedsRebuild || _heldPlugins?.IsHeldWithAFailure(key) == true) ReindexHeldCopy(key);
+            var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
+            if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)
+                index.RefreshByKeys(key, folder, report.ChangedKeys);
+            else if (report.NeedsRebuild || failed) ReindexHeldCopy(key);
             return report;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

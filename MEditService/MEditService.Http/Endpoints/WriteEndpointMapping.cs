@@ -21,7 +21,7 @@ internal static class WriteEndpointMapping
             ? null
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
 
-    /// <summary>The FormKey an applied create, renumber or copy allocated. Every caller here reaches
+    /// <summary>The FormKey an applied create or copy allocated. Every caller here reaches
     /// this only once the result is known applied.</summary>
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");

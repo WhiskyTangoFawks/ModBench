@@ -15,9 +15,6 @@ public static class PluginAdapters
         IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         adapter.OpenRecordLookup(new ModPath(copy.Path), release, schemas);
 
-    public static PluginFormIds ReadFormIds(this IPluginAdapter adapter, RegisteredCopy copy, GameRelease release) =>
-        adapter.ReadFormIds(new ModPath(copy.Path), release);
-
     public static bool CanRead(this IPluginAdapter adapter, RegisteredCopy copy) =>
         adapter.CanRead(new ModPath(ModKey.FromFileName(copy.Name), copy.Path));
 

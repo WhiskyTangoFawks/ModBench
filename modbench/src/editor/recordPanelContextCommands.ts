@@ -63,7 +63,7 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
       fieldFile: deps.fieldFile,
       log: deps.log,
       reporter: deps.reporter,
-      onCommit: value => applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value }),
+      onCommit: async value => { await applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value }); },
     },
   );
 }

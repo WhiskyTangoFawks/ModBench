@@ -171,7 +171,7 @@ public sealed partial class SourceRepository
             if (ReferenceEquals(file.Before, Unreadable) || ReferenceEquals(file.After, Unreadable))
             {
                 unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                    "its content could not be read while the renumber wrote it, so there is nothing to compare against"));
+                    "its content could not be read while the FormID change wrote it, so there is nothing to compare against"));
                 return;
             }
 
@@ -184,7 +184,7 @@ public sealed partial class SourceRepository
             {
                 // By reference: Unreadable is a zero-length array and would compare equal to a legitimately empty file.
                 unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                    "it could not be read, so there is no way to tell whether it still holds what this renumber wrote"));
+                    "it could not be read, so there is no way to tell whether it still holds what this FormID change wrote"));
                 return;
             }
 

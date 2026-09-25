@@ -232,23 +232,6 @@ internal sealed class WriteTargets(
         internal IEnumerable<string> Taken => Effective.Concat(Head);
     }
 
-    // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
-    // adapter answers from its own bytes.
-    internal Allocator AllocatorFor(RegisteredCopy copy, PluginCopyKey plugin)
-    {
-        if (loadOrder.Current.ModFolderOf(plugin) is { } modFolder
-            && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
-        {
-            return AllocatorOver(repository, plugin);
-        }
-
-        // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
-        var own = adapter.ReadFormIds(copy, loadOrder.Current.GameRelease);
-        return AllocatorOver(
-            plugin, HeaderDocument.IsLight(Encoding.UTF8.GetBytes(own.HeaderText)),
-            own.Native, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-    }
-
     // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
     internal Allocator AllocatorOver(SourceRepository repository, PluginCopyKey plugin) =>
@@ -338,7 +321,7 @@ internal sealed class WriteTargets(
             return RecordEditResult.Refused(
                 RecordEditRefusal.NotNativeRecord,
                 $"{requestedFormKey} belongs to {requestedOwner}, not {plugin.Name} — a requested FormKey " +
-                "must be native to the plugin it is being created or renumbered into.");
+                "must be native to the plugin that is to hold it.");
         }
 
         if (isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
@@ -368,11 +351,11 @@ internal sealed class WriteTargets(
         return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
-    // Shared by create, copy as new and renumber (edit-record.md's refusal table): every branch
+    // Shared by create and copy as new (edit-record.md's refusal table): every branch
     // names both remedies, even where one is moot for this plugin.
     internal static string FormKeySpaceExhaustedMessage(PluginCopyKey plugin, bool isLight, bool eslContradiction = false)
     {
-        const string remedies = "Clear the light flag in the header, or renumber.";
+        const string remedies = "Clear the light flag in the header, or change a record's FormID.";
         if (eslContradiction)
         {
             return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
@@ -424,8 +407,8 @@ internal sealed class WriteTargets(
     internal static RecordEditResult? RefuseIfHeader(string recordType) =>
         recordType == PluginHeader.RecordType
             ? RecordEditResult.Refused(
-                RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
-                "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
+                RecordEditRefusal.HeaderDeleteNotSupported,
+                "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
 
     // CreateRecord and CopyAsNewRecord only: a brand-new record has no containment to resolve to, and
@@ -439,7 +422,7 @@ internal sealed class WriteTargets(
             RecordEditRefusal.ContainerRecordNotYetSupported,
             $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace) " +
             "or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, branch, " +
-            "scene, response). Editing its fields works, and so do deleting and renumbering it; creating " +
+            "scene, response). Editing its fields and its FormID works, and so does deleting it; creating " +
             "one from scratch is not supported — a brand-new record has no containment for anything to " +
             "place it into.");
     }
