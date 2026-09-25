@@ -76,8 +76,8 @@ public sealed class TwoPluginModDeferralTests : IDisposable
     {
         RaiseExternalChangeOnA();
 
-        var resultA = _editHandler.Set(new PluginCopyKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
-        var resultB = _editHandler.Set(new PluginCopyKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
+        var resultA = _editHandler.Set(new PluginAddress(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
+        var resultB = _editHandler.Set(new PluginAddress(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
 
         Assert.False(resultA.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, resultA.Refusal);
@@ -92,7 +92,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var pathB = Path.Combine(_modFolder, PluginB);
         var bytesB = File.ReadAllBytes(pathB);
 
-        var result = await _compileHandler.CompileAsync(new PluginCopyKey(PluginB, Origin), new CompileSource.WorkingTree());
+        var result = await _compileHandler.CompileAsync(new PluginAddress(PluginB, Origin), new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -105,8 +105,8 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         RaiseExternalChangeOnA();
         SourceRepository.ClearExternalChangeQuestion(_modFolder);
 
-        var resultA = _editHandler.Set(new PluginCopyKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
-        var resultB = _editHandler.Set(new PluginCopyKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
+        var resultA = _editHandler.Set(new PluginAddress(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
+        var resultB = _editHandler.Set(new PluginAddress(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
 
         Assert.True(resultA.Applied, resultA.Message);
         Assert.True(resultB.Applied, resultB.Message);

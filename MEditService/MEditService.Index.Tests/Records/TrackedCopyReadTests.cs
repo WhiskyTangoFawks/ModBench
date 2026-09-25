@@ -31,8 +31,8 @@ public sealed class TrackedCopyReadTests : IDisposable
         _fixture.Dispose();
     }
 
-    private static readonly PluginCopyKey Tracked = new("Tracked.esp", "TrackedMod");
-    private static readonly PluginCopyKey Plain = new("Plain.esp", "PlainMod");
+    private static readonly PluginAddress Tracked = new("Tracked.esp", "TrackedMod");
+    private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
     [Fact]
     public void ACopyIngestedFromItsSourceTree_ReadsAsTracked()
@@ -51,7 +51,7 @@ public sealed class TrackedCopyReadTests : IDisposable
     [Fact]
     public void TheTrackedSet_ComparesKeysAsEveryOtherLookupDoes()
     {
-        Assert.Contains(new PluginCopyKey("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedCopies());
+        Assert.Contains(new PluginAddress("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedCopies());
     }
 
     [Fact]

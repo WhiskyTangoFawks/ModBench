@@ -267,7 +267,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private static PluginCopyKey Key(string plugin) => new(plugin, ModName);
+    private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 

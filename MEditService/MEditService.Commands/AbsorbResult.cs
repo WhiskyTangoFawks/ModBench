@@ -8,18 +8,18 @@ namespace MEditService.Commands;
 public sealed class AbsorbResult
 {
     private AbsorbResult(
-        IReadOnlyList<PluginCopyKey> landed, IReadOnlyList<TrackRefused> refused, string? trackedFilesRefusal,
+        IReadOnlyList<PluginAddress> landed, IReadOnlyList<TrackRefused> refused, string? trackedFilesRefusal,
         TrackResult? answerRefusal) =>
         (Landed, Refused, TrackedFilesRefusal, AnswerRefusal) = (landed, refused, trackedFilesRefusal, answerRefusal);
 
     public static AbsorbResult PerPlugin(
-        IReadOnlyList<PluginCopyKey> landed, IReadOnlyList<TrackRefused> refused, string? trackedFilesRefusal) =>
+        IReadOnlyList<PluginAddress> landed, IReadOnlyList<TrackRefused> refused, string? trackedFilesRefusal) =>
         new(landed, refused, trackedFilesRefusal, answerRefusal: null);
 
     public static AbsorbResult WholeAnswerRefused(TrackRefusal refusal, string message) =>
         new([], [], trackedFilesRefusal: null, TrackResult.Refused(refusal, message));
 
-    public IReadOnlyList<PluginCopyKey> Landed { get; }
+    public IReadOnlyList<PluginAddress> Landed { get; }
 
     public IReadOnlyList<TrackRefused> Refused { get; }
 

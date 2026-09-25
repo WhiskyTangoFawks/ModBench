@@ -23,13 +23,13 @@ internal static class MasterResolution
 {
     /// <summary>Per-copy master issues; a copy with every master resolved has no entry (never an
     /// empty list). A master is named by filename, so any copy of that name resolves it.</summary>
-    public static IReadOnlyDictionary<PluginCopyKey, IReadOnlyList<MasterIssue>> Classify(
-        IReadOnlyDictionary<PluginCopyKey, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
+    public static IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> Classify(
+        IReadOnlyDictionary<PluginAddress, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
     {
         var loaded = opened.Keys.Select(k => k.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var failed = failures.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var result = new Dictionary<PluginCopyKey, IReadOnlyList<MasterIssue>>(PluginCopyKey.Comparer);
+        var result = new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>(PluginAddress.Comparer);
         foreach (var (key, content) in opened)
         {
             var issues = new List<MasterIssue>();

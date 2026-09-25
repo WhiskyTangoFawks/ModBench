@@ -21,8 +21,8 @@ public sealed class PartialFormCompareTests
     // agree.
     private const float OverrideOwnWaterHeight = 999f;
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginCopyKey BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginCopyKey OverridePlugin = new("Partial.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
+    private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
 
     private readonly FormKey _cellKey;
     private readonly FormKey _refKey;
@@ -48,7 +48,7 @@ public sealed class PartialFormCompareTests
             new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", ["WaterHeight"])),
             new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(refr, OverridePlugin, 1, isWinner: true, Release, "refr", [])),
         };
-        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 1),
             [OverridePlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),

@@ -29,7 +29,7 @@ public class GetDocumentsTests
             }, origin: "ModA")
             .BuildScattered();
         var entry = fixture.Plugins.Single();
-        var key = new PluginCopyKey(entry.Name, entry.Origin);
+        var key = new PluginAddress(entry.Name, entry.Origin);
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
         using var onDisk = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
@@ -81,8 +81,8 @@ public class GetDocumentsTests
         // Records only: each copy also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
-        var fromA = reads.GetDocuments(new PluginCopyKey("Shared.esp", "ModA"));
-        var fromB = reads.GetDocuments(new PluginCopyKey("Shared.esp", "ModB"));
+        var fromA = reads.GetDocuments(new PluginAddress("Shared.esp", "ModA"));
+        var fromB = reads.GetDocuments(new PluginAddress("Shared.esp", "ModB"));
         var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
 

@@ -109,7 +109,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
         var opened = opens.OpenedTotal;
-        var bKey = new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
@@ -147,8 +147,8 @@ public sealed class ReconcileDiffTests
 
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var modA = new PluginCopyKey("Shared.esp", "ModA");
-        var modB = new PluginCopyKey("Shared.esp", "ModB");
+        var modA = new PluginAddress("Shared.esp", "ModA");
+        var modB = new PluginAddress("Shared.esp", "ModB");
         var stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
@@ -181,7 +181,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
         var opened = opens.OpenedTotal;
-        var bKey = new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bKey = new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
@@ -231,7 +231,7 @@ public sealed class ReconcileDiffTests
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdOpens.OpenedTotal);
-            Assert.False(third.Registers(new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
+            Assert.False(third.Registers(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }

@@ -27,7 +27,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _referrer = new(ReferrerName, ReferrerOrigin);
+    private readonly PluginAddress _referrer = new(ReferrerName, ReferrerOrigin);
     private readonly string _targetPath;
     private readonly string _referrerPath;
     private readonly FormKey _embeddedTarget;

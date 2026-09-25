@@ -14,7 +14,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 {
     private const string MalformedFixture = "LitR - TrueStorms.esp";
     private const string Origin = "TrueStormsMod";
-    private static readonly PluginCopyKey Key = new(MalformedFixture, Origin);
+    private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-diagnosis-instance-").FullName;

@@ -105,7 +105,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-642-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-642-game-").FullName;
 
-        public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+        public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Faction { get; }

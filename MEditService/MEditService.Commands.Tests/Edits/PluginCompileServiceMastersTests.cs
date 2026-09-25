@@ -24,7 +24,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _plugin = new(PluginName, "MastersMod");
+    private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
     private readonly FormKey _charlieKeyword;

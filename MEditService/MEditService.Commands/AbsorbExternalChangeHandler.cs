@@ -124,7 +124,7 @@ public sealed class AbsorbExternalChangeHandler
             return AbsorbResult.WholeAnswerRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
 
-        IReadOnlyList<PluginCopyKey> landed = [.. trailers.Select(b => Addressed(origin, b))];
+        IReadOnlyList<PluginAddress> landed = [.. trailers.Select(b => Addressed(origin, b))];
         if (SourceRepository.CommitTrackedFilesToMain(modFolder, trackedFileChanges) is { } failed)
             return AbsorbResult.PerPlugin(landed, [], $"'{failed.Subject}' {failed.Reason}.");
 
@@ -163,5 +163,5 @@ public sealed class AbsorbExternalChangeHandler
         return AbsorbResult.PerPlugin([.. baselines.Take(at).Select(b => Addressed(origin, b))], refused, trackedFilesRefusal);
     }
 
-    private static PluginCopyKey Addressed(string origin, BaselineTrailers baseline) => new(baseline.Plugin, origin);
+    private static PluginAddress Addressed(string origin, BaselineTrailers baseline) => new(baseline.Plugin, origin);
 }

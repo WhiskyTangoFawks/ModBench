@@ -15,7 +15,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     /// <summary>One comparison per source document, so a clean plugin costs one read per file. An
     /// embedded child's system of record is its owner's document, so a matching document vouches for
     /// every row derived from it.</summary>
-    internal ValidationReport Validate(PluginCopyKey key, string modFolder)
+    internal ValidationReport Validate(PluginAddress key, string modFolder)
     {
         var failures = new List<string>();
         var sourceRoot = SourceRepository.RootIn(modFolder, key.Name);
@@ -94,7 +94,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     // The committed half, from one ls-tree rather than a git process per record: a document whose
     // bytes are still a blob in that listing is clean at HEAD. Returns what the listing proves gone.
     private List<string> ValidateCommitted(
-        PluginCopyKey key, string modFolder, IEnumerable<string> documents, HashSet<string> drifted, List<string> failures)
+        PluginAddress key, string modFolder, IEnumerable<string> documents, HashSet<string> drifted, List<string> failures)
     {
         var goneAtHead = new List<string>();
 
@@ -131,7 +131,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         return goneAtHead;
     }
 
-    private string? HeadBody(PluginCopyKey key, string formKey) =>
+    private string? HeadBody(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(connection,
             "SELECT body FROM records_head WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
@@ -141,7 +141,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
 
     // A worldspace's TopCell is the one cell embedded rather than filed, and PlacementWalker leaves
     // its block coordinates null — what tells it from an exterior cell, which has a directory.
-    private Dictionary<string, string> HeldDocuments(PluginCopyKey key)
+    private Dictionary<string, string> HeldDocuments(PluginAddress key)
     {
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
         using var cmd = connection.CreateCommand();

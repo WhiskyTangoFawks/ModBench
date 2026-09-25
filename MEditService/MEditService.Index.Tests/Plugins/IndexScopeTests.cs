@@ -52,7 +52,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeIndexer(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var count = manager.RequireReads().CountOf(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), "npc_");
+        var count = manager.RequireReads().CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "npc_");
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
@@ -81,7 +81,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginAddress(TestPluginFixture.PluginName, "Data")));
     }
 
     private Indexer MakeLoadedManager(LoadOrderHolder holder)

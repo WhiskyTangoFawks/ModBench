@@ -32,14 +32,14 @@ public sealed class CopyRecordAsOverrideHandler
 
     /// <summary>The source's text is read before anything is written, so a record the codec cannot
     /// read refuses rather than landing as a stub. The master dependency follows at compile.</summary>
-    public RecordEditResult CopyRecordAsOverride(PluginCopyKey sourcePlugin, string formKey, PluginCopyKey destinationPlugin)
+    public RecordEditResult CopyRecordAsOverride(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
         return CopyAsOverride(copy, destinationPlugin);
     }
 
-    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginCopyKey destinationPlugin)
+    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -156,7 +156,7 @@ public sealed class CopyRecordAsOverrideHandler
 
     // A destination loading before the origin would be an underride, silently
     // beaten at runtime. A plugin the load order does not place passes.
-    private RecordEditResult? RefuseIfUnderride(string formKey, PluginCopyKey destinationPlugin)
+    private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
     {
         var copies = _loadOrder.Current.Copies;
 

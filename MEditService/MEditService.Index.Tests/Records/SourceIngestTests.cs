@@ -52,7 +52,7 @@ public sealed class SourceIngestTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private PluginCopyKey Plugin => _entry.KeyOf();
+    private PluginAddress Plugin => _entry.KeyOf();
 
     private string ModFolder => _entry.ModFolderOf();
 

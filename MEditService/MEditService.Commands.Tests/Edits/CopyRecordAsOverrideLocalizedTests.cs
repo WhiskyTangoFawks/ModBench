@@ -68,10 +68,10 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_FromAnUntrackedLocalizedSource_CarriesItsTranslatedStrings()
     {
-        var destination = new PluginCopyKey(DestinationPluginName, DestinationOrigin);
+        var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
 
         var result = _handler.CopyRecordAsOverride(
-            new PluginCopyKey(SourcePluginName, SourceOrigin), _door.ToString(), destination);
+            new PluginAddress(SourcePluginName, SourceOrigin), _door.ToString(), destination);
 
         Assert.True(result.Applied, result.Message);
         var document = TrackedTree.Document(_destinationModFolder, destination, _door.ToString());

@@ -22,9 +22,9 @@ public sealed class LoadOrderTests
     {
         var order = Order(Copy("A.esp", "ModA", slot: 0, enabled: false));
 
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "ModA")));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "ModA")));
         Assert.Empty(order.Participating);
-        Assert.Equal(new Registration(0, Enabled: false, Winning: true), order.Registration(new PluginCopyKey("A.esp", "ModA")));
+        Assert.Equal(new Registration(0, Enabled: false, Winning: true), order.Registration(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]
@@ -69,8 +69,8 @@ public sealed class LoadOrderTests
 
         Assert.Empty(order.Participating);
         Assert.Null(order.WinningCopy("A.esp"));
-        Assert.Null(order.Registration(new PluginCopyKey("A.esp", "ModA")));
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "ModA")));
+        Assert.Null(order.Registration(new PluginAddress("A.esp", "ModA")));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class LoadOrderTests
 
         var replaced = added.With(Copy("New.esp", "ModA", slot: 1, enabled: false));
         Assert.Equal(["A.esp", "New.esp"], replaced.Copies.Select(c => c.Name));
-        Assert.False(replaced.Participates(new PluginCopyKey("New.esp", "ModA")));
+        Assert.False(replaced.Participates(new PluginAddress("New.esp", "ModA")));
     }
 
     // ADR-0007's counterpart: a create that could not write its file takes its registration back,
@@ -139,10 +139,10 @@ public sealed class LoadOrderTests
     {
         var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 1));
 
-        var left = order.Without(new PluginCopyKey("A.esp", "ModB"));
+        var left = order.Without(new PluginAddress("A.esp", "ModB"));
 
         Assert.Equal(["ModA"], left.Copies.Select(c => c.Origin));
-        Assert.Equal(order.Copies, order.Without(new PluginCopyKey("Absent.esp", "ModA")).Copies);
+        Assert.Equal(order.Copies, order.Without(new PluginAddress("Absent.esp", "ModA")).Copies);
     }
 
     // The entries are the whole of the snapshot: the path they carry names no directory that
@@ -162,8 +162,8 @@ public sealed class LoadOrderTests
         var winner = order.WinningCopy("A.esp");
         Assert.NotNull(winner);
         Assert.Equal("HighPriorityMod", winner.Origin);
-        Assert.Equal([new PluginCopyKey("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "LowPriorityMod")));
+        Assert.Equal([new PluginAddress("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "LowPriorityMod")));
     }
 
     [Fact]
@@ -171,12 +171,12 @@ public sealed class LoadOrderTests
     {
         var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 0, winning: false));
 
-        var copyA = order.Copy(new PluginCopyKey("A.esp", "ModA"));
+        var copyA = order.Copy(new PluginAddress("A.esp", "ModA"));
         Assert.NotNull(copyA);
         Assert.Equal("ModA", copyA.Origin);
-        var copyB = order.Copy(new PluginCopyKey("A.esp", "ModB"));
+        var copyB = order.Copy(new PluginAddress("A.esp", "ModB"));
         Assert.NotNull(copyB);
         Assert.Equal("ModB", copyB.Origin);
-        Assert.Null(order.Copy(new PluginCopyKey("A.esp", "ModC")));
+        Assert.Null(order.Copy(new PluginAddress("A.esp", "ModC")));
     }
 }

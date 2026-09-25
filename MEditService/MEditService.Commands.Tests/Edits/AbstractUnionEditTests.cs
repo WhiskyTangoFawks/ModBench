@@ -228,7 +228,7 @@ public sealed class AbstractUnionEditTests : IDisposable
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-548-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-548-game-").FullName;
 
-        public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+        public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Npc { get; }

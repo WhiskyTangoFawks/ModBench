@@ -66,7 +66,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         var result = await Absorb();
 
         Assert.True(result.AllApplied);
-        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(First, Origin), new PluginAddress(Second, Origin)], result.Landed);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal([Asset], PathsIn("refs/heads/main"));
     }
@@ -80,7 +80,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(Second, Origin)], result.Landed);
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal(firstParkedBefore, Git("rev-parse", SourceRepository.LastCompileRef(First)).Trim());
     }
@@ -110,9 +110,9 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.Equal([new PluginCopyKey(First, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(First, Origin)], result.Landed);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((new PluginCopyKey(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
+        Assert.Equal((new PluginAddress(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
         Assert.Contains($"'Update {Second}' could not be committed to main", refused.Message, StringComparison.Ordinal);
         Assert.Contains($"'Update {Second}'", result.TrackedFilesRefusal, StringComparison.Ordinal);
     }
@@ -127,7 +127,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         Assert.Empty(result.Landed);
         Assert.Equal(
-            [(new PluginCopyKey(First, Origin), TrackRefusal.CommitFailed), (new PluginCopyKey(Second, Origin), TrackRefusal.StoppedByEarlierFailure)],
+            [(new PluginAddress(First, Origin), TrackRefusal.CommitFailed), (new PluginAddress(Second, Origin), TrackRefusal.StoppedByEarlierFailure)],
             result.Refused.Select(r => (r.Plugin, r.Refusal)));
         Assert.Contains($"'Update {First}'", result.Refused[1].Message, StringComparison.Ordinal);
     }
@@ -141,7 +141,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(First, Origin), new PluginAddress(Second, Origin)], result.Landed);
         Assert.Empty(result.Refused);
         Assert.Contains($"'Update {Origin}' could not be committed to main", result.TrackedFilesRefusal, StringComparison.Ordinal);
         Assert.False(result.AllApplied);
@@ -159,7 +159,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(Second, Origin)], result.Landed);
         Assert.True(result.AllApplied);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));
@@ -176,7 +176,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         Assert.Empty(result.Landed);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((new PluginCopyKey(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
+        Assert.Equal((new PluginAddress(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
         Assert.Contains($"landed on main, but {SourceRepository.LastCompileRef(Second)} could not be moved", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("could not be committed", refused.Message, StringComparison.Ordinal);
@@ -231,7 +231,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         {
             var result = await Absorb();
 
-            Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+            Assert.Equal([new PluginAddress(First, Origin), new PluginAddress(Second, Origin)], result.Landed);
             Assert.Empty(result.Refused);
             Assert.Null(result.TrackedFilesRefusal);
         }
@@ -255,7 +255,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(First, Origin), new PluginAddress(Second, Origin)], result.Landed);
         Assert.Empty(result.Refused);
         Assert.Contains("index.lock", result.TrackedFilesRefusal, StringComparison.Ordinal);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
@@ -275,7 +275,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         var result = await Absorb();
 
         Assert.True(result.AllApplied);
-        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(Second, Origin)], result.Landed);
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal(baselineOnMain, Git("rev-parse", SourceRepository.LastCompileRef(Second)).Trim());
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));

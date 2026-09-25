@@ -336,7 +336,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         internal LoadOrderHolder Holder { get; } = new();
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
-        public PluginCopyKey Plugin { get; }
+        public PluginAddress Plugin { get; }
 
         public MutationScope(CompileRoundTripGateFixture fixture)
         {

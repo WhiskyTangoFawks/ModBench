@@ -34,7 +34,7 @@ public sealed class TrackServiceTests
             var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(loadOrder, [new PluginCopyKey("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits);
+                .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits);
 
             var refused = Assert.Single(result.Refused);
             Assert.Equal(TrackRefusal.PluginNotLoaded, refused.Refusal);
@@ -72,9 +72,9 @@ public sealed class TrackServiceTests
             var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
                 .TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
-            Assert.Equal([new PluginCopyKey("Fixture.esp", "FixtureMod")], result.Landed);
+            Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
             var refused = Assert.Single(result.Refused);
-            Assert.Equal((new PluginCopyKey("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
+            Assert.Equal((new PluginAddress("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
             Assert.Contains("cannot be read", refused.Message, StringComparison.Ordinal);
             Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"))));
             Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Locked.esp"))));

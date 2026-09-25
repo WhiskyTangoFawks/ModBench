@@ -93,8 +93,8 @@ public sealed class RecordQueryServiceTests
             .Build("Aggression");
         var (manager, svc) = Build(fixture);
         ((FakeReads)manager.RequireReads()).Tracked =
-            new HashSet<PluginCopyKey>(fixture.Copies.Where(c => c.Name == PluginName).Select(c => c.Key),
-                PluginCopyKey.Comparer);
+            new HashSet<PluginAddress>(fixture.Copies.Where(c => c.Name == PluginName).Select(c => c.Key),
+                PluginAddress.Comparer);
 
         var plugins = svc.GetPlugins();
 
@@ -652,12 +652,12 @@ public sealed class RecordQueryServiceTests
 
     // --- GET /plugins/{plugin}/record-types ---
 
-    private static readonly PluginCopyKey PluginKey = new(PluginName, "Data");
+    private static readonly PluginAddress PluginKey = new(PluginName, "Data");
 
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
     {
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
         };
@@ -674,7 +674,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
     {
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] =
             [
@@ -694,7 +694,7 @@ public sealed class RecordQueryServiceTests
     {
         // The signature ("npc_") stays the key; DisplayName is additive, sourced
         // from the same xEdit-parity lookup SchemaReflector uses.
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
         };
@@ -710,7 +710,7 @@ public sealed class RecordQueryServiceTests
     {
         // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
         // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] =
             [
@@ -771,7 +771,7 @@ public sealed class RecordQueryServiceTests
     {
         var copy = Assert.Single(_svc.GetPlugins(), p => p.Copy.Name == PluginName).Copy.Key;
         _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer) { copy };
+        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { copy };
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
@@ -784,7 +784,7 @@ public sealed class RecordQueryServiceTests
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
-        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
+        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);

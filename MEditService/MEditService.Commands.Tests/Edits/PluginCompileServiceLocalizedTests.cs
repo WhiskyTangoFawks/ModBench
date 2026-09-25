@@ -69,7 +69,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         foreach (var fileName in originalStringsFiles.Keys)
             File.Delete(Path.Combine(stringsDir, fileName));
 
-        var plugin = new PluginCopyKey(PluginName, Origin);
+        var plugin = new PluginAddress(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
         var result = await compileService.CompileAsync(plugin, new CompileSource.WorkingTree());
 

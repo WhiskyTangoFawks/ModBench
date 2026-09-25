@@ -15,8 +15,8 @@ namespace MEditService.Queries.Tests.Query;
 public sealed class VmadCompareTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginCopyKey BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginCopyKey TopPlugin = new("Top.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
+    private static readonly PluginAddress TopPlugin = new("Top.esp", "Data");
     private const string Field = "VirtualMachineAdapter";
 
     private readonly FormKey _scriptedNpc;
@@ -54,7 +54,7 @@ public sealed class VmadCompareTests
             Row(baseQuest, BasePlugin, 0, isWinner: false, "qust"),
             Row(topQuest, TopPlugin, 1, isWinner: true, "qust"),
         };
-        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 2),
             [TopPlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),
@@ -68,7 +68,7 @@ public sealed class VmadCompareTests
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 
-    private static FakeRow Row(IMajorRecordGetter record, PluginCopyKey plugin, int loadOrderIndex, bool isWinner, string recordType) =>
+    private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType) =>
         new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, [Field]));
 
     private static ScriptEntry NamedScript(string name, string property, int value)

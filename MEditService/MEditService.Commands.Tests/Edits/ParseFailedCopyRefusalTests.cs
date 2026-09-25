@@ -84,8 +84,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copyfail-dest-").FullName;
         private readonly string _sourcePath;
 
-        public PluginCopyKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-        public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+        public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
+        public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
         public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
         public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
 

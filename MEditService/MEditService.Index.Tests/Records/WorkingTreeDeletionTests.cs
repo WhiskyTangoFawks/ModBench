@@ -17,8 +17,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
     private readonly LoadOrderEntry _winner;
-    private readonly PluginCopyKey _baseKey;
-    private readonly PluginCopyKey _winnerKey;
+    private readonly PluginAddress _baseKey;
+    private readonly PluginAddress _winnerKey;
     private readonly string _npc;
     private readonly string _raceA;
     private readonly string _raceB;

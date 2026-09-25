@@ -28,7 +28,7 @@ public sealed class StoreRebuildTests : IDisposable
         _fixture.Dispose();
     }
 
-    private PluginCopyKey Key => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Key => _fixture.Plugins.Single().KeyOf();
 
     private void Reconcile(string? instanceRoot) =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);

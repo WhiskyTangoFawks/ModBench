@@ -14,8 +14,8 @@ namespace MEditService.Index.Tests.Records;
 // answers nothing anywhere; naming it again makes them answer with no re-read.
 public class RegistrationScopingTests
 {
-    private static readonly PluginCopyKey AlphaKey = new("Alpha.esp", "ModA");
-    private static readonly PluginCopyKey BetaKey = new("Beta.esp", "ModB");
+    private static readonly PluginAddress AlphaKey = new("Alpha.esp", "ModA");
+    private static readonly PluginAddress BetaKey = new("Beta.esp", "ModB");
 
     // Every kind of row the index extracts, so every read path has something to not answer with. Beta
     // additionally overrides Alpha's Npc, so the override stack and the contested-FormKey read have a

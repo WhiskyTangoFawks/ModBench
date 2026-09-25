@@ -77,7 +77,7 @@ public sealed class SpatialParseFailurePrefixTests
         internal const string PluginName = "SpatialPrefix.esp";
         internal const string Origin = PluginOrigin.DataDirectory;
 
-        internal static readonly PluginCopyKey Plugin = new(PluginName, Origin);
+        internal static readonly PluginAddress Plugin = new(PluginName, Origin);
 
         private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
         private readonly string _path;

@@ -30,7 +30,7 @@ public sealed class MalformedPluginQueryServiceTests
     private static PluginDiagnosisReport[] Diagnose(
         IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredCopy[] copies) =>
         [.. new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), []) { Diagnoses = rows }),
+            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = rows }),
             FakeLoadOrder.Of(GameRelease.Fallout4, copies))
             .GetLoadOrderDiagnoses()];
 
@@ -125,7 +125,7 @@ public sealed class MalformedPluginQueryServiceTests
     public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing()
     {
         var copy = Copy(Malformed);
-        var reads = new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), []) { Diagnoses = [Row(copy, Short)] };
+        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = [Row(copy, Short)] };
         var reconciling = new LoadOrderStatus(
             LoadOrderState.Reconciling, TotalPlugins: 1, [], ConflictsComputed: false, []);
 
@@ -140,7 +140,7 @@ public sealed class MalformedPluginQueryServiceTests
     public void GetLoadOrderDiagnoses_WithNoLoadOrderHeld_Throws()
     {
         var service = new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), [])),
+            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
             new LoadOrderHolder());
 
         Assert.Throws<NoLoadOrderException>(service.GetLoadOrderDiagnoses);

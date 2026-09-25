@@ -14,7 +14,7 @@ namespace MEditService.Queries.Tests.TestSupport;
 /// would have opened, and the documents each copy holds.</summary>
 internal sealed record FakeFixtureData(
     GameRelease Release,
-    IReadOnlyList<RegisteredCopy> Copies, IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
+    IReadOnlyList<RegisteredCopy> Copies, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
 
 // Build takes the column names a test reads, never every column a schema has: a scratch round
 // trip runs Mutagen's own master computation, then the real codec serializes each record once.
@@ -45,8 +45,8 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         {
             var builtMods = new List<Fallout4Mod>();
             var copies = new List<RegisteredCopy>();
-            var opened = new Dictionary<PluginCopyKey, PluginContent>();
-            var perPlugin = new List<(PluginCopyKey Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)>();
+            var opened = new Dictionary<PluginAddress, PluginContent>();
+            var perPlugin = new List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)>();
 
             for (var slot = 0; slot < _plugins.Count; slot++)
             {
@@ -63,7 +63,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                 overlays.Add(overlay);
                 var written = (IFallout4ModGetter)overlay;
 
-                var key = new PluginCopyKey(name, origin);
+                var key = new PluginAddress(name, origin);
                 var masters = written.ModHeader.MasterReferences.Select(m => m.Master.FileName.String).ToList();
                 var records = written.EnumerateMajorRecords()
                     .Select(r => (Record: r, RecordType: RecordTableName.Of(r, schemas)))
@@ -102,9 +102,9 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
     // FormKey is the highest-slot copy whose plugin participates.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
-        List<RegisteredCopy> copies, List<(PluginCopyKey Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
+        List<RegisteredCopy> copies, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
     {
-        var participates = copies.Where(c => c.Registration.Participates).Select(c => new PluginCopyKey(c.Name, c.Origin)).ToHashSet();
+        var participates = copies.Where(c => c.Registration.Participates).Select(c => new PluginAddress(c.Name, c.Origin)).ToHashSet();
         var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);
         foreach (var (key, slot, records) in perPlugin)
         {

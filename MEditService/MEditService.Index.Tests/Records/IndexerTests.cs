@@ -94,7 +94,7 @@ public sealed class IndexerTests
         Assert.Equal(
             snapshot.Copies.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
             indexer.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
-        Assert.False(indexer.Registers(new PluginCopyKey("Nobody.esp", PluginOrigin.DataDirectory)));
+        Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
     // Header flags, the master list and the record count are read out of the file when the copy is
@@ -131,7 +131,7 @@ public sealed class IndexerTests
         Reconcile(indexer, holder, snapshot);
 
         var opened = indexer.RequireReads().OpenedCopies;
-        Assert.DoesNotContain(new PluginCopyKey("Gone.esp", "SomeMod"), opened.Keys);
+        Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
         Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
 
@@ -145,7 +145,7 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(await indexer.RefreshBinary(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
+        Assert.True(await indexer.RefreshBinary(new PluginAddress("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

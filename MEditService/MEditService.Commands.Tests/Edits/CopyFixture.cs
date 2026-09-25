@@ -33,8 +33,8 @@ public sealed class CopyFixture : IDisposable
     public DeleteRecordHandler DeleteHandler { get; }
     public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
     public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
-    public PluginCopyKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-    public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+    public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
+    public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
     public const string SourceNpcEditorId = "SourceNpc";
     public FormKey SourceNpc { get; }
@@ -98,10 +98,10 @@ public sealed class CopyFixture : IDisposable
             .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>
+    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
-    public SourceDocument? CommittedDocument(PluginCopyKey plugin, RecordIdentity identity) =>
+    public SourceDocument? CommittedDocument(PluginAddress plugin, RecordIdentity identity) =>
         TrackedTree.CommittedDocument(ModFolderOf(plugin), plugin, identity);
 
     public IReadOnlyList<string> DestinationGitStatus() => TrackedTree.GitStatus(DestinationModFolder);
@@ -119,14 +119,14 @@ public sealed class CopyFixture : IDisposable
     /// an untracked source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));
 
-    public string ModFolderOf(PluginCopyKey plugin) =>
+    public string ModFolderOf(PluginAddress plugin) =>
         plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder;
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
     // Asked of the repository, matching TwoModFixture's own reason: computing the path needs an
     // order index this fixture has no reason to track.
-    public string SourceFileFor(PluginCopyKey plugin, FormKey formKey, string recordType, string? editorId) =>
+    public string SourceFileFor(PluginAddress plugin, FormKey formKey, string recordType, string? editorId) =>
         SourceDocumentPath.Of(
             plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
             plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);

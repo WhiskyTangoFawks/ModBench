@@ -17,7 +17,7 @@ internal sealed class OverflowValidation
         _logger = logger;
     }
 
-    public void Validate(IReadOnlyList<PluginCopyKey> keys)
+    public void Validate(IReadOnlyList<PluginAddress> keys)
     {
         foreach (var key in keys)
         {

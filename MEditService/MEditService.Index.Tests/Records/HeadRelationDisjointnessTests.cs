@@ -13,7 +13,7 @@ public sealed class HeadRelationDisjointnessTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _entry;
-    private readonly PluginCopyKey _key;
+    private readonly PluginAddress _key;
     private readonly string _formKey;
 
     public HeadRelationDisjointnessTests()

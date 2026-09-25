@@ -109,7 +109,7 @@ public class FilterTests(TestPluginFixture fixture)
 
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
-        Assert.Equal(1, reads.CountOf(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), "NPC_"));
+        Assert.Equal(1, reads.CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "NPC_"));
     }
 
     // --- GetPluginsWithMatchingRecords ---
@@ -125,7 +125,7 @@ public class FilterTests(TestPluginFixture fixture)
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
         var plugins = reads.GetPluginsWithMatchingRecords(["NPC_"]);
-        Assert.Contains(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), plugins);
+        Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, "Data"), plugins);
     }
 
     // ADR-0012 invariant 1: a filename is not an identity — a match in one copy is not a match in
@@ -146,7 +146,7 @@ public class FilterTests(TestPluginFixture fixture)
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'OnlyInModB'", "filter.sql");
 
         Assert.Equal(
-            [new PluginCopyKey("Shared.esp", "ModB")],
+            [new PluginAddress("Shared.esp", "ModB")],
             index.RequireReads().GetPluginsWithMatchingRecords(["npc_"]));
     }
 

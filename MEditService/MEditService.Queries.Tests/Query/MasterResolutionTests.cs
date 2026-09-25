@@ -12,14 +12,14 @@ namespace MEditService.Queries.Tests.Query;
 // public door: classification is Queries' own internal.
 public class MasterResolutionTests
 {
-    private static (PluginCopyKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
-        (new PluginCopyKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
+    private static (PluginAddress Key, PluginContent Content) Plugin(string name, params string[] masters) =>
+        (new PluginAddress(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
 
     private static IReadOnlyList<PluginRow> GetPlugins(
-        (PluginCopyKey Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
+        (PluginAddress Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
         params PluginLoadFailure[] failures)
     {
-        var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer);
+        var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer);
         var copies = plugins
             .Select((p, slot) => new RegisteredCopy(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
             .ToList();
@@ -32,7 +32,7 @@ public class MasterResolutionTests
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
-        (PluginCopyKey Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
+        (PluginAddress Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
         GetPlugins(plugins, LoadOrderState.Ready, failures)
             .Where(row => row.MasterIssues.Count > 0)
             .ToDictionary(row => row.Copy.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
@@ -51,9 +51,9 @@ public class MasterResolutionTests
     [Fact]
     public void GetPlugins_TwoCopiesOfOneName_EachCarriesItsOwnMasterIssues()
     {
-        var missingAMaster = (new PluginCopyKey("Patch.esp", "WinningMod"),
+        var missingAMaster = (new PluginAddress("Patch.esp", "WinningMod"),
             new PluginContent(IsLight: false, IsMaster: false, ["Ghost.esm"], RecordCount: 0));
-        var complete = (new PluginCopyKey("Patch.esp", "LosingMod"),
+        var complete = (new PluginAddress("Patch.esp", "LosingMod"),
             new PluginContent(IsLight: false, IsMaster: false, [], RecordCount: 0));
 
         var rows = GetPlugins([missingAMaster, complete]);

@@ -43,7 +43,7 @@ public sealed class DeleteRecordHandlerTests
         var otherNpc = new RecordAt(mod.Plugin, mod.OtherNpc.ToString());
 
         var npcSpelledOtherwise = new RecordAt(
-            new PluginCopyKey(mod.Plugin.Name.ToUpperInvariant(), mod.Plugin.Origin.ToLowerInvariant()),
+            new PluginAddress(mod.Plugin.Name.ToUpperInvariant(), mod.Plugin.Origin.ToLowerInvariant()),
             mod.Npc.ToString().ToLowerInvariant());
 
         var result = mod.DeleteHandler.DeleteRecords([npc, otherNpc, npc, npcSpelledOtherwise]);

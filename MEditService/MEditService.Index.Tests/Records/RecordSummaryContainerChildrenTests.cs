@@ -13,7 +13,7 @@ namespace MEditService.Index.Tests.Records;
 /// per-row follow-up call; the Plugins tree's collapsible state reads this flag directly.</summary>
 public sealed class RecordSummaryContainerChildrenTests
 {
-    private static readonly PluginCopyKey Key = new("Dialogue.esp", "Data");
+    private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
 
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);

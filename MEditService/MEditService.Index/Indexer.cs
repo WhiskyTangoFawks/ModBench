@@ -74,7 +74,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // ADR-0013 invariant 4: a copy that failed to open stays a row in an error state until its
     // bytes change. The hash recorded alongside it is what changing detects.
-    private readonly Dictionary<PluginCopyKey, string?> _failedHashes = new(PluginCopyKey.Comparer);
+    private readonly Dictionary<PluginAddress, string?> _failedHashes = new(PluginAddress.Comparer);
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -102,14 +102,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
     /// handing out the store.</summary>
-    public bool Registers(PluginCopyKey key)
+    public bool Registers(PluginAddress key)
     {
-        lock (_lock) return _index?.RegisteredPlugins().Contains(key, PluginCopyKey.Comparer) == true;
+        lock (_lock) return _index?.RegisteredPlugins().Contains(key, PluginAddress.Comparer) == true;
     }
 
     // ADR-0009 invariant 4: the hash the store's rows for this copy were built from, or null when
     // it holds no validated rows for it.
-    private string? IndexedContentHash(PluginCopyKey key)
+    private string? IndexedContentHash(PluginAddress key)
     {
         lock (_lock) return _index?.IndexedContentHash(key);
     }
@@ -198,7 +198,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // ADR-0015 invariant 3: a whole copy re-derived or removed has too many rows to name, so the
     // announcement names the copy and the sequence the store reached once the projection landed.
-    private void AnnouncePluginChanged(IRecordIndex index, PluginCopyKey key) =>
+    private void AnnouncePluginChanged(IRecordIndex index, PluginAddress key) =>
         index.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, index.Sequence)));
 
     // Polling, not the notification port: this answers one caller's own bound, not every
@@ -396,10 +396,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         HeldPlugins held, IRecordIndex index, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var resolved = snapshot.Copies;
-        var wanted = resolved.ToDictionary(r => r.Key, PluginCopyKey.Comparer);
-        var open = held.Plugins.ToDictionary(p => p.Key, PluginCopyKey.Comparer);
+        var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
+        var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 
-        IReadOnlyList<PluginCopyKey> failed;
+        IReadOnlyList<PluginAddress> failed;
         lock (_lock) failed = [.. _failedHashes.Keys];
         // Registered, held, or held only as a failure row — a copy the snapshot has stopped naming
         // leaves by every one of those doors, so a stale error row cannot outlive its copy.
@@ -407,7 +407,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             .Concat(held.Plugins.Select(p => p.Key))
             .Concat(failed)
             .Where(k => !wanted.ContainsKey(k))
-            .Distinct(PluginCopyKey.Comparer)
+            .Distinct(PluginAddress.Comparer)
             .ToList();
         var moved = resolved
             .Where(r => open.TryGetValue(r.Key, out var h) && h.Registration != r.Registration)
@@ -447,7 +447,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             held.Remove(key);
             lock (_lock)
             {
-                _indexed.RemoveAll(i => PluginCopyKey.Comparer.Equals(new PluginCopyKey(i.Name, i.Origin), key));
+                _indexed.RemoveAll(i => PluginAddress.Comparer.Equals(new PluginAddress(i.Name, i.Origin), key));
                 _failedHashes.Remove(key);
             }
         }
@@ -709,7 +709,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
     /// this call re-derived whole.</summary>
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginCopyKey? plugin)
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
@@ -718,7 +718,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         var (_, index) = RequireScopeCore();
         // One advance for everything this validate re-derives, however many copies it names.
         using var projection = index.BeginProjection();
-        var keys = plugin is { } one ? (IReadOnlyList<PluginCopyKey>)[one] : index.RegisteredPlugins();
+        var keys = plugin is { } one ? (IReadOnlyList<PluginAddress>)[one] : index.RegisteredPlugins();
 
         var order = _holder.Current;
         var reports = new List<ValidationReport>(keys.Count);
@@ -731,7 +731,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // index-load-order.md, failures: one copy that cannot be read is flagged with its reason, and the
     // copies after it are still validated.
-    private ValidationReport ValidateOne(IRecordIndex index, PluginCopyKey key, string? modFolder)
+    private ValidationReport ValidateOne(IRecordIndex index, PluginAddress key, string? modFolder)
     {
         try
         {
@@ -756,7 +756,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>ADR-0015 invariant 2's narrow signal: re-projects these keys from the source tree
     /// under the write gate. An untracked or unheld copy is a no-op.</summary>
-    public void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys)
+    public void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys)
     {
         // Taken before anything reaches _lock or the index: this runs on the Source watcher's timer,
         // with nothing else ordering it against an in-flight edit.
@@ -785,7 +785,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // A tree the keys cannot be read from is diagnosed on the copy by the whole read, as a first
     // ingest would diagnose it.
     private void RefreshByKeysOrReadWhole(
-        IRecordIndex index, PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys)
+        IRecordIndex index, PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
     {
         try
         {
@@ -804,7 +804,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // Which truth it reads is the plugin's: an untracked copy from its binary, a tracked copy from
     // its source tree (ADR-0007 invariant 3), because reading a tracked copy's binary would discard
     // uncommitted edits.
-    private void ReindexHeldCopy(PluginCopyKey key)
+    private void ReindexHeldCopy(PluginAddress key)
     {
         // Taken before anything reaches _lock: this runs on the watcher's timer. IndexWriteGate is a
         // Lock, thread-affine, so nothing under this scope may await — the thread that exits must be
@@ -830,7 +830,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
     // ingest produce the same rows by construction. A failed read is recorded and rethrown, never
     // degraded to the binary.
-    private void IngestFromSourceTree(PluginCopyKey key)
+    private void IngestFromSourceTree(PluginAddress key)
     {
         // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
         // reentrant gate makes that free.
@@ -880,7 +880,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         AnnouncePluginChanged(index, key);
     }
 
-    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease, string DataFolderPath) RequireHeldCopy(PluginCopyKey key)
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease, string DataFolderPath) RequireHeldCopy(PluginAddress key)
     {
         lock (_lock)
         {
@@ -906,7 +906,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // The file is gone, so its rows go with it. A no-op while the held copy still exists or with no
     // load order: the watcher that calls this races teardowns and superseding load orders.
-    private void UnindexGoneCopy(PluginCopyKey key)
+    private void UnindexGoneCopy(PluginAddress key)
     {
         // The watcher's timer's other index write — a vanished binary — gated like its sibling
         // above. Outside _lock, never inside it.
@@ -937,9 +937,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>See <see cref="IRefreshIndex.RefreshBinary"/>. Nothing here awaits: the comparison
     /// and every re-derivation are synchronous under the write gate.</summary>
-    public Task<bool> RefreshBinary(PluginCopyKey key, string path) => Task.FromResult(RefreshBinaryNow(key, path));
+    public Task<bool> RefreshBinary(PluginAddress key, string path) => Task.FromResult(RefreshBinaryNow(key, path));
 
-    private bool RefreshBinaryNow(PluginCopyKey key, string path)
+    private bool RefreshBinaryNow(PluginAddress key, string path)
     {
         if (!File.Exists(path))
         {
@@ -960,7 +960,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // A copy the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
     // the single-copy counterpart of ReconcileProgressively's own arriving loop.
-    private bool IndexNotYetHeld(PluginCopyKey key)
+    private bool IndexNotYetHeld(PluginAddress key)
     {
         using var _ = WriteGate.Enter();
 

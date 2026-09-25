@@ -25,7 +25,7 @@ public sealed class IndexVisibilityTests
                 for (int i = 0; i < NpcCount; i++) mod.Npcs.AddNew($"Npc{i:D4}");
             })
             .Build();
-        var key = new PluginCopyKey("Big.esp", PluginOrigin.DataDirectory);
+        var key = new PluginAddress("Big.esp", PluginOrigin.DataDirectory);
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
 
@@ -65,7 +65,7 @@ public sealed class IndexVisibilityTests
     }
 
     // No store yet is a count of nothing, which is what a reader before the reconcile sees.
-    private static int CountOrNone(Indexer index, PluginCopyKey key)
+    private static int CountOrNone(Indexer index, PluginAddress key)
     {
         try
         {

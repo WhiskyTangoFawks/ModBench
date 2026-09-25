@@ -57,7 +57,7 @@ internal sealed class WatcherSinks
 
     /// <summary>ADR-0009's runtime half: key and path only, never a locally remembered hash. The
     /// Index owns the comparison and announces whatever landed.</summary>
-    public async Task RefreshBinary(PluginCopyKey key, string path)
+    public async Task RefreshBinary(PluginAddress key, string path)
     {
         try
         {
@@ -99,7 +99,7 @@ internal sealed class WatcherSinks
 
     private void ProjectOne(SourceChangeEvent change)
     {
-        var key = new PluginCopyKey(change.PluginName, change.Origin);
+        var key = new PluginAddress(change.PluginName, change.Origin);
         try
         {
             // A mod with no repository is untracked rather than broken: nothing to project from.
@@ -123,7 +123,7 @@ internal sealed class WatcherSinks
 
     /// <summary>ADR-0015 invariant 4: one git listing for the whole copy, compared by content hash.
     /// The Index announces a copy it re-derives.</summary>
-    public void ValidateWholeCopy(PluginCopyKey key, string reason)
+    public void ValidateWholeCopy(PluginAddress key, string reason)
     {
         foreach (var report in _index.ValidateIndex(key))
         {

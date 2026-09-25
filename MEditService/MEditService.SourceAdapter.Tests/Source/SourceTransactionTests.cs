@@ -14,7 +14,7 @@ public sealed class SourceTransactionTests : IDisposable
 {
     private const GameRelease Release = GameRelease.Fallout4;
     private const string PluginName = "Fixture.esp";
-    private static readonly PluginCopyKey Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
 
     private readonly string _root = Directory.CreateTempSubdirectory("medit-swt-").FullName;
 

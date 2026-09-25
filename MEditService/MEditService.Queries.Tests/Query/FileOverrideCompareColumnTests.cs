@@ -19,7 +19,7 @@ public sealed class FileOverrideCompareColumnTests
     private static RecordQueryService Service(IReadOnlyList<RegisteredCopy> copies, IReadOnlyList<FakeRow> rows)
     {
         var opened = copies.ToDictionary(
-            c => new PluginCopyKey(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, Masters: [], RecordCount: 1));
+            c => new PluginAddress(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, Masters: [], RecordCount: 1));
         var holder = FakeLoadOrder.Of(Release, [.. copies]);
         return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
@@ -28,7 +28,7 @@ public sealed class FileOverrideCompareColumnTests
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(plugin), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew(editorId);
-        var key = new PluginCopyKey(plugin, origin);
+        var key = new PluginAddress(plugin, origin);
         return new(key, loadOrderIndex, isWinner, RealDocuments.Of(npc, key, loadOrderIndex, isWinner, Release, "npc_", []));
     }
 

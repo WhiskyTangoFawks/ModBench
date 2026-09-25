@@ -35,7 +35,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private readonly string _modFolder;
     private readonly string _gameDirectory;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _plugin = new(PluginName, Origin);
+    private readonly PluginAddress _plugin = new(PluginName, Origin);
 
     private readonly FormKey _cellA;
     private readonly FormKey _cellB;

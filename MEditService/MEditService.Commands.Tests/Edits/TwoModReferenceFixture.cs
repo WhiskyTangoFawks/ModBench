@@ -33,8 +33,8 @@ public sealed class TwoModReferenceFixture : IDisposable
     public LoadOrderSnapshot LoadOrder { get; }
     public EditRecordHandler EditHandler { get; }
 
-    public PluginCopyKey TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
-    public PluginCopyKey ReferencerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
+    public PluginAddress TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
+    public PluginAddress ReferencerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
 
     /// <summary>Native to Base.esm and overridden unedited in Winner.esp, so the override case has a
     /// record to be asked about.</summary>
@@ -86,19 +86,19 @@ public sealed class TwoModReferenceFixture : IDisposable
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-    public string ModFolderOf(PluginCopyKey plugin) =>
+    public string ModFolderOf(PluginAddress plugin) =>
         plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginCopyKey plugin, FormKey formKey) =>
+    public SourceDocument? Document(PluginAddress plugin, FormKey formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey.ToString());
 
-    public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>
+    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
     /// <summary>Asked of the layout rather than the repository: a leaf name is what a FormID edit moves,
     /// and a test naming it ahead of the write is naming the file that must survive a refusal.</summary>
-    public string SourceFileFor(PluginCopyKey plugin, FormKey formKey, string recordType, string? editorId) =>
+    public string SourceFileFor(PluginAddress plugin, FormKey formKey, string recordType, string? editorId) =>
         SourceDocumentPath.Of(
             ModFolderOf(plugin), plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 

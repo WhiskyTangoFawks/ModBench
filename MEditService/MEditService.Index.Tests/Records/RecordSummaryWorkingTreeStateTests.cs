@@ -14,7 +14,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
-    private readonly PluginCopyKey _baseKey;
+    private readonly PluginAddress _baseKey;
     private readonly FormKey _editedFormKey;
     private readonly FormKey _untouchedFormKey;
 

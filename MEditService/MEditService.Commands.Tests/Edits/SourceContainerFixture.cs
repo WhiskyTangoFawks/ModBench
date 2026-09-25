@@ -29,7 +29,7 @@ public sealed class SourceContainerFixture : IDisposable
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
-    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+    public PluginAddress Plugin { get; } = new(PluginName, Origin);
     public FormKey Worldspace { get; }
     public FormKey TopCell { get; }
     public FormKey TopCellRef { get; }

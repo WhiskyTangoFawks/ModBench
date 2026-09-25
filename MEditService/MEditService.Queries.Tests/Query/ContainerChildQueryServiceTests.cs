@@ -19,7 +19,7 @@ public class ContainerChildQueryServiceTests
         public string? LastGetContainerChildrenOrigin { get; private set; }
         public readonly List<string?> SearchedRecordTypes = [];
 
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey)
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey)
         {
             LastGetContainerChildrenOrigin = plugin.Origin;
             return containerChildren;
@@ -35,27 +35,27 @@ public class ContainerChildQueryServiceTests
             return new(items, items.Count);
         }
 
-        public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies =>
-            new Dictionary<PluginCopyKey, PluginContent>();
+        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies =>
+            new Dictionary<PluginAddress, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginCopyKey plugin) => null;
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin) => [];
+        public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) => [];
         public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) => [];
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginCopyKey>();
+        public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => new HashSet<string>();
+        public IReadOnlySet<PluginAddress> GetTrackedCopies() => new HashSet<PluginAddress>(PluginAddress.Comparer);
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int l, int o) => new([], 0);
-        public CellReferences GetCellReferences(PluginCopyKey plugin, string fk) => new([], []);
-        public PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin) => null;
-        public CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey) => null;
-        public ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey) => null;
+        public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
+        public PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int l, int o) => new([], 0);
+        public CellReferences GetCellReferences(PluginAddress plugin, string fk) => new([], []);
+        public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
+        public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
+        public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
     // The reads' presence is what "no load order" means for the Index side; this service takes

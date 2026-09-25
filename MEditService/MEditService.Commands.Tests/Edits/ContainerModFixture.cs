@@ -33,7 +33,7 @@ public sealed class ContainerModFixture : IDisposable
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
-    public PluginCopyKey Plugin { get; } = new(PluginName, ModFolderOrigin);
+    public PluginAddress Plugin { get; } = new(PluginName, ModFolderOrigin);
 
     public const string NpcEditorId = "FixtureNpc";
     public FormKey Npc { get; }

@@ -13,8 +13,8 @@ namespace MEditService.Index.Tests.Indexing;
 // door. What a filter may name is what these pin.
 public sealed class SqlDoorSchemaTests : IDisposable
 {
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-    private static readonly PluginCopyKey OverKey = new("Over.esp", "Data");
+    private static readonly PluginAddress BaseKey = new("Base.esm", "Data");
+    private static readonly PluginAddress OverKey = new("Over.esp", "Data");
 
     private readonly PluginFixtureData _fixture;
     private readonly Indexer _index;

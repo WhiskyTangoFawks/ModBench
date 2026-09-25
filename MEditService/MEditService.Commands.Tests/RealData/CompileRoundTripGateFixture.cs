@@ -18,7 +18,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public CompileRoundTripGateFixture()
     {

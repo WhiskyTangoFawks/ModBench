@@ -39,7 +39,7 @@ internal static class RealDocuments
 
     // fieldNames names the columns the test reads; a schema lacking one of them is skipped for it.
     internal static RecordDocument Of(
-        IMajorRecordGetter record, PluginCopyKey plugin, int loadOrderIndex, bool isWinner, GameRelease release,
+        IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, GameRelease release,
         string recordType, IReadOnlyList<string> fieldNames, Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
         var schema = SharedSchemaReflector.Instance.GetSchemas(release)[recordType];

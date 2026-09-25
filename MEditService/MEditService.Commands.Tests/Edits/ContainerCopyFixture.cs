@@ -33,8 +33,8 @@ public sealed class ContainerCopyFixture : IDisposable
     public EditRecordHandler EditHandler { get; }
     public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
     public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
-    public PluginCopyKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-    public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+    public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
+    public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
     public const string DestinationNpcEditorId = "DestinationNpc";
     public FormKey DestinationNpc { get; }
@@ -293,7 +293,7 @@ public sealed class ContainerCopyFixture : IDisposable
             .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
-    public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>
+    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(
             plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder, plugin, formKey);
 
@@ -323,7 +323,7 @@ public sealed class ContainerCopyFixture : IDisposable
 
     /// <summary>Any document in a tracked plugin's tree carrying an EditorID: a container's own
     /// RecordData.json, a flat record's file, or the file that inlines an embedded child.</summary>
-    public string SourceFileContaining(PluginCopyKey plugin, string editorId) =>
+    public string SourceFileContaining(PluginAddress plugin, string editorId) =>
         Directory
             .EnumerateFiles(
                 Path.Combine(

@@ -19,7 +19,7 @@ internal sealed class SourceModFixture : IDisposable
 
     public string ModFolder { get; }
     internal string GameDirectory { get; }
-    internal PluginCopyKey Plugin { get; }
+    internal PluginAddress Plugin { get; }
     internal LoadOrderSnapshot LoadOrder { get; }
     internal EditRecordHandler EditHandler { get; }
     internal DeleteRecordHandler DeleteHandler { get; }
@@ -27,7 +27,7 @@ internal sealed class SourceModFixture : IDisposable
     private SourceModFixture(string pluginName, string origin, Action<Fallout4Mod> build)
     {
         var holder = new LoadOrderHolder();
-        Plugin = new PluginCopyKey(pluginName, origin);
+        Plugin = new PluginAddress(pluginName, origin);
         _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
         var tracked = origin != PluginOrigin.DataDirectory;

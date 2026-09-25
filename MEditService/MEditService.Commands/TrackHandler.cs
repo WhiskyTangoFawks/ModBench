@@ -19,6 +19,6 @@ public sealed class TrackHandler
     /// (ADR-0013 invariant 4). Throws <see cref="NoLoadOrderException"/> with nothing written when none
     /// is held.</summary>
     public Task<TrackSelectionResult> TrackAsync(
-        IReadOnlyList<PluginCopyKey> plugins, SourcePreset preset, CancellationToken cancel = default) =>
+        IReadOnlyList<PluginAddress> plugins, SourcePreset preset, CancellationToken cancel = default) =>
         _trackService.TrackAsync(_loadOrder.Require(), plugins, preset, cancel);
 }

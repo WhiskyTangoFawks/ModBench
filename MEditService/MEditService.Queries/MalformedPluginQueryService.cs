@@ -18,7 +18,7 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
         // not reached holds no rows yet and would read clean.
         if (index.Status.State != LoadOrderState.Ready) return [];
 
-        var byCopy = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginCopyKey.Comparer);
+        var byCopy = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
         return
         [
             .. copies

@@ -22,15 +22,15 @@ internal sealed class HeldPlugins
     // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
     // ordinarily held at once. Compared as every other keyed lookup compares it, the kernel's own
     // comparer.
-    private readonly Dictionary<PluginCopyKey, PluginLoadFailure> _loadFailures = new(PluginCopyKey.Comparer);
+    private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
     // these lists on every request.
     private readonly Lock _mutation = new();
     private PluginMetadata[] _pluginsSnapshot = [];
-    private IReadOnlyDictionary<PluginCopyKey, PluginContent> _openedSnapshot =
-        new Dictionary<PluginCopyKey, PluginContent>(PluginCopyKey.Comparer);
+    private IReadOnlyDictionary<PluginAddress, PluginContent> _openedSnapshot =
+        new Dictionary<PluginAddress, PluginContent>(PluginAddress.Comparer);
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
@@ -46,7 +46,7 @@ internal sealed class HeldPlugins
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
     /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>
-    public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
+    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
     public HeldPlugins(
@@ -60,8 +60,8 @@ internal sealed class HeldPlugins
         GameRelease = gameRelease;
     }
 
-    public PluginMetadata? Find(PluginCopyKey key) =>
-        Plugins.FirstOrDefault(p => PluginCopyKey.Comparer.Equals(p.Key, key));
+    public PluginMetadata? Find(PluginAddress key) =>
+        Plugins.FirstOrDefault(p => PluginAddress.Comparer.Equals(p.Key, key));
 
     /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
@@ -130,7 +130,7 @@ internal sealed class HeldPlugins
     {
         lock (_mutation)
         {
-            _plugins.RemoveAll(p => PluginCopyKey.Comparer.Equals(p.Key, metadata.Key));
+            _plugins.RemoveAll(p => PluginAddress.Comparer.Equals(p.Key, metadata.Key));
             _plugins.Add(metadata);
             PublishPlugins();
             _loadFailures.Remove(metadata.Key);
@@ -143,16 +143,16 @@ internal sealed class HeldPlugins
     private void PublishPlugins()
     {
         Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
-        Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer));
+        Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer));
     }
 
     /// <summary>The load order's half of a copy leaving the snapshot. The index side is
     /// the Index's own unregister: the rows stay for the next snapshot that wants them.</summary>
-    public bool Remove(PluginCopyKey key)
+    public bool Remove(PluginAddress key)
     {
         lock (_mutation)
         {
-            var removed = _plugins.RemoveAll(p => PluginCopyKey.Comparer.Equals(p.Key, key)) > 0;
+            var removed = _plugins.RemoveAll(p => PluginAddress.Comparer.Equals(p.Key, key)) > 0;
             if (_loadFailures.Remove(key))
             {
                 Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
@@ -177,7 +177,7 @@ internal sealed class HeldPlugins
 
         lock (_mutation)
         {
-            var index = _plugins.FindIndex(p => PluginCopyKey.Comparer.Equals(p.Key, previous.Key));
+            var index = _plugins.FindIndex(p => PluginAddress.Comparer.Equals(p.Key, previous.Key));
             if (index < 0)
                 throw new KeyNotFoundException($"No plugin '{previous.Name}' from origin '{previous.Origin}' is held.");
 
@@ -195,7 +195,7 @@ internal sealed class HeldPlugins
 
     /// <summary>Lets the Indexer report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
-    internal void SetFailure(PluginCopyKey key, string reason)
+    internal void SetFailure(PluginAddress key, string reason)
     {
         lock (_mutation)
         {
@@ -206,7 +206,7 @@ internal sealed class HeldPlugins
 
     /// <summary>Drops the failure an earlier read recorded, for a copy that has just read cleanly.
     /// False when none was recorded.</summary>
-    internal bool ClearFailure(PluginCopyKey key)
+    internal bool ClearFailure(PluginAddress key)
     {
         lock (_mutation)
         {
@@ -218,12 +218,12 @@ internal sealed class HeldPlugins
 
     /// <summary>Held, and its last read failed: a copy the open itself failed on is not held, and has
     /// nothing to read again.</summary>
-    internal bool IsHeldWithAFailure(PluginCopyKey key)
+    internal bool IsHeldWithAFailure(PluginAddress key)
     {
         lock (_mutation)
         {
             return _loadFailures.ContainsKey(key)
-                   && _plugins.Exists(p => PluginCopyKey.Comparer.Equals(p.Key, key));
+                   && _plugins.Exists(p => PluginAddress.Comparer.Equals(p.Key, key));
         }
     }
 

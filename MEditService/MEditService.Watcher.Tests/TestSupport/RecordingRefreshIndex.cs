@@ -6,7 +6,7 @@ namespace MEditService.Watcher.Tests.TestSupport;
 /// <summary>What the watcher asked the Index for, in order, with the projection scope it was
 /// inside.</summary>
 internal sealed record RecordedProjection(
-    string Verb, PluginCopyKey? Plugin, IReadOnlyList<string> Keys, int Scope);
+    string Verb, PluginAddress? Plugin, IReadOnlyList<string> Keys, int Scope);
 
 /// <summary>The Index as a recorder: the watcher's routing is what it asked for, so a test reads the
 /// verb and the copy rather than the delegate that carried it.</summary>
@@ -15,8 +15,8 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
     private readonly List<(LoadOrderSnapshot Snapshot, long Version)> _reconciles = [];
-    private readonly List<(PluginCopyKey Key, string Path)> _binaryPokes = [];
-    private readonly Dictionary<PluginCopyKey, string> _indexedHashes = new(PluginCopyKey.Comparer);
+    private readonly List<(PluginAddress Key, string Path)> _binaryPokes = [];
+    private readonly Dictionary<PluginAddress, string> _indexedHashes = new(PluginAddress.Comparer);
     private int _scope;
 
     public IndexWriteGate WriteGate { get; } = writeGate ?? new IndexWriteGate();
@@ -53,7 +53,7 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
 
     /// <summary>Every binary poke, whether or not the bytes turned out to differ: what the watcher
     /// asked for is its own fact, where the answer is this recorder's.</summary>
-    public IReadOnlyList<(PluginCopyKey Key, string Path)> BinaryPokes
+    public IReadOnlyList<(PluginAddress Key, string Path)> BinaryPokes
     {
         get { lock (_gate) return [.. _binaryPokes]; }
     }
@@ -74,13 +74,13 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
         lock (_gate) _reconciles.Add((snapshot, version));
     }
 
-    public void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys)
+    public void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys)
     {
         Refuse();
         Record("refresh", key, formKeys);
     }
 
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginCopyKey? plugin)
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin)
     {
         Refuse();
         HoldsValidateUntil?.Wait(TimeSpan.FromSeconds(30));
@@ -90,9 +90,9 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
 
     /// <summary>Seeds this copy as already indexed with this hash — the state a prior reconcile
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
-    public void SeedIndexed(PluginCopyKey key, string hash) => _indexedHashes[key] = hash;
+    public void SeedIndexed(PluginAddress key, string hash) => _indexedHashes[key] = hash;
 
-    public Task<bool> RefreshBinary(PluginCopyKey key, string path)
+    public Task<bool> RefreshBinary(PluginAddress key, string path)
     {
         lock (_gate) _binaryPokes.Add((key, path));
 
@@ -128,7 +128,7 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
         if (Refuses) throw new NoLoadOrderException();
     }
 
-    private void Record(string verb, PluginCopyKey? plugin, IReadOnlyList<string> keys)
+    private void Record(string verb, PluginAddress? plugin, IReadOnlyList<string> keys)
     {
         lock (_gate) _projections.Add(new RecordedProjection(verb, plugin, keys, _scope));
     }

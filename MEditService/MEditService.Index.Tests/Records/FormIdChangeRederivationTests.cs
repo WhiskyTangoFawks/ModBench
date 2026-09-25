@@ -164,7 +164,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         private readonly ScatteredFixtureData _fixture;
 
         public LoadOrderEntry Entry { get; }
-        public PluginCopyKey Plugin => Entry.KeyOf();
+        public PluginAddress Plugin => Entry.KeyOf();
         public Indexer Index { get; }
         public IRecordReads Reads => Index.RequireReads();
         public string Worldspace { get; }

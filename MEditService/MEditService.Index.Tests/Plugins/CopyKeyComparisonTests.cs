@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.Plugins;
 
 // The registration lookup and the held-copies lookup share one name comparison, the kernel's
-// PluginCopyKey.Comparer: a key that differs only in case names the same copy at both doors.
+// PluginAddress.Comparer: a key that differs only in case names the same copy at both doors.
 public sealed class CopyKeyComparisonTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("copy-key-comparison")
@@ -31,7 +31,7 @@ public sealed class CopyKeyComparisonTests : IDisposable
         _fixture.Dispose();
     }
 
-    private static readonly PluginCopyKey OtherCase = new("CASED.ESP", "casedmod");
+    private static readonly PluginAddress OtherCase = new("CASED.ESP", "casedmod");
 
     // The rival this pins: the record struct's own equality, which is case-sensitive.
     [Fact]

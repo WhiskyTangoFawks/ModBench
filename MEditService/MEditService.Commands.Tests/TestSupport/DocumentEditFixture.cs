@@ -23,7 +23,7 @@ internal sealed class DocumentEditFixture : IDisposable
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-docedit-game-").FullName;
     private readonly SourceRepository _repository;
 
-    internal PluginCopyKey Plugin { get; } = new(PluginName, "DocEditMod");
+    internal PluginAddress Plugin { get; } = new(PluginName, "DocEditMod");
     internal EditRecordHandler EditHandler { get; }
 
     internal DocumentEditFixture()

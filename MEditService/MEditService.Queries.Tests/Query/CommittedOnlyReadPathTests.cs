@@ -17,7 +17,7 @@ public sealed class CommittedOnlyReadPathTests
     private const string PluginName = "TestPlugin.esp";
     private const string Origin = "Data";
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginCopyKey Plugin = new(PluginName, Origin);
+    private static readonly PluginAddress Plugin = new(PluginName, Origin);
 
     private static FakeRow Row(Fallout4Mod mod, string editorId) =>
         new(Plugin, LoadOrderIndex: 0, IsWinner: true,
@@ -25,7 +25,7 @@ public sealed class CommittedOnlyReadPathTests
 
     private static RecordQueryService Service(params FakeRow[] rows)
     {
-        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [Plugin] = new(IsLight: false, IsMaster: false, Masters: [], RecordCount: rows.Length),
         };

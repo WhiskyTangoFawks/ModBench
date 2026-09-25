@@ -25,7 +25,7 @@ public class IndexAtomicityTests
                 mod.Npcs.AddNew("AtomicNPC3");
             })
             .Build();
-        var key = new PluginCopyKey("Atomic.esp", "Data");
+        var key = new PluginAddress("Atomic.esp", "Data");
         using var index = Indexes.Reconciled(fixture, adapter: new ThrowingPartwayAdapter(afterRecords: 2));
         var reads = index.RequireReads();
 

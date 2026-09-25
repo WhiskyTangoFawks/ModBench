@@ -41,11 +41,11 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
     public LoadOrderSnapshot LoadOrder { get; }
 
-    public PluginCopyKey WinningPlugin { get; } = new(PluginName, WinningOrigin);
-    public PluginCopyKey OverriddenPlugin { get; } = new(PluginName, OverriddenOrigin);
-    public PluginCopyKey CopySourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-    public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-    public PluginCopyKey UnlistedPlugin { get; } = new(UnlistedPluginName, UnlistedOrigin);
+    public PluginAddress WinningPlugin { get; } = new(PluginName, WinningOrigin);
+    public PluginAddress OverriddenPlugin { get; } = new(PluginName, OverriddenOrigin);
+    public PluginAddress CopySourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
+    public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+    public PluginAddress UnlistedPlugin { get; } = new(UnlistedPluginName, UnlistedOrigin);
 
     public FormKey WinningNpc { get; }
     public FormKey OverriddenNpc { get; }
@@ -130,7 +130,7 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-    public string ModFolderOf(PluginCopyKey plugin) => plugin.Origin switch
+    public string ModFolderOf(PluginAddress plugin) => plugin.Origin switch
     {
         WinningOrigin => WinningModFolder,
         OverriddenOrigin => OverriddenModFolder,
@@ -139,18 +139,18 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         _ => SourceModFolder,
     };
 
-    public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>
+    public SourceDocument? Document(PluginAddress plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
-    public IReadOnlyList<string> GitStatus(PluginCopyKey plugin) => TrackedTree.GitStatus(ModFolderOf(plugin));
+    public IReadOnlyList<string> GitStatus(PluginAddress plugin) => TrackedTree.GitStatus(ModFolderOf(plugin));
 
     /// <summary>The bytes on disk for a tracked plugin's own binary — what a refused compile's
     /// "writes nothing" claim is checked against.</summary>
-    public byte[] PluginBytes(PluginCopyKey plugin) => File.ReadAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name));
+    public byte[] PluginBytes(PluginAddress plugin) => File.ReadAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name));
 
     /// <summary>The mod's question as the watcher would raise it: its binary changed outside
     /// Modbench and no answer has landed yet.</summary>
-    public void RaiseExternalChangeOn(PluginCopyKey plugin, string question)
+    public void RaiseExternalChangeOn(PluginAddress plugin, string question)
     {
         File.WriteAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name), "changed-outside-modbench"u8.ToArray());
         SourceRepository.RaiseExternalChangeQuestion(ModFolderOf(plugin), question);

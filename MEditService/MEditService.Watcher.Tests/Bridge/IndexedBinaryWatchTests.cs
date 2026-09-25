@@ -11,7 +11,7 @@ public sealed class IndexedBinaryWatchTests
 {
     private const string Origin = "Untracked";
     private const string PluginName = "Mirrored.esp";
-    private static readonly PluginCopyKey Copy = new(PluginName, Origin);
+    private static readonly PluginAddress Copy = new(PluginName, Origin);
 
     // Untracked, so the load order arms the indexed-binary route for it, and seeded as a prior
     // reconcile would have left it: already indexed at the bytes on disk now.

@@ -21,7 +21,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-partialform-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-partialform-game-").FullName;
 
-    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+    public PluginAddress Plugin { get; } = new(PluginName, Origin);
     public LoadOrderSnapshot LoadOrder { get; }
     public EditRecordHandler EditHandler { get; }
     public FormKey PartialCell { get; }

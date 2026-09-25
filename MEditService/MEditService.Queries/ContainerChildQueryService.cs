@@ -34,7 +34,7 @@ public sealed class ContainerChildQueryService(
     {
         origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var repo = _index.RequireReads();
-        var pluginKey = new PluginCopyKey(plugin, origin);
+        var pluginKey = new PluginAddress(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
             .Where(r => SlotOrder.ContainsKey(r.SlotName))

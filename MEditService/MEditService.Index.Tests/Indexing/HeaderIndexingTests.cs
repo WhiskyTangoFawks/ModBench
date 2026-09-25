@@ -29,7 +29,7 @@ public class HeaderIndexingTests
             .Build();
 
     private static RecordDocument Header(Indexer index, string name) =>
-        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginCopyKey(name, "Data"));
+        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginAddress(name, "Data"));
 
     [Fact]
     public void Index_Fo4Plugin_WritesHeaderDocument_WithSyntheticFormKeyAndHeaderType()
@@ -122,7 +122,7 @@ public class HeaderIndexingTests
     {
         using var fixture = OnePlugin("header-reindex", "ReindexHeader.esp");
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginCopyKey("ReindexHeader.esp", "Data");
+        var key = new PluginAddress("ReindexHeader.esp", "Data");
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         Assert.True(await index.RefreshBinary(key, fixture.Plugins.Single().Path));
@@ -139,7 +139,7 @@ public class HeaderIndexingTests
         using var fixture = OnePlugin("header-lookup", "LookupHeader.esp", mod => mod.Npcs.AddNew().EditorID = "SomeNpc");
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
-        var key = new PluginCopyKey("LookupHeader.esp", "Data");
+        var key = new PluginAddress("LookupHeader.esp", "Data");
 
         var documents = reads.GetDocuments(key);
         // Positive control: more than just the header, or the sweep below is a 1==1 that would

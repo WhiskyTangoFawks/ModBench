@@ -28,7 +28,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-docedit-real-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-docedit-real-game-").FullName;
     private readonly SourceRepository _repository;
-    private readonly PluginCopyKey _plugin;
+    private readonly PluginAddress _plugin;
     private readonly EditRecordHandler _editHandler;
 
     public DocumentEditRealDataTests(ITestOutputHelper output)
@@ -36,7 +36,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         _output = output;
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
-        _plugin = new PluginCopyKey(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
+        _plugin = new PluginAddress(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
 
         var loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));

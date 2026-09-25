@@ -45,7 +45,7 @@ public sealed class KeepExternalChangeHandler
 
         var touchedByPlugin = new Dictionary<string, List<TouchedRecord>>(StringComparer.OrdinalIgnoreCase);
         foreach (var plugin in plugins)
-            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path, gameRelease, schemas);
+            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginAddress(plugin.Name, plugin.Origin), plugin.Path, gameRelease, schemas);
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         var stagedAlready = trackedFileChanges.Where(c => c.StagedAlready).ToList();
@@ -62,7 +62,7 @@ public sealed class KeepExternalChangeHandler
         var landed = new List<string>();
         foreach (var plugin in plugins)
         {
-            var pluginKey = new PluginCopyKey(plugin.Name, plugin.Origin);
+            var pluginKey = new PluginAddress(plugin.Name, plugin.Origin);
             foreach (var t in touchedByPlugin[plugin.Name])
             {
                 repository.Put(pluginKey, new SourceDocument(t.FormKey, t.At.RecordType, t.At.EditorId, t.IncomingText));
@@ -107,7 +107,7 @@ public sealed class KeepExternalChangeHandler
     // document wins a FormKey two claim — Compile refuses such a tree; refusing Keep over it too
     // would help nobody.
     private List<TouchedRecord> TouchedRecordsFor(
-        SourceRepository repository, PluginCopyKey plugin, string pluginPath, GameRelease gameRelease,
+        SourceRepository repository, PluginAddress plugin, string pluginPath, GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var pluginName = plugin.Name;

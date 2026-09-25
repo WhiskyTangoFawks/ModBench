@@ -206,7 +206,7 @@ public sealed class ParseFailedRecordTests
 
         public Indexer Index { get; }
         public IRecordReads Reads => Index.Projected();
-        public PluginCopyKey Plugin { get; }
+        public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 
         public Scratch(string fixtureFileName, bool corruptWholeFile = false)
@@ -216,7 +216,7 @@ public sealed class ParseFailedRecordTests
 
         public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false)
         {
-            Plugin = new PluginCopyKey(fixtureFileName, Origin);
+            Plugin = new PluginAddress(fixtureFileName, Origin);
             var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
             File.Copy(sourcePath, pluginPath);
 

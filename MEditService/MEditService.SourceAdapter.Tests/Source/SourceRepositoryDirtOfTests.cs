@@ -19,7 +19,7 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     private const string NpcBody = "{\n  \"FormKey\": \"000800:Test.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
     private const string EditedBody = "{\n  \"FormKey\": \"000800:Test.esp\",\n  \"EditorID\": \"Edited\"\n}";
 
-    private static readonly PluginCopyKey Plugin = new(PluginName, "TestMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "TestMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     // Spelled from the fixture's own constants rather than asked of the repository, matching

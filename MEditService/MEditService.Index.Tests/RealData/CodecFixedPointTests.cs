@@ -22,7 +22,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var documents = fixture.Reads
-            .GetDocuments(new PluginCopyKey(RealDataPlugin.PluginFileName, "Data"));
+            .GetDocuments(new PluginAddress(RealDataPlugin.PluginFileName, "Data"));
 
         // The plugin's own record count, so a fixture that stopped being indexed cannot pass this
         // over an empty list.

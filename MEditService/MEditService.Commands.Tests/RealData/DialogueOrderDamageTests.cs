@@ -22,7 +22,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
-    private readonly PluginCopyKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    private readonly PluginAddress _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
     {

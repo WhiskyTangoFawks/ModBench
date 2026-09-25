@@ -28,10 +28,10 @@ public sealed class RecordQueryService(
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
         // reports no issues rather than inventing a third state.
         var status = _index.Status;
-        IReadOnlyDictionary<PluginCopyKey, IReadOnlyList<MasterIssue>> masterIssues =
+        IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> masterIssues =
             status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(opened, status.Failures)
-                : new Dictionary<PluginCopyKey, IReadOnlyList<MasterIssue>>();
+                : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedCopies();
         PluginRow ToRow(RegisteredCopy copy, bool hasMatchingRecords) =>
@@ -143,7 +143,7 @@ public sealed class RecordQueryService(
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
-        return [.. reads.GetRecordTypeCounts(new PluginCopyKey(plugin, origin))
+        return [.. reads.GetRecordTypeCounts(new PluginAddress(plugin, origin))
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
             .OrderBy(r => r.Type)];

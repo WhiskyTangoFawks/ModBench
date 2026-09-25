@@ -14,7 +14,7 @@ public static class SourceDocumentPath
     {
         var repository = SourceRepository.Open(modFolder, release) ?? SourceRepository.Over(modFolder, release);
         var unit = repository.UnitHolding(
-            new PluginCopyKey(pluginFileName, "TestMod"), new RecordIdentity(formKey, recordType, editorId));
+            new PluginAddress(pluginFileName, "TestMod"), new RecordIdentity(formKey, recordType, editorId));
 
         return unit is null
             ? throw new InvalidOperationException(

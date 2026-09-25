@@ -4,7 +4,7 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1):
 /// one filename can be in two mods, each holding the record.</summary>
-public readonly record struct RecordAt(PluginCopyKey Plugin, string FormKey);
+public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
 
 /// <summary>A record of a selection that wrote nothing, with the typed refusal and the message
 /// naming the way out.</summary>

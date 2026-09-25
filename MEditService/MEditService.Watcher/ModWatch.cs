@@ -16,7 +16,7 @@ internal sealed record SourceChangeEvent(
     string PluginName, string Origin, string ModFolder, SourceChangeScope Scope, IReadOnlyList<string> Paths);
 
 /// <summary>A registered plugin's own binary, touched in the window that just closed.</summary>
-internal sealed record TouchedBinary(PluginCopyKey Key, string Path);
+internal sealed record TouchedBinary(PluginAddress Key, string Path);
 
 /// <summary>Everything one mod folder's window collected before it closed: the source batch, the
 /// binaries touched, and whether any other path under the mod was.</summary>
@@ -99,9 +99,9 @@ internal sealed class ModWatch : IDisposable
     public bool FolderExists => Directory.Exists(ModFolder);
 
     /// <summary>Every registered copy, for the validation an overflow asks of each.</summary>
-    public IReadOnlyList<PluginCopyKey> RegisteredKeys
+    public IReadOnlyList<PluginAddress> RegisteredKeys
     {
-        get { lock (_lock) return [.. _plugins.Values.Select(p => new PluginCopyKey(p.Name, p.Origin))]; }
+        get { lock (_lock) return [.. _plugins.Values.Select(p => new PluginAddress(p.Name, p.Origin))]; }
     }
 
     /// <summary>Registers a copy the snapshot holds in this folder: its binary path, and the source
@@ -172,7 +172,7 @@ internal sealed class ModWatch : IDisposable
 
                 if (plugin.FileTouched)
                 {
-                    binaries.Add(new TouchedBinary(new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path));
+                    binaries.Add(new TouchedBinary(new PluginAddress(plugin.Name, plugin.Origin), plugin.Path));
                     plugin.FileTouched = false;
                 }
             }
