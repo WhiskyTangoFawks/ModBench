@@ -962,7 +962,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
   // ADR-0012: a plugin is `(origin, filename)`, and both compare without case, as MO2 and a
   // Windows filesystem compare them.
-  it('caches one copy once, whatever case its filename and origin arrive in', async () => {
+  it('caches one plugin once, whatever case its filename and origin arrive in', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
