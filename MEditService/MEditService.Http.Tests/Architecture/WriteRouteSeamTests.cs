@@ -111,8 +111,6 @@ public sealed class WriteRouteSeamTests
             });
     }
 
-    // A route may delegate through a shared private helper instead of naming WriteEndpointMapping
-    // inline, so the seam must be found one hop away.
     [Fact]
     public void TheScan_FollowsASiblingMethodTheRouteCalls()
     {

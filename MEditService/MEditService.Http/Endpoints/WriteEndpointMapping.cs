@@ -86,8 +86,7 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now"
-    /// rather than a 404.</summary>
+    /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now".</summary>
     internal static IResult NotTrackedMod(string origin) =>
         Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
 

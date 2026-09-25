@@ -249,9 +249,7 @@ export function publishCompileDiagnostics(
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
- *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
- *  manual Refresh button has. */
+/** The one shape this extension needs from a `vscode.git` `Repository`: `status()`. */
 export interface MinimalRepository {
   status(): Thenable<unknown>;
 }
