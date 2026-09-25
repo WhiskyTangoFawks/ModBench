@@ -88,9 +88,9 @@ Between the two, as a user, I want:
    saying the disk now shows something else. No notification. *ADR-0003, invariant 4; ADR-0019,
    invariant 2*
 5. While the disk cannot be read, the mark to stay (States, story 6). *ADR-0015, invariant 7*
-6. A gesture that fails or is refused to leave no mark: the thing I changed shows the disk's value
-   again at once, and the failure is reported as any failed gesture is (Reporting). *A failed
-   gesture writes nothing*
+6. `refresh` to clear every mark, because it reloads from disk. A gesture that fails or is refused
+   is reported as any failed gesture is (Reporting), and its mark stays until the disk's next value
+   or a refresh: only the disk says what is true. *ADR-0015, invariant 2; ruling*
 
 ## The status bar
 
