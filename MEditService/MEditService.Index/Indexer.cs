@@ -33,7 +33,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
     // Survives a rebuild of its own scope, since it clears only on purpose (plugins.md, Order and
-    // view state, story 5), and is dropped when another scope opens: its SQL names that scope's tables.
+    // view state, story 5), and is dropped when another scope opens.
     private ScopedFilter? _filter;
     // The reconcile's own progress. Guarded by _lock like _heldPlugins/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
@@ -486,6 +486,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             lock (_lock) _failedHashes.Remove(plugin.Key);
 
             RegisterOrIndex(held, index, metadata, token);
+            // A plugin is browsable the moment it lands, so the rows the filter matches in it must
+            // answer then too, not only after the whole set (plugins.md, Order and view state).
+            ReapplyFilter();
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
@@ -982,6 +985,13 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
         lock (_lock)
         {
+            // A filter kept through a rebuild outlives the store it was materialized in, and one
+            // that is reported must clear, store or no store.
+            if (filter is null && _index is null)
+            {
+                _filter = null;
+                return;
+            }
             var (held, index) = RequireScopeCore();
             index.SetFilter(filter?.Sql);
             _filter = filter is { } set ? new ScopedFilter(set.Sql, set.Source, ScopeOf(held)) : null;
