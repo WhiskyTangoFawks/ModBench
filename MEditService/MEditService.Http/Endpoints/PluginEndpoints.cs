@@ -139,7 +139,7 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refusal, result.Message);
             }
 
-            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin, result.Path));
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin, Path.Combine(req.Folder, plugin.Name)));
         }
         catch (NoLoadOrderException ex)
         {

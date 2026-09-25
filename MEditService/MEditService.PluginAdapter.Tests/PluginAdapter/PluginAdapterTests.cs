@@ -59,7 +59,7 @@ public sealed class PluginAdapterTests
 
             Assert.Equal(
                 EmptyPluginWrite.Written,
-                await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), path, GameRelease.Fallout4));
+                await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
 
             using var reread = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
@@ -90,7 +90,7 @@ public sealed class PluginAdapterTests
         {
             var path = Path.Combine(scratch, name);
 
-            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), path, GameRelease.Fallout4);
+            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, GameRelease.Fallout4);
 
             using var reread = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(name), path), Fallout4Release.Fallout4);
@@ -108,8 +108,7 @@ public sealed class PluginAdapterTests
         var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-alone-").FullName;
         try
         {
-            await Adapter.CreateAndWriteAsync(
-                ModKey.FromFileName(PluginName), Path.Combine(scratch, PluginName), GameRelease.Fallout4);
+            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
 
             Assert.Equal(
                 [PluginName],
@@ -130,8 +129,7 @@ public sealed class PluginAdapterTests
         {
             var gone = Path.Combine(scratch, "GoneMod");
 
-            var written = await Adapter.CreateAndWriteAsync(
-                ModKey.FromFileName(PluginName), Path.Combine(gone, PluginName), GameRelease.Fallout4);
+            var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4);
 
             Assert.Equal(EmptyPluginWrite.FolderGone, written);
             Assert.False(Directory.Exists(gone));
@@ -151,7 +149,7 @@ public sealed class PluginAdapterTests
             var path = Path.Combine(scratch, PluginName);
             File.WriteAllText(path, "another tool's file");
 
-            var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), path, GameRelease.Fallout4);
+            var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
 
             Assert.Equal(EmptyPluginWrite.FileExists, written);
             Assert.Equal("another tool's file", File.ReadAllText(path));
@@ -170,8 +168,8 @@ public sealed class PluginAdapterTests
         FileModes.Set(scratch, "555");
         try
         {
-            await Assert.ThrowsAnyAsync<Exception>(() => Adapter.CreateAndWriteAsync(
-                ModKey.FromFileName(PluginName), Path.Combine(scratch, PluginName), GameRelease.Fallout4));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                () => Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
 
             Assert.Empty(Directory.EnumerateFileSystemEntries(scratch));
         }

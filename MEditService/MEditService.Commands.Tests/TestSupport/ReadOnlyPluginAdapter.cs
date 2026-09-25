@@ -78,6 +78,6 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public virtual Task<EmptyPluginWrite> CreateAndWriteAsync(
-        ModKey modKey, string destinationPath, GameRelease gameRelease) =>
+        ModKey modKey, string folder, GameRelease gameRelease) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 }

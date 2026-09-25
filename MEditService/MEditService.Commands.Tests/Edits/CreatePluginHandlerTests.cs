@@ -37,8 +37,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var result = await Create("NewPlugin.esp", folder, "StateMod");
 
         Assert.True(result.Applied);
-        Assert.Equal(Path.Combine(folder, "NewPlugin.esp"), result.Path);
-        Assert.True(File.Exists(result.Path));
+        Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
     }
 
     [Theory]
@@ -132,7 +131,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var result = await Create("Occupied.esp", folder, "OccupiedMod");
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
-        Assert.Contains(occupied, result.Message, StringComparison.Ordinal);
+        Assert.Contains(folder, result.Message, StringComparison.Ordinal);
+        Assert.Contains("Occupied.esp", result.Message, StringComparison.Ordinal);
         Assert.Equal("another tool's file", File.ReadAllText(occupied));
     }
 
@@ -177,7 +177,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];
 
-        public override Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease)
+        public override Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add((modKey.FileName.String, gameRelease));
             return Task.FromResult(EmptyPluginWrite.Written);

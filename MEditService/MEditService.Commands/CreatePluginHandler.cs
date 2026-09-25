@@ -21,22 +21,21 @@ public sealed class CreatePluginHandler
     public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder)
     {
         var release = _holder.Require().GameRelease;
-        var path = Path.Combine(folder, plugin.Name);
         var modKey = ModKey.FromFileName(plugin.Name);
 
         if (modKey.Type == ModType.Light && GameConstants.Get(release).SmallMasterFlag is null)
         {
-            return new PluginCreateResult(path, PluginCreateRefusal.LightPluginUnsupported,
+            return new PluginCreateResult(PluginCreateRefusal.LightPluginUnsupported,
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
         }
 
-        return await _adapter.CreateAndWriteAsync(modKey, path, release) switch
+        return await _adapter.CreateAndWriteAsync(modKey, folder, release) switch
         {
-            EmptyPluginWrite.FolderGone => new PluginCreateResult(path, PluginCreateRefusal.FolderGone,
+            EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
-            EmptyPluginWrite.FileExists => new PluginCreateResult(path, PluginCreateRefusal.FileExists,
-                $"A file is already at {path}, so {plugin.Name} was not created."),
-            _ => new PluginCreateResult(path),
+            EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,
+                $"{folder} already holds a file named {plugin.Name}, so it was not created."),
+            _ => new PluginCreateResult(),
         };
     }
 }

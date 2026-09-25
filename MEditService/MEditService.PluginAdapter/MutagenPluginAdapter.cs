@@ -135,9 +135,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         => ModFactory.Activator(modKey, gameRelease);
 
     public async Task<EmptyPluginWrite> CreateAndWriteAsync(
-        ModKey modKey, string destinationPath, GameRelease gameRelease)
+        ModKey modKey, string folder, GameRelease gameRelease)
     {
-        var folder = PathShape.DirectoryOf(destinationPath);
+        var destinationPath = Path.Combine(folder, modKey.FileName.String);
         if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
         if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 
@@ -151,7 +151,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         Directory.CreateDirectory(tempFolder);
         try
         {
-            var tempPath = Path.Combine(tempFolder, Path.GetFileName(destinationPath));
+            var tempPath = Path.Combine(tempFolder, modKey.FileName.String);
             await WriteAsync(plugin, tempPath);
             File.Move(tempPath, destinationPath, overwrite: false);
             return EmptyPluginWrite.Written;

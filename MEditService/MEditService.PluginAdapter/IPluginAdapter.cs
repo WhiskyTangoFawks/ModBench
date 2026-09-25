@@ -95,10 +95,10 @@ public interface IPluginAdapter
     string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
-    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>: a header whose flags the
-    /// extension alone sets, no records and no masters. Written whole or not at all, and never into
-    /// a folder it had to make or over a file already there.</summary>
-    Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease);
+    /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
+    /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
+    /// no file.</summary>
+    Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
 }
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> found at the path before it wrote

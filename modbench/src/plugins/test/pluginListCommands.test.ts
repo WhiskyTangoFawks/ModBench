@@ -78,7 +78,14 @@ describe('registerCreatePluginCommand', () => {
   }
 
   type Place = { label: string; origin: string };
-  const offered = (): Place[] => present(showQuickPick.mock.calls[0], 'the place pick')[0] as Place[];
+  const offering = (): { offered: Place[] } => {
+    const pick = { offered: [] as Place[] };
+    showQuickPick.mockImplementation((places: Place[]) => {
+      pick.offered = places;
+      return Promise.resolve(undefined);
+    });
+    return pick;
+  };
   const pickOrigin = (origin: string) => showQuickPick.mockImplementation((places: Place[]) =>
     Promise.resolve(places.find((p) => p.origin === origin)));
 
@@ -99,11 +106,16 @@ describe('registerCreatePluginCommand', () => {
   });
 
   it('refuses an empty name and a name that is not .esp, .esm or .esl', async () => {
-    showInputBox.mockResolvedValue(undefined);
+    type Validate = (v: string) => string | undefined;
+    const prompt: { validate?: Validate } = {};
+    showInputBox.mockImplementation((options: { validateInput: Validate }) => {
+      prompt.validate = options.validateInput;
+      return Promise.resolve(undefined);
+    });
     const { run } = invoke(new InMemoryMEditClient(), makeMo2());
     await run();
 
-    const validate = present(showInputBox.mock.calls[0], 'the name prompt')[0].validateInput as (v: string) => string | undefined;
+    const validate = present(prompt.validate, 'the name prompt\'s validator');
     expect(validate('')).toBe('Name is required');
     expect(validate('MyPatch.txt')).toBe('Extension must be .esp, .esm, or .esl');
     expect(validate('MyPatch')).toBe('Extension must be .esp, .esm, or .esl');
@@ -114,12 +126,12 @@ describe('registerCreatePluginCommand', () => {
   // and the other enabled mods.
   it('picks Overwrite first, then the enabled mods, leaving out the place that holds the name', async () => {
     showInputBox.mockResolvedValue('mypatch.ESP');
-    showQuickPick.mockResolvedValue(undefined);
+    const pick = offering();
 
     const { run } = invoke(new InMemoryMEditClient(), makeMo2());
     await run();
 
-    expect(offered().map((p) => p.label)).toEqual(['Overwrite', 'Winning Mod']);
+    expect(pick.offered.map((p) => p.label)).toEqual(['Overwrite', 'Winning Mod']);
   });
 
   it('creates nothing and asks for no place when Esc answers the name prompt', async () => {

@@ -1,7 +1,7 @@
 namespace MEditService.Commands;
 
-/// <summary>What the create gesture wrote, at <see cref="Path"/>, or why it wrote nothing.</summary>
-public sealed record PluginCreateResult(string Path, PluginCreateRefusal? Refusal = null, string? Message = null)
+/// <summary>Whether the create gesture wrote its plugin, or why it wrote nothing.</summary>
+public sealed record PluginCreateResult(PluginCreateRefusal? Refusal = null, string? Message = null)
 {
     public bool Applied => Refusal is null;
 }
