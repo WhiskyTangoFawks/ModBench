@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { CrashRepairOffer, MEditClient } from '../client';
+import type { MEditClient } from '../client';
 import { subscribeQuestionOpen } from './externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import type { Reporter } from '../ports/reporter';
@@ -18,12 +18,11 @@ export interface QuestionOpenWiring {
   treeProvider: PluginTreeProvider;
   refreshMatchingPlugins: () => void;
   askQuestion: AskQuestion;
-  presentCrashRepair: (offers: CrashRepairOffer[]) => Promise<void>;
   reporter: Reporter;
 }
 
 export function wireQuestionOpen({
-  client, outputChannel, treeProvider, refreshMatchingPlugins, askQuestion, presentCrashRepair, reporter,
+  client, outputChannel, treeProvider, refreshMatchingPlugins, askQuestion, reporter,
 }: QuestionOpenWiring): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
@@ -34,7 +33,6 @@ export function wireQuestionOpen({
     reporter,
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
-    presentCrashRepair,
     log,
   }, client);
 }

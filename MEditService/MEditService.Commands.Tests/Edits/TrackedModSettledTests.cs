@@ -89,27 +89,25 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // The two prompts must never both fire for one event: a crash recovery verdict is the repair
-    // offer's own state, so a question already open stands exactly as it was.
+    // compile-plugin, Failure: an interrupted compile warns and opens no question, so a question
+    // already open stands exactly as it was.
     [Fact]
-    public async Task Handle_ReturnsCrashRecovery_AndTouchesNoMarker_ForAnInterruptedCompile()
+    public async Task Handle_PublishesCompileUnfinished_AndNoQuestion_ForAnInterruptedCompile()
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question already open before the crash");
         await Assert.ThrowsAnyAsync<Exception>(async () =>
             await CompileJournal.RunBatchAsync(_mod.ModFolder, [SourceEditFixture.PluginName],
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
-        Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
+        Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder));
 
         var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
 
-        Assert.Equal(TrackedModSettledOutcome.CrashRecovery, outcome);
+        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
         Assert.Equal("a question already open before the crash", SourceRepository.UnansweredExternalChange(_mod.ModFolder));
-        // Assert.Single is also "never both": the repair offer and the external-change dialog's
-        // own question must never fire together for one event.
-        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
-        Assert.Equal(SourceEditFixture.ModFolderOrigin, pending.Origin);
-        Assert.Equal([SourceEditFixture.PluginName], pending.Plugins);
-        Assert.Equal(nameof(CrashRepairReason.InterruptedCompile), pending.CrashRepairReason);
+        var unfinished = Assert.Single(_notifications.Notifications);
+        Assert.Equal(
+            new CompileUnfinishedNotification(new PluginAddress(SourceEditFixture.PluginName, SourceEditFixture.ModFolderOrigin)),
+            unfinished);
     }
 
     // The rival this pins: naming the mod from the load-order plugin that raised the question,
