@@ -1,5 +1,7 @@
 import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
+import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
+import { dataFolderOf } from './instanceAdapter/gameDirectory';
 import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
@@ -8,6 +10,26 @@ type PluginSyncOutcome =
   | { applied: true; added: readonly string[]; dropped: readonly string[] }
   | { applied: false; refusal: string }
   | { applied: false; toldAsInstanceState: true };
+
+/** Plugin sync's inputs, projected off the instance value that is its Argument (commands.md, The
+ *  system commands). */
+export interface PluginSyncArguments {
+  profile: string;
+  provided: ReadonlyMap<string, string>;
+  inData: DataFolderPlugins;
+  dataFolder: string | undefined;
+  gameName: string;
+}
+
+export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
+  return {
+    profile: value.activeProfile,
+    provided: providedPluginsOf(value.plugins),
+    inData: value.dataFolderPlugins,
+    dataFolder: dataFolderOf(value.gameFolder),
+    gameName: value.gameRelease,
+  };
+}
 
 /** Its message is the Plugins view's, for a failed run until a run lands. */
 export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns {

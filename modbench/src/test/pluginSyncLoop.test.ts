@@ -9,7 +9,7 @@ import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirector
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
-import { registerPluginSync } from '../pluginSyncTrigger';
+import { pluginSyncArguments, registerPluginSync } from '../pluginSyncTrigger';
 import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
@@ -18,7 +18,6 @@ import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
 import { syncMods } from '../modlist/modlist';
-import { providedPluginsOf } from '../instanceLoader/loadOrderSnapshot';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -97,8 +96,8 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const games: string[] = [];
   const trigger = registerPluginSync(instance, (value) => {
     games.push(value.gameRelease);
-    const run = syncPlugins(
-      root, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins, () => Promise.resolve([]));
+    const { profile, provided, inData } = pluginSyncArguments(value);
+    const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
@@ -210,9 +209,10 @@ describe('the game folder not found, across the whole instance', () => {
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
-    const pluginSync = registerPluginSync(instance, (value) => syncPlugins(
-      root, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
-      () => Promise.resolve(undefined)), channel);
+    const pluginSync = registerPluginSync(instance, (value) => {
+      const { profile, provided, inData } = pluginSyncArguments(value);
+      return syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined));
+    }, channel);
     const modSync = registerModSync(instance, (value) => syncMods(root, value.activeProfile, value.modFolders), channel);
 
     await instance.refresh();
@@ -462,5 +462,30 @@ describe('registerPluginSync — on connect', () => {
 
     expect(profiles).toEqual(['Before', 'Landed', 'Current']);
     expect(trigger.message()).toBeUndefined();
+  });
+});
+
+// commands.md, The system commands: plugin sync's Argument is the instance value, projected here
+// once for the command and every test that runs it.
+describe('pluginSyncArguments', () => {
+  it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the game', () => {
+    const value = instanceValueFixture({
+      activeProfile: 'Survival',
+      gameRelease: 'Skyrim Special Edition',
+      gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+      dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
+      plugins: [
+        { name: 'Mine.esp', path: join('/instance', 'mods', 'My Mod', 'Mine.esp'), origin: 'My Mod', slot: 0, enabled: true, winning: true },
+        { name: 'Skyrim.esm', path: join('/game', 'Data', 'Skyrim.esm'), origin: 'Data', slot: 1, enabled: true, winning: true },
+      ],
+    });
+
+    expect(pluginSyncArguments(value)).toEqual({
+      profile: 'Survival',
+      provided: new Map([['mine.esp', 'Mine.esp']]),
+      inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
+      dataFolder: '/game/Data',
+      gameName: 'Skyrim Special Edition',
+    });
   });
 });

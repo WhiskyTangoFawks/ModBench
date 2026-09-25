@@ -18,7 +18,7 @@ import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { loadOrderSnapshotOf, originFolder, providedPluginsOf } from './instanceLoader/loadOrderSnapshot';
+import { loadOrderSnapshotOf, originFolder } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -29,7 +29,7 @@ import { syncPlugins, reorderPlugins, type ImplicitMasterSource } from './plugin
 import { syncMods } from './modlist/modlist';
 import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
-import { registerPluginSync } from './pluginSyncTrigger';
+import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './mo2TreeViews';
@@ -496,9 +496,10 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginSync = (value: InstanceValue) => syncPlugins(
-    instanceRoot, value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
-    () => implicitMastersIn(dataFolderOf(value.gameFolder), value.gameRelease));
+  const runPluginSync = (value: InstanceValue) => {
+    const { profile, provided, inData, dataFolder, gameName } = pluginSyncArguments(value);
+    return syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
+  };
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot,
