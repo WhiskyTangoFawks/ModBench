@@ -2,9 +2,9 @@
 // returns — the downloads watcher is how it comes back.
 
 import { parseDownloadMeta, setHiddenInText } from '../mo2Codecs/downloads';
-import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';
+import { downloadFile } from '../instanceAdapter/layout';
 import { exists } from '../instanceAdapter/files';
-import { spliceDownloadMeta } from '../instanceAdapter/downloadMeta';
+import { spliceDownloadMeta, trashDownloadMeta } from '../instanceAdapter/downloadMeta';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -98,10 +98,8 @@ async function deleteDownload(
   } catch (err) {
     return refuse(err);
   }
-  const sidecar = downloadSidecarFile(downloadsDir, name);
-  if (!(await exists(sidecar))) return { applied: true, wrote: true };
   try {
-    await trash(sidecar);
+    await trashDownloadMeta(downloadsDir, name, trash);
   } catch (err) {
     return { applied: true, wrote: true, metaLeftBehind: errorMessage(err) };
   }

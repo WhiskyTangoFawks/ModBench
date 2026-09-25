@@ -24,9 +24,10 @@ import { parseModlist } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
-  downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
+  modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
   pluginsFile, profilesDir, settingsFile,
 } from '../instanceAdapter/layout';
+import { downloadPaths } from '../instanceAdapter/downloadMeta';
 import {
   GAME_FOLDER_SETTING, dataFolderOf, type GameFolder, type GameDirectoryResolver,
 } from '../instanceAdapter/gameDirectory';
@@ -465,9 +466,7 @@ export class Instance implements vscode.Disposable {
           kind: 'listed',
           rows: downloadsOutcome.downloadEntries && installedInto
             ? buildDownloadRows(downloadsOutcome.downloadEntries, installedInto).map((row) => ({
-              ...row,
-              path: downloadFile(downloadsOutcome.downloadsDir, row.name),
-              sidecarPath: downloadSidecarFile(downloadsOutcome.downloadsDir, row.name),
+              ...row, ...downloadPaths(downloadsOutcome.downloadsDir, row.name),
             }))
             : [],
         },

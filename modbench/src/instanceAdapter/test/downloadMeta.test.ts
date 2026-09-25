@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spliceDownloadMeta } from '../downloadMeta';
+import { downloadPaths, spliceDownloadMeta, trashDownloadMeta } from '../downloadMeta';
 
 describe('spliceDownloadMeta', () => {
   let downloadsDir: string;
@@ -59,5 +59,44 @@ describe('spliceDownloadMeta', () => {
     const text = await readFile(metaPath('foo.7z'), 'utf8');
     expect(text).toContain('removed=true');
     expect(text).toContain('installed=true');
+  });
+});
+
+describe('a downloaded file\'s two paths', () => {
+  it('names the file and its .meta beside it', () => {
+    expect(downloadPaths('/downloads', 'foo.7z')).toEqual({ path: join('/downloads', 'foo.7z'), sidecarPath: join('/downloads', 'foo.7z.meta') });
+  });
+});
+
+describe('trashDownloadMeta', () => {
+  let downloadsDir: string;
+
+  beforeEach(async () => {
+    downloadsDir = await mkdtemp(join(tmpdir(), 'download-meta-trash-'));
+  });
+
+  afterEach(async () => {
+    await rm(downloadsDir, { recursive: true, force: true });
+  });
+
+  const trashed: string[] = [];
+  const trash = (path: string): Promise<void> => { trashed.push(path); return rm(path); };
+
+  it('moves the .meta to the trash, and answers that it did', async () => {
+    trashed.length = 0;
+    await writeFile(join(downloadsDir, 'foo.7z.meta'), '[General]\r\n');
+
+    expect(await trashDownloadMeta(downloadsDir, 'foo.7z', trash)).toBe(true);
+
+    expect(trashed).toEqual([join(downloadsDir, 'foo.7z.meta')]);
+    await expect(access(join(downloadsDir, 'foo.7z.meta'))).rejects.toThrow();
+  });
+
+  it('trashes nothing for a file with no .meta', async () => {
+    trashed.length = 0;
+
+    expect(await trashDownloadMeta(downloadsDir, 'manual.7z', trash)).toBe(false);
+
+    expect(trashed).toEqual([]);
   });
 });
