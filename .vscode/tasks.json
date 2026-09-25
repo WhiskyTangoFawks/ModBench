@@ -75,7 +75,7 @@
     {
       "label": "Stop Backend",
       "type": "shell",
-      "command": "pkill -f MEditService.Http || true",
+      "command": "echo ${input:terminateStartBackend}",
       "problemMatcher": []
     },
     {
@@ -83,6 +83,14 @@
       "dependsOn": ["Start Backend", "TS: Build"],
       "dependsOrder": "parallel",
       "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "terminateStartBackend",
+      "type": "command",
+      "command": "workbench.action.tasks.terminate",
+      "args": "Start Backend"
     }
   ]
 }
