@@ -73,7 +73,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
+  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
   instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files; changes: the lines to flip, move, add or\ndrop, a download's record; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
 }
 
