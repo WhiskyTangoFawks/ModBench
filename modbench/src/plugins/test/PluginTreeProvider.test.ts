@@ -322,25 +322,29 @@ describe('RecordNode', () => {
   });
 
   it('states a record of a tracked plugin', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, true);
+    const node = new RecordNode(makeRecord(0), undefined, { tracked: true, editable: true });
     expect(node.contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an untracked plugin', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false);
+    const node = new RecordNode(makeRecord(0), undefined, { tracked: false, editable: true });
     expect(node.contextValue).toBe('record untracked editable');
   });
 
   // plugins.md, Menus and keys: the record menu is the same on every record row, an override's too.
   it('states an override as it states the plugin\'s own records', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect(new RecordNode(record).contextValue).toBe('record untracked editable');
-    expect(new RecordNode(record, undefined, false, true).contextValue).toBe('record tracked editable');
+    expect(new RecordNode(record, undefined, { tracked: false, editable: true }).contextValue).toBe('record untracked editable');
+    expect(new RecordNode(record, undefined, { tracked: true, editable: true }).contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an immutable plugin read-only', () => {
-    const node = new RecordNode(makeRecord(0), undefined, true);
+    const node = new RecordNode(makeRecord(0), undefined, { tracked: false, editable: false });
     expect(node.contextValue).toBe('record untracked');
+  });
+
+  it('states no record edit when no one has described its plugin', () => {
+    expect(new RecordNode(makeRecord(0)).contextValue).toBe('record untracked');
   });
 
   // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
@@ -443,85 +447,16 @@ describe('record rows carry their copy identity', () => {
     expect(expectInstanceOf(rec, RecordNode).origin).toBe('ModA');
   });
 
-  it('record rows of a plugin outside the load order are read-only', async () => {
+  it('record rows of a plugin outside the load order are read-only, whatever its row states', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    const typeNode = present(expectInstancesOf(
+      await provider.getPluginChildren('Plugin0.esp', 'ModA', { tracked: false, editable: true }), RecordTypeNode,
+    )[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
 
     expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
-  });
-
-  it('record rows of an immutable plugin are read-only, case-insensitively', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-
-    const [rec] = await provider.getChildren(typeNode);
-
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
-  });
-
-  // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
-  // is editable, and its records still wait on Track, which is what `untracked` says.
-  it('mutable but untracked load-order rows are untracked and editable', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins([{ name: 'SomethingElse.esm', origin: 'Data' }]);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-
-    const [rec] = await provider.getChildren(typeNode);
-
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked editable');
-  });
-
-  // Tracked-ness reaches the row exactly the way immutability already does — a set pushed in
-  // from the reconcile's own `GET /plugins` answer (`PluginResponse.IsTracked`), never a
-  // filesystem probe made here.
-  it('record rows of a tracked plugin are tracked, case-insensitively', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-
-    const [rec] = await provider.getChildren(typeNode);
-
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked editable');
-  });
-
-  it('an immutable plugin stays read-only even when tracked', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
-    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-
-    const [rec] = await provider.getChildren(typeNode);
-
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked');
-  });
-
-  // Tracking or untracking a plugin rides the reconcile the `mods/**` watcher already fires when
-  // a `.git` directory appears or vanishes, so this provider owes only a re-render off its cache.
-  it('re-rendering after tracking flips the rows without a repository refetch', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
-    const callsAfterFirstRender = repo.calls.filter(c => c.method === 'getRecords').length;
-
-    const changed = vi.fn();
-    provider.onDidChangeTreeData(changed);
-    provider.setTrackedPlugins([{ name: 'Fallout4.esm', origin: 'Data' }]);
-
-    expect(changed).toHaveBeenCalled();
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record tracked editable');
-    // And back again, for the untrack direction.
-    provider.setTrackedPlugins([]);
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
 });
 
@@ -549,7 +484,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   }
 
   // Every record row a plugin row expands into, at every depth, by its contextValue.
-  async function rowsBeneath(provider: PluginTreeProvider, origin: string | undefined, told: PluginConditions): Promise<string[]> {
+  async function rowsBeneath(provider: PluginTreeProvider, origin: string | undefined, pluginRowConditions: PluginConditions): Promise<string[]> {
     const states: string[] = [];
     const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
       for (const node of nodes) {
@@ -557,7 +492,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
         if (node.kind !== 'recordType' && node.kind !== 'placed') await walk(await provider.getChildren(node));
       }
     };
-    await walk(await provider.getPluginChildren('Plugin0.esp', origin, told));
+    await walk(await provider.getPluginChildren('Plugin0.esp', origin, pluginRowConditions));
     return states;
   }
 
@@ -573,20 +508,37 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     ]);
   });
 
-  // Two plugins that share a filename each state their own conditions, whatever the other is.
-  it('states an untracked plugin untracked, beside a tracked plugin of the same name', async () => {
-    const provider = new PluginTreeProvider(spatialClient());
-    provider.setTrackedPlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
-
-    const states = await rowsBeneath(provider, undefined, { tracked: false, editable: true });
-
-    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
-  });
-
   it('states a plugin outside the load order read-only, whatever it is told', async () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), 'ModA', TRACKED);
 
     expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['tracked']));
+  });
+
+  async function questAndItsTopic(pluginRowConditions: PluginConditions): Promise<[RecordNode, RecordNode]> {
+    const repo = makeClient({
+      recordTypes: [{ type: 'qust', count: 1, displayName: 'Quest' }],
+      records: { items: [{ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }], total: 1 },
+    });
+    repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA')]);
+    const provider = new PluginTreeProvider(repo);
+    const [group] = await provider.getPluginChildren('Fallout4.esm', undefined, pluginRowConditions);
+    const [quest] = await provider.getChildren(present(group, 'the Quest group'));
+    const [topic] = await provider.getChildren(present(quest, 'the quest'));
+    return [expectInstanceOf(quest, RecordNode), expectInstanceOf(topic, RecordNode)];
+  }
+
+  it("states a tracked, editable plugin on a group's records and a quest's children", async () => {
+    const [quest, topic] = await questAndItsTopic(TRACKED);
+
+    expect(quest.contextValue).toBe('record tracked editable');
+    expect(topic.contextValue).toBe('record tracked editable');
+  });
+
+  it("states an untracked, read-only plugin on a group's records and a quest's children", async () => {
+    const [quest, topic] = await questAndItsTopic({ tracked: false, editable: false });
+
+    expect(quest.contextValue).toBe('record untracked');
+    expect(topic.contextValue).toBe('record untracked');
   });
 });
 
@@ -1095,24 +1047,24 @@ describe('RecordNode collapsibility for container types', () => {
   // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
   // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', true);
+    const node = new RecordNode(makeRecord(0), undefined, undefined, 'qust', true);
     expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
   });
 
   it('is Collapsed when built as a "dial" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial', true);
+    const node = new RecordNode(makeRecord(0), undefined, undefined, 'dial', true);
     expect(node.collapsibleState).toBe(1);
   });
 
   // Collapsibility reads the listing's own hasContainerChildren fact, not the record's type
   // signature: a Quest with zero container children must show no expand chevron.
   it('stays None (a leaf) when built as a "qust" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', false);
+    const node = new RecordNode(makeRecord(0), undefined, undefined, 'qust', false);
     expect(node.collapsibleState).toBe(0);
   });
 
   it('stays None (a leaf) when built as a "dial" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial', false);
+    const node = new RecordNode(makeRecord(0), undefined, undefined, 'dial', false);
     expect(node.collapsibleState).toBe(0);
   });
 
@@ -1131,7 +1083,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust');
 
     const children = await provider.getChildren(questNode);
 
@@ -1155,7 +1107,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust', true);
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust', true);
 
     const children = expectInstancesOf(await provider.getChildren(questNode), RecordNode);
 
@@ -1174,7 +1126,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const topicNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, false, false, 'dial');
+      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, undefined, 'dial');
 
     const children = await provider.getChildren(topicNode);
 
@@ -1187,7 +1139,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial')]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust');
 
     await provider.getChildren(questNode);
     await provider.getChildren(questNode);
@@ -1203,9 +1155,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const provider = new PluginTreeProvider(repo);
     const questA = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', undefined, 'qust');
     const questB = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', undefined, 'qust');
 
     const childrenA = expectInstancesOf(await provider.getChildren(questA), RecordNode);
     const childrenB = expectInstancesOf(await provider.getChildren(questB), RecordNode);

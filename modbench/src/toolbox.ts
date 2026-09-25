@@ -240,8 +240,7 @@ function registerPluginListView(
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
-  const isEnabled = (row: PluginNode) =>
-    instance.value.plugins.some((p) => p.winning && p.enabled && p.name === row.plugin.name && p.origin === row.origin);
+  const isEnabled = (row: PluginNode) => pluginsTree.isEnabled(row);
   const showKeyContext = () => {
     for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection, isEnabled))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);

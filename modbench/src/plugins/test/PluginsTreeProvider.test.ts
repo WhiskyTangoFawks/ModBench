@@ -826,6 +826,33 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
 // Implicit masters render as forced-on rows ahead of plugins.txt lines. The backend names
 // them (ADR-0016); this tree only places them.
+describe("PluginsTreeProvider — whether a row's line is enabled now", () => {
+  it('reads a row built before its line was disabled as disabled', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0, enabled: true })]));
+    const { tree } = makeTree([], { instance });
+    const [row] = await tree.getChildren();
+
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0, enabled: false })]));
+
+    expect(tree.isEnabled(expectInstanceOf(row, PluginNode))).toBe(false);
+  });
+
+  it('reads a row enabled whatever the case of its file name and its mod', () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: true })]);
+
+    expect(tree.isEnabled(new PluginNode({ name: 'a.ESP', enabled: false }, 'SOMEMOD'))).toBe(true);
+  });
+
+  it('reads a row disabled when its plugin is overridden by another mod', () => {
+    const { tree } = makeTree([
+      plugin({ name: 'A.esp', slot: 0, origin: 'Winner', enabled: true }),
+      plugin({ name: 'A.esp', slot: 0, origin: 'Loser', enabled: true, winning: false }),
+    ]);
+
+    expect(tree.isEnabled(new PluginNode({ name: 'A.esp', enabled: true }, 'Loser'))).toBe(false);
+  });
+});
+
 describe('PluginsTreeProvider — implicit master rows', () => {
   // The Instance adapter's answer, which the tree takes rather than builds.
   const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
@@ -1181,15 +1208,27 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(await h.tree.getChildren()).toEqual(before);
   });
 
-  it('pushes the immutable and tracked sets from the reconcile own read', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    const immutable = vi.spyOn(h.records, 'setImmutablePlugins');
-    const tracked = vi.spyOn(h.records, 'setTrackedPlugins');
+  it("re-states a plugin's records tracked once a reconcile says it is, with no second read of its records", async () => {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
+      records: { items: [recordSummary({ plugin: 'A.esp', formKey: '000001:A.esp' })], total: 1 },
+    });
+    const h = makeTree([A_ROW()], { client });
+    const recordBeneath = async (): Promise<RecordNode> => {
+      const [row] = await h.tree.getChildren();
+      const [group] = await h.tree.getChildren(present(row, 'the A.esp row'));
+      const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
+      return expectInstanceOf(record, RecordNode);
+    };
+    await reconcile(h, [held('A.esp', { isTracked: false })]);
+    const untracked = await recordBeneath();
 
-    await reconcile(h, [held('A.esp', { isImmutable: true }), held('B.esp', { isTracked: true })]);
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+    const tracked = await recordBeneath();
 
-    expect(immutable).toHaveBeenCalledWith([{ name: 'A.esp', origin: 'SomeMod' }]);
-    expect(tracked).toHaveBeenCalledWith([{ name: 'B.esp', origin: 'SomeMod' }]);
+    expect(untracked.contextValue).toBe('record untracked editable');
+    expect(tracked.contextValue).toBe('record tracked editable');
+    expect(callCount(client, 'getRecords')).toBe(1);
   });
 
   // ADR-0012 invariant 1: two plugins that share a filename are never one plugin.
@@ -1469,8 +1508,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
-  // An implicit master has no mod origin to join facts on, so its filter match falls back to
-  // its name alone (ADR-0012) — it is as filterable as any other row, not exempt.
   it('hides an implicit master row the record filter matches no records of', async () => {
     const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
     await reconcile(h, [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: false })]);
@@ -2398,6 +2435,38 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     })]);
 
     expect((await rowItem(h)).tooltip).toContain('Missing master: Ghost.esm');
+  });
+
+  const GAME_FOLDER_MASTER = held('Fallout4.esm', { origin: 'Data', isImmutable: true, isTracked: false });
+  const TRACKED_MOD_COPY = held('Fallout4.esm', { origin: 'SomeMod', isImmutable: false, isTracked: true });
+
+  it.each([
+    ['after', [GAME_FOLDER_MASTER, TRACKED_MOD_COPY]],
+    ['before', [TRACKED_MOD_COPY, GAME_FOLDER_MASTER]],
+  ])("states the locked row's records as the game folder's read-only master, with a tracked mod copy of the same name listed %s it", async (_order, answer) => {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
+      records: { items: [recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: 'Data' })], total: 1 },
+    });
+    const h = makeTree([], { client, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    await reconcile(h, answer);
+
+    const [row] = await h.tree.getChildren();
+    const [group] = await h.tree.getChildren(expectInstanceOf(row, ImplicitMasterNode));
+    const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
+
+    expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked');
+    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('record untracked');
+  });
+
+  it.each([
+    ['after', [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: true }), held('Fallout4.esm', { origin: 'SomeMod', hasMatchingRecords: false })]],
+    ['before', [held('Fallout4.esm', { origin: 'SomeMod', hasMatchingRecords: false }), held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: true })]],
+  ])("keeps the locked row the record filter matches in the game folder, with an unmatched mod copy of the same name listed %s it", async (_order, answer) => {
+    const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    await reconcile(h, answer);
+
+    expect((await h.tree.getChildren()).map((row) => row.label)).toEqual(['Fallout4.esm']);
   });
 });
 

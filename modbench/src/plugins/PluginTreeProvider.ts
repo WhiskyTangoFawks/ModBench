@@ -3,7 +3,7 @@ import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
-  ContainerChildSummary, MEditClient, PluginAddress,
+  ContainerChildSummary, MEditClient,
 } from '../client';
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -87,11 +87,7 @@ export class RecordNode extends vscode.TreeItem {
   constructor(
     public readonly record: RecordSummary,
     public readonly origin?: string,
-    immutable = false,
-    // Whether this row's plugin is tracked, pushed in by `setTrackedPlugins` and never probed
-    // from here. Defaults false because untracked is the state that withholds a gesture: a caller
-    // that has not said gets the narrower row.
-    tracked = false,
+    public readonly conditions: PluginConditions = NOT_EDITABLE,
     // Set for a Quest or Dialog Topic — this same row type expands into their children rather
     // than forking a wrapper node the way WorldspacesNode/CellNode do, so a container's own row
     // stays a fully-affordanced record row.
@@ -104,7 +100,7 @@ export class RecordNode extends vscode.TreeItem {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-    this.contextValue = conditionedContextValue('record', { tracked, editable: !immutable });
+    this.contextValue = conditionedContextValue('record', conditions);
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -312,21 +308,6 @@ function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
   return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
 }
 
-// ADR-0012 invariant 1: keyed by (origin, filename), so two plugins that share a filename never
-// share a fact.
-class PluginAddressSet {
-  private readonly addresses = new Set<string>();
-
-  replace(plugins: Iterable<PluginAddress>): void {
-    this.addresses.clear();
-    for (const p of plugins) this.addresses.add(pluginAddressKey(p.name, p.origin));
-  }
-
-  has(name: string, origin: string): boolean {
-    return this.addresses.has(pluginAddressKey(name, origin));
-  }
-}
-
 type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
@@ -349,45 +330,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // surface that pages. Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
-  // The load order's immutable plugins, pushed in from the tree's own `GET /plugins` read —
-  // record rows under one state it read-only, which the record edits' `when` clauses read.
-  private readonly immutablePlugins = new PluginAddressSet();
-  // The load order's *tracked* plugins, from the same `GET /plugins` answer the immutable
-  // set comes from — never a filesystem probe from here: tracked-ness is a fact the backend
-  // derives on every read.
-  private readonly trackedPlugins = new PluginAddressSet();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
-
-  setImmutablePlugins(plugins: Iterable<PluginAddress>): void {
-    this.immutablePlugins.replace(plugins);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** Replaced wholesale on every reconcile, firing a re-render rather than clearing a cache. A
-   *  `.git` appearing or disappearing under a plugin's origin is a watched event that drives a
-   *  reconcile, so both directions arrive on that path. */
-  setTrackedPlugins(plugins: Iterable<PluginAddress>): void {
-    this.trackedPlugins.replace(plugins);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  // A plugin outside the load order (origin stated) is immutable by construction below, so it
-  // never reaches the tracked/untracked distinction at all.
-  private isTracked(record: { plugin: string; origin: string }): boolean {
-    return this.trackedPlugins.has(record.plugin, record.origin);
-  }
-
-  // ADR-0012: a plugin outside the load order (origin stated) is read-only by construction — an
-  // edit to a file the game does not load changes nothing observable — so the stated origin alone
-  // decides before the immutable set is consulted.
-  private isImmutable(record: { plugin: string; origin: string }, statedOrigin?: string): boolean {
-    return statedOrigin !== undefined || this.immutablePlugins.has(record.plugin, record.origin);
-  }
-
 
   refresh(): void {
     this.pageCache.clear();
@@ -526,9 +473,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** Keyed by filename rather than by a node this provider built: `PluginsTreeProvider` expands
    *  its own load-order rows, whose whole knowledge of this side is a plugin filename
    *  (ADR-0002), and the conditions that row states. */
-  async getPluginChildren(pluginName: string, origin?: string, told: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
+  async getPluginChildren(
+    pluginName: string, origin?: string, pluginRowConditions: PluginConditions = NOT_EDITABLE,
+  ): Promise<PluginTreeNode[]> {
     // ADR-0012: a plugin outside the load order is read-only by construction.
-    const conditions = origin === undefined ? told : { ...told, editable: false };
+    const conditions = origin === undefined ? pluginRowConditions : { ...pluginRowConditions, editable: false };
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
       const typesPresent = new Set(types.map(t => t.type));
@@ -584,8 +533,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
       return children.map(c => new RecordNode(
-        c, node.origin, this.isImmutable(c, node.origin), this.isTracked(c),
-        containerChildTypeOf(c.recordType), c.hasContainerChildren));
+        c, node.origin, node.conditions, containerChildTypeOf(c.recordType), c.hasContainerChildren));
     });
   }
 
@@ -615,8 +563,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // listing still expands into its container children, the same mechanism
       // fetchContainerChildren uses.
       return cached.items.map(r => new RecordNode(
-        r, node.origin, this.isImmutable(r, node.origin), this.isTracked(r),
-        containerChildTypeOf(node.recordType), r.hasContainerChildren));
+        r, node.origin, node.conditions, containerChildTypeOf(node.recordType), r.hasContainerChildren));
     });
   }
 }
