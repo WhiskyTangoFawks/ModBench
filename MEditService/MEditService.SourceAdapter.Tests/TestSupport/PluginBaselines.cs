@@ -10,6 +10,16 @@ internal static class PluginBaselines
     internal static void Track(string modFolder, SourcePreset preset, IEnumerable<TreeFile> files) =>
         SourceRepository.Track(modFolder, preset, Of(files));
 
+    /// <summary>A setup commit that must land, so a failed one fails the test that needed it.</summary>
+    internal static void CommitToMain(
+        string modFolder,
+        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
+        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
+    {
+        Assert.Null(SourceRepository.CommitBaselinesToMain(modFolder, baselines));
+        Assert.Null(SourceRepository.CommitTrackedFilesToMain(modFolder, trackedFileChanges ?? []));
+    }
+
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> Of(IEnumerable<TreeFile> files) =>
     [
         .. files.GroupBy(file => PluginRootOf(file.RelativePath), StringComparer.Ordinal)

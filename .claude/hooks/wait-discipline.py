@@ -9,13 +9,15 @@ import json
 import re
 import sys
 
+from hook_caller import is_subagent
+
 DETACHED = "bash .claude/skills/validate/detached.sh"
 GATE = r"\bdotnet\s+(test|build)\b|\bnpm\s+run\s+(test|build)|\brun-gates\.sh\b(?!.*--detach)|\bdetached\.sh\s+wait\b"
 
 data = json.load(sys.stdin)
 tool = data.get("tool_name")
 tool_input = data.get("tool_input", {})
-subagent = "/subagents/" in data.get("transcript_path", "")
+subagent = is_subagent(data)
 
 if subagent and (tool == "Monitor" or tool_input.get("run_in_background")):
     print(

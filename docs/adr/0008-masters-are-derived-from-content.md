@@ -17,7 +17,7 @@ it, so there is no drift to manage: sort and clean are what every compile does.
    of the two things the format forces compile to derive
    ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
 3. **A master naming no loaded plugin is flagged, never deactivated**
-   ([ADR-0012](0012-every-plugin-copy-is-indexed.md)).
+   ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)).
 
 ## Alternatives rejected
 

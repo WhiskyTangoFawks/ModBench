@@ -7,7 +7,7 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type BackendStatus, type CellPage, type CellReferences, type CompileResult,
+  type AbsorbOutcome, type BackendStatus, type CellPage, type CellReferences, type CompileResult,
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
@@ -397,15 +397,22 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A refusal
-   *  (e.g. "could not be parsed") rides a 200 as `succeeded: false` — the caller reads
-   *  `refusalReason` off the returned value itself. */
-  async absorbUpstreamUpdate(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
-    return this.mutate<ExternalChangeActionResult>({
+  /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A plugin that
+   *  cannot be read or parsed refuses the whole answer, which arrives as a WriteRefused. */
+  async absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused> {
+    const failMsg = `Could not absorb the upstream update for "${origin}"`;
+    const answer = await this.mutate({
       op: `absorbUpstreamUpdate(${origin})`,
-      failMsg: `Could not absorb the upstream update for "${origin}"`,
+      failMsg,
       post: () => this.apiClient.POST('/plugins/external-change/absorb', { body: { origin } }),
     });
+    if (answer === undefined) return { refused: true, message: `${failMsg} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied,
+      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+      trackedFilesRefusal: answer.trackedFilesRefusal ?? null,
+    };
   }
 
   /** Origin-scoped. A collision (a record or an already-staged tracked file) with existing

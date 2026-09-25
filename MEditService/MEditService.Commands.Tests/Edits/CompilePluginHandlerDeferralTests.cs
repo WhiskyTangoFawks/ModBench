@@ -53,7 +53,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
     {
         RaiseParseableExternalChange();
         var absorbed = (await _mod.AbsorbHandler.AbsorbAsync(SourceEditFixture.ModFolderOrigin)).Require();
-        Assert.True(absorbed.Applied, absorbed.RefusalReason);
+        Assert.True(absorbed.AllApplied);
 
         var result = await Compile();
 

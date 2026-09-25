@@ -34,6 +34,10 @@ public enum TrackRefusal
 
     /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
+
+    /// <summary>An earlier commit of the same answer failed and stopped the run before this plugin;
+    /// answering again finishes it.</summary>
+    StoppedByEarlierFailure,
 }
 
 /// <summary>One plugin's Track outcome, or a whole selection's refusal: applied-or-refusal, never an

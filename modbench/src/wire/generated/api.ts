@@ -663,7 +663,6 @@ export interface components {
         ExternalChangeActionResponse: {
             succeeded: boolean;
             refusalReason?: string | null;
-            rebase?: components["schemas"]["RebaseResponse"] | null;
         };
         FieldDiff: {
             fieldName: string;
@@ -1013,7 +1012,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "ExternalChangeUnanswered" | "CommitFailed" | "GitUnavailable";
+        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "ExternalChangeUnanswered" | "CommitFailed" | "GitUnavailable" | "StoppedByEarlierFailure";
         TrackRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             preset: string;
@@ -1021,6 +1020,7 @@ export interface components {
         TrackResponse: {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginAddressRefusal"][];
+            trackedFilesRefusal?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -1802,11 +1802,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExternalChangeActionResponse"];
+                    "application/json": components["schemas"]["TrackResponse"];
                 };
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

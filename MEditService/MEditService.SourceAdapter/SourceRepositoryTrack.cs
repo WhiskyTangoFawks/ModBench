@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using Serilog;
 
 namespace MEditService.SourceAdapter;
 
@@ -106,13 +107,10 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
     }
 
-    /// <summary>Absorb's git mechanics: each plugin's new baseline on main, then every changed tracked
-    /// file in one commit. By plumbing, so the edit branch, its index and its working tree are
-    /// untouched.</summary>
-    public static void CommitPristineToMain(
-        string modFolder,
-        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
-        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
+    /// <summary>Absorb's baselines on main, one commit each, by plumbing so the edit branch is
+    /// untouched. The first failure stops the run and is answered with its baseline.</summary>
+    public static (BaselineTrailers Baseline, string Subject, string Reason)? CommitBaselinesToMain(
+        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         GitCli.EnsureOnPath();
         var gitDir = Path.Combine(modFolder, ".git");
@@ -123,21 +121,80 @@ public sealed partial class SourceRepository
         {
             foreach (var (files, trailers) in baselines)
             {
-                PristineFileWriter.WriteAll(files, scratchDir);
-                CommitBaselineToMain(gitDir, scratchDir, UpdateSubject(trailers), trailers);
+                var subject = UpdateSubject(trailers);
+                var commitSha = string.Empty;
+                if (FailureOf(() =>
+                    {
+                        // An earlier answer that landed this baseline but not its ref left it on main.
+                        if (BaselineOnMainOf(gitDir, scratchDir, trailers) is { } landed)
+                        {
+                            commitSha = landed;
+                            return;
+                        }
+                        PristineFileWriter.WriteAll(files, scratchDir);
+                        commitSha = CommitToMain(
+                            gitDir, scratchDir, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
+                    }) is { } commitFailure)
+                    return (trailers, subject, $"could not be committed to main: {commitFailure}");
+                if (FailureOf(() => GitCli.Run(gitDir, scratchDir, "update-ref", LastCompileRef(trailers.Plugin), commitSha))
+                    is { } refFailure)
+                    return (trailers, subject, $"landed on main, but {LastCompileRef(trailers.Plugin)} could not be moved to it: {refFailure}");
             }
+            return null;
         }
         finally
         {
-            Directory.Delete(scratchDir, recursive: true);
+            // Thrown from here, it would replace the answer of commits that already landed.
+            if (FailureOf(() => Directory.Delete(scratchDir, recursive: true)) is { } cleanupFailure)
+                Log.Warning("Could not remove Absorb's scratch work tree {ScratchDir}: {Reason}", scratchDir, cleanupFailure);
         }
+    }
 
-        // A deleted file is missing from the work tree, so `add -A` stages its removal.
-        if (trackedFileChanges is { Count: > 0 } changes)
+    /// <summary>The mod's changed tracked files on main in one commit, by plumbing, the failure
+    /// answered with its subject. A deleted file is missing from the work tree, so `add -A` stages
+    /// its removal.</summary>
+    public static (string Subject, string Reason)? CommitTrackedFilesToMain(string modFolder, IReadOnlyList<TrackedFileChange> changes)
+    {
+        if (changes.Count == 0) return null;
+        var subject = $"Update {ModNameIn(modFolder)}";
+        // An earlier answer that committed them but could not stage them left main already holding them.
+        var failure = FailureOf(() => CommitToMain(
+            Path.Combine(modFolder, ".git"), modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject,
+            skipWhenUnchanged: true));
+        return failure is { } reason ? (subject, $"could not be committed to main: {reason}") : null;
+    }
+
+    // No rollback beyond git's: the commits before a failed one stand, and any failure, git missing
+    // mid-run included, is answered rather than thrown past them (ADR-0019).
+    private static string? FailureOf(Action step)
+    {
+        try
         {
-            CommitToMain(
-                gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], $"Update {ModNameIn(modFolder)}");
+            step();
+            return null;
         }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log.Warning(ex, "An Absorb step failed");
+            return ex.Message.Trim();
+        }
+    }
+
+    // The plugin's newest baseline commit on main, when it is this very baseline: same binary, same
+    // meta.ini and version. With no binary hash, nothing proves it the same.
+    private static string? BaselineOnMainOf(string gitDir, string workTree, BaselineTrailers trailers)
+    {
+        if (trailers.BinarySha256 is null) return null;
+        var records = GitCli.Run(gitDir, workTree, "log", "-z", "--format=%H%n%(trailers:only,unfold)", "refs/heads/main");
+        foreach (var record in records.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (sha, block) = record.Split('\n', 2) is [var head, var rest] ? (head, rest) : (record, "");
+            if (!string.Equals(ReadTrailer(block, "Plugin"), trailers.Plugin, StringComparison.OrdinalIgnoreCase)) continue;
+            var onMain = new BaselineTrailers(
+                trailers.Plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256"));
+            return onMain == trailers ? sha.Trim() : null;
+        }
+        return null;
     }
 
     private static void CommitBaselineToMain(string gitDir, string workTree, string subject, BaselineTrailers trailers)
@@ -149,7 +206,8 @@ public sealed partial class SourceRepository
 
     // main's own tree with just the pathspecs restaged from the work tree, through a scratch index: the
     // real one may hold the user's own staged dirt.
-    private static string CommitToMain(string gitDir, string workTree, string[] pathspecs, string message)
+    private static string CommitToMain(
+        string gitDir, string workTree, string[] pathspecs, string message, bool skipWhenUnchanged = false)
     {
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-main-index-{Guid.NewGuid():N}");
         try
@@ -158,6 +216,8 @@ public sealed partial class SourceRepository
             GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "read-tree", parentSha);
             GitCli.RunWithIndex(gitDir, workTree, scratchIndex, ["add", "-A", "--", .. pathspecs]);
             var treeSha = GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
+            if (skipWhenUnchanged && treeSha == GitCli.Run(gitDir, workTree, "rev-parse", $"{parentSha}^{{tree}}").Trim())
+                return parentSha;
 
             var commitSha = GitCli.Run(gitDir, workTree, "commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
             // The old value makes the move conditional, so a main another tool moved in between is not
@@ -191,23 +251,27 @@ public sealed partial class SourceRepository
         return string.Join('\n', lines) + "\n";
     }
 
-    /// <summary>The trailers of the plugin's own latest baseline commit on refs/heads/main, never HEAD:
-    /// the edit branch is what is checked out (ADR-0007). Null when untracked or when main holds no
-    /// baseline of it.</summary>
-    public static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin)
+    /// <summary>Each named plugin's own latest baseline on refs/heads/main, never the checked-out edit
+    /// branch (ADR-0007), the newest commit first. A plugin main holds no baseline of is left out.</summary>
+    public static IReadOnlyList<BaselineTrailers> LatestBaselineTrailersNewestFirst(string modFolder, IReadOnlyList<string> plugins)
     {
-        if (!IsTracked(modFolder)) return null;
+        if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         // git's own trailer parser, so a "Plugin: " line in a message's prose is never read as one.
         if (!GitCli.TryRun(gitDir, modFolder, out var blocks, "log", "-z", "--format=%(trailers:only,unfold)", "refs/heads/main"))
-            return null;
+            return [];
 
-        return blocks.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Where(block => string.Equals(ReadTrailer(block, "Plugin"), plugin, StringComparison.OrdinalIgnoreCase))
-            .Select(block => new BaselineTrailers(
-                plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256")))
-            .FirstOrDefault();
+        var latest = new List<BaselineTrailers>();
+        foreach (var block in blocks.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var named = ReadTrailer(block, "Plugin");
+            var plugin = plugins.FirstOrDefault(p => string.Equals(p, named, StringComparison.OrdinalIgnoreCase));
+            if (plugin is null || latest.Exists(baseline => baseline.Plugin == plugin)) continue;
+            latest.Add(new BaselineTrailers(
+                plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256")));
+        }
+        return latest;
     }
 
     // Last matching line wins — git's own rule for a repeated trailer key.

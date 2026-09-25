@@ -5,7 +5,7 @@ Diagram: [create-plugin.d2](create-plugin.d2). Catalog row: `create` under Plugi
 [plugins.md](../surfaces/plugins.md), Create plugin. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md),
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md) and
 [ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md).

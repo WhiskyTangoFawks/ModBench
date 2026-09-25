@@ -287,6 +287,55 @@ describe('HttpMEditClient — an applied edit', () => {
   });
 });
 
+describe('HttpMEditClient — absorbing an upstream update answers per plugin', () => {
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModA' };
+
+  it('reads what was applied as landed, each refusal with its message, and the tracked-files refusal beside them', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [first],
+      refused: [{ plugin: second, refusal: 'CommitFailed', message: "'Update Second.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.absorbUpstreamUpdate('ModA');
+
+    expect(outcome).toEqual({
+      landed: [first],
+      refused: [{ item: second, reason: "'Update Second.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    });
+  });
+
+  it('reads the tracked-files refusal when every plugin landed and that commit did not', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.absorbUpstreamUpdate('ModA');
+
+    expect(outcome).toEqual({
+      landed: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
+    });
+  });
+
+  it('resolves a WriteRefused carrying the server text when the whole answer is refused', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
+      refusal: 'RoundTripFailed', detail: 'Second.esp could not be parsed from its own binary.',
+    })));
+    const client = makeClient(fetch);
+
+    const result = await client.absorbUpstreamUpdate('ModA');
+
+    expect(result).toEqual({
+      refused: true,
+      message: 'Could not absorb the upstream update for "ModA" — Second.esp could not be parsed from its own binary.',
+    });
+  });
+});
+
 describe('HttpMEditClient — the not-OK response text', () => {
 
   it('editRecord leaves an ordinary typed refusal exactly as the backend worded it', async () => {

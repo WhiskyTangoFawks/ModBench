@@ -10,7 +10,7 @@ Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit fiel
 [ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
 [ADR-0008](../../adr/0008-masters-are-derived-from-content.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md) and
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 Every gesture here changes a tracked plugin's source in the working tree, and nothing else: no

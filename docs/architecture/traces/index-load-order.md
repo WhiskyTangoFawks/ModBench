@@ -4,7 +4,7 @@ Diagram: [index-load-order.d2](index-load-order.d2). Catalog row: the system com
 order` in [commands.md](../commands.md). What the views show while it runs is in
 [plugins.md](../surfaces/plugins.md), States. Governed by
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 

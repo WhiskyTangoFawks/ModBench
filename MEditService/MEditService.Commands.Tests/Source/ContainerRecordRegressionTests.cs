@@ -153,6 +153,10 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public async Task AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
         var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
+        MutateExternalBinary(Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), mod => mod.Cells.Records
+            .SelectMany(block => block.SubBlocks)
+            .SelectMany(sub => sub.Cells)
+            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         await TestEditService.AbsorbHandler(_fixture.Holder).AbsorbAsync(ContainerModFixture.ModFolderOrigin);
 
