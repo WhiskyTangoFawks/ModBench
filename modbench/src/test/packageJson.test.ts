@@ -191,11 +191,23 @@ describe('package.json outside an instance', () => {
   });
 
   // `&&` binds tighter than `||` in a when clause, so a term in every alternative gates them all.
-  it('recognizes the gate as a conjunct of every alternative, and never inside parentheses', () => {
+  it('recognizes the gate as a conjunct of every alternative', () => {
     expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
     expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires(`${IN_AN_INSTANCE} && (view == a || view == b)`, IN_AN_INSTANCE)).toBe(false);
     expect(requires(undefined, IN_AN_INSTANCE)).toBe(false);
+  });
+
+  it('reads parentheses as VS Code groups them', () => {
+    expect(requires(`${IN_AN_INSTANCE} && (view == a || view == b)`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`(view == a && ${IN_AN_INSTANCE}) || (view == b && ${IN_AN_INSTANCE})`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`(view == a || ${IN_AN_INSTANCE}) && view == b`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires(`!(${IN_AN_INSTANCE}) && view == a`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires(String.raw`${IN_AN_INSTANCE} && !(viewItem =~ /\b(a|b)\b/)`, IN_AN_INSTANCE)).toBe(true);
+  });
+
+  it('refuses a clause it cannot read, rather than reading it as ungated', () => {
+    expect(() => requires(`${IN_AN_INSTANCE} && (view == a`, IN_AN_INSTANCE)).toThrow(/cannot read/);
+    expect(() => requires(`${IN_AN_INSTANCE} && view == a)`, IN_AN_INSTANCE)).toThrow(/cannot read/);
   });
 });
 
