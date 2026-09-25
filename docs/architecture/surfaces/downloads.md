@@ -94,7 +94,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
    Argument in the catalog says. *catalog Argument*
 2. `open` to open the file in its system application, and `open .meta` to open the sidecar in an
-   editor tab. `open .meta` is absent when there is no `.meta`. *catalog `open`, target Option*
+   editor tab. `open .meta` is absent when there is no `.meta`. *catalog `open`, `open .meta`*
 3. `view on Nexus` absent when the file has no Nexus mod ID. *catalog Where*
 4. Exclude and include over a selection that mixes excluded and included rows to apply the right-
    clicked row's direction to every row, because a menu condition cannot see the mix. A row already
