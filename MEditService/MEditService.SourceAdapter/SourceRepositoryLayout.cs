@@ -255,8 +255,8 @@ public sealed partial class SourceRepository
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
             && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
 
-    // The computed path when it exists, else whichever file in the group folder carries this FormKey:
-    // name and document EditorIDs can disagree, and the name alone reads a live record as deleted.
+    // A move by hand can rename a document or file it deeper, and the computed name alone reads a
+    // live record as deleted.
     private static string FlatSourcePath(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
@@ -271,12 +271,18 @@ public sealed partial class SourceRepository
         var groupDirectory = Path.Combine(RootIn(modFolder, pluginFileName), groupFolder);
         if (!Directory.Exists(groupDirectory)) return computed;
 
-        var suffix = FilesafeFormKey(formKey) + JsonSuffix;
-        var matches = Directory
-            .EnumerateFiles(groupDirectory, $"*{suffix}", SearchOption.TopDirectoryOnly)
-            .Where(f => NameCarries(Path.GetFileName(f), suffix))
-            .Take(2)
+        var documents = Directory
+            .EnumerateFiles(groupDirectory, $"*{JsonSuffix}", SearchOption.AllDirectories)
+            .Where(f => !CarriesNoRecord(f))
             .ToList();
+        var suffix = FilesafeFormKey(formKey) + JsonSuffix;
+        var matches = documents.Where(f => NameCarries(Path.GetFileName(f), suffix)).Take(2).ToList();
+        if (matches.Count == 0)
+        {
+            matches = [.. documents
+                .Where(f => !NamesAnyRecord(Path.GetFileName(f)) && Declares(f, pluginFileName, formKey))
+                .Take(2)];
+        }
 
         return matches.Count switch
         {
@@ -288,6 +294,34 @@ public sealed partial class SourceRepository
                 "partway. Resolve the duplicate by hand before editing."),
         };
     }
+
+    // "[<EditorID> - ]<hex6>_<ModKey>.json", where both the EditorID and the ModKey can hold the
+    // separator, so every place it could split is tried.
+    private static bool NamesAnyRecord(string leaf)
+    {
+        if (!leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)) return false;
+        var stem = leaf[..^JsonSuffix.Length];
+        for (var start = 0; start >= 0; start = NextAfterSeparator(stem, start))
+        {
+            var tail = stem[start..];
+            var underscore = tail.IndexOf('_', StringComparison.Ordinal);
+            if (underscore == 6 && FormKey.TryFactory($"{tail[..underscore]}:{tail[(underscore + 1)..]}", out _))
+                return true;
+        }
+        return false;
+    }
+
+    private static int NextAfterSeparator(string stem, int from)
+    {
+        var separator = stem.IndexOf(" - ", from, StringComparison.Ordinal);
+        return separator < 0 ? -1 : separator + 3;
+    }
+
+    private static bool Declares(string documentPath, string pluginFileName, string formKey) =>
+        FormKeyDeclaredBy(documentPath, pluginFileName) is { } declared
+        && FormKey.TryFactory(declared, out var carried)
+        && FormKey.TryFactory(formKey, out var sought)
+        && carried == sought;
 
     // One place that knows a container is a directory and a flat record a file, so callers and
     // the rollback cannot disagree.

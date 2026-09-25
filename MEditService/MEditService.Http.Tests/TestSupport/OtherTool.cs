@@ -64,7 +64,9 @@ internal static class OtherTool
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
         File.Copy(document, Beside(document, copiedTo));
 
-    private static string Beside(string document, string relativeTarget)
+    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its
+    /// file name, with the folders it needs made.</summary>
+    internal static string Beside(string document, string relativeTarget)
     {
         var target = Path.Combine(
             Path.GetDirectoryName(document).Require(),

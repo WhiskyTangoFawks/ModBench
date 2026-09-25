@@ -89,8 +89,11 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
 
     // A tool that moves by copying and then deleting: the old path's delete settles in a batch the
     // new path is not in.
-    [Fact]
-    public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord()
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    [InlineData("SortedByHand/RenamedByHand.json")]
+    public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord(string copiedTo)
     {
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
@@ -98,7 +101,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var quest = await Client.FirstFormKey(Plugin, "qust");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
         using var stream = await Client.NotificationStream();
-        OtherTool.CopiesASourceDocument(original, "SortedByHand/{0}");
+        OtherTool.CopiesASourceDocument(original, copiedTo);
         OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
@@ -106,6 +109,28 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
 
         var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // A tool that deletes first and writes the copy after: the record leaves with the delete, and the
+    // document that declares it again brings it back wherever it landed.
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    public async Task ACommittedDocumentDeletedThenWrittenElsewhereByHand_BringsItsRecordBack(string writtenTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        var text = File.ReadAllText(original);
+        using var stream = await Client.NotificationStream();
+        OtherTool.DeletesTheFile(original);
+        await stream.EventsUntil("rows-changed", e => Names(e, npc));
+
+        OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
+
+        await stream.EventsUntil("rows-changed", e => Names(e, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
