@@ -318,6 +318,19 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Select(f => f.GetProperty("reason").GetString())
             .FirstOrDefault();
 
+    // An earlier projection's frame can name the record too, and a write joining the delete's settle
+    // is a move that advances nothing: the delete's frame is the one after which the record reads gone.
+    private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
+    {
+        while (true)
+        {
+            var frame = (await stream.EventsUntil("rows-changed", e => Names(e, formKey)))[^1];
+            await Client.SequenceReaches(frame.GetProperty("sequence").GetInt64());
+            var read = await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative));
+            if (read.StatusCode == HttpStatusCode.NotFound) return;
+        }
+    }
+
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("SortedByHand/{0}")]
@@ -330,7 +343,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var text = File.ReadAllText(original);
         using var stream = await Client.NotificationStream();
         OtherTool.DeletesTheFile(original);
-        await stream.EventsUntil("rows-changed", e => Names(e, npc));
+        await TheFrameAfterWhichItReadsGone(stream, npc);
         var afterTheDelete = await Client.Sequence();
 
         OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
