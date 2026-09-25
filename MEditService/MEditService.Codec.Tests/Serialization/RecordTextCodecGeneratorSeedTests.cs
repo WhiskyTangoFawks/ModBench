@@ -1,7 +1,5 @@
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using MEditService.Codec.Serialization;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 

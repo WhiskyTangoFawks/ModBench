@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;

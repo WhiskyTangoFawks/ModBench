@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.LoadOrder;
 using Serilog;
 
 namespace MEditService.SourceAdapter;
@@ -54,7 +53,7 @@ public sealed partial class SourceRepository
     }
 
     // A scratch work tree: the edit branch does not move, and a baseline written into the real one
-    // would stand in the way of `rebase edit branch` as untracked files.
+    // would stand in the way of the user's rebase as untracked files.
     private static List<(string Plugin, string Reason)> JoinRepository(
         string gitDir, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {

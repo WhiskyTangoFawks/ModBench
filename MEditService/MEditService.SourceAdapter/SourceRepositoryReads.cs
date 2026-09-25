@@ -3,7 +3,6 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 

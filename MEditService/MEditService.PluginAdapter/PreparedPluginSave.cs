@@ -1,5 +1,3 @@
-using MEditService.LoadOrder;
-
 namespace MEditService.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>

@@ -25,9 +25,8 @@ import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerTrackCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
-  watchRepositoryStates, type MinimalRepository,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
@@ -110,7 +109,6 @@ export function activate(context: vscode.ExtensionContext) {
       void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
     }
   });
-  context.subscriptions.push({ dispose: () => { session.pluginRepositoryStates?.dispose(); } });
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
@@ -118,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
   const notifyConflictsComputed = () => {
     announceConflictsComputed(recordPanels, editsInFlight);
     void registerHeldTrackedRepositories(
-      meditClient, outputChannel, (repos) => { holdPluginRepositories(session, repos); }, isTracked, pluginFolder);
+      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
   };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
@@ -179,7 +177,6 @@ export function activate(context: vscode.ExtensionContext) {
         askQuestion,
         presentCrashRepair: showCrashRepairOffers,
         reporter: makeReporter(outputChannel, 'externalChange'),
-        originFiles: pluginRowDeps.originFiles,
       }),
     },
     referencedByTreeView,
@@ -245,27 +242,17 @@ interface PluginRowCommandDeps {
   originFiles: OriginFilesOf;
 }
 
-// plugins.md, Menus and keys, story 6: the Plugins rows offer rebase edit branch only while no
-// rebase is in progress, so a repository's state change re-renders them.
-function holdPluginRepositories(session: ExtensionSession, repos: Map<string, MinimalRepository>): void {
-  session.pluginRepositoryStates?.dispose();
-  session.pluginRepositories = repos;
-  session.pluginRepositoryStates = watchRepositoryStates(repos, () => session.pluginsTree?.invalidate());
-  session.pluginsTree?.invalidate();
-}
-
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
-  const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
       client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(
-          client, outputChannel, (repos) => { holdPluginRepositories(session, repos); }, isTracked, pluginFolder);
+          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
         notifyConflictsComputed();
       },
       () => session.pluginsTreeView?.selection ?? [],
@@ -276,9 +263,6 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),
-    registerRebaseCommand(
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles,
-      () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
 }

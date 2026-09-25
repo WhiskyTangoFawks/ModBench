@@ -3,10 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 

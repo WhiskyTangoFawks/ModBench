@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.SourceAdapter;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 

@@ -33,11 +33,9 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
-  registerSaveAndCompileCommand, registerCompileAtRefCommand, rebaseInProgressIn, watchRepositoryStates,
-  type MinimalRepository,
+  registerTrackCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
+  registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
-import { pluginAddressKey } from '../trackedRepositories';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
@@ -172,147 +170,6 @@ describe('registerTrackCommand', () => {
 
     expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
-  });
-});
-
-// ── registerRebaseCommand ──────────────────────────────────────────────────
-
-describe('registerRebaseCommand', () => {
-  function invokeRebase(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
-    const treeProvider = new PluginTreeProvider(client);
-    const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
-    const refreshMatchingPlugins = vi.fn();
-    const reporter = recordingReporter();
-    const modA = { name: 'MyMod.esp', path: '/instance/mods/ModA/MyMod.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
-    registerRebaseCommand(
-      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin),
-      () => viewSelection);
-    return {
-      handler: present(handlers.get('modbench.mod.rebaseEditBranch'), 'the rebase command registerRebaseCommand registers'),
-      refresh, refreshMatchingPlugins, reporter,
-    };
-  }
-
-  it('reports nothing on a clean rebase, but still refreshes', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
-    const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
-    expect(reporter.landings).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
-  });
-
-  // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
-  it('rebases the one selected plugin\'s mod from the palette', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
-    const { handler } = invokeRebase(client, [pluginNode()]);
-
-    await handler();
-
-    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
-  });
-
-  it('reports an unresolvable origin at error and never asks the backend to rebase', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', []);
-    const { handler, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not resolve which mod "MyMod.esp" belongs to.', detail: undefined },
-    ]);
-    expect(client.calls.filter((c) => c.method === 'rebaseOntoMain')).toEqual([]);
-  });
-
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the rebase outright', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'Could not rebase "ModA" — boom' });
-    const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not rebase "ModA" — boom', detail: undefined },
-    ]);
-    expect(refresh).not.toHaveBeenCalled();
-    expect(refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('reports a typed rebase refusal at warning, naming the dirty paths the backend gave', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    const refusalReason = 'Cannot rebase: uncommitted changes in source/Scripts/Foo.psc. '
-      + 'Commit, stash, or discard them first, then try again.';
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason, conflictedPaths: [] });
-    const { handler, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('opens the native merge editor for every conflicted path, and reports nothing when the backend gave no reason', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult(
-      'rebaseOntoMain',
-      { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc', 'source/Scripts/Bar.psc'] },
-    );
-    const { handler, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Bar.psc' }));
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  // SourceRepository.cs's autostash case: git kept the change in the stash list rather than
-  // losing it, and the reason names the recovery — the merge editor alone does not say that.
-  it('reports the reason a conflicted rebase carries, once the merge editor is open', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    const refusalReason = 'The rebase replayed cleanly, but re-applying its autostashed tracked-file changes '
-      + 'conflicted. Nothing was lost — they are kept in `git stash list` — resolve the conflict markers, '
-      + 'stage them, then run `git stash drop`.';
-    client.setCommandResult(
-      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason, conflictedPaths: ['source/Scripts/Foo.psc'] },
-    );
-    const { handler, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  // The rival: falling straight back to `vscode.open` on every path, without trying the real
-  // merge editor first, would leave conflict markers in a plain text editor with no explanation.
-  it('falls back to a plain editor and reports why, when the Git extension cannot open the merge editor', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult(
-      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc'] },
-    );
-    executeCommand.mockImplementation((command: string) => (
-      command === 'git.openMergeEditor' ? Promise.reject(new Error('command not found')) : Promise.resolve(undefined)
-    ));
-    const { handler, reporter } = invokeRebase(client);
-
-    await handler(pluginNode());
-
-    expect(executeCommand).toHaveBeenCalledWith('vscode.open', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
-    expect(reporter.reports).toEqual([{
-      severity: 'warning',
-      message: 'Could not open the merge editor for "source/Scripts/Foo.psc" — opened it as a text editor instead.',
-      detail: 'command not found',
-    }]);
   });
 });
 
@@ -516,7 +373,7 @@ describe('registerSaveAndCompileCommand', () => {
     ]);
     showQuickPick.mockResolvedValue(undefined);
     const selected = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
-    selected.contextValue = 'plugin rebasable compilable';
+    selected.contextValue = 'plugin compilable';
     const { handler } = invokeSaveAndCompile(client, [selected]);
 
     await handler();
@@ -642,50 +499,5 @@ describe('registerCompileAtRefCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
-  });
-});
-
-// plugins.md, Menus and keys, story 6: rebase edit branch is offered only while no rebase is in
-// progress, which the mod's repository in vscode.git says, and says again as it changes.
-describe('a tracked mod\'s rebase in progress', () => {
-  function fakeRepository(rebasing: boolean) {
-    const listeners: (() => void)[] = [];
-    const repository: MinimalRepository = {
-      status: () => Promise.resolve(),
-      state: {
-        rebaseCommit: rebasing ? { hash: 'abc' } : undefined,
-        onDidChange: (listener: () => void) => {
-          listeners.push(listener);
-          return { dispose: () => { listeners.splice(listeners.indexOf(listener), 1); } };
-        },
-      },
-    };
-    return { repository, change: () => { for (const listener of [...listeners]) listener(); } };
-  }
-
-  it('is the plugin\'s own mod repository\'s answer, and none with no repository', () => {
-    const repos = new Map([
-      [pluginAddressKey('A.esp', 'ModA'), fakeRepository(true).repository],
-      [pluginAddressKey('B.esp', 'ModB'), fakeRepository(false).repository],
-    ]);
-
-    expect(rebaseInProgressIn(repos, 'a.ESP', 'moda')).toBe(true);
-    expect(rebaseInProgressIn(repos, 'B.esp', 'ModB')).toBe(false);
-    expect(rebaseInProgressIn(repos, 'C.esp', 'ModC')).toBe(false);
-    expect(rebaseInProgressIn(undefined, 'A.esp', 'ModA')).toBe(false);
-  });
-
-  it('hears each repository\'s state change until disposed', () => {
-    const a = fakeRepository(false);
-    const b = fakeRepository(false);
-    const heard = vi.fn();
-    const watch = watchRepositoryStates(new Map([['a', a.repository], ['b', b.repository]]), heard);
-
-    a.change();
-    b.change();
-    watch.dispose();
-    a.change();
-
-    expect(heard).toHaveBeenCalledTimes(2);
   });
 });

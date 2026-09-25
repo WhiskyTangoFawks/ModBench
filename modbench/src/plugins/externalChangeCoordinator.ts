@@ -4,16 +4,13 @@ import type { Reporter } from '../ports/reporter';
 import { askOne, dispatchOne } from './externalChangeGestures';
 import { errorMessage } from '../ports/errorMessage';
 
-export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
-
 export interface ExternalChangeCoordinatorDeps {
-  // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0002).
-  client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
+  // The two write verbs Keep/Absorb dispatch to, narrowed off the port (ADR-0002).
+  client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate'>;
   showDialog: AskQuestion;
-  openMergeEditor: OpenMergeEditor;
   /** ADR-0019: each gesture's refusal, and each plugin of Absorb's answer that did not land. */
   reporter: Pick<Reporter, 'report' | 'selectionOutcome'>;
-  /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0017). */
+  /** A landed Keep/Absorb is a working-tree change (ADR-0017). */
   refreshTree: () => void;
   refreshMatchingPlugins: () => void;
   /** The other question-open verdict: a repair offer, never Absorb/Keep's own dialog. */

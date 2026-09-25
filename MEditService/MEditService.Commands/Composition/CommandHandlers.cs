@@ -1,11 +1,9 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -93,12 +91,6 @@ public static class CommandHandlers
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<TrackService>(),
-            sp.GetRequiredService<LoadOrderHolder>()));
-
-        services.AddSingleton(sp => new RebaseEditBranchHandler(
-            sp.GetRequiredService<LoadOrderHolder>()));
-
-        services.AddSingleton(sp => new ContinueRebaseEditBranchHandler(
             sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(

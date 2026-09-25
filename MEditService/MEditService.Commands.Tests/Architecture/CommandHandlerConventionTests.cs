@@ -1,5 +1,4 @@
 using System.Reflection;
-using MEditService.Commands;
 using MEditService.Commands.Composition;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,8 +24,6 @@ public sealed class CommandHandlerConventionTests
         (typeof(AbsorbExternalChangeHandler), "AllApplied"),
         (typeof(KeepExternalChangeHandler), "Applied"),
         (typeof(CreatePluginHandler), "Applied"),
-        (typeof(RebaseEditBranchHandler), "Applied"),
-        (typeof(ContinueRebaseEditBranchHandler), "Applied"),
         (typeof(PutLoadOrderHandler), "Applied"),
     ];
 

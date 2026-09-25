@@ -1,13 +1,9 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import type { CrashRepairOffer, MEditClient } from '../client';
-import type { OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
-import {
-  subscribeQuestionOpen, type OpenMergeEditor,
-} from './externalChangeCoordinator';
+import { subscribeQuestionOpen } from './externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { errorMessage } from '../ports/errorMessage';
 
 // Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
 // lives in ./externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
@@ -17,19 +13,17 @@ import { errorMessage } from '../ports/errorMessage';
  *  no health gate, since `client.subscribe` already follows the backend's lifecycle. Returns the
  *  unsubscribe. */
 export interface QuestionOpenWiring {
-  client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain' | 'subscribe'>;
+  client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'subscribe'>;
   outputChannel: vscode.LogOutputChannel;
   treeProvider: PluginTreeProvider;
   refreshMatchingPlugins: () => void;
   askQuestion: AskQuestion;
   presentCrashRepair: (offers: CrashRepairOffer[]) => Promise<void>;
   reporter: Reporter;
-  /** Where a conflicted path's merge editor opens. */
-  originFiles: OriginFilesOf;
 }
 
 export function wireQuestionOpen({
-  client, outputChannel, treeProvider, refreshMatchingPlugins, askQuestion, presentCrashRepair, reporter, originFiles,
+  client, outputChannel, treeProvider, refreshMatchingPlugins, askQuestion, presentCrashRepair, reporter,
 }: QuestionOpenWiring): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
@@ -37,39 +31,10 @@ export function wireQuestionOpen({
   return subscribeQuestionOpen({
     client,
     showDialog: askQuestion,
-    openMergeEditor: makeMergeEditorOpener(originFiles, outputChannel, reporter),
     reporter,
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
     presentCrashRepair,
     log,
   }, client);
-}
-
-/** Resolved fresh per call: several repositories can be mid-answer at once. `git.mergeEditor`
- *  defaults off, so only `git.openMergeEditor` opens the real merge editor; `vscode.open` is
- *  its fallback, reported, when that command is unavailable or throws. */
-export function makeMergeEditorOpener(
-  originFiles: OriginFilesOf, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-): OpenMergeEditor {
-  return async (origin, relativePath) => {
-    const file = originFiles(origin)?.file(relativePath);
-    if (file === undefined) {
-      outputChannel.error(`[extension] openMergeEditor: could not resolve "${origin}"'s mod folder`);
-      return;
-    }
-    const uri = vscode.Uri.file(file);
-    try {
-      await vscode.commands.executeCommand('git.openMergeEditor', uri);
-    } catch (err) {
-      const detail = errorMessage(err);
-      outputChannel.error(`[extension] git.openMergeEditor failed for "${relativePath}": ${detail}`);
-      await vscode.commands.executeCommand('vscode.open', uri);
-      reporter.report(
-        'warning',
-        `Could not open the merge editor for "${relativePath}" — opened it as a text editor instead.`,
-        detail,
-      );
-    }
-  };
 }

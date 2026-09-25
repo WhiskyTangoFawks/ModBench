@@ -97,7 +97,6 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
   readonly allUntrackedInMod: boolean;
-  readonly singleRebasable: boolean;
   readonly singleRecordType: boolean;
   readonly allDeletableRecords: boolean;
 }
@@ -106,7 +105,6 @@ export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): Plugin
   return {
     singlePlugin: onlySelected(selection, 'plugin') !== undefined,
     allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
-    singleRebasable: flagsOf(onlySelected(selection, 'plugin')).includes('rebasable'),
     singleRecordType: onlySelected(selection, 'recordType') !== undefined,
     allDeletableRecords: every(selection, (row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
   };

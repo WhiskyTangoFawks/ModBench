@@ -1,7 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -369,81 +368,6 @@ public sealed partial class SourceRepository
         var paths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
         GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. paths]);
     }
-
-    /// <summary>The edit branch replayed onto main's new tip. Refuses over dirt in the source tree;
-    /// a tracked file outside it rides `--autostash` (ADR-0003). Mid-rebase delegates to
-    /// <see cref="ContinueRebase"/>.</summary>
-    public static RebaseResult RebaseEditBranch(string modFolder)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        if (RebaseInProgress(gitDir))
-            return ContinueRebase(modFolder);
-
-        var sourcePrefix = ToGitPath(RootFolderName) + "/";
-        var dirty = WorkingTreeStatus(modFolder).Where(p => p.StartsWith(sourcePrefix, StringComparison.Ordinal)).ToList();
-        if (dirty.Count > 0)
-        {
-            return RebaseResult.Refused(
-                $"Cannot rebase: uncommitted changes in {string.Join(", ", dirty)}. " +
-                "Commit, stash, or discard them first, then try again.");
-        }
-
-        // Captured before the autostash round-trip: a successful pop restores content but not
-        // reliably the staged bit, so a path Absorb/Keep staged as its own answer is re-staged below.
-        var stagedBefore = ParseStatus(modFolder).Where(e => e.IndexStatus is not (' ' or '?')).Select(e => e.Path).ToList();
-        var stashCountBefore = StashCount(gitDir, modFolder);
-
-        // -c core.editor=true: a clean, non-conflicted rebase never needs a message editor, but this
-        // keeps the call non-interactive regardless — nothing here has a terminal to hand one to.
-        if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "--autostash", "refs/heads/main"))
-        {
-            // Exit 0 even when re-applying the autostash itself conflicted: git keeps the stash and
-            // leaves conflict markers rather than losing the change. A new stash entry is the tell.
-            if (StashCount(gitDir, modFolder) > stashCountBefore)
-            {
-                return RebaseResult.Conflicted(
-                    ConflictedPaths(gitDir, modFolder),
-                    "The rebase replayed cleanly, but re-applying its autostashed tracked-file changes " +
-                    "conflicted. Nothing was lost — they are kept in `git stash list` — resolve the " +
-                    "conflict markers, stage them, then run `git stash drop`.");
-            }
-
-            // A path the replay fully resolved (its diff now matches new main, deletion included) is
-            // gone from status entirely — restaging it by name would be an unmatched pathspec.
-            var stillDirty = ParseStatus(modFolder).Select(e => e.Path).ToHashSet(StringComparer.Ordinal);
-            var toRestage = stagedBefore.Where(stillDirty.Contains).ToList();
-            if (toRestage.Count > 0) GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. toRestage]);
-            return RebaseResult.Clean();
-        }
-
-        return RebaseResult.Conflicted(ConflictedPaths(gitDir, modFolder));
-    }
-
-    private static int StashCount(string gitDir, string workTree) =>
-        GitCli.TryRun(gitDir, workTree, out var stdout, "stash", "list")
-            ? stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length
-            : 0;
-
-    private static bool RebaseInProgress(string gitDir) =>
-        Directory.Exists(Path.Combine(gitDir, "rebase-merge")) || Directory.Exists(Path.Combine(gitDir, "rebase-apply"));
-
-    /// <summary>Stages whatever the working tree now holds and continues: this repo's tree is
-    /// source-JSON-only, so a blanket <c>add -A</c> is exactly the resolution the user just wrote.</summary>
-    public static RebaseResult ContinueRebase(string modFolder)
-    {
-        var gitDir = Path.Combine(modFolder, ".git");
-        GitCli.Run(gitDir, modFolder, "add", "-A");
-
-        if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "--continue"))
-            return RebaseResult.Clean();
-
-        return RebaseResult.Conflicted(ConflictedPaths(gitDir, modFolder));
-    }
-
-    private static List<string> ConflictedPaths(string gitDir, string workTree) =>
-        GitCli.TryRun(gitDir, workTree, out var stdout, "diff", "--name-only", "--diff-filter=U")
-            ? stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList()
-            : [];
 
     /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
     /// clean.</summary>

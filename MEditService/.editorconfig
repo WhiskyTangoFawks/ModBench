@@ -94,6 +94,10 @@ dotnet_diagnostic.CA2025.severity = error
 dotnet_diagnostic.CA1508.severity = error
 dotnet_diagnostic.CA2016.severity = error
 
+# IDE0005: an unused using fails the build. It reports only with GenerateDocumentationFile on,
+# which Directory.Build.props sets.
+dotnet_diagnostic.IDE0005.severity = error
+
 # CA1062: redundant under nullable reference types — a public member with a non-nullable reference
 # parameter already can't be called with null without a compiler warning at the call site.
 dotnet_diagnostic.CA1062.severity = none

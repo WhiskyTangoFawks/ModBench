@@ -4,7 +4,6 @@ using MEditService.Index;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Api;
 

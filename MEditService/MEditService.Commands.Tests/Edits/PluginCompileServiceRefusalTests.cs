@@ -1,9 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 

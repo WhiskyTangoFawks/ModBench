@@ -1,9 +1,7 @@
 using System.Text.Json;
-using MEditService.Http.Endpoints;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -54,17 +52,5 @@ public sealed class WireEnumSerializationTests
         var json = JsonSerializer.Serialize(LoadOrderStatus.None with { State = LoadOrderState.Reconciling }, options);
 
         Assert.Contains("\"state\":\"Reconciling\"", json, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(RebaseOutcome.Clean, "Clean")]
-    [InlineData(RebaseOutcome.Refused, "Refused")]
-    [InlineData(RebaseOutcome.Conflicted, "Conflicted")]
-    public async Task RebaseResponseOutcome_SerializesAsMemberName(RebaseOutcome outcome, string expected)
-    {
-        var options = await AppSerializerOptionsAsync();
-        var json = JsonSerializer.Serialize(new RebaseResponse(outcome, null, []), options);
-
-        Assert.Contains($"\"outcome\":\"{expected}\"", json, StringComparison.Ordinal);
     }
 }

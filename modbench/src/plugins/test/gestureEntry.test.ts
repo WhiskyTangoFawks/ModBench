@@ -179,24 +179,20 @@ describe('what the Plugins palette entries read off the selection', () => {
     expect(pluginsKeyContext([lockedRow('Fallout4.esm')]).singlePlugin).toBe(false);
   });
 
-  it('track sees a selection of untracked plugins in mods, every one, and rebase exactly one rebasable plugin', () => {
+  it('track sees a selection of untracked plugins in mods, every one', () => {
     const untracked = pluginRow('Gamma.esp', 'ModC');
     untracked.contextValue = 'plugin untrackedInMod';
-    const rebasable = pluginRow('Delta.esp', 'ModD');
-    rebasable.contextValue = 'plugin rebasable';
 
     const alsoUntracked = pluginRow('Zeta.esp', 'ModZ');
     alsoUntracked.contextValue = 'plugin untrackedInMod';
     expect(pluginsKeyContext([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
-    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ allUntrackedInMod: false, singleRebasable: false });
+    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ allUntrackedInMod: false });
     expect(pluginsKeyContext([])).toMatchObject({ allUntrackedInMod: false });
-    expect(pluginsKeyContext([rebasable])).toMatchObject({ allUntrackedInMod: false, singleRebasable: true });
-    expect(pluginsKeyContext([rebasable, alpha]).singleRebasable).toBe(false);
   });
 
   it('compile takes exactly one selected compilable plugin', () => {
     const compilable = pluginRow('Eps.esp', 'ModE');
-    compilable.contextValue = 'plugin rebasable compilable';
+    compilable.contextValue = 'plugin compilable';
 
     expect(compilableSelected([compilable])).toBe(compilable);
     expect(compilableSelected([alpha])).toBeUndefined();

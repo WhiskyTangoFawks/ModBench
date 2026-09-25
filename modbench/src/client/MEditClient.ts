@@ -1,7 +1,7 @@
 import type { components } from '../wire/generated/api';
 import {
   CRASH_REPAIR_REASONS,
-  type CompileResult, type RebaseResult, type CrashRepairOffer, type CrashRepairReason,
+  type CompileResult, type CrashRepairOffer, type CrashRepairReason,
   type ExternalChangeActionResult, type NotificationEvent,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -153,12 +153,10 @@ export interface MEditClient {
     requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
   ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined>;
   compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
-  // Origin-scoped, like rebase: the mod, not one plugin in it, is the unit both answers cover.
+  // Origin-scoped: the mod, not one plugin in it, is the unit both answers cover.
   // Absorb's WriteRefused is the whole answer refused, with nothing written.
   absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
   keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
-  rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
-  continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
@@ -208,6 +206,6 @@ export interface MEditClient {
 export type {
   CrashRepairOffer, CrashRepairReason, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult,
+  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult,
   ExternalChangeActionResult, LoadOrderStatus, LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
 };

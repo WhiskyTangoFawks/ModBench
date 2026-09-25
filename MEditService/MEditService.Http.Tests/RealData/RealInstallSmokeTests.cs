@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using MEditService.Codec.Schema;
-using MEditService.Http;
-using MEditService.Http.Tests.Api;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;

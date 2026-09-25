@@ -1,6 +1,6 @@
 import type { ExternalChangeDialogAnswer } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
-import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../client';
+import { isRefused, type UnansweredExternalChange } from '../client';
 import type { ExternalChangeCoordinatorDeps } from './externalChangeCoordinator';
 
 // The coordinator decides *when* to ask; this asks one mod's question and says what the answer
@@ -65,24 +65,4 @@ export async function dispatchOne(
   if (answer === 'defer') return;
   if (answer === 'keep') return dispatchKeep(deps, origin);
   return dispatchAbsorb(deps, origin);
-}
-
-// The manual, re-runnable rebase gesture, origin-scoped: the repo, not any one plugin, is the unit
-// of baselines and rebase. Resumption-aware — a conflicted rebase re-runs this.
-export async function runRebase(
-  deps: Pick<ExternalChangeCoordinatorDeps, 'client' | 'openMergeEditor' | 'reporter' | 'refreshTree' | 'refreshMatchingPlugins'>,
-  origin: string,
-): Promise<RebaseResult | null> {
-  const result = await deps.client.rebaseOntoMain(origin);
-  if (!result) return null;
-  if (isRefused(result)) { deps.reporter.report('error', result.message); return null; }
-  if (result.outcome === 'Conflicted') {
-    for (const path of result.conflictedPaths) {
-      await deps.openMergeEditor(origin, path);
-    }
-  }
-  // Refresh happens either way — `Conflicted` leaves the repo mid-rebase, which the panel must
-  // reflect.
-  refreshAfterWrite(deps);
-  return result;
 }

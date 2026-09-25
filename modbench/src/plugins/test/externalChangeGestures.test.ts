@@ -1,73 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runRebase, askOne, dispatchOne } from '../externalChangeGestures';
+import { askOne, dispatchOne } from '../externalChangeGestures';
 import type { ExternalChangeCoordinatorDeps } from '../externalChangeCoordinator';
 import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
 import type { MEditClient, UnansweredExternalChange } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-type RebaseClient = Partial<Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>>;
+type AnswerClient = Partial<Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate'>>;
 
 // Every method the deps' own `client` field requires, so a test's own partial override still
 // satisfies the full port — the untouched methods are never called for that test.
-function fullClient(client: RebaseClient): Required<RebaseClient> {
-  return { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn(), rebaseOntoMain: vi.fn(), ...client };
+function fullClient(client: AnswerClient): Required<AnswerClient> {
+  return { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn(), ...client };
 }
-
-function makeRebaseDeps(client: RebaseClient) {
-  return {
-    client: fullClient(client),
-    openMergeEditor: vi.fn().mockResolvedValue(undefined),
-    reporter: recordingReporter(),
-    refreshTree: vi.fn(),
-    refreshMatchingPlugins: vi.fn(),
-  };
-}
-
-describe('runRebase', () => {
-  it('opens the native merge editor on every conflicted path', async () => {
-    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] }) };
-    const deps = makeRebaseDeps(client);
-
-    const result = await runRebase(deps, 'ModA');
-
-    expect(result?.outcome).toBe('Conflicted');
-    expect(deps.openMergeEditor).toHaveBeenCalledTimes(2);
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/x.json');
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/y.json');
-  });
-
-  it('opens nothing on a clean rebase', async () => {
-    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }) };
-    const deps = makeRebaseDeps(client);
-
-    await runRebase(deps, 'ModA');
-
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
-  });
-
-  // Refresh happens either way — a `Conflicted` outcome leaves the repo mid-rebase, which the
-  // panel must still reflect.
-  it('refreshes the tree and matching-plugin set on both a clean and a conflicted outcome', async () => {
-    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['a.json'] }) };
-    const deps = makeRebaseDeps(client);
-
-    await runRebase(deps, 'ModA');
-
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
-  });
-
-  it('shows the ready-to-show message and refreshes nothing when the backend refuses the rebase outright', async () => {
-    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'Could not rebase "ModA" — boom' }) };
-    const deps = makeRebaseDeps(client);
-
-    const result = await runRebase(deps, 'ModA');
-
-    expect(result).toBeNull();
-    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not rebase "ModA" — boom', detail: undefined }]);
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-  });
-});
 
 function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {
@@ -79,11 +23,10 @@ function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExt
 const first = { name: 'A.esp', origin: 'ModA' };
 const second = { name: 'B.esp', origin: 'ModA' };
 
-function makeDispatchDeps(client: RebaseClient, showDialogChoice: string | undefined) {
+function makeDispatchDeps(client: AnswerClient, showDialogChoice: string | undefined) {
   return {
     client: fullClient(client),
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
-    openMergeEditor: vi.fn().mockResolvedValue(undefined),
     reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
