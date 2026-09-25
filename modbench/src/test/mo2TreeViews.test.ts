@@ -429,27 +429,35 @@ describe('the Downloads decoration provider follows a rows change', () => {
 
 // commands.md, view on Nexus: the palette hands the command no row, so the Downloads view says
 // whether its selection is one the gesture takes.
-describe('the Downloads view tells the palette whether its selection is one file with a Nexus id', () => {
-  const KEY = 'modbench.downloadedFile.singleNexusFile';
+describe('the Downloads view tells its palette entries what the selection holds', () => {
+  const KEYS = ['singleFile', 'singleFileWithMeta', 'holdsFile', 'holdsIncluded', 'holdsExcluded']
+    .map((name) => `modbench.downloadedFile.${name}`);
+  const keys = () => Object.fromEntries(KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
   const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
     view.selection = rows;
     for (const listener of h.selectionListeners) listener({ selection: rows });
   };
 
-  it('is true for one selected file with a Nexus id, and false for none, one without, or several', async () => {
+  it('sets each key off the selection as it changes', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
     const { downloadsView } = registerDownloadsView(downloadsViewDeps(root, instance));
-    const withId = new DownloadNode(downloadRowFixture('a.7z', { modID: '1' }));
-    const withoutId = new DownloadNode(downloadRowFixture('b.7z'));
 
-    expect(h.state.contextKeys.get(KEY)).toBe(false);
-    select(downloadsView, [withId]);
-    expect(h.state.contextKeys.get(KEY)).toBe(true);
-    select(downloadsView, [withoutId]);
-    expect(h.state.contextKeys.get(KEY)).toBe(false);
-    select(downloadsView, [withId, new DownloadNode(downloadRowFixture('c.7z', { modID: '2' }))]);
-    expect(h.state.contextKeys.get(KEY)).toBe(false);
+    select(downloadsView, [new DownloadNode(downloadRowFixture('a.7z', { hasMeta: true }))]);
+    expect(keys()).toEqual({
+      'modbench.downloadedFile.singleFile': true, 'modbench.downloadedFile.singleFileWithMeta': true,
+      'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': true,
+      'modbench.downloadedFile.holdsExcluded': false,
+    });
+
+    select(downloadsView, [
+      new DownloadNode(downloadRowFixture('b.7z', { excluded: true })), new DownloadNode(downloadRowFixture('c.7z', { excluded: true })),
+    ]);
+    expect(keys()).toEqual({
+      'modbench.downloadedFile.singleFile': false, 'modbench.downloadedFile.singleFileWithMeta': false,
+      'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': false,
+      'modbench.downloadedFile.holdsExcluded': true,
+    });
   });
 });
 

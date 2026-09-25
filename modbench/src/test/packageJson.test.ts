@@ -556,11 +556,6 @@ describe('package.json command titles and categories', () => {
     'modbench.record.moveElementUp',
     'modbench.record.moveElementDown',
     'modbench.record.openFieldValue',
-    'modbench.downloadedFile.open',
-    'modbench.downloadedFile.openMeta',
-    'modbench.downloadedFile.delete',
-    'modbench.downloadedFile.exclude',
-    'modbench.downloadedFile.include',
     'modbench.plugin.reveal',
     'modbench.plugin.track',
     'modbench.mod.rebaseEditBranch',
@@ -766,6 +761,24 @@ describe('package.json Downloads delete key', () => {
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
     expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+  });
+});
+
+// commands.md, No dead entries: each is listed only while the Downloads selection holds what it
+// acts on.
+describe('package.json Downloads palette entries', () => {
+  const DOWNLOADS_PALETTE = [
+    ['modbench.downloadedFile.open', 'modbench.downloadedFile.singleFile'],
+    ['modbench.downloadedFile.openMeta', 'modbench.downloadedFile.singleFileWithMeta'],
+    ['modbench.downloadedFile.delete', 'modbench.downloadedFile.holdsFile'],
+    ['modbench.downloadedFile.exclude', 'modbench.downloadedFile.holdsIncluded'],
+    ['modbench.downloadedFile.include', 'modbench.downloadedFile.holdsExcluded'],
+  ] as const;
+
+  it.each(DOWNLOADS_PALETTE)('%s is in the palette only while the Downloads view has focus and its selection holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.downloads && ${IN_AN_INSTANCE} && ${holds}`]);
   });
 });
 

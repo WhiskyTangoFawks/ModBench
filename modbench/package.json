@@ -469,23 +469,23 @@
         },
         {
           "command": "modbench.downloadedFile.open",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.singleFile"
         },
         {
           "command": "modbench.downloadedFile.openMeta",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.singleFileWithMeta"
         },
         {
           "command": "modbench.downloadedFile.delete",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsFile"
         },
         {
           "command": "modbench.downloadedFile.exclude",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsIncluded"
         },
         {
           "command": "modbench.downloadedFile.include",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsExcluded"
         },
         {
           "command": "modbench.mod.openFolder",

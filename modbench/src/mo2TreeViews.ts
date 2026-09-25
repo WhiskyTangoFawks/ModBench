@@ -8,8 +8,9 @@ import {
   registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
-import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
+import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
+import { downloadsKeyContext } from './downloads/keyContext';
 import type { InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
@@ -132,21 +133,19 @@ export function registerDownloadsView(
     void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.allExcluded', downloadsProvider.allExcluded());
   updateAllExcludedContext();
   own(downloadsProvider.onDidChangeTreeData(updateAllExcludedContext));
-  const updateSingleNexusFileContext = () => {
-    const [only, ...rest] = downloadsView.selection;
-    const single = only?.kind === 'download' && only.nexusModId !== undefined && rest.length === 0;
-    void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.singleNexusFile', single);
+  const showKeyContext = () => {
+    for (const [name, value] of Object.entries(downloadsKeyContext(downloadsView.selection))) {
+      void vscode.commands.executeCommand('setContext', `modbench.downloadedFile.${name}`, value);
+    }
   };
-  updateSingleNexusFileContext();
-  own(downloadsView.onDidChangeSelection(updateSingleNexusFileContext));
+  showKeyContext();
+  own(downloadsView.onDidChangeSelection(showKeyContext));
+  own(downloadsProvider.onDidChangeTreeData(showKeyContext));
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsExcludedToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
-    ...registerDownloadsMultiRowCommands(
-      instance, reporter, ask, trash, install.log,
-      () => downloadsView.selection.filter((row): row is DownloadNode => row.kind === 'download'),
-    ),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install, () => downloadsView.selection),
+    ...registerDownloadsMultiRowCommands(instance, reporter, ask, trash, install.log, () => downloadsView.selection),
   ]) own(disposable);
   return { downloadsProvider, downloadsView };
 }
