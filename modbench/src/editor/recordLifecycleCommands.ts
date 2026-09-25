@@ -118,21 +118,28 @@ type RecordLifecycleClient = Pick<MEditClient,
   | 'editRecord'>;
 
 // Each record takes the next free FormID the backend draws for it. A refusal that leaves mEdit
-// unreachable is no record's own, so the loop stops there.
+// unreachable stops the loop, and every record after it is named as not attempted.
 async function renumberEach(
   client: Pick<MEditClient, 'renumberRecord' | 'status'>,
   addressed: readonly { record: RecordIdentity; address: RecordAddress }[],
-): Promise<{ landed: RecordIdentity[]; refused: ItemRefusal<RecordIdentity>[]; lostMEdit?: string }> {
+): Promise<{ landed: RecordIdentity[]; refused: ItemRefusal<RecordIdentity>[]; lostMEdit: boolean }> {
   const landed: RecordIdentity[] = [];
   const refused: ItemRefusal<RecordIdentity>[] = [];
-  for (const { record, address } of addressed) {
+  for (const [i, { record, address }] of addressed.entries()) {
     const result = await client.renumberRecord(address.formKey, address.plugin, address.origin, undefined);
     if (result === undefined) refused.push({ item: record, reason: 'mEdit gave no answer' });
     else if (!isRefused(result)) landed.push(record);
-    else if (client.status === 'attached') refused.push({ item: record, reason: result.message });
-    else return { landed, refused, lostMEdit: result.message };
+    else {
+      refused.push({ item: record, reason: result.message });
+      if (client.status !== 'attached') {
+        for (const { record: rest } of addressed.slice(i + 1)) {
+          refused.push({ item: rest, reason: 'not attempted: mEdit stopped answering' });
+        }
+        return { landed, refused, lostMEdit: true };
+      }
+    }
   }
-  return { landed, refused };
+  return { landed, refused, lostMEdit: false };
 }
 
 interface RenumberDeps {
@@ -207,14 +214,12 @@ function makeRenumber(
     const { landed, refused, lostMEdit } = await renumberEach(client, addressed);
     refused.unshift(...unaddressed);
     if (landed.length > 0) onWritten();
-    if (lostMEdit !== undefined) {
-      reporter.report('error',
-        `mEdit stopped answering after renumbering ${landed.length} of ${identities.length} records; `
-        + 'the rest were not renumbered.', lostMEdit);
-      return;
-    }
     reporter.selectionOutcome(
-      `Could not renumber ${refused.length} of ${identities.length} records.`, { landed, refused }, recordLabel);
+      lostMEdit
+        ? `mEdit stopped answering after renumbering ${landed.length} of ${identities.length} records; `
+          + 'the rest were not renumbered.'
+        : `Could not renumber ${refused.length} of ${identities.length} records.`,
+      { landed, refused }, recordLabel);
   }
 
   return async (identities) => {

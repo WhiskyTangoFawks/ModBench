@@ -673,23 +673,33 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
-    it('stops at the first failure that takes mEdit away, and says so once', async () => {
+    it('stops at the first failure that takes mEdit away, and names every record that did not land once', async () => {
       const client = attachedClient();
+      client.setQueryAnswer('getPlugins', []);
       client.setQueryAnswer('getReferences', []);
+      const FOURTH_NODE = { kind: 'record', origin: 'ModA', record: { formKey: '000804:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null } };
       client.setCommandHandler('renumberRecord', (formKey) => {
         if (formKey === '000801:MyPatch.esp') return Promise.resolve(applied(formKey, '000900:MyPatch.esp'));
+        if (formKey === '000802:MyPatch.esp') {
+          return Promise.resolve({ refused: true as const, message: 'mEdit: Could not renumber 000802:MyPatch.esp — no free FormID' });
+        }
         client.setStatus('disconnected');
         return Promise.resolve({ refused: true as const, message: `mEdit: Could not renumber ${formKey} — fetch failed` });
       });
       const { reporter, treeSync } = invoke(client);
 
-      await renumber(SECOND_NODE, [RECORD_NODE, SECOND_NODE, THIRD_NODE]);
+      await renumber(SECOND_NODE, [
+        RECORD_NODE, SECOND_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }, THIRD_NODE, FOURTH_NODE,
+      ]);
 
-      expect(renumberCalls(client)).toHaveLength(2);
+      expect(renumberCalls(client)).toHaveLength(3);
       expect(reporter.reports).toEqual([{
         severity: 'error',
-        message: 'mEdit stopped answering after renumbering 1 of 3 records; the rest were not renumbered.',
-        detail: 'mEdit: Could not renumber 000802:MyPatch.esp — fetch failed',
+        message: 'mEdit stopped answering after renumbering 1 of 5 records; the rest were not renumbered.',
+        detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to), '
+          + '"SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)" (mEdit: Could not renumber 000802:MyPatch.esp — no free FormID), '
+          + '"000803:MyPatch.esp in MyPatch.esp (ModA)" (mEdit: Could not renumber 000803:MyPatch.esp — fetch failed), '
+          + '"000804:MyPatch.esp in MyPatch.esp (ModA)" (not attempted: mEdit stopped answering)',
       }]);
       expect(treeSync.refresh).toHaveBeenCalledOnce();
     });
