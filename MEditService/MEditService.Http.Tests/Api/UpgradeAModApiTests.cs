@@ -56,23 +56,26 @@ public sealed class UpgradeAModApiTests : HostedTests
         Assert.Equal("2.0.0", question.GetProperty("externalChangeNewVersion").GetString());
     }
 
-    // The baseline answer the version pre-selects: the upgrade becomes the new history on main, and
-    // what the client reads next is the upgraded content.
+    // The baseline answer the version pre-selects makes the upgrade the new history on main; the
+    // user's own rebase brings it onto the edit branch, and the next read is the upgraded content.
     [Fact]
-    public async Task TheBaselineAnswerToAnUpgrade_Applies_AndTheUpgradedContentAnswersTheNextRead()
+    public async Task TheBaselineAnswerToAnUpgrade_ThenRebaseEditBranch_AnswersTheNextReadWithTheUpgradedContent()
     {
         using var fx = await AnInstalledTrackedMod();
         var formKey = await Client.FirstFormKey(Plugin);
         using var stream = await Client.NotificationStream();
         TheUpgradeLands(fx);
         await stream.EventsUntil("question-open");
-        var before = await Client.Sequence();
 
         var answered = await Client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin });
-
         answered.EnsureSuccessStatusCode();
         var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
+        var before = await Client.Sequence();
+        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
+
+        rebased.EnsureSuccessStatusCode();
+        Assert.Equal("Clean", (await rebased.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outcome").GetString());
         await Client.SequenceReaches(before + 1);
         var height = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");
