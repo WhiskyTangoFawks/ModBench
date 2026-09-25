@@ -157,6 +157,41 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
     }
 
+    // The first record kept is written before the second, so the second's document has to be found
+    // after a write.
+    [Fact]
+    public async Task KeepingARelease_OverARecordWhoseDocumentWasRenamedByHand_UpdatesThatDocumentInPlace()
+    {
+        var fx = Owned(new PluginFixtureBuilder("trace-keep-renamed")
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew("FirstNpc").HeightMax = 0.5f;
+                mod.Npcs.AddNew("SecondNpc").HeightMax = 0.5f;
+            }, origin: Origin)
+            .BuildScattered());
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(Plugin);
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, "\"SecondNpc\"", "RenamedByHand.json");
+        var renamed = OtherTool.SourceDocumentCarrying(modFolder, Plugin, "\"SecondNpc\"");
+        using var stream = await Client.NotificationStream();
+
+        OtherTool.WritesThePlugin(
+            fx.Plugins.Single(p => p.Origin == Origin).Path,
+            mod =>
+            {
+                mod.Npcs.AddNew("FirstNpc").HeightMax = 0.75f;
+                mod.Npcs.AddNew("SecondNpc").HeightMax = 0.75f;
+            });
+        await stream.EventsUntil("question-open");
+
+        (await Answer("keep", Origin)).EnsureSuccessStatusCode();
+
+        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(modFolder, Plugin, "\"SecondNpc\""));
+        Assert.Contains("0.75", File.ReadAllText(renamed), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task EditingARecord_WhileTheModsQuestionIsOpen_IsAConflictNamingTheRefusal_WritingNothing()
     {

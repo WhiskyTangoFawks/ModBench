@@ -59,13 +59,13 @@ public sealed partial class SourceRepository
             ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
             : null;
 
-    /// <summary>Every document in the working tree by the FormKey it declares. An unreadable file is a
-    /// failure line and clears <paramref name="fullyRead"/>; a FormKey two documents declare throws
+    /// <summary>Every document in the working tree by the FormKey it declares, and a line for each file
+    /// that could not be read as one. A FormKey two documents declare throws
     /// <see cref="AmbiguousSourceUnitException"/>.</summary>
-    public static Dictionary<string, string> DocumentsByDeclaredFormKey(
-        string modFolder, string pluginFileName, List<string> failures, out bool fullyRead)
+    public static (IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<string> Unreadable)
+        DocumentsByDeclaredFormKey(string modFolder, string pluginFileName)
     {
-        fullyRead = true;
+        var unreadable = new List<string>();
         var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -84,15 +84,13 @@ public sealed partial class SourceRepository
             {
                 // Never exclusive owners of a file: it may vanish or lock between the listing and the
                 // read. A skip and a line, and the tree stops counting as evidence a record is gone.
-                failures.Add($"Could not read '{file}': {ex.Message}");
-                fullyRead = false;
+                unreadable.Add($"Could not read '{file}': {ex.Message}");
                 continue;
             }
 
             if (FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
             {
-                failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
-                fullyRead = false;
+                unreadable.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
                 continue;
             }
 
@@ -100,7 +98,7 @@ public sealed partial class SourceRepository
             documents[formKey] = text;
         }
 
-        return documents;
+        return (documents, unreadable);
     }
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each

@@ -25,11 +25,14 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         if (!Directory.Exists(sourceRoot))
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
 
-        Dictionary<string, string> onDisk;
+        IReadOnlyDictionary<string, string> onDisk;
         bool treeFullyRead;
         try
         {
-            onDisk = SourceRepository.DocumentsByDeclaredFormKey(modFolder, key.Name, failures, out treeFullyRead);
+            (onDisk, var unreadable) = SourceRepository.DocumentsByDeclaredFormKey(modFolder, key.Name);
+            failures.AddRange(unreadable);
+            // A file that could not be read is no evidence that a record is gone.
+            treeFullyRead = unreadable.Count == 0;
         }
         catch (AmbiguousSourceUnitException ex)
         {

@@ -366,12 +366,13 @@ public sealed partial class SourceRepository
     }
 
     // Every verb that writes calls this: the listing, owner and file maps describe a tree this
-    // repository has just changed, and reading them afterwards would answer about the tree as it stood.
+    // repository has just changed. A document found by its text stays found until a write moves it.
     private void Forget()
     {
         _entriesByScanRoot.Clear();
         _scansBySourceRoot.Clear();
-        _foundByText.Clear();
+        foreach (var gone in _foundByText.Where(found => !File.Exists(found.Value)).Select(found => found.Key).ToList())
+            _foundByText.Remove(gone);
         _filesByPluginAndRef.Clear();
     }
 
