@@ -256,8 +256,7 @@ describe('pluginsCopyValueText', () => {
     expect(pluginsCopyValueText(() => mixed)(locked, undefined)).toBe('Fallout4.esm');
   });
 
-  // Another view's row or key, and the palette's bare call, belong to the next adapter.
-  it('defers what is not the Plugins view\'s', () => {
+  it('defers another view\'s row or key, and the palette\'s bare call, to the next adapter', () => {
     const copy = pluginsCopyValueText(() => mixed);
     expect(copy(undefined, undefined)).toBeUndefined();
     expect(copy({ view: 'modbench.modList' }, undefined)).toBeUndefined();

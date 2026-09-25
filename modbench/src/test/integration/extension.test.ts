@@ -1203,6 +1203,12 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   let gameDir = '';
   let original = '';
 
+  const setGameDirectoryAndStopTheMEditItRelaunches = async (dir: string) => {
+    await setGameDirectory(dir);
+    await enterEditing();
+    exitEditing();
+  };
+
   // TestMod.esp is the first row and enabled; Other.esp is the second and disabled.
   const focusRow = async (index: number) => {
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\r\nOther.esp\r\n'));
@@ -1226,10 +1232,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-keys-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await setGameDirectory(gameDir);
-    // Setting the game directory relaunches mEdit; the tests below need no backend.
-    await enterEditing();
-    exitEditing();
+    await setGameDirectoryAndStopTheMEditItRelaunches(gameDir);
   });
 
   after(async () => {
@@ -1248,7 +1251,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     assert.strictEqual(fs.readFileSync(pluginsTxtPath, 'utf8'), '*TestMod.esp\r\nOther.esp\r\n');
   });
 
-  it('Space disables the selected plugin', async function () {
+  it('the disable Space runs, given no row, disables the selected plugin', async function () {
     if (!root) this.skip();
     await focusRow(0);
     await vscode.commands.executeCommand('modbench.plugin.disable');

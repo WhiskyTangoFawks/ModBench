@@ -700,8 +700,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
   const ON_THE_TREE = `focusedView == modbench.pluginListTree && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
-  // Enter is left to VS Code's own `list.select`, which opens the focused row as a click does.
-  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code', () => {
+  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code\'s list.select, which opens the row as a click does', () => {
     const pluginsKeys = pkg.contributes.keybindings
       .filter((k) => k.when.startsWith('focusedView == modbench.pluginListTree'))
       .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
