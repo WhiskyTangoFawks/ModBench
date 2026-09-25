@@ -781,7 +781,9 @@ describe('package.json Downloads delete key', () => {
 // commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
 // in focus, and is in the palette only while one has focus, on the cell its menu is offered on.
 describe('package.json field gestures\' palette entries', () => {
-  const ON_A_RECORD_TAB = "activeWebviewPanelId == 'modbench'";
+  // The editor area has keyboard focus and its active editor is a record tab: VS Code has no key
+  // for a webview's own focus.
+  const ON_A_RECORD_TAB = "activeWebviewPanelId == 'modbench' && editorAreaFocus";
   const FIELD_PALETTE = [
     ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
     ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],

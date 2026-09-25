@@ -440,23 +440,23 @@
         },
         {
           "command": "modbench.record.addElement",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
+          "when": "activeWebviewPanelId == 'modbench' && editorAreaFocus && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
         },
         {
           "command": "modbench.record.removeElement",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
+          "when": "activeWebviewPanelId == 'modbench' && editorAreaFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
         },
         {
           "command": "modbench.record.moveElementUp",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
+          "when": "activeWebviewPanelId == 'modbench' && editorAreaFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
         },
         {
           "command": "modbench.record.moveElementDown",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
+          "when": "activeWebviewPanelId == 'modbench' && editorAreaFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
         },
         {
           "command": "modbench.record.openFieldValue",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
+          "when": "activeWebviewPanelId == 'modbench' && editorAreaFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
         },
         {
           "command": "modbench.downloads.install",
