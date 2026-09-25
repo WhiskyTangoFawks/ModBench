@@ -36,8 +36,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
-        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
-            .EnsureSuccessStatusCode();
+        (await _client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
     }
 
     [Fact]

@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const {
   handlers, registerCommand, showQuickPick, withProgress,
 } = vi.hoisted(() => {
-  const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
+  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
@@ -76,39 +76,68 @@ describe('registerTrackCommand', () => {
     };
   }
 
-  it('refreshes the tree and lands the tracked toast on a landed track', async () => {
+  it('tracks the right-clicked plugin alone, refreshes the tree and lands the tracked toast', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { origin: 'ModA' });
+    const plugin = { name: 'MyMod.esp', origin: 'ModA' };
+    client.setCommandResult('track', { landed: [plugin], refused: [] });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
-    expect(client.calls).toContainEqual({ method: 'track', args: ['ModA', 'Edits', expect.anything()] });
+    expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
     expect(refresh).toHaveBeenCalledOnce();
-    expect(reporter.landings).toEqual(['Tracked "ModA".']);
+    expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
+    expect(reporter.reports).toEqual([]);
+    expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  // commands.md, "A selection is one gesture": one call with the whole selection, asked once, and
+  // one notification naming each refused plugin and why.
+  it('tracks the whole selection in one call, asks the preset once, and reports each refused plugin once while the rest land', async () => {
+    const client = new InMemoryMEditClient();
+    const first = { name: 'First.esp', origin: 'ModA' };
+    const second = { name: 'Second.esp', origin: 'ModB' };
+    const outcome = { landed: [first], refused: [{ item: second, reason: 'Second.esp does not round-trip.' }] };
+    client.setCommandResult('track', outcome);
+    showQuickPick.mockResolvedValue({ label: 'Everything' });
+    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
+    const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
+
+    await handler(nodes[0], nodes);
+
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(client.calls.filter((c) => c.method === 'track')).toEqual([
+      { method: 'track', args: [[first, second], 'Everything', expect.anything()] },
+    ]);
+    expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not track 1 of 2 plugins.', outcome }]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModB)" (Second.esp does not round-trip.)' },
+    ]);
+    expect(reporter.landings).toEqual([]);
+    expect(refresh).toHaveBeenCalledOnce();
     expect(onTracked).toHaveBeenCalledOnce();
   });
 
   // The rival: landing the toast and refreshing on a refusal too would tell the user a track
-  // landed when the backend actually said "already tracked."
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the track', async () => {
+  // landed when the backend refused the whole selection.
+  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the whole selection', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track "ModA" — already tracked' });
+    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track 1 plugin — git was not found on PATH.' });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not track "ModA" — already tracked', detail: undefined },
+      { severity: 'error', message: 'mEdit: Could not track 1 plugin — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(refresh).not.toHaveBeenCalled();
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  it('reports an unresolvable origin at error and never asks what the .gitignore should hold', async () => {
+  it('refuses a plugin whose mod cannot be resolved, naming it, and never asks what the .gitignore should hold', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
     const { handler, reporter } = invokeTrack(client);
@@ -116,9 +145,12 @@ describe('registerTrackCommand', () => {
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not resolve which mod "MyMod.esp" belongs to.', detail: undefined },
+      { severity: 'error', message: 'Could not track 1 of 1 plugins.', detail: '"MyMod.esp" (its mod could not be resolved)' },
     ]);
+    // ADR-0012: the row's own identity, with no origin invented for it.
+    expect(reporter.selectionOutcomeCalls.map((call) => call.outcome.refused.map((r) => r.item))).toEqual([[{ name: 'MyMod.esp' }]]);
     expect(showQuickPick).not.toHaveBeenCalled();
+    expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
   });
 });
 
