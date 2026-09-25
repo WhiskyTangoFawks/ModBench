@@ -15,6 +15,10 @@ public enum RecordEditRefusal
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
     PluginHasNoModFolder,
 
+    /// <summary>The Mod override order does not resolve this copy's name to it (ADR-0012 invariant
+    /// 5); the way out is raising its mod's priority above the winner's.</summary>
+    LosingCopy,
+
     RecordNotFound,
 
     /// <summary>The path resolves to no member of the schema, or to one the record's own class lacks

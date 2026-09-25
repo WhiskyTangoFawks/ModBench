@@ -144,10 +144,24 @@ internal sealed class WriteTargets(
 
         (modFolder, repository) = (folder, opened);
 
-        // Checked before anything else, so the source file is never reached.
-        return BlockingQuestion(loadOrder.Current, folder) is { } question
-            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
-            : null;
+        // Compile filters this door to ExternalChangeUnanswered alone: an open question must win
+        // over LosingCopy, or a losing copy with a question compiles unblocked.
+        if (BlockingQuestion(loadOrder.Current, folder) is { } question)
+            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
+
+        return RefuseIfLosingCopy(plugin);
+    }
+
+    // Tracking is per mod folder and does not imply winning (ADR-0012 invariant 5). Refuses only
+    // a copy the override order does not resolve to.
+    private RecordEditResult? RefuseIfLosingCopy(PluginCopyKey plugin)
+    {
+        if (loadOrder.Current.Registration(plugin) is not { Winning: false }) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.LosingCopy,
+            $"{plugin.Name} ({plugin.Origin}) is a losing copy — the game does not load this copy, " +
+            "so it is read-only. Raise its mod's priority to make this copy the one the game loads.");
     }
 
     /// <summary>The mod's unanswered question while its change still stands, or null, for every write
