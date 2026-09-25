@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// onPluginCheckboxChanged is extracted from registerPluginListView so a unit test can reach it,
-// the same way modCheckboxHandler.test.ts reaches onModCheckboxChanged.
-const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
-  showErrorMessage: vi.fn(),
-  showWarningMessage: vi.fn(),
+const { setPluginsParticipation } = vi.hoisted(() => ({ setPluginsParticipation: vi.fn() }));
+
+vi.mock('../pluginsCommands/plugins', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../pluginsCommands/plugins')>()),
+  setPluginsParticipation,
 }));
 
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, uriFrom } from './vscodeMock';
 
 vi.mock('vscode', () => ({
-  window: { showErrorMessage, showWarningMessage },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
   TreeItem, TreeItemCollapsibleState, EventEmitter,
   Uri: { from: uriFrom },
@@ -19,51 +18,134 @@ vi.mock('vscode', () => ({
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
 import { PluginNode } from '../plugins/PluginsTreeProvider';
 import { RecordNode } from '../plugins/PluginTreeProvider';
-import { FakeLogOutputChannel } from './fakeOutputChannel';
+import { recordingReporter } from './surfacingDoubles';
 import { recordSummaryFixture } from '../client/test/fixtures';
 
-beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
+beforeEach(() => { vi.clearAllMocks(); });
+
+const profile = () => 'Default';
 
 describe('onPluginCheckboxChanged', () => {
-  it('enables/disables the plugin and does nothing else on success', async () => {
-    const setPluginEnabled = vi.fn().mockResolvedValue(undefined);
+  it('enables the plugin and says nothing on a full landing', async () => {
+    setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['TestMod.esp'], refused: [] } });
     const invalidate = vi.fn();
-    const provider = { setPluginEnabled, invalidate };
-    const channel = new FakeLogOutputChannel();
+    const reporter = recordingReporter();
 
     await onPluginCheckboxChanged(
-      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }), 1]] }, provider, channel,
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }), 1]] },
+      '/instance', profile, reporter, invalidate,
     );
 
-    expect(setPluginEnabled).toHaveBeenCalledWith('TestMod.esp', true);
+    expect(setPluginsParticipation).toHaveBeenCalledWith('/instance', 'Default', [{ name: 'TestMod.esp', enabled: true }]);
     expect(invalidate).not.toHaveBeenCalled();
-    expect(showErrorMessage).not.toHaveBeenCalled();
-    expect(channel.error).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
   });
 
-  it('reports and invalidates so the checkbox resyncs when the toggle fails', async () => {
-    const setPluginEnabled = vi.fn().mockRejectedValue(new Error('disk full'));
+  // The core requirement this handler exists to satisfy: several boxes toggled in one VS Code
+  // event reach the core in one splice, not one write per row.
+  it('several boxes toggled to the same state make one call to the core, one write', async () => {
+    setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['A.esp', 'B.esp'], refused: [] } });
     const invalidate = vi.fn();
-    const provider = { setPluginEnabled, invalidate };
-    const channel = new FakeLogOutputChannel();
+    const reporter = recordingReporter();
 
     await onPluginCheckboxChanged(
-      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }), 0]] }, provider, channel,
+      {
+        items: [
+          [new PluginNode({ name: 'A.esp', enabled: true }), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }), 1],
+        ],
+      },
+      '/instance', profile, reporter, invalidate,
     );
 
-    expect(channel.error).toHaveBeenCalledWith(
-      '[pluginListTree.checkbox] error: Failed to update "TestMod.esp". — disk full');
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to update "TestMod.esp". — disk full');
+    expect(setPluginsParticipation).toHaveBeenCalledOnce();
+    expect(setPluginsParticipation).toHaveBeenCalledWith(
+      '/instance', 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: true }],
+    );
+  });
+
+  // The rival this guards against: grouping by target state and issuing one splice per group,
+  // which turns a single mixed-state VS Code event into two writes and two reports.
+  it('boxes toggled to different states still make one call to the core, one write', async () => {
+    setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['A.esp', 'B.esp'], refused: [] } });
+    const reporter = recordingReporter();
+
+    await onPluginCheckboxChanged(
+      {
+        items: [
+          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }), 0],
+        ],
+      },
+      '/instance', profile, reporter, vi.fn(),
+    );
+
+    expect(setPluginsParticipation).toHaveBeenCalledOnce();
+    expect(setPluginsParticipation).toHaveBeenCalledWith(
+      '/instance', 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }],
+    );
+  });
+
+  it('reports and resyncs the tree when the whole toggle is refused', async () => {
+    setPluginsParticipation.mockResolvedValue({ applied: false, refusal: 'disk full' });
+    const invalidate = vi.fn();
+    const reporter = recordingReporter();
+
+    await onPluginCheckboxChanged(
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }), 0]] },
+      '/instance', profile, reporter, invalidate,
+    );
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'disk full' }]);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a mixed-state toggle\'s failure generically, having no single direction to name', async () => {
+    setPluginsParticipation.mockResolvedValue({ applied: false, refusal: 'disk full' });
+    const reporter = recordingReporter();
+
+    await onPluginCheckboxChanged(
+      {
+        items: [
+          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }), 0],
+        ],
+      },
+      '/instance', profile, reporter, vi.fn(),
+    );
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to update plugins.', detail: 'disk full' }]);
+  });
+
+  it('resyncs only for a refused row, naming it, while a landed one needs no resync', async () => {
+    setPluginsParticipation.mockResolvedValue({
+      applied: true,
+      outcome: { landed: ['A.esp'], refused: [{ item: 'B.esp', reason: 'Plugin not found in plugins.txt: B.esp' }] },
+    });
+    const invalidate = vi.fn();
+    const reporter = recordingReporter();
+
+    await onPluginCheckboxChanged(
+      {
+        items: [
+          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
+          [new PluginNode({ name: 'B.esp', enabled: false }), 1],
+        ],
+      },
+      '/instance', profile, reporter, invalidate,
+    );
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not enable 1 of 2 plugins.', detail: '"B.esp" (Plugin not found in plugins.txt: B.esp)' },
+    ]);
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
-    const setPluginEnabled = vi.fn();
-    const provider = { setPluginEnabled, invalidate: vi.fn() };
     const recordNode = new RecordNode(recordSummaryFixture());
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, provider, new FakeLogOutputChannel());
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, '/instance', profile, recordingReporter(), vi.fn());
 
-    expect(setPluginEnabled).not.toHaveBeenCalled();
+    expect(setPluginsParticipation).not.toHaveBeenCalled();
   });
 });

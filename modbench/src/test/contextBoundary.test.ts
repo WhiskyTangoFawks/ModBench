@@ -37,8 +37,8 @@ const SHARED_ACTIVATION_STATE = ['session.ts'];
 // tripping the blunt medit-path check as a false positive.
 const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
 
-// Wires a TreeView checkbox event to the Plugins view's own Mod-Management API
-// (`setPluginEnabled`/`invalidate`) — composition-root glue carrying no record vocabulary.
+// Wires a TreeView checkbox event to plugins commands' `setPluginsEnabled` core — composition-
+// root glue carrying no record vocabulary.
 const CHECKBOX_HANDLER_WIRING = ['pluginCheckboxHandler.ts'];
 
 // target-architecture-references.d2 draws instance commands -> mEdit client: put load order and
