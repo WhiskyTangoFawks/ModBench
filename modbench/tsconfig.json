@@ -20,6 +20,7 @@
     { "path": "./src/editor" },
     { "path": "./src" },
     { "path": "./webview" },
+    { "path": "./eslint-rules" },
     { "path": "./tsconfig.test.json" }
   ]
 }
