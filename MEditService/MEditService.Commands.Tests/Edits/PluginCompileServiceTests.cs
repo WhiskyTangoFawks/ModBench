@@ -14,9 +14,9 @@ namespace MEditService.Commands.Tests.Edits;
 /// types; containers are <c>PluginCompileServiceContainerTests</c>' job.</summary>
 public sealed class PluginCompileServiceTests : IDisposable
 {
-    // Past the fixture's own records, and past its header's NextFormID: what a renumber or a create
+    // Past the fixture's own records, and past its header's NextFormID: what a FormID edit or a create
     // allocates, and what an ObjectID below $800 could never be (engine-hardcoded range).
-    private const uint RenumberedNpcId = 0x000900;
+    private const uint MovedNpcId = 0x000900;
     private const uint CreatedNpcId = 0x000910;
 
     private readonly CompileFixture _mod = new();
@@ -110,35 +110,35 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_AfterRenumberingTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
+    public async Task Compile_AfterChangingTheFormIdOfTheFirstOfTwo_Succeeds_WithBothRecordsPresent()
     {
-        var renumbered = _mod.Renumber(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, RenumberedNpcId);
+        var moved = _mod.ChangeFormId(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, MovedNpcId);
         Assert.Equal(2, NpcFiles().Count);
 
         var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
-            Assert.Contains(mod.Npcs, n => n.FormKey == renumbered);
+            Assert.Contains(mod.Npcs, n => n.FormKey == moved);
             Assert.Contains(mod.Npcs, n => n.FormKey == _mod.OtherNpc);
         }
     }
 
     [Fact]
-    public async Task Compile_AfterStackedDeletesCreatesAndARenumber_Succeeds_WithExactlyTheSurvivors()
+    public async Task Compile_AfterStackedDeletesCreatesAndAFormIdEdit_Succeeds_WithExactlyTheSurvivors()
     {
         var created1 = _mod.CreateNpc("Created1", CreatedNpcId);
         _mod.CreateNpc("Created2", CreatedNpcId + 1);
         _mod.Remove(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId);
-        var renumbered = _mod.Renumber(
-            _mod.OtherNpc, CompileFixture.NpcRecordType, CompileFixture.OtherNpcEditorId, RenumberedNpcId);
+        var moved = _mod.ChangeFormId(
+            _mod.OtherNpc, CompileFixture.NpcRecordType, CompileFixture.OtherNpcEditorId, MovedNpcId);
         _mod.Remove(created1, CompileFixture.NpcRecordType, "Created1");
 
         var (mod, handle) = await CompileAndReimport();
         using (handle)
         {
             Assert.Equal(2, mod.Npcs.Count);
-            Assert.Contains(mod.Npcs, n => n.FormKey == renumbered);
+            Assert.Contains(mod.Npcs, n => n.FormKey == moved);
             Assert.Contains(mod.Npcs, n => n.EditorID == "Created2");
             Assert.DoesNotContain(mod.Npcs, n => n.FormKey == _mod.Npc);
             Assert.DoesNotContain(mod.Npcs, n => n.FormKey == created1);

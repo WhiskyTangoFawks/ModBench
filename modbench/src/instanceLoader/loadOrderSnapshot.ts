@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
-import { overwriteDir } from '../instanceAdapter/layout';
+import { fileInFolder, isInFolder, overwriteDir } from '../instanceAdapter/layout';
 import { isPluginFile } from '../instanceAdapter/pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
@@ -56,6 +56,26 @@ export function originFolder(
 ): string | undefined {
   const copy = plugins.find((p) => p.path !== undefined && p.origin === origin);
   return copy?.path === undefined ? undefined : dirname(copy.path);
+}
+
+/** The files inside one origin's folder, by the relative path a source tree names them with. */
+export interface OriginFiles {
+  file(relativePath: string): string;
+  holds(file: string): boolean;
+}
+
+/** `originFiles` bound to one generation of the value's rows, for a caller that holds no rows of
+ *  its own. */
+export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
+
+/** The files of the folder `originFolder` answers, through the Instance adapter's path functions.
+ *  `undefined` when no row for that origin has a copy on disk. */
+export function originFiles(
+  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
+): OriginFiles | undefined {
+  const folder = originFolder(plugins, origin);
+  if (folder === undefined) return undefined;
+  return { file: (relativePath) => fileInFolder(folder, relativePath), holds: (file) => isInFolder(folder, file) };
 }
 
 /** The plugin files this instance provides, keyed case-folded to the winning copy's on-disk

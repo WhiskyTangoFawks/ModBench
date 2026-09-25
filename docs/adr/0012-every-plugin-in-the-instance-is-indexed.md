@@ -1,8 +1,8 @@
-# Every plugin copy is indexed
+# Every plugin in the instance is indexed
 
-The record index holds every physical plugin copy in the instance: the copy that wins its name
-and the copies that lose it, the copies `plugins.txt` lists and the files no line names. The load
-order filters down to which copies compete
+The record index holds every plugin file in the instance: the plugin that wins its filename and
+the overridden plugins that share it, the plugins `plugins.txt` lists and the files no line names.
+The load order filters down to which plugins compete
 ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)).
 A mod reordered, enabled or disabled is then a flag moving between rows already indexed, never a
 file re-read, which is what lets the editor follow a mod change as it happens
@@ -10,16 +10,16 @@ file re-read, which is what lets the editor follow a mod change as it happens
 
 ## Strategic invariants
 
-1. **A plugin is identified by `(origin, filename)`.** A filename names several copies once every
-   copy is indexed, so it cannot be the key. `origin` is the mod folder that provides the file,
-   with reserved values for the game's `Data/` directory and MO2's `overwrite/`; vanilla, DLC and
-   Creation Club plugins take the `Data/` origin, never a null key component.
+1. **A plugin is identified by `(origin, filename)`.** Once every plugin is indexed, one filename
+   can name several plugins, so it cannot be the key. `origin` is the mod folder that provides
+   the file, with reserved values for the game's `Data/` directory and MO2's `overwrite/`;
+   vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component.
 2. **The column is named `origin`, not `mod`.** Editing treats an origin as an opaque string it
    never interprets. Mod Management knows an origin is a mod folder and is the only side that
    renders it. The vocabulary boundary ([CONTEXT.md](../../CONTEXT.md)) holds even though
    the boundary object sits in a primary key.
 3. **Origin is never what the user reads.** The tree and the compare-grid header show the
-   filename; the origin sits in the tooltip and appears inline only when two loaded copies share a
+   filename; the origin sits in the tooltip and appears inline only when two loaded plugins share a
    filename. Column headers are the scarcest space in the grid, and xEdit's carry filenames alone.
 4. **A plugin whose master is missing is indexed like any other, flagged, never deactivated,
    and never cascades.** Mutagen builds FormKeys from a plugin's own header, so importing never
@@ -35,9 +35,9 @@ file re-read, which is what lets the editor follow a mod change as it happens
 
 ## Alternatives rejected
 
-- **Register only the winning copies and load losers on demand.** A second loading path and a
-  second identity story for what is, to the user, the same gesture as a disabled plugin, and a
-  mod-order change becomes a file re-read instead of a flag.
+- **Register only the winning plugins and load overridden plugins on demand.** A second loading
+  path and a second identity story for what is, to the user, the same gesture as a disabled
+  plugin, and a mod-order change becomes a file re-read instead of a flag.
 - **Bare filename as identity**, the original key. It holds only while one physical file can
   answer to a name.
 - **Absolute path as identity.** Unstable across an instance move, unreadable, and it leaks the

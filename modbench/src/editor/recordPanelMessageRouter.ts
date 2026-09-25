@@ -6,6 +6,7 @@ import {
 import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
+import type { EditGate, EditsInFlight, FollowedPanel } from './followRecord';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
@@ -22,6 +23,26 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
   formKeyPicker: FormKeyPickerDeps | undefined;
+  // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
+  // that tab along: its column names the plugin copy the edit landed on (ADR-0012).
+  editInFlight: EditGate;
+}
+
+/** What every panel's messages share: the rest is the panel's own. */
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight'>;
+
+/** The router's bundle for one panel's messages: the picker replies to it, and its edits are
+ *  held in flight for it. */
+export function routerDepsForPanel<Panel extends FollowedPanel>(
+  shared: SharedRecordPanelDeps,
+  panel: Panel,
+  edits: EditsInFlight<Panel>,
+): RouteRecordPanelMessageDeps {
+  return {
+    ...shared,
+    formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
+    editInFlight: edits.gate(panel),
+  };
 }
 
 export interface FormKeyPickerDeps {
@@ -167,9 +188,9 @@ async function replyFormKeyPicked(
 
 // The webview's inline and keyboard edits reach the same host-side write path the right-click
 // menus call directly (ADR-0007).
-function editField(
+async function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  return applyRecordEdit(deps, m.formKey, m.plugin, m.origin, m.envelope);
+  await deps.editInFlight(m, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
 }

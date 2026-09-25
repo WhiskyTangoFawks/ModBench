@@ -21,12 +21,8 @@ internal static class ExternalChangeClassifier
         if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
-        // An untracked plugin has no source to lose, so it is no part of the question.
-        var trackedPlugins = plugins.Where(p => SourceRepository.IsPluginTracked(modFolder, p.PluginName)).ToList();
-        var changedPlugins = trackedPlugins
-            .Where(p => !SourceRepository.MatchesParkedCompileBinary(modFolder, p.PluginName, p.ObservedBytes))
-            .Select(p => p.PluginName)
-            .ToList();
+        var trackedPlugins = TrackedPlugins(modFolder, plugins);
+        var changedPlugins = ChangedAmong(modFolder, trackedPlugins);
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         if (changedPlugins.Count == 0 && trackedFileChanges.Count == 0) return null;
@@ -34,20 +30,38 @@ internal static class ExternalChangeClassifier
         // Each plugin's own baseline carries the meta.ini it was taken with, and plugins sharing a
         // repository are taken at different times: the changed plugins' baselines are the ones asked.
         IReadOnlyList<string> asked = changedPlugins.Count > 0 ? changedPlugins : [.. trackedPlugins.Select(p => p.PluginName)];
-        var baselines = asked
-            .Select(plugin => SourceRepository.LatestBaselineTrailers(modFolder, plugin))
-            .OfType<BaselineTrailers>()
-            .ToList();
+        var baselines = SourceRepository.LatestBaselineTrailersNewestFirst(modFolder, asked);
         var meta = SourceRepository.MetaFactsIn(modFolder);
 
         // Trailers inform the dialog's default, never act: unchanged or absent both mean false.
-        var metaChanged = meta.MetaSha256 != null && baselines.Any(baseline => baseline.MetaSha256 != null
-            && !string.Equals(baseline.MetaSha256, meta.MetaSha256, StringComparison.OrdinalIgnoreCase));
+        bool MetaMovedSince(BaselineTrailers baseline) => meta.MetaSha256 != null && baseline.MetaSha256 != null
+            && !string.Equals(baseline.MetaSha256, meta.MetaSha256, StringComparison.OrdinalIgnoreCase);
+        var metaChanged = baselines.Any(MetaMovedSince);
+        // The newest baseline the version moved from is the mod's own last version, whatever order
+        // the load order lists the plugins in.
+        var oldBaseline = baselines.FirstOrDefault(MetaMovedSince) ?? (baselines is [var newest, ..] ? newest : null);
 
         return new ExternalChangeClassification.ExternalChange(
             changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged,
-            baselines.FirstOrDefault()?.UpstreamVersion, meta.UpstreamVersion);
+            oldBaseline?.UpstreamVersion, meta.UpstreamVersion);
     }
+
+    /// <summary>The tracked plugins whose bytes differ from what Modbench last wrote, in the order
+    /// given.</summary>
+    public static IReadOnlyList<string> ChangedPlugins(
+        string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins) =>
+        ChangedAmong(modFolder, TrackedPlugins(modFolder, plugins));
+
+    private static List<string> ChangedAmong(
+        string modFolder, List<(string PluginName, byte[] ObservedBytes)> trackedPlugins) =>
+        [.. trackedPlugins
+            .Where(p => !SourceRepository.MatchesParkedCompileBinary(modFolder, p.PluginName, p.ObservedBytes))
+            .Select(p => p.PluginName)];
+
+    // An untracked plugin has no source to lose, so it is no part of the question.
+    private static List<(string PluginName, byte[] ObservedBytes)> TrackedPlugins(
+        string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins) =>
+        [.. plugins.Where(p => SourceRepository.IsPluginTracked(modFolder, p.PluginName))];
 
     /// <summary>Every plugin the load order holds in <paramref name="modFolder"/>, read fresh off
     /// disk, or null when one cannot be read — a partial set would classify the rest as the whole
@@ -56,15 +70,18 @@ internal static class ExternalChangeClassifier
         LoadOrderSnapshot loadOrder, string modFolder)
     {
         var plugins = new List<(string, byte[])>();
-        foreach (var copy in loadOrder.Copies)
+        foreach (var copy in CopiesIn(loadOrder, modFolder))
         {
-            if (!string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal))
-                continue;
             if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
             plugins.Add((copy.Name, bytes));
         }
         return plugins;
     }
+
+    /// <summary>Every copy the load order holds in <paramref name="modFolder"/>.</summary>
+    public static IEnumerable<RegisteredCopy> CopiesIn(LoadOrderSnapshot loadOrder, string modFolder) =>
+        loadOrder.Copies.Where(copy =>
+            string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal));
 }
 
 /// <summary>What classification answers. Never both a crash and an external change for one

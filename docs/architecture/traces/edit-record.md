@@ -1,7 +1,7 @@
 # edit-record: contract
 
 Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit field`, `add element`,
-`remove element`, `move element`, `create`, `delete`, `copy` and `renumber`, in
+`remove element`, `move element`, `create`, `delete` and `copy`, in
 [commands.md](../commands.md). What the user picks, types and confirms is in
 [plugins.md](../surfaces/plugins.md), [editor.md](../surfaces/editor.md) and
 [editor-fields.md](../surfaces/editor-fields.md). Governed by
@@ -10,7 +10,7 @@ Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit fiel
 [ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
 [ADR-0008](../../adr/0008-masters-are-derived-from-content.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md) and
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 Every gesture here changes a tracked plugin's source in the working tree, and nothing else: no
@@ -33,7 +33,7 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
 
 | Gesture | What changes in the source |
 |---|---|
-| `edit field` | A field's value is set, or cleared to its default. A new function or Run On empties the condition parameters it leaves unused (ADR-0005, invariant 7). |
+| `edit field` | A field's value is set, or cleared to its default. A new function or Run On empties the condition parameters it leaves unused (ADR-0005, invariant 7). An edit of the FormID changes the record's FormKey and nothing else: the records that reference it, itself included, are left as they are, and updating them is a script. |
 | `add element` | An element is appended to an array: the value a drop supplies, or an element empty but for its kind. |
 | `remove element` | An element leaves its array. |
 | `move element` | An element moves one step in an unsorted array. |
@@ -41,7 +41,6 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
 | `delete` | The record's file is removed, or a child record leaves its container's document. The records that reference it are left as they are: compile reports them. |
 | `copy`, as override | The record's document lands in the destination plugin's source, under the same FormKey. A destination that already holds the record takes it only with the replace Option, as xEdit's copy as override with overwriting does. |
 | `copy`, as new | A duplicate lands in the destination under its next free FormID, with an EditorID derived from the source's and unique in the destination (#867). Its child records get fresh FormKeys, and a reference to itself follows it. A container the destination lacks is created bare, as a Partial Form. |
-| `renumber` | The record's FormKey changes, and nothing else. The records that reference it are left as they are: updating them is a script. |
 
 ## Hand-off
 
@@ -64,14 +63,14 @@ Commands refuses before it writes the record, and names the cause.
 | A field or element that is not there, or a move off either end, naming the path | the element and field gestures | |
 | A value the codec rejects, naming the field | `edit field`, `add element` | Refuse, do not repair. |
 | Two elements with one key in a keyed array, naming the key | `edit field`, `add element` | The key is the element's identity. |
-| A read-only field, with the reason: the schema's, a Partial Form's own field, a container's child slots, or the header's masters | the element and field gestures | ADR-0005, invariant 6; ADR-0008. |
+| A read-only field, with the reason: the schema's, a Partial Form's own field, a container's child slots, the header's masters, or a plugin header's FormID | the element and field gestures | ADR-0005, invariant 6; ADR-0008. |
 | A record type that cannot be created, or a container record | `create` | Choosing a container's containment is planned (#462). |
-| No free FormID is left, naming the remedies: clear the light flag in the header, or renumber | `create`, `copy` as new, `renumber` | |
-| The FormKey asked for is taken | `create`, `renumber` | |
+| No free FormID is left, naming the remedies: clear the light flag in the header, or change a record's FormID | `create`, `copy` as new | |
+| The FormKey asked for is taken | `create`, `edit field` on the FormID | |
 | The destination loads before the source | `copy` as override | That is an underride, which is planned. |
 | The destination already holds the record, and the replace Option is not given, naming the destination | `copy` as override | Confirm what destroys: the surface asks, then supplies the Option. |
 | A cell or a worldspace | `copy` as new | |
-| The record is an override, naming its master | `renumber` | Renumber it where it is native. |
+| The FormID of an override, naming its master | `edit field` | Change it where the record is native. |
 | git is missing from the PATH, once for the whole selection | delete | A cause no record can escape (commands.md). |
 
 ## Failure

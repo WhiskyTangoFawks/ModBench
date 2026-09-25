@@ -7,8 +7,6 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 install: @../target-architecture.modbench_core.install
 install.label: install
-codecs: @../target-architecture.modbench_kernel.codecs
-codecs.label: MO2 file codecs
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
@@ -20,20 +18,16 @@ watcher.label: "Mod watcher\nmEdit"
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target: a new mod, or a candidate pre-selected by file id, else by its recorded installation file. Always confirmed. Esc installs nothing"
 downloads -> install: "the source, and the target" {class: loadorder}
-install -> codecs: "meta.ini: the meta it knows" {class: loadorder}
-codecs -> install: bytes {class: loadorder}
 
 new mod: "a new mod" {
-  install -> instanceadapter: "stage, meta.ini first, then one rename into mods/" {class: loadorder}
+  install -> instanceadapter: "stage, meta.ini first with the meta it knows, then one rename into mods/" {class: loadorder}
 }
 upgrade: "an upgrade" {
-  install -> instanceadapter: "staged tree in, old files out, .git kept" {class: loadorder}
+  install -> instanceadapter: "staged tree in, old files out, .git, .gitignore and source/ kept, meta.ini's owned keys set" {class: loadorder}
 }
 
 from download: "from a downloaded file" {
-  install -> codecs: "the .meta: installed" {class: loadorder}
-  codecs -> install: bytes {class: loadorder}
-  install -> instanceadapter: "put the .meta in downloads/" {class: loadorder}
+  install -> instanceadapter: "the downloaded file: installed" {class: loadorder}
   install."a failed mark is a line in the Output, and the install still applied"
 }
 
@@ -43,7 +37,7 @@ mo2 -> instanceloader: watch {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."the folder has no line: update-load-order-file adopts it"
 mo2 -> watcher: changed paths {class: signal}
-watcher."a tracked mod: decompile-plugin from here, the moved version pre-selecting the new baseline"
+watcher."a tracked mod: decompile-plugin from here, the new baseline as the default"
 
 refused: "refused, before any write" {
   install -> downloads: "a new mod whose folder exists · an upgrade whose folder has gone · mods/ on another volume · the archive cannot be extracted" {class: loadorder}

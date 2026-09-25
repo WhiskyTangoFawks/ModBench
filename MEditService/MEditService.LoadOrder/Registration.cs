@@ -11,7 +11,7 @@ public readonly record struct Registration(int? LoadOrderIndex, bool Enabled, bo
     public bool Participates => Enabled && Winning && LoadOrderIndex is not null;
 
     /// <summary>The winning copy of a listed name, enabled or not: a disabled line is still a
-    /// legitimate write target; a losing copy is not (ADR-0012: editing a file the game does not
+    /// legitimate write target; an overridden plugin is not (ADR-0012: editing a file the game does not
     /// load changes nothing).</summary>
     public bool InLoadOrder => Winning && LoadOrderIndex is not null;
 

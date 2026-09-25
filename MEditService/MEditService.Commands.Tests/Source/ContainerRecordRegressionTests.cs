@@ -19,7 +19,7 @@ namespace MEditService.Commands.Tests.Source;
 
 /// <summary>Create refuses a container with a typed
 /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500; edit, delete
-/// and renumber write and read back through the Source repository.</summary>
+/// and a FormID edit write and read back through the Source repository.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -124,28 +124,24 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.DoesNotContain("structural gesture", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("renumbering it do not yet", result.Message, StringComparison.Ordinal);
         Assert.Contains("creating one from scratch is not supported", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void RenumberingACell_Succeeds()
+    public void EditingTheFormIdOfACell_Succeeds()
     {
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Cell.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
-        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected RenumberRecord to set NewFormKey on success.");
+        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected a FormID edit to answer the new FormKey.");
         Assert.NotNull(_fixture.Document(newFormKey));
     }
 
     [Fact]
-    public void RenumberingAPlainRecordReferencedByNothing_StillWorks_ContainerGuardIsScopedNotBlanket()
+    public void EditingTheFormIdOfAPlainRecord_InAPluginHoldingACell_Succeeds()
     {
-        // Positive control: the container guard must not blanket-refuse renumber for a plugin that
-        // merely *holds* a cell elsewhere — only the record actually being touched (target or
-        // referencer) is checked.
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Npc.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Npc.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
     }
@@ -156,6 +152,10 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public async Task AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
         var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
+        MutateExternalBinary(Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), mod => mod.Cells.Records
+            .SelectMany(block => block.SubBlocks)
+            .SelectMany(sub => sub.Cells)
+            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         await TestEditService.AbsorbHandler(_fixture.Holder).AbsorbAsync(ContainerModFixture.ModFolderOrigin);
 

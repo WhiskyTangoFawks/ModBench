@@ -29,8 +29,8 @@ public sealed partial class SourceRepository
         if (Directory.Exists(to) || File.Exists(to))
         {
             throw new IOException(
-                $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the renumbered " +
-                "container has nowhere to move to.");
+                $"{Path.GetFileName(to)} already exists in {Path.GetDirectoryName(to)}, so the container whose FormID changed " +
+                "has nowhere to move to.");
         }
 
         Directory.Move(from, to);

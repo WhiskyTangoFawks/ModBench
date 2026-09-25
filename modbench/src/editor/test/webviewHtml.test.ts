@@ -6,6 +6,7 @@ const BASE_PARAMS = {
   port: 5172,
   scriptUri: 'vscode-webview://host/main.js',
   cspSource: 'vscode-webview-resource:',
+  panelId: 'panel-7',
 };
 
 describe('buildWebviewHtml', () => {
@@ -25,6 +26,14 @@ describe('buildWebviewHtml', () => {
     const html = buildWebviewHtml(BASE_PARAMS);
     expect(html).toContain('window.mEditFormKey = "Fallout4.esm:001234"');
     expect(html).toContain('window.mEditBackendPort = 5172');
+  });
+
+  // A webview right-click hands its command the contexts merged from the document root down, so
+  // the body's names the panel every menu came from.
+  it('names its panel in the body\'s webview context, which every right-click inherits', () => {
+    const html = buildWebviewHtml(BASE_PARAMS);
+    const context = /<body data-vscode-context='([^']*)'>/.exec(html)?.[1];
+    expect(JSON.parse(context ?? 'null')).toEqual({ panelId: 'panel-7' });
   });
 
   it('uses unique nonces on each call', () => {

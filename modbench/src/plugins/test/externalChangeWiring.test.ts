@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// `showError` must go through the injected reporter (ADR-0019) — the log line and the toast
-// come from the same call, not a raw `vscode.window.showErrorMessage`.
+// Every refusal goes through the injected reporter (ADR-0019) — the log line and the toast come
+// from the same call, not a raw `vscode.window.showErrorMessage`.
 const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   subscribeQuestionOpen: vi.fn(
-    (_deps: { showError: (message: string) => void; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
+    (_deps: { reporter: unknown; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
 }));
 
 import { EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
@@ -32,7 +32,10 @@ function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockR
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
   const reporter = recordingReporter();
-  wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion, presentCrashRepair, reporter);
+  wireQuestionOpen({
+    client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, presentCrashRepair, reporter,
+    originFiles: () => undefined,
+  });
   return {
     outputChannel, reporter,
     deps: present(subscribeQuestionOpen.mock.calls[0], "wireQuestionOpen's call to the coordinator")[0],
@@ -55,13 +58,10 @@ describe('wireQuestionOpen', () => {
   });
 
   // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is
-  // that the coordinator's refusal reaches the reporter at all, at the error tier.
-  it('routes a gesture refusal to the reporter it was handed', () => {
+  // that the coordinator's refusals reach the reporter it was handed.
+  it('hands the coordinator the reporter it was given', () => {
     const { reporter, deps } = wire();
-    deps.showError('Could not keep "ModA" as your own edit — x');
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined },
-    ]);
+    expect(deps.reporter).toBe(reporter);
   });
 });

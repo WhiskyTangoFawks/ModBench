@@ -5,7 +5,7 @@ Diagram: [load-instance.d2](load-instance.d2). Catalog row: `refresh` under Inst
 States, and [toolbox.md](../surfaces/toolbox.md), Refresh. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
@@ -24,7 +24,7 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
    `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
    folder's plugins. The Instance adapter finds the game folder: the setting first, then MO2's
    configuration, then Steam or Wine detection.
-3. One codec parses each file.
+3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
 5. The value goes to every view, and to instance commands. Instance commands derive the load order
@@ -57,7 +57,7 @@ This flow waits for no hand-off.
 
 | Outcome | What happens |
 |---|---|
-| A file fails to parse | The last value stays, with its sequence. One line goes to the Output. How a view says that it is behind the disk is #973. |
+| A file cannot be read or parsed | The last value stays, with its sequence, and the reason is published beside it until a read lands. One line goes to the Output. Each view keeps its rows and says so (common.md, States, story 6). |
 | The first read fails | No value lands. The views show the error row (common.md, States, story 2). |
 | The folder is not an instance | The views say so, and how to open one (common.md, States, story 4). |
 | The game folder cannot be found | The value lands without it. No snapshot is sent, so mEdit keeps the load order it holds (common.md, States, story 5). |

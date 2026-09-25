@@ -145,24 +145,29 @@ internal sealed class WriteTargets(
         (modFolder, repository) = (folder, opened);
 
         // Compile filters this door to ExternalChangeUnanswered alone: an open question must win
-        // over LosingCopy, or a losing copy with a question compiles unblocked.
+        // over the load-order refusals, or a plugin the game does not load compiles unblocked.
         if (BlockingQuestion(loadOrder.Current, folder) is { } question)
             return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
 
-        return RefuseIfLosingCopy(plugin);
+        return RefuseIfNotLoaded(plugin);
     }
 
-    // Tracking is per mod folder and does not imply winning (ADR-0012 invariant 5). Refuses only
-    // a copy the override order does not resolve to.
-    private RecordEditResult? RefuseIfLosingCopy(PluginCopyKey plugin)
-    {
-        if (loadOrder.Current.Registration(plugin) is not { Winning: false }) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.LosingCopy,
-            $"{plugin.Name} ({plugin.Origin}) is a losing copy — the game does not load this copy, " +
-            "so it is read-only. Raise its mod's priority to make this copy the one the game loads.");
-    }
+    // Tracking is per mod folder and implies neither winning nor a plugins.txt line (ADR-0012
+    // invariant 5). A disabled line is still a line, so its plugin stays writable.
+    private RecordEditResult? RefuseIfNotLoaded(PluginCopyKey plugin) =>
+        loadOrder.Current.Registration(plugin) switch
+        {
+            { Winning: false } => RecordEditResult.Refused(
+                RecordEditRefusal.OverriddenPlugin,
+                $"{plugin.Name} ({plugin.Origin}) is an overridden plugin — another mod's {plugin.Name} wins, " +
+                "so the game does not load this one and it is read-only. Raise its mod's priority to make " +
+                "it the one the game loads."),
+            { LoadOrderIndex: null } => RecordEditResult.Refused(
+                RecordEditRefusal.UnlistedPlugin,
+                $"{plugin.Name} ({plugin.Origin}) has no plugins.txt line, so the game does not load it and " +
+                "it is read-only. Plugin sync gives it a line."),
+            _ => null,
+        };
 
     /// <summary>The mod's unanswered question while its change still stands, or null, for every write
     /// to the mod, Track's included. The marker caches the last verdict (ADR-0003): present means
@@ -211,23 +216,6 @@ internal sealed class WriteTargets(
         public bool HoldsAtEitherRef(string formKey) => Effective.Contains(formKey) || Head.Contains(formKey);
 
         internal IEnumerable<string> Taken => Effective.Concat(Head);
-    }
-
-    // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
-    // adapter answers from its own bytes.
-    internal Allocator AllocatorFor(RegisteredCopy copy, PluginCopyKey plugin)
-    {
-        if (loadOrder.Current.ModFolderOf(plugin) is { } modFolder
-            && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
-        {
-            return AllocatorOver(repository, plugin);
-        }
-
-        // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
-        var own = adapter.ReadFormIds(copy, loadOrder.Current.GameRelease);
-        return AllocatorOver(
-            plugin, HeaderDocument.IsLight(Encoding.UTF8.GetBytes(own.HeaderText)),
-            own.Native, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
     // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
@@ -319,7 +307,7 @@ internal sealed class WriteTargets(
             return RecordEditResult.Refused(
                 RecordEditRefusal.NotNativeRecord,
                 $"{requestedFormKey} belongs to {requestedOwner}, not {plugin.Name} — a requested FormKey " +
-                "must be native to the plugin it is being created or renumbered into.");
+                "must be native to the plugin that is to hold it.");
         }
 
         if (isLight && parsed.ID > PluginFlagPredicates.LightLocalFormIdCap)
@@ -349,11 +337,11 @@ internal sealed class WriteTargets(
         return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
-    // Shared by create, copy as new and renumber (edit-record.md's refusal table): every branch
+    // Shared by create and copy as new (edit-record.md's refusal table): every branch
     // names both remedies, even where one is moot for this plugin.
     internal static string FormKeySpaceExhaustedMessage(PluginCopyKey plugin, bool isLight, bool eslContradiction = false)
     {
-        const string remedies = "Clear the light flag in the header, or renumber.";
+        const string remedies = "Clear the light flag in the header, or change a record's FormID.";
         if (eslContradiction)
         {
             return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
@@ -405,8 +393,8 @@ internal sealed class WriteTargets(
     internal static RecordEditResult? RefuseIfHeader(string recordType) =>
         recordType == PluginHeader.RecordType
             ? RecordEditResult.Refused(
-                RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
-                "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
+                RecordEditRefusal.HeaderDeleteNotSupported,
+                "The plugin header cannot be deleted — it is not an ordinary record.")
             : null;
 
     // CreateRecord and CopyAsNewRecord only: a brand-new record has no containment to resolve to, and
@@ -420,7 +408,7 @@ internal sealed class WriteTargets(
             RecordEditRefusal.ContainerRecordNotYetSupported,
             $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace) " +
             "or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, branch, " +
-            "scene, response). Editing its fields works, and so do deleting and renumbering it; creating " +
+            "scene, response). Editing its fields and its FormID works, and so does deleting it; creating " +
             "one from scratch is not supported — a brand-new record has no containment for anything to " +
             "place it into.");
     }

@@ -20,6 +20,7 @@ public sealed class EditRecordHandler
     private readonly LoadOrderHolder _loadOrder;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
+    private readonly FormKeyChange _formKeyChange;
     private readonly ILogger<EditRecordHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
@@ -33,6 +34,7 @@ public sealed class EditRecordHandler
     {
         (_targets, _loadOrder, _codec, _schemaReflector, _logger) =
             (targets, loadOrder, codec, schemaReflector, logger);
+        _formKeyChange = new FormKeyChange(targets, codec, schemaReflector, logger);
     }
 
     /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
@@ -41,6 +43,7 @@ public sealed class EditRecordHandler
     public RecordEditResult Edit(PluginCopyKey plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
+        if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);
         var (release, identity, unit, repository) = editTarget;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 

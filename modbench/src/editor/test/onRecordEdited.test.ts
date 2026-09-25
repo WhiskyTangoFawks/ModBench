@@ -64,7 +64,7 @@ describe('makeOnRecordEdited — record-filter-match refresh', () => {
 // The native Source Control panel does not pick up a field edit's working-tree dirt on its own;
 // this is the wiring that closes that gap.
 describe('makeOnRecordEdited — Source Control refresh', () => {
-  it('calls the injected refreshSourceControl with the edited plugin filename on every edit', () => {
+  it('calls the injected refreshSourceControl with the edited plugin copy on every edit', () => {
     const refreshSourceControl = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
       fakeTreeProvider(), fakeDecorationProvider(), vi.fn(), refreshSourceControl,
@@ -73,7 +73,7 @@ describe('makeOnRecordEdited — Source Control refresh', () => {
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
     expect(refreshSourceControl).toHaveBeenCalledTimes(1);
-    expect(refreshSourceControl).toHaveBeenCalledWith('Test.esp');
+    expect(refreshSourceControl).toHaveBeenCalledWith('Test.esp', 'SomeMod');
   });
 
   it('calls refreshSourceControl even when the record-row cache has no entry for this FormKey', () => {
@@ -112,7 +112,7 @@ describe('a write and the stream, together (ADR-0015 invariant 3)', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker);
+    subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, waitingFor: () => undefined, release: () => false });
 
     const treeSync: RecordTreeSync = { refresh: vi.fn(), workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn().mockReturnValue(false) };
     const decorationProvider = fakeDecorationProvider();

@@ -320,22 +320,17 @@ describe('RecordNode', () => {
     expect(firstCommandArgument(node.command).label).toBe(record.formKey);
   });
 
-  // The renumberable row — a master copy whose plugin is tracked — is the only one that
-  // spells `recordTracked`, which is the whole of package.json's Change FormID when-clause.
   it('contextValue is recordTracked for a master row in a tracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, true);
     expect(node.contextValue).toBe('recordTracked');
   });
 
-  // The same master row in an untracked plugin: the product refuses to renumber it, so the
-  // gesture must be absent rather than offered and then eaten.
   it('contextValue is recordUntracked for a master row in an untracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false);
     expect(node.contextValue).toBe('recordUntracked');
   });
 
-  // An override doesn't own its FormID, so package.json's renumber when-clause hides Change FormID
-  // on a row whose plugin is not the FormKey's own origin; tracked-ness never rescues it.
+  // An override doesn't own its FormID; tracked-ness never rescues it.
   it('contextValue is recordOverride when the row\'s plugin is not the FormKey\'s origin', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
     expect(new RecordNode(record).contextValue).toBe('recordOverride');
@@ -439,7 +434,7 @@ describe('record rows carry their copy identity', () => {
   it('record rows of an immutable plugin get contextValue recordImmutable, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['fallout4.esm'])); // makeRecord's rows belong to Fallout4.esm
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -448,11 +443,11 @@ describe('record rows carry their copy identity', () => {
   });
 
   // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
-  // is fully actionable — and still not renumberable, which is what `recordUntracked` says.
+  // is fully actionable, and still read-only until tracked, which is what `recordUntracked` says.
   it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['SomethingElse.esm']));
+    provider.setImmutablePlugins([{ name: 'SomethingElse.esm', origin: 'Data' }]);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -466,7 +461,7 @@ describe('record rows carry their copy identity', () => {
   it('record rows of a tracked plugin get contextValue recordTracked, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setTrackedPlugins(new Set(['fallout4.esm'])); // makeRecord's rows belong to Fallout4.esm
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -477,8 +472,8 @@ describe('record rows carry their copy identity', () => {
   it('an immutable plugin stays recordImmutable even when tracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['fallout4.esm']));
-    provider.setTrackedPlugins(new Set(['fallout4.esm']));
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -497,12 +492,12 @@ describe('record rows carry their copy identity', () => {
 
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
-    provider.setTrackedPlugins(new Set(['Fallout4.esm']));
+    provider.setTrackedPlugins([{ name: 'Fallout4.esm', origin: 'Data' }]);
 
     expect(changed).toHaveBeenCalled();
     expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordTracked');
     // And back again, for the untrack direction.
-    provider.setTrackedPlugins(new Set());
+    provider.setTrackedPlugins([]);
     expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordUntracked');
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
@@ -511,7 +506,7 @@ describe('record rows carry their copy identity', () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
-    provider.setImmutablePlugins(new Set(['Plugin0.esp']));
+    provider.setImmutablePlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
 
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
     const row = present(expectInstancesOf(await provider.getChildren(group), PlacedNode)[0], 'the sole PlacedNode');

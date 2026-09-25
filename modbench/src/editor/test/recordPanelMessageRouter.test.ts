@@ -15,10 +15,11 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, normalizeFormKeyQuery,
+  routeRecordPanelMessage, normalizeFormKeyQuery, routerDepsForPanel,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
+import { EditsInFlight } from '../followRecord';
 import type { RecordSummary } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
@@ -48,6 +49,8 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
   return {
     channel: fakeChannel(), reporter: fakeReporter,
     meditClient, onRecordEdited,
+    // No panel holds this suite's reads: the gate sends each write where it was addressed.
+    editInFlight: async (address, write) => { await write(address.formKey); },
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     ...overrides,
@@ -255,6 +258,65 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
 
     expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     expect(fakeReporter.report).not.toHaveBeenCalled();
+  });
+
+  function tabsOn(formKey: string, ...titles: string[]) {
+    const formKeys = new Map<unknown, string>();
+    const tracker = {
+      setFormKey(panel: unknown, key: string) { formKeys.set(panel, key); },
+      formKeyOf(panel: unknown) { return formKeys.get(panel); },
+    };
+    const tabs = titles.map(title => ({ title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } }));
+    for (const tab of tabs) tracker.setFormKey(tab, formKey);
+    return { tracker, tabs, edits: new EditsInFlight(tracker) };
+  }
+
+  it('takes the tab to the new FormKey an edit of its FormID answers with', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+
+    expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
+  });
+
+  // ADR-0012 invariant 1: two copies of Mod.esp, in two mods, each shown in a tab of its own under
+  // one FormKey. The edit lands on the copy its own tab's column names, and only that tab follows.
+  it('follows only the tab the edit came from, not a tab showing the other copy of the plugin', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const { tracker, tabs: [edited, other], edits } = tabsOn('000800:Mod.esp', 'Mod.esp (SomeMod)', 'Mod.esp (OtherMod)');
+    const editedCopy = present(edited, 'the edited tab');
+    const otherCopy = present(other, 'the other tab');
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedCopy, edits));
+
+    expect(tracker.formKeyOf(editedCopy)).toBe('000900:Mod.esp');
+    expect(tracker.formKeyOf(otherCopy)).toBe('000800:Mod.esp');
+    expect(otherCopy.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  // Between the FormID's answer and the report that reads the new key, the webview still names
+  // the old one; the host knows the move, so a second edit lands on the record where it now is.
+  it('sends a second edit, posted under the old FormKey before the tab reads the new one, to the new FormKey', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const { tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    meditClient.setCommandResult('editRecord', { applied: true });
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+
+    expect(editRecordCalls().map(c => c.args[0])).toEqual(['000800:Mod.esp', '000900:Mod.esp']);
+  });
+
+  it('leaves the tab where it is after an edit that keeps the FormKey', async () => {
+    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+
+    expect(tracker.formKeyOf(panel)).toBe('000800:Mod.esp');
   });
 
   it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {

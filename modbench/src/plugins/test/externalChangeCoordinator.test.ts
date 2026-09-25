@@ -5,6 +5,7 @@ import {
 } from '../externalChangeCoordinator';
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
@@ -25,7 +26,7 @@ function makeDeps(
     client,
     showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
-    showError: vi.fn(),
+    reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
     presentCrashRepair: vi.fn().mockResolvedValue(undefined),
@@ -36,9 +37,7 @@ function makeDeps(
 function clientScriptedForKeepAndAbsorb(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-  client.setCommandResult('absorbUpstreamUpdate', {
-    succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
-  });
+  client.setCommandResult('absorbUpstreamUpdate', { landed: [{ name: 'Fixture.esp', origin: 'ModA' }], refused: [], trackedFilesRefusal: null });
   return client;
 }
 
@@ -69,35 +68,21 @@ describe('subscribeQuestionOpen', () => {
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
-  it('dispatches Absorb; a clean rebase is silent', async () => {
+  it('dispatches Absorb; a landed Absorb is silent, and neither rebases the edit branch nor opens the merge editor', async () => {
     const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] });
+    const reporter = recordingReporter();
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON), reporter });
     subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
-    expect(deps.showError).not.toHaveBeenCalled();
+    expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
+    expect(reporter.reports).toEqual([]);
     expect(deps.openMergeEditor).not.toHaveBeenCalled();
-  });
-
-  // Absorb's own rebase runs server-side; a conflict is the extension's cue to open the native
-  // merge editor, same as the manual rebase command.
-  it('dispatches Absorb; a conflicted rebase opens the merge editor on every path', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-    client.setCommandResult('absorbUpstreamUpdate', {
-      succeeded: true, refusalReason: null,
-      rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] },
-    });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeQuestionOpen(deps, client);
-
-    client.emit(pendingEvent());
-    await flush();
-
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/Fixture.esp/x.json');
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
@@ -115,7 +100,7 @@ describe('subscribeQuestionOpen', () => {
 
   it('a failed Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', undefined); // transport failure
+    client.setCommandResult('absorbUpstreamUpdate', { refused: true, message: 'Could not absorb the upstream update for "ModA" — socket hang up' });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
 
@@ -127,7 +112,10 @@ describe('subscribeQuestionOpen', () => {
 
   it('a refused Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', { succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' });
+    client.setCommandResult('absorbUpstreamUpdate', {
+      landed: [], refused: [{ item: { name: 'Fixture.esp', origin: 'ModA' }, reason: "'Update Fixture.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
 

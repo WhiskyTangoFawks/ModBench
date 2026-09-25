@@ -1,6 +1,8 @@
+using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -58,6 +60,78 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal([formKey], notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
         Assert.Null(index.RequireReads().GetDocument(formKey, entry.KeyOf()));
+    }
+
+    // The tree gained a record, as an edit of a FormID or a create leaves it: read again whole, and
+    // named by the rows that moved (edit-record.md, Hand-off), never by the plugin.
+    [Fact]
+    public void RefreshKeys_ForAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
+    {
+        var (fixture, entry, notifications, index, moved, still) = TwoNpcs("rows-changed-gained");
+        using var _ = fixture;
+        using var __ = index;
+        var gained = GainARecord(entry, index, moved.ToString());
+        entry.HandEdit(index.RequireReads().DocumentOf(moved.ToString(), entry.KeyOf()), "\"MovedNpc\"", "\"EditedNpc\"");
+
+        index.RefreshKeys(entry.KeyOf(), [gained]);
+
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(entry.KeyOf(), notification.Plugin);
+        Assert.Equal([moved.ToString(), gained], notification.Keys.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(still.ToString(), notification.Keys);
+        Assert.Equal(index.Sequence, notification.Sequence);
+        Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
+        Assert.NotNull(index.RequireReads().GetDocument(gained, entry.KeyOf()));
+    }
+
+    // Where a gained record lands when the watch could not name its key: a new document no commit
+    // filed. The validate re-derives the copy whole, and still names the rows.
+    [Fact]
+    public void ValidatingACopyThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
+    {
+        var (fixture, entry, notifications, index, moved, _) = TwoNpcs("rows-changed-validate-gained");
+        using var __ = fixture;
+        using var ___ = index;
+        var gained = GainARecord(entry, index, moved.ToString());
+
+        var report = Assert.Single(index.ValidateIndex(entry.KeyOf()));
+
+        Assert.True(report.NeedsRebuild);
+        Assert.Equal([gained], report.ChangedKeys);
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal([gained], notification.Keys);
+        Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
+        Assert.NotNull(index.RequireReads().GetDocument(gained, entry.KeyOf()));
+    }
+
+    private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications,
+        Indexer Index, FormKey Moved, FormKey Still) TwoNpcs(string name)
+    {
+        FormKey moved = default, still = default;
+        var fixture = new PluginFixtureBuilder(name)
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                moved = mod.Npcs.AddNew("MovedNpc").FormKey;
+                still = mod.Npcs.AddNew("StillNpc").FormKey;
+            }, origin: "FixtureMod")
+            .BuildScattered()
+            .Tracked();
+        var notifications = new InMemoryNotificationPublisher();
+        var index = Indexes.Reconciled(fixture, notifications: notifications);
+        return (fixture, fixture.Plugins.Single(), notifications, index, moved, still);
+    }
+
+    // A copy of an existing document under a FormKey neither ref holds, put the way the write side
+    // puts one.
+    private static string GainARecord(LoadOrderEntry entry, Indexer index, string template)
+    {
+        var gained = $"000F00:{entry.Name}";
+        var document = index.RequireReads().DocumentOf(template, entry.KeyOf());
+        TrackedMods.RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(
+            gained, document.RecordType, "GainedNpc",
+            document.Body.Require().Replace(template, gained, StringComparison.Ordinal)
+                .Replace($"\"{document.EditorId}\"", "\"GainedNpc\"", StringComparison.Ordinal)));
+        return gained;
     }
 
     // A container's document is one row plus every embedded child's, so naming only the key the

@@ -2,12 +2,16 @@ import * as vscode from 'vscode';
 import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import { openExtendedFieldEditor } from './extendedFieldEditor';
+import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import type { EditGate } from './followRecord';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
-  // Load order-static: the same temp root and channel every panel's tabs would get.
-  tempRoot: string;
+  // Load order-static: the same field files and channel every panel's tabs would get.
+  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   log: (msg: string) => void;
+  // A right-click's edits are the panel's it came from, through its gate. The panel is named by its
+  // webview context's `panelId`, which the body carries.
+  editGateOf: (panelId: string | undefined) => EditGate;
 }
 
 interface ContextCommand {
@@ -22,6 +26,11 @@ function hasWebviewSection<Ctx extends { webviewSection: string }>(
 ): value is Ctx {
   if (typeof value !== 'object' || value === null) return false;
   return (value as { webviewSection?: unknown }).webviewSection === webviewSection;
+}
+
+function panelIdOf(ctx: object): string | undefined {
+  const panelId: unknown = Reflect.get(ctx, 'panelId');
+  return typeof panelId === 'string' ? panelId : undefined;
 }
 
 function isArrayParentContext(value: unknown): value is ArrayParentContext {
@@ -46,7 +55,8 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
     run: async (deps, raw) => {
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw);
-      if (envelope) await applyRecordEdit(deps, raw.formKey, raw.plugin, raw.origin, envelope);
+      if (!envelope) return;
+      await deps.editGateOf(panelIdOf(raw))(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
     },
   };
 }
@@ -54,16 +64,18 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
 // ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
+  const gate = deps.editGateOf(panelIdOf(ctx));
   return openExtendedFieldEditor(
     {
       value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,
       plugin: ctx.plugin, origin: ctx.origin, readOnly: ctx.readOnly,
     },
     {
-      tempRoot: deps.tempRoot,
+      fieldFile: deps.fieldFile,
       log: deps.log,
       reporter: deps.reporter,
-      onCommit: value => applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value }),
+      onCommit: value => gate(ctx, formKey =>
+        applyRecordEdit(deps, formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value })),
     },
   );
 }

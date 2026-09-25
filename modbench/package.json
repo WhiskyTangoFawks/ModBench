@@ -423,11 +423,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.renumber",
-        "title": "Change FormID…",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.record.copyAsOverride",
         "title": "Copy as Override Into…",
         "category": "Modbench"
@@ -554,10 +549,6 @@
         },
         {
           "command": "modbench.record.delete",
-          "when": "false"
-        },
-        {
-          "command": "modbench.record.renumber",
           "when": "false"
         },
         {
@@ -933,19 +924,14 @@
           "group": "recordActions@1"
         },
         {
-          "command": "modbench.record.renumber",
-          "when": "view == modbench.pluginListTree && viewItem == recordTracked",
-          "group": "recordActions@2"
-        },
-        {
           "command": "modbench.record.copyAsOverride",
           "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@3"
+          "group": "recordActions@2"
         },
         {
           "command": "modbench.record.copyAsNewRecord",
           "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@4"
+          "group": "recordActions@3"
         }
       ],
       "webview/context": [
@@ -988,12 +974,6 @@
     },
     "keybindings": [
       {
-        "command": "modbench.mod.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.modList && modbench.folder == instance"
-      },
-      {
         "command": "modbench.mod.enable",
         "key": "space",
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionToggle == enable"
@@ -1031,28 +1011,16 @@
         }
       },
       {
-        "command": "modbench.plugin.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.pluginListTree && modbench.folder == instance"
-      },
-      {
-        "command": "modbench.downloadedFile.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
-      },
-      {
         "command": "modbench.downloadedFile.delete",
         "key": "Delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
+        "when": "focusedView == modbench.downloads && listFocus && !inputFocus && modbench.folder == instance"
       },
       {
         "command": "modbench.record.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "focusedView == modbench.referencedByTree"
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus"
       }
     ]
   },

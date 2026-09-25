@@ -12,9 +12,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Two mod folders, because the interesting question — does a renumber rewrite a FormLink in
-/// a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
-public sealed class RenumberTwoModFixture : IDisposable
+/// <summary>Two mod folders, because the interesting question — does a FormID edit rewrite a FormLink
+/// in a different mod folder's own repo — cannot be asked of one. No index anywhere in it.</summary>
+public sealed class TwoModReferenceFixture : IDisposable
 {
     public const string ReferencerPluginName = "Winner.esp";
     public const string TargetPluginName = "Base.esm";
@@ -31,7 +31,7 @@ public sealed class RenumberTwoModFixture : IDisposable
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
     public LoadOrderSnapshot LoadOrder { get; }
-    public RenumberRecordHandler RenumberHandler { get; }
+    public EditRecordHandler EditHandler { get; }
 
     public PluginCopyKey TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
     public PluginCopyKey ReferencerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
@@ -43,12 +43,12 @@ public sealed class RenumberTwoModFixture : IDisposable
     public FormKey TargetRace { get; }
     public FormKey ReferencerNpc { get; }
 
-    private RenumberTwoModFixture(bool trackReferencer)
+    private TwoModReferenceFixture(bool trackReferencer)
     {
         var holder = new LoadOrderHolder();
-        TargetModFolder = Directory.CreateTempSubdirectory("medit-renumber-target-").FullName;
-        ReferencerModFolder = Directory.CreateTempSubdirectory("medit-renumber-ref-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-renumber-game-").FullName;
+        TargetModFolder = Directory.CreateTempSubdirectory("medit-formid-target-").FullName;
+        ReferencerModFolder = Directory.CreateTempSubdirectory("medit-formid-ref-").FullName;
+        GameDirectory = Directory.CreateTempSubdirectory("medit-formid-game-").FullName;
 
         var targetPath = Path.Combine(TargetModFolder, TargetPluginName);
         var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
@@ -77,10 +77,10 @@ public sealed class RenumberTwoModFixture : IDisposable
         if (trackReferencer) Track(ReferencerOrigin);
 
         holder.Apply(LoadOrder);
-        RenumberHandler = TestEditService.RenumberHandler(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
-    public static RenumberTwoModFixture Create(bool trackReferencer) => new(trackReferencer);
+    public static TwoModReferenceFixture Create(bool trackReferencer) => new(trackReferencer);
 
     private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
@@ -96,7 +96,7 @@ public sealed class RenumberTwoModFixture : IDisposable
     public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>
         TrackedTree.Document(ModFolderOf(plugin), plugin, formKey);
 
-    /// <summary>Asked of the layout rather than the repository: a leaf name is what a renumber moves,
+    /// <summary>Asked of the layout rather than the repository: a leaf name is what a FormID edit moves,
     /// and a test naming it ahead of the write is naming the file that must survive a refusal.</summary>
     public string SourceFileFor(PluginCopyKey plugin, FormKey formKey, string recordType, string? editorId) =>
         SourceDocumentPath.Of(

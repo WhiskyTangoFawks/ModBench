@@ -86,9 +86,10 @@ public sealed class ResponseWriteApiTests : IDisposable
     }
 
     [Fact]
-    public async Task RenumberingAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
+    public async Task EditingTheFormIdOfAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
     {
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.EditHandler.SetFormId(
+            _fixture.Plugin, _fixture.Response.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);

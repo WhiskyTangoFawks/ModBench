@@ -28,6 +28,8 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
+const VIEW_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor'];
+
 export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
@@ -96,6 +98,19 @@ export default defineConfig(
         files: ['src/modmanager/**/*.ts'],
         rules: {
             'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/client/**'], message: 'Mod Management never calls the backend.' }] }],
+        },
+    },
+
+    // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
+    // The views are README's driving band: Toolbox, Mods, Plugins, Downloads and Editor.
+    {
+        files: VIEW_BOXES.map((box) => `src/${box}/**/*.ts`),
+        ignores: VIEW_BOXES.map((box) => `src/${box}/test/**`),
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [{
+                group: ['node:path', 'node:path/*', 'path', 'path/*'],
+                message: 'A view never builds a path: take it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
+            }] }],
         },
     },
 

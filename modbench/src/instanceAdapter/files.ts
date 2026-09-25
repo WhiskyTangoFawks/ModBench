@@ -9,6 +9,7 @@ import {
 import { join, relative, sep } from 'node:path';
 import { modsDir as modsDirOf, modGitDir, profilesDir, settingsFile } from './layout';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here, and surfaces that error elsewhere (ADR-0019). Synchronous: the composition
@@ -123,6 +124,24 @@ export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
 
+/** The folders directly in `path`, following links as MO2 does (QDir::Dirs without NoSymLinks).
+ *  A link whose target cannot be checked is skipped, as MO2 skips it, and handed to `skippedLink`. */
+export async function listFolders(
+  path: string, skippedLink?: (name: string, reason: string) => void,
+): Promise<string[]> {
+  const folders = await Promise.all((await listDir(path)).map(async (dirent) => {
+    if (dirent.isDirectory()) return dirent.name;
+    if (!dirent.isSymbolicLink()) return undefined;
+    try {
+      return (await stat(join(path, dirent.name))).isDirectory() ? dirent.name : undefined;
+    } catch (err) {
+      skippedLink?.(dirent.name, errorMessage(err));
+      return undefined;
+    }
+  }));
+  return folders.filter((name): name is string => name !== undefined);
+}
+
 /** Creates `path` and every missing parent; a no-op when it is already there. */
 export async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
@@ -143,13 +162,13 @@ export async function put(path: string, edit: (before: string) => string, opts: 
 }
 
 /** Like {@link put}, but skips the write when `edit` changed nothing, so an unwritten file never
- *  fires its watcher. Answers whether it wrote. */
+ *  fires its watcher. Answers whether it wrote. An `edit` that awaits holds the lock meanwhile. */
 export function putIfChanged(
-  path: string, edit: (before: string) => string, opts: PutOptions = {},
+  path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
   return withLock(path, async () => {
     const before = await readOr(path, opts.ifMissing);
-    const after = edit(before);
+    const after = await edit(before);
     if (after === before) return { wrote: false };
     await writeFile(path, after);
     return { wrote: true };

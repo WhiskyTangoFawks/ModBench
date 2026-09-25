@@ -1,12 +1,38 @@
 import { errorMessage } from './ports/errorMessage';
 
-type SyncOutcome = { applied: true } | { applied: false; refusal: string };
+type SyncOutcome =
+  | { applied: true }
+  | { applied: false; refusal: string }
+  // Wrote nothing for a cause the instance's state tells once, so the command has none of its own.
+  | { applied: false; toldAsInstanceState: true };
 
 /** A system command's part of its view's message line. */
 export interface SyncMessage {
   /** The failure standing now, or undefined. */
   message(): string | undefined;
   onMessageChanged(listener: () => void): { dispose(): void };
+}
+
+/** A system command's runs, each begun by a landed value and ended once it has told what it did. */
+export interface SyncRuns {
+  /** Resolves once every run begun so far has written its Output and settled its message. */
+  settled(): Promise<void>;
+}
+
+/** Tracks the runs a trigger begins, for its `settled`. */
+export function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+  const inFlight = new Set<Promise<void>>();
+  return {
+    begin: (run) => {
+      // A run that rejects has still ended: tracked by its settling, never by the run itself.
+      const ended = run.then(() => undefined, () => undefined);
+      inFlight.add(ended);
+      void ended.then(() => inFlight.delete(ended));
+    },
+    settled: async () => {
+      while (inFlight.size > 0) await Promise.all([...inFlight]);
+    },
+  };
 }
 
 export interface SyncFailureReport extends SyncMessage {
@@ -45,7 +71,7 @@ export function reportSyncFailures(
       } catch (err) {
         outcome = { applied: false as const, refusal: errorMessage(err) };
       }
-      if (mine === latest) settle(outcome.applied ? undefined : outcome.refusal);
+      if (mine === latest) settle('refusal' in outcome ? outcome.refusal : undefined);
       return landed(outcome) ? outcome : undefined;
     },
   };

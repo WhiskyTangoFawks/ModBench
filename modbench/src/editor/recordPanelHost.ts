@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
-import * as os from 'node:os';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
+import type { EditsInFlight } from './followRecord';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
-import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
+import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordWriteDeps } from './applyRecordEdit';
+import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
@@ -22,26 +22,31 @@ export interface EditorCommandDeps {
   // Which of recordPanels is active, and what FormKey each shows — openRecordPanel keeps
   // this current; the Referenced By view retargets from it, not from a command argument.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
+  // Each panel's edits in flight, which hold its reads until the answer; the same instance gates
+  // the notification wiring.
+  editsInFlight: EditsInFlight<vscode.WebviewPanel>;
   port: number;
   // Editor's own view of the Plugins tree, structural rather than the tree's own type — see
   // `RecordTreeSync`'s own doc comment.
   treeSync: RecordTreeSync;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
-    | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences' | 'status'>;
+    | 'createRecord' | 'deleteRecords' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
+    | 'getPlugins' | 'getRecordOverridePlugins'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
   // The two things a committed field edit redrives (the filter's match map, the plugin's Source
   // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
   refreshMatchingPlugins: () => void;
-  refreshSourceControlFor: (plugin: string) => void;
+  refreshSourceControlFor: (plugin: string, origin: string) => void;
   outputChannel: vscode.LogOutputChannel;
   // The two ports (ADR-0019), built over the window API by the composition root: this box
   // surfaces a failure and asks a question, and implements neither.
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
+  // Where an extended-editor tab is written, answered at the composition root.
+  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
 // ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
 // notification stream (ADR-0015 invariant 3), not a broadcast from here.
@@ -53,7 +58,7 @@ function recordPanelWriteDeps(
     onRecordEdited: makeOnRecordEdited(
       deps.treeSync, recordDecorationProvider,
       () => { deps.refreshMatchingPlugins(); },
-      (plugin) => deps.refreshSourceControlFor(plugin),
+      (plugin, origin) => deps.refreshSourceControlFor(plugin, origin),
     ),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),
@@ -62,27 +67,34 @@ function recordPanelWriteDeps(
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, port, treeSync, meditClient,
+    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync, meditClient,
     outputChannel, mergedTreeSelection, refreshMatchingPlugins,
   } = deps;
   // One decoration provider per activation: its lookup reads treeSync's cache live, so it
   // needs no copy of that state.
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
+  const panelsById = new Map<string, vscode.WebviewPanel>();
   const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
-  // `formKeyPicker` is a placeholder here and rebuilt per panel below, since its reply must reach
-  // the one panel that asked.
-  const routerDeps: RouteRecordPanelMessageDeps = {
-    ...writeDeps, meditClient, channel: outputChannel, formKeyPicker: undefined,
+  // The picker and the edit gate are each panel's own, added per panel below.
+  const routerDeps: SharedRecordPanelDeps = {
+    ...writeDeps, meditClient, channel: outputChannel,
   };
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, tempRoot: extendedFieldEditorTempRoot, log: (m: string) => outputChannel.debug(m),
+      ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
+      editGateOf: (panelId) => {
+        const panel = panelId === undefined ? undefined : panelsById.get(panelId);
+        return panel
+          ? editsInFlight.gate(panel)
+          // The panel the menu came from has closed, so no panel's reads wait on this write.
+          : async (address, write) => { await write(address.formKey); };
+      },
     }),
-    // Editor owns the record gestures (create/delete/renumber/copy) — registered once, here,
+    // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins),
@@ -90,7 +102,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, outputChannel, deps.reporterFor('recordCopy'), treeSync, refreshMatchingPlugins),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton: true });
     }),
     // A named "Open to the Side" (ADR-0018), not a right-click side effect. `item`/`allSelected`
     // mirror VS Code's view/item/context invocation shape, falling back to the tree's current
@@ -104,11 +116,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         const identities = nodes.map(recordOpenIdentity)
           .filter((i): i is { formKey: string; label: string } => i !== undefined);
         if (identities.length === 0) return;
-        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, activeRecordTracker });
+        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight });
       }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
-        { routerDeps, recordPanels, activeRecordTracker, singleton: true });
+        { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton: true });
     }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
@@ -118,19 +130,19 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 }
 
 export const RECORD_PANEL_KEY = '__record_view__';
-// The temp directory every extended-editor tab writes under —
-// load order-static (the same value every panel gets), so it lives at module scope rather than in
-// any per-panel bundle.
-export const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
+let panelsOpened = 0;
 // Bundled as one trailing param since these travel together as one panel-wiring concern.
 // `recordPanels` is every open panel, main and Beside alike: broadcasts post to all and let each
 // self-filter rather than picking "the right one".
 export interface OpenRecordPanelDeps {
-  routerDeps: RouteRecordPanelMessageDeps;
+  routerDeps: SharedRecordPanelDeps;
   recordPanels: Set<vscode.WebviewPanel>;
   // Kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
+  editsInFlight: EditsInFlight<vscode.WebviewPanel>;
+  // Each open panel by the id its webview context names it by, for its right-click menus.
+  panelsById: Map<string, vscode.WebviewPanel>;
   // Deliberately independent of `viewColumn`: a batched Beside open's 2nd..Nth panel needs a
   // concrete resolved column while still being non-retargeting, so `viewColumn !== Beside` cannot
   // stand in for "is this the singleton".
@@ -143,7 +155,7 @@ export function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn,
-  { routerDeps, recordPanels, activeRecordTracker, singleton }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton }: OpenRecordPanelDeps,
 ): void {
   if (singleton) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -163,7 +175,7 @@ export function openRecordPanel(
 
   const panel = vscode.window.createWebviewPanel('modbench', title, viewColumn, {
     enableScripts: true,
-    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
+    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out', 'webview')],
   });
 
   if (singleton) {
@@ -173,6 +185,9 @@ export function openRecordPanel(
 
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
+  const panelId = `record-panel-${++panelsOpened}`;
+  panelsById.set(panelId, panel);
+  panel.onDidDispose(() => { panelsById.delete(panelId); editsInFlight.forget(panel); });
 
   // FormKey is recorded before the panel is declared active, so a new panel fires the Referenced
   // By retarget exactly once, already carrying it. onDidChangeViewState announces only *gaining*
@@ -185,20 +200,17 @@ export function openRecordPanel(
   panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // A reply must reach the one panel that asked, never a broadcast; `routerDeps` is shared
-    // across panels, so this per-panel field is rebuilt with the panel this closure holds.
-    const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
-    void routeRecordPanelMessage(msg, {
-      ...routerDeps,
-      formKeyPicker: { meditClient: routerDeps.meditClient, reply },
-    });
+    // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
+    // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
+    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, editsInFlight));
   });
 
   const scriptUri = panel.webview.asWebviewUri(
-    vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview', 'assets', 'main.js'))
+    vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', 'main.js')
   );
 
   panel.webview.html = buildWebviewHtml({
+    panelId,
     formKey,
     port,
     scriptUri: scriptUri.toString(),

@@ -27,7 +27,6 @@ public sealed class ContainerModFixture : IDisposable
     /// <summary>The kernel's holder with <see cref="LoadOrder"/> applied, for a handler built over
     /// this fixture.</summary>
     public LoadOrderHolder Holder { get; }
-    public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
@@ -64,16 +63,15 @@ public sealed class ContainerModFixture : IDisposable
     public FormKey DialogTopic { get; }
 
     // Two responses inline in the first topic's document: a sibling is what shows an edit, a delete
-    // or a renumber touching only its own element, and two is the shortest list with an order.
+    // or a FormID edit touching only its own element, and two is the shortest list with an order.
     public const string ResponseEditorId = "EmbedResponse";
     public FormKey Response { get; }
 
     public const string Response2EditorId = "EmbedResponse2";
     public FormKey Response2 { get; }
 
-    // Two more siblings under the same Quest, so "delete/renumber a mid-list topic, then compile"
-    // has an actual middle and two actual survivors to pin the GRUP order of — one DialogTopic
-    // alone cannot exercise "gap, not renumbered".
+    // Two more siblings under the same Quest, so a delete or FormID edit of a mid-list topic has
+    // an actual middle and two survivors to pin the compiled GRUP order of.
     public const string DialogTopic2EditorId = "EmbedTopic2";
     public FormKey DialogTopic2 { get; }
 
@@ -145,7 +143,6 @@ public sealed class ContainerModFixture : IDisposable
 
         holder.Apply(LoadOrder);
         Holder = holder;
-        RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);

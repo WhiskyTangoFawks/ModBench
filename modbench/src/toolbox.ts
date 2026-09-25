@@ -9,7 +9,7 @@ import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/lo
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
-import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
@@ -194,9 +194,6 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporterFor: (tag: string) => Reporter;
   instanceRoot: string;
-  // A getter over the Instance value's own resolution, not a Promise settled once. Undefined
-  // when nothing resolved, which leaves an implicit row without a file to point at.
-  dataFolder: () => Promise<string | undefined>;
   /** The rows the game forces on, asked of the backend (ADR-0016). */
   implicitMasters: ImplicitMasterSource;
   /** ADR-0015: the tree's only row input — name, origin, slot, enabled and winning for every
@@ -215,12 +212,13 @@ interface PluginListDeps {
 // ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
-  const { own, session, outputChannel, reporterFor, instanceRoot, dataFolder, implicitMasters, instance } = deps;
+  const { own, session, outputChannel, reporterFor, instanceRoot, implicitMasters, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
   const pluginsTree = own(new PluginsTreeProvider({
-    instance, source, log, reporter: reporterFor('pluginList'), dataFolder, implicitMasters,
+    instance, source, log, reporter: reporterFor('pluginList'), implicitMasters,
+    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
     publishDiagnoses: (reports) => publishLoadDiagnoses(
@@ -239,9 +237,9 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   session.pluginsTreeView = pluginListView; // progress and message live here
   session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
   // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
-  // against the tree's own implicitMasterNames() so it never drifts from what is rendered.
+  // against the tree's own locked row URIs so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
-    new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
+    new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
     e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
@@ -495,7 +493,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   ) => syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const pluginsTree = registerPluginListView({
-    own, session, outputChannel, reporterFor, instanceRoot, dataFolder,
+    own, session, outputChannel, reporterFor, instanceRoot,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });

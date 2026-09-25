@@ -677,6 +677,8 @@ describe('modbench.openEditorBeside', () => {
 // The implicit-master row is a different class with a different contextValue and no `.plugin`
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
+import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
+import { publishLoadDiagnoses } from '../../medit/loadDiagnostics';
 // esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
 // here from source is a distinct constructor — `.kind` is what identifies a node across that
 // boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
@@ -696,6 +698,30 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
+  });
+});
+
+// plugins.md, A plugin the game loads with no line: the row table draws a greyed label and no
+// Problems badge, and VS Code badges any tree row whose resourceUri carries diagnostics.
+describe('the locked row is greyed and carries no Problems badge', () => {
+  const dataFolder = path.join(os.tmpdir(), 'locked-row-game', 'Data');
+  const node = new ImplicitMasterNode('Fallout4.esm', path.join(dataFolder, 'Fallout4.esm'));
+  const collection = vscode.languages.createDiagnosticCollection('locked-row-test');
+  after(() => collection.dispose());
+
+  it('holds none of the diagnostics published on its plugin file', () => {
+    publishLoadDiagnoses(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', defectClass: 'malformed', message: 'malformed', text: 'malformed' }]);
+
+    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
+    assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
+  });
+
+  it('is greyed', () => {
+    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
+    const provider = new ImplicitMasterDecorationProvider(() => new Set([rowUri.toString()]));
+
+    assert.deepStrictEqual(provider.provideFileDecoration(rowUri)?.color, new vscode.ThemeColor('disabledForeground'));
+    assert.strictEqual(provider.provideFileDecoration(vscode.Uri.file(path.join(dataFolder, 'Fallout4.esm'))), undefined);
   });
 });
 
@@ -892,6 +918,31 @@ describe('Overwrite row', () => {
 
 // ── A Mods gesture's write reaches the view through the watch alone ──────────────
 
+// VS Code's delete-to-trash on Linux writes the freedesktop.org Trash; the extension's trash
+// cannot be doubled, since `vscode.workspace.fs.delete` cannot be redefined. Elsewhere a run leaves
+// its trashed folder in the OS trash.
+const xdgTrash = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'Trash');
+const trashInfoDir = path.join(xdgTrash, 'info');
+const TRASH_INFO = '.trashinfo';
+
+function trashInfoNames(): ReadonlySet<string> {
+  return new Set(fs.existsSync(trashInfoDir) ? fs.readdirSync(trashInfoDir) : []);
+}
+
+// Takes each entry trashed from `original` since `before` out of the OS trash, answering how many.
+function takeFromTrash(original: string, before: ReadonlySet<string>): number {
+  let taken = 0;
+  for (const info of trashInfoNames()) {
+    if (before.has(info) || !info.endsWith(TRASH_INFO)) continue;
+    const pathLine = fs.readFileSync(path.join(trashInfoDir, info), 'utf8').split('\n').find((l) => l.startsWith('Path='));
+    if (pathLine === undefined || decodeURIComponent(pathLine.slice('Path='.length)) !== original) continue;
+    fs.rmSync(path.join(xdgTrash, 'files', info.slice(0, -TRASH_INFO.length)), { recursive: true, force: true });
+    fs.rmSync(path.join(trashInfoDir, info));
+    taken++;
+  }
+  return taken;
+}
+
 // ADR-0015 invariant 2: the gesture writes modlist.txt and returns, and the view follows the value
 // the watch lands, as it would a change from MO2.
 describe('A Mods gesture\'s write reaches the Mods view through the watch alone', () => {
@@ -901,17 +952,27 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
   const instance = () => present(instanceExport(), 'the Instance activate() exports');
   const separatorRow = async (name: string) =>
     (await provider().getChildren()).find((n) => n.kind === 'separator' && n.label === name);
+  const doomedDir = root ? path.join(root, 'mods', 'Doomed_separator') : '';
   let original = '';
+  let trashedBefore: ReadonlySet<string> = new Set();
 
   before(async () => {
     if (!root) return;
+    trashedBefore = trashInfoNames();
     original = fs.readFileSync(modlistPath, 'utf8');
-    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '-Doomed_separator\r\n'));
+    await writeAndAwaitInstance(() => {
+      fs.mkdirSync(doomedDir, { recursive: true });
+      fs.writeFileSync(modlistPath, '-Doomed_separator\r\n');
+    });
   });
 
   after(async () => {
     if (!root) return;
-    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, original));
+    takeFromTrash(doomedDir, trashedBefore);
+    await writeAndAwaitInstance(() => {
+      fs.rmSync(doomedDir, { recursive: true, force: true });
+      fs.writeFileSync(modlistPath, original);
+    });
   });
 
   it('delete separator asks for no refresh, and its row goes when the watch lands the new value', async function () {
@@ -925,6 +986,10 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
       await vscode.commands.executeCommand('modbench.separator.delete', doomed);
 
       assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
+      assert.ok(!fs.existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
+      if (process.platform === 'linux') {
+        assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
+      }
       assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
       assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
 
@@ -944,6 +1009,8 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
   const modDirs = root ? ['Armor Pack', 'Weapons', 'Late Armor'].map((name) => path.join(root, 'mods', name)) : [];
+  // Mod sync drops a separator line whose folder is gone, as it does a mod's.
+  const gearDir = root ? path.join(root, 'mods', 'Gear_separator') : '';
   const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
   let original = '';
   let asked: string[] = [];
@@ -973,7 +1040,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     };
     restore = () => { p.getChildren = getChildren; };
     await writeAndAwaitInstance(() => {
-      for (const dir of modDirs.slice(0, 2)) fs.mkdirSync(dir, { recursive: true });
+      for (const dir of [...modDirs.slice(0, 2), gearDir]) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Weapons\r\n-Gear_separator\r\n');
     });
   });
@@ -984,7 +1051,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     if (!root) return;
     await writeAndAwaitInstance(() => {
       fs.writeFileSync(modlistPath, original);
-      for (const dir of modDirs) fs.rmSync(dir, { recursive: true, force: true });
+      for (const dir of [...modDirs, gearDir]) fs.rmSync(dir, { recursive: true, force: true });
     });
   });
 
@@ -1350,8 +1417,8 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// update-load-order-file, Refusals: plugin sync's refusal reaches the Plugins view's message line,
-// and the first value lands before mEdit can answer, so a connect runs plugin sync again.
+// update-load-order-file, Refusals: once mEdit has attached, plugin sync's refusal reaches the
+// Plugins view's message line, and a connect runs plugin sync again.
 describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1365,6 +1432,9 @@ describe('Plugin sync says why it wrote nothing, and runs again on connect', () 
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
     await setGameDirectory(gameDir);
+    // Before mEdit first attaches, plugin sync waits; this suite's refusal comes after that.
+    await enterEditing();
+    await resetMockBackendDetached();
   });
 
   after(async () => {

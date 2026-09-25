@@ -64,6 +64,17 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
     // --- DELETE /load-order/filter ---
 
+    // plugins.md, Order and view state, story 5: the filter clears on purpose, whatever is held.
+    [Fact]
+    public async Task DeleteFilter_WithNoLoadOrder_Returns204()
+    {
+        await using var app = new MEditHost();
+
+        var del = await app.CreateClient().DeleteAsync("/load-order/filter");
+
+        Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
+    }
+
     [Fact]
     public async Task DeleteFilter_Returns204AndClearsTheSqlAndItsSource()
     {

@@ -26,7 +26,8 @@ Modbench cannot classify on its own is a question for the user, never a silent r
    on a verdict of nothing, so bytes restored by hand end the question without an answer. One
    dialog asks, and either answer covers the whole mod: upstream update, a new baseline on `main`,
    or your own edit, working-tree dirt. The edit branch moves only when the user rebases it.
-   `meta.ini` is a tell that pre-selects the default, never a trigger.
+   The default answer is always the new baseline on `main`, and `meta.ini` takes no part in the
+   question.
 4. **A third party's concurrent write is preserved and named, never reverted.** A rollback
    restores only what the action still owns
    ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).

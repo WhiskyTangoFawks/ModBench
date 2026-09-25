@@ -154,9 +154,24 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var answered = await Answer("absorb", Origin);
 
         answered.EnsureSuccessStatusCode();
-        var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
-        Assert.Equal("Clean", outcome.GetProperty("rebase").GetProperty("outcome").GetString());
+        Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task EditingARecord_WhileTheModsQuestionIsOpen_IsAConflictNamingTheRefusal_WritingNothing()
+    {
+        var fx = Owned(await Watched());
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+        ARelease(fx);
+        await stream.EventsUntil("question-open");
+        var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, Origin));
+
+        var response = await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("ExternalChangeUnanswered", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, Origin)));
     }
 
     [Fact]
@@ -249,6 +264,21 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
             Asset, question.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
     }
 
+    // No plugin can land while one cannot be parsed: the answer covers the whole mod.
+    [Fact]
+    public async Task TheBaselineAnswerToAReleaseThatCannotBeParsed_Is422_NamingThePlugin()
+    {
+        var fx = Owned(await Watched());
+        File.WriteAllBytes(fx.Plugins.Single(p => p.Origin == Origin).Path, [0x00, 0x01, 0x02, 0x03]);
+
+        var answered = await Answer("absorb", Origin);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, answered.StatusCode);
+        var problem = await answered.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("RoundTripFailed", problem.GetProperty("refusal").GetString());
+        Assert.Contains(Plugin, problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("absorb")]
     [InlineData("keep")]
@@ -331,7 +361,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaselineAndRefusesTheRebaseNamingThePath()
+    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaseline_AndLeavesTheEditToTheUsersRebase()
     {
         var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
@@ -343,11 +373,9 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var answered = await Answer("absorb", Origin);
 
         answered.EnsureSuccessStatusCode();
-        var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(
-            outcome.GetProperty("succeeded").GetBoolean(),
-            "the baseline commit lands even when the rebase that follows refuses");
-        var rebase = outcome.GetProperty("rebase");
+        Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
+        var rebase = await rebased.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Refused", rebase.GetProperty("outcome").GetString());
         Assert.Contains(".json", rebase.GetProperty("refusalReason").GetString().Require(), StringComparison.Ordinal);
     }
@@ -397,8 +425,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var answered = await Answer("absorb", Origin);
 
         answered.EnsureSuccessStatusCode();
-        var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
+        Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
 
         Restart();
         using var afterRestart = await Client.NotificationStream();

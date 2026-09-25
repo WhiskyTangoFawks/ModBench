@@ -3,3 +3,4 @@
 // where construction demands it (Referenced By, the notification wiring).
 export { registerEditorCommands, type EditorCommandDeps } from './recordPanelHost';
 export { ActiveRecordTracker } from './ActiveRecordTracker';
+export { EditsInFlight } from './followRecord';

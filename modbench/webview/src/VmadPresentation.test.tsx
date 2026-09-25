@@ -521,10 +521,11 @@ describe('Add Script is the generic array gesture', () => {
 
     // The new script's key is empty until the user names it, so it sorts first.
     reloadWith(oneColumn([script(''), script('Guard')]));
-    await waitFor(() => expect(document.querySelectorAll('tbody tr')).toHaveLength(3));
+    // The Record Header and its FormID, then Scripts and its two script rows.
+    await waitFor(() => expect(document.querySelectorAll('tbody tr')).toHaveLength(5));
 
     // First of the two script rows, since the empty key sorts before every named one.
-    const added = document.querySelectorAll('tbody tr')[1];
+    const added = document.querySelectorAll('tbody tr')[3];
     if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
     expect(cellAt(added, 0).textContent).toBe('▶');

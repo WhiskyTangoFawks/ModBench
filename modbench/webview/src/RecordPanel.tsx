@@ -19,12 +19,17 @@ import { editField } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
+import { RecordHeaderRows, RECORD_HEADER_ROW } from './RecordHeaderRows';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
+
+// The document member a record's FormID is, which an edit of the FormID names (editor.md, The
+// FormID; edit-record.md).
+const FORM_ID_MEMBER = 'FormKey';
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
@@ -56,7 +61,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
+  const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set([RECORD_HEADER_ROW]));
   // ADR-0018: one source of truth for "which value cell is focused," so at most one cell across
   // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
@@ -415,6 +420,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           <tbody>
             {/* A Partial Form column's own fields are nulled by the classifier: none is absent by
                 default, since the record's own fields are not there to be members of. */}
+            <RecordHeaderRows
+              columns={columns}
+              collapsedColumns={collapsedColumns}
+              dimmedColumns={dimmedColumns}
+              editableColumns={editableColumns}
+              isPluginHeader={isHeaderRecord}
+              expanded={expandedStructs.has(RECORD_HEADER_ROW)}
+              onToggle={() => setExpandedStructs(prev => {
+                const next = new Set(prev);
+                if (next.has(RECORD_HEADER_ROW)) next.delete(RECORD_HEADER_ROW); else next.add(RECORD_HEADER_ROW);
+                return next;
+              })}
+              focusedCell={focusedCell}
+              onFocusCell={handleFocusCell}
+              onCommitFormId={(plugin, value) => post(plugin, { op: 'set', path: [{ kind: 'member', name: FORM_ID_MEMBER }], value })}
+            />
             {diffs.flatMap(
               diff => buildRows(
                 diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName,

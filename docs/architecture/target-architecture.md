@@ -75,12 +75,12 @@ Change flows up only through watchers and the notification port. mEdit watches o
 mod, and the Source adapter names the paths inside it, so layout has one owner; on the
 Modbench side the Instance adapter is that owner, the one box that reads or writes the instance: the mod
 manager's configuration, the load order, and which game it is for. Game Data/ is not a system of record but
-a projection, and deploy alone writes it. A command splices through the pure codec and puts through the Instance adapter. No command reads the
+a projection, and deploy alone writes it. A command hands the Instance adapter the change, and the adapter splices it through the file's codec and writes the file whole. The mod manager's codecs are inside its implementation; the game's `plugins.txt` codec is in the kernel. No command reads the
 Instance loader; a value a command needs, the mod lines and plugin lines to sync, or the winners
 to deploy, arrives as an argument. Deploy and purge are commands; Toolbox offers the gesture and
 keeps the first-deploy consent.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
-keeps the last value on a parse failure. It validates on activation and on refresh, through the
+keeps the last value on a read failure, and publishes the reason beside it. It validates on activation and on refresh, through the
 same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
 holds it. Modbench does not depend on one mod manager. The game owns the format of `plugins.txt`.

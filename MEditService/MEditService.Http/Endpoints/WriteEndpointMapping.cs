@@ -21,7 +21,7 @@ internal static class WriteEndpointMapping
             ? null
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
 
-    /// <summary>The FormKey an applied create, renumber or copy allocated. Every caller here reaches
+    /// <summary>The FormKey an applied create or copy allocated. Every caller here reaches
     /// this only once the result is known applied.</summary>
     internal static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
@@ -33,9 +33,10 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: result.Refusal switch
         {
-            // Not-editable-at-all is a state conflict: the request is well-formed, and the answer is
-            // "not while this plugin is untracked".
-            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder => 409,
+            // The request is sound; the plugin's present state refuses it until that state changes.
+            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
+                or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin
+                or RecordEditRefusal.ExternalChangeUnanswered => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
             // The envelope itself could not be read as a write: the request is malformed.
             RecordEditRefusal.InvalidEnvelope => 400,

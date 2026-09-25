@@ -24,14 +24,15 @@ or an installed mod the user confirmed. Install never infers the target from dis
 4. It finds the mod's root: a `Data/` folder, or the level that holds the plugins and asset
    folders, below any single wrapper folder. A FOMOD installer is found and flagged. Its steps do
    not run, and its files stay as they are.
-5. It writes `meta.ini` through the codec: the game, the Nexus mod ID, the version, the installation
+5. It writes `meta.ini` through the Instance adapter: the game, the Nexus mod ID, the version, the installation
    file and the installed files. On an upgrade, a key the source does not know keeps its old value,
    so an unknown version never blanks a known one. Every key install does not own survives.
 6. The mod lands:
    - **A new mod.** `meta.ini` is written in the staged tree first. Then one rename moves the tree
      into `mods/<name>`, so the folder is never seen half built.
-   - **An upgrade.** The folder's contents are replaced in place, except `.git`. The folder is never
-     renamed, so its identity, its repository and its watchers survive (ADR-0007).
+   - **An upgrade.** The folder's contents are replaced in place, except `.git`, `.gitignore` and
+     `source/`. The folder is never renamed, so its identity, its repository and its watchers
+     survive (ADR-0007).
 7. For a downloaded file, it marks the file installed in its `.meta`, for MO2's Downloads tab
    (ADR-0017, invariant 1).
 8. The install box removes the staging folder, then answers: applied, and whether the source was a
@@ -44,7 +45,7 @@ This flow waits for no hand-off. Install writes no `modlist.txt` line.
 - The Instance loader's watch sees the folder. `mod sync` adds its line at the winning end,
   disabled, and `plugin sync` adds its plugins' lines
   ([update-load-order-file](update-load-order-file.md)).
-- For a tracked mod, the Mod watcher sees the new bytes and the moved `meta.ini` version.
+- For a tracked mod, the Mod watcher sees the new bytes.
   [decompile-plugin](decompile-plugin.md)'s trigger asks, with the new baseline as the default.
   That question is the user's notice that tracked files changed.
 

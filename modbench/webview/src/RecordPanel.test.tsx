@@ -13,7 +13,8 @@ import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, parseJsonRecord, required,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, member, panelClient,
+  parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
 import type { CompareResult } from './types';
@@ -335,7 +336,7 @@ describe('RecordPanel', () => {
 
   it('shows the record title with editorId and formKey after loading', async () => {
     renderPanel(compareResult);
-    await waitFor(() => expect(screen.getByText(/TestNPC \[000001:Fallout4\.esm\]/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/TestNPC \[000001:Fallout4\.esm\]/, { selector: 'div' })).toBeInTheDocument());
   });
 
   it('shows field names from the diff table', async () => {
@@ -569,7 +570,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     const enabled = screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
     expect(enabled).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '▼' }));
+    fireEvent.click(within(required(screen.getByText('Flags').closest('tr'), "the Flags row")).getByRole('button', { name: '▼' }));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getAllByText('A, B')).toHaveLength(2);
   });
@@ -682,7 +683,7 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('re-loads with the new formKey when a loadRecord message arrives from the extension', async () => {
     const { client } = renderPanel(fkCompareResult, { plugins: fkPlugins });
-    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
+    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]', { selector: 'div' }));
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -729,7 +730,7 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
-    fireEvent.click(screen.getByText('▼'));
+    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), "the Bounds row")).getByText('▼'));
     await waitFor(() => expect(screen.queryByText('X')).not.toBeInTheDocument());
   });
 
@@ -761,7 +762,7 @@ describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
 
   it('shows no statement once the sweep has already completed (AC3)', async () => {
     renderPanel(compareResult, { conflictsComputed: true });
-    await waitFor(() => screen.getByText(/TestNPC/));
+    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
     expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument();
   });
 
@@ -809,7 +810,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
   it('re-loads data when LOAD_RECORD arrives with the same formKey', async () => {
     const { client } = renderPanel(compareResult);
-    await waitFor(() => screen.getByText(/TestNPC/));
+    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
     const callsBefore = vi.mocked(client.load).mock.calls.length;
 
     act(() => {
@@ -819,7 +820,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     });
 
     await waitFor(() => expect(vi.mocked(client.load).mock.calls.length).toBeGreaterThan(callsBefore));
-    await waitFor(() => screen.getByText(/TestNPC/));
+    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
   });
 
   it('clears error and shows data after a successful refresh following a load failure', async () => {
@@ -840,7 +841,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     });
 
     await waitFor(() => expect(screen.queryByText(/Error:/)).not.toBeInTheDocument());
-    await waitFor(() => screen.getByText(/TestNPC/));
+    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
   });
 });
 
@@ -1540,5 +1541,80 @@ describe('RecordPanel — a column whose record failed to parse', () => {
       .find(c => String(c.webviewSection).includes('stringValue'));
     expect(stringContext('Broken.esp')?.readOnly).toBe(true);
     expect(stringContext('Good.esp')?.readOnly).toBe(false);
+  });
+});
+
+// editor.md, The FormID: the first row of the grid, under Record Header, edited as any field is,
+// and read-only on a plugin header. It reads as xEdit's does, as the record it names.
+describe('RecordPanel — the Record Header', () => {
+  const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
+  const native = (formKey: string, editorId: string | null): CompareResult => compareResultFixture({
+    overrides: [
+      compareOverride({
+        formKey, plugin: 'MyMod.esp', isWinner: true, editorId,
+        fields: [{ metadata: nameMeta, value: 'A Name' }],
+      }),
+    ],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' })],
+  });
+  const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
+
+  const rows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr'));
+  const rowLabels = (container: HTMLElement) =>
+    rows(container).map(tr => tr.querySelector('td')?.textContent.replace(/^[▶▼]/, ''));
+  const formIdCell = (container: HTMLElement) =>
+    required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'FormID')?.querySelectorAll('td')[1],
+      'the FormID cell');
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is the grid\'s first row, with the FormID under it, reading as the record it names', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
+    expect(formIdCell(container).textContent).toBe('MovedNpc [000800:MyMod.esp]');
+  });
+
+  it('opens on the FormKey and posts a set of the record\'s FormKey member with the one typed', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const cell = formIdCell(container);
+    fireEvent.doubleClick(within(cell).getByText('MovedNpc [000800:MyMod.esp]'));
+    const input = required(cell.querySelector('input'), "the FormID cell's input");
+    expect(input).toHaveValue('000800:MyMod.esp');
+    fireEvent.change(input, { target: { value: '000900:MyMod.esp' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({
+      op: 'set', path: [member('FormKey')], value: '000900:MyMod.esp',
+    });
+  });
+
+  // editor.md, Menus and keys: open field value is a text field's; the FormID reads as a reference.
+  it('offers the FormID no open-field-value menu, where a text field offers one', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    const menuOf = (cell: Element) => cell.closest('[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '';
+    expect(menuOf(formIdCell(container))).not.toContain('stringValue');
+    expect(menuOf(required(screen.getByText('A Name').closest('td'), "Name's cell"))).toContain('stringValue');
+  });
+
+  it('opens no editor on a plugin header\'s FormID, where its other fields open one', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    fireEvent.doubleClick(screen.getByText('A Name'));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 });

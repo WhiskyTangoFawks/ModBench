@@ -72,15 +72,15 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         var repository = Tracked(
             new TreeFile(worldspacePath, _codec.SerializeToBytes(worldspace, Release)));
 
-        // Renumbered in the working tree alone: at HEAD the child still sits under its old key, so
+        // Its FormID changed in the working tree alone: at HEAD the child still sits under its old key, so
         // only the working tree can answer, and only through the document that inlines it.
-        var renumbered = $"00080A:{PluginName}";
+        var moved = $"00080A:{PluginName}";
         var file = Path.Combine(_modFolder, worldspacePath);
         File.WriteAllText(
             file,
-            File.ReadAllText(file).Replace(child.FormKey.ToString(), renumbered, StringComparison.Ordinal));
+            File.ReadAllText(file).Replace(child.FormKey.ToString(), moved, StringComparison.Ordinal));
 
-        Assert.True(repository.HoldsAtEitherRef(Plugin, renumbered));
+        Assert.True(repository.HoldsAtEitherRef(Plugin, moved));
         Assert.True(repository.HoldsAtEitherRef(Plugin, $"00080a:{PluginName}"));
         Assert.False(repository.HoldsAtEitherRef(Plugin, $"00099F:{PluginName}"));
     }

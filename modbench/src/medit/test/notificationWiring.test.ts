@@ -33,6 +33,9 @@ function fakeActiveRecordTracker() {
   };
 }
 
+// A gate holding no read: no edit is in flight in this suite.
+const holdsNothing = { holds: () => false, waitingFor: () => undefined, release: () => false };
+
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
     const client = new InMemoryMEditClient();
@@ -40,7 +43,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
 
     client.emit(rowsChanged(['000001:Test.esp']));
 
@@ -53,7 +56,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
 
     client.emit(rowsChanged(['000002:Other.esp']));
 
@@ -66,7 +69,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
 
     client.emit(pluginChanged());
 
@@ -79,7 +82,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
+    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
 
     unsubscribe();
     client.emit(rowsChanged(['000001:Test.esp']));

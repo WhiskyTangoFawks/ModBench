@@ -148,9 +148,11 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await client.copyRecordAsOverride('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'Other.esp', 'ModB');
 
-    expect(result).toEqual({ refused: true, message: 'Could not renumber 000800:MyPatch.esp — No load order has been received.' });
+    expect(result).toEqual({
+      refused: true, message: 'Could not copy 000800:MyPatch.esp into "Other.esp" — No load order has been received.',
+    });
   });
 });
 
@@ -253,6 +255,84 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
     const result = await client.track([first, second], 'Edits');
 
     expect(result).toEqual({ refused: true, message: 'Could not track 2 plugins — git was not found on PATH.' });
+  });
+});
+
+describe('HttpMEditClient — an applied edit', () => {
+  it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'FormKey', newFormKey: '000900:MyPatch.esp',
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA',
+      { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' },
+    );
+
+    expect(outcome).toEqual({ applied: true, newFormKey: '000900:MyPatch.esp' });
+  });
+
+  it('editRecord answers no new FormKey for an edit of any other field', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'EditorID', newFormKey: null,
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    );
+
+    expect(outcome).toEqual({ applied: true });
+  });
+});
+
+describe('HttpMEditClient — absorbing an upstream update answers per plugin', () => {
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModA' };
+
+  it('reads what was applied as landed, each refusal with its message, and the tracked-files refusal beside them', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [first],
+      refused: [{ plugin: second, refusal: 'CommitFailed', message: "'Update Second.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.absorbUpstreamUpdate('ModA');
+
+    expect(outcome).toEqual({
+      landed: [first],
+      refused: [{ item: second, reason: "'Update Second.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    });
+  });
+
+  it('reads the tracked-files refusal when every plugin landed and that commit did not', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.absorbUpstreamUpdate('ModA');
+
+    expect(outcome).toEqual({
+      landed: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
+    });
+  });
+
+  it('resolves a WriteRefused carrying the server text when the whole answer is refused', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
+      refusal: 'RoundTripFailed', detail: 'Second.esp could not be parsed from its own binary.',
+    })));
+    const client = makeClient(fetch);
+
+    const result = await client.absorbUpstreamUpdate('ModA');
+
+    expect(result).toEqual({
+      refused: true,
+      message: 'Could not absorb the upstream update for "ModA" — Second.esp could not be parsed from its own binary.',
+    });
   });
 });
 

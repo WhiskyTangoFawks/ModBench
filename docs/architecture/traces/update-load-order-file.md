@@ -22,8 +22,9 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
    loader itself.
 2. Plugins commands ask the mEdit client which plugins the game loads with no line, and, for a
    move, which masters each plugin has. An unreachable mEdit answers that it cannot say.
-3. Under one lock per file, the Core box reads the file as it is now and splices it through the
-   codec. Only the bytes the command names change: comments, blank lines, line endings, the byte
+3. Under one lock per file, the Instance adapter reads the file as it is now and splices the
+   command's change through the file's codec: the mod manager's own, inside its implementation,
+   or the game's, for `plugins.txt`. Only the bytes the command names change: comments, blank lines, line endings, the byte
    order mark and every line Modbench does not manage survive (ADR-0017, invariant 2). A result
    equal to the file writes nothing.
 4. The Instance adapter replaces the file whole, through a temporary file and a rename, then
@@ -74,7 +75,7 @@ The Core box refuses before it writes, and names the cause.
 | A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
 | `mods/` cannot be listed | `mod sync` | Nothing is written. The reason goes to the Mods view's message line and the Output. |
-| mEdit cannot say which plugins load with no line, or a folder cannot be listed, the game folder included | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. |
+| mEdit cannot say which plugins load with no line, or a folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. Before mEdit first attaches, plugin sync waits and runs on attach, so a launch reports nothing. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
 
 A system command reports a failure once when it begins, and again only when its reason changes
 ([common.md](../surfaces/common.md), States, story 2).
@@ -87,7 +88,9 @@ Exceptions to the principles:
 
 - **A failed gesture writes nothing.** `uninstall` writes the folder, the line and the `.meta`. When
   the line fails after the trash, the line names a folder that is gone, and `mod sync` drops it. A
-  failed `.meta` mark is a line in the Output, and the uninstall stands. A downloaded file `delete`
+  failed `.meta` mark is a line in the Output, and the uninstall stands. A separator `delete` trashes
+  the folder first, then drops its line; when the line fails after the trash, the line names a
+  folder that is gone, and `mod sync` drops it. A downloaded file `delete`
   whose `.meta` fails after the file leaves a lone `.meta`, which no view shows
   ([downloads.md](../surfaces/downloads.md), Reporting).
 

@@ -18,6 +18,15 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/comment-write.py\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-guard.py\""
+          }
+        ]
       }
     ],
     "Stop": [
@@ -42,13 +51,20 @@
     ]
   },
   "permissions": {
+    "ask": [
+      "Edit(//**/docs/architecture/**)",
+      "Edit(//**/docs/adr/**)",
+      "Edit(//**/CONTEXT.md)",
+      "Edit(//**/CLAUDE.md)",
+      "Edit(//**/.claude/settings*.json)",
+      "Edit(//**/.claude/hooks/**)"
+    ],
     "allow": [
       "Bash(xargs cat)",
       "Bash(git fetch *)",
       "Bash(grep -n 'AddNew\\\\|create\\\\|$create\\\\|SaveAsync\\\\|RecordTableSchema\\\\|AddNew' MEditService/MEditService.Core/Edits/PluginWriter.cs)",
       "Bash(bash ../.claude/skills/mutation-test/run.sh)",
       "Bash(kill %1)",
-      "Bash(pkill -f \"MEditService.Api\")",
       "Bash(curl -s http://localhost:5172/swagger/v1/swagger.json)",
       "Bash(python3 -c \"import sys,json; paths=json.load\\(sys.stdin\\)['paths']; print\\([p for p in paths if 'copy' in p]\\)\")",
       "Bash(dotnet run *)",

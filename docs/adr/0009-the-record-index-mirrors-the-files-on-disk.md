@@ -18,7 +18,7 @@ most of a launch, and no per-record speedup gets under a minute; only not redoin
    structure beside the rows and join at read. Winners are keyed by ref as well as FormKey,
    because the working tree and HEAD can disagree on who wins.
 3. **One index file per instance, inside the instance root.** Plugin identity is
-   `(origin, filename)` ([ADR-0012](0012-every-plugin-copy-is-indexed.md)) and an
+   `(origin, filename)` ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)) and an
    origin is a mod folder name, unique only within one instance, so the instance is the only scope
    the key is valid at; every profile in the instance shares the file. It sits beside MO2's own
    working files, never inside `mods/`, `profiles/`, `overwrite/` or `downloads/`, which a
