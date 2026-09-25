@@ -303,8 +303,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   // MO2 keys separators by name without case (modinfo.cpp, FileNameComparator). Rivals: an exact
-  // match, which lets a second separator take the same folder; or one that refuses a separator's
-  // own name in another case, so a case-only rename is refused.
+  // match, letting two separators share a folder; or refusing a case-only rename.
   describe('a separator name clash, without case', () => {
     const entries = [{ kind: 'separator' as const, name: 'Armor' }];
 
