@@ -11,14 +11,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Two tracked mods sharing one plugin filename (ADR-0012), one winning and one losing;
-/// a winning copy plugins.txt does not list; and a plain winning destination. No index anywhere
+/// <summary>Two tracked mods sharing one plugin filename (ADR-0012), one winning and one overridden;
+/// a winning plugin plugins.txt does not list; and a plain winning destination. No index anywhere
 /// in it.</summary>
-public sealed class LosingCopyFixture : IDisposable
+public sealed class OverriddenAndUnlistedFixture : IDisposable
 {
     public const string PluginName = "Shared.esp";
     public const string WinningOrigin = "WinningMod";
-    public const string LosingOrigin = "LosingMod";
+    public const string OverriddenOrigin = "OverriddenMod";
     public const string SourcePluginName = "CopySource.esm";
     public const string SourceOrigin = "CopySourceMod";
     public const string DestinationPluginName = "Destination.esp";
@@ -27,12 +27,12 @@ public sealed class LosingCopyFixture : IDisposable
     public const string UnlistedOrigin = "UnlistedMod";
 
     public const string WinningNpcEditorId = "WinningNpc";
-    public const string LosingNpcEditorId = "LosingNpc";
+    public const string OverriddenNpcEditorId = "OverriddenNpc";
     public const string CopySourceNpcEditorId = "CopySourceNpc";
     public const string UnlistedNpcEditorId = "UnlistedNpc";
 
     public string WinningModFolder { get; }
-    public string LosingModFolder { get; }
+    public string OverriddenModFolder { get; }
     public string SourceModFolder { get; }
     public string DestinationModFolder { get; }
     public string UnlistedModFolder { get; }
@@ -42,13 +42,13 @@ public sealed class LosingCopyFixture : IDisposable
     public LoadOrderSnapshot LoadOrder { get; }
 
     public PluginCopyKey WinningPlugin { get; } = new(PluginName, WinningOrigin);
-    public PluginCopyKey LosingPlugin { get; } = new(PluginName, LosingOrigin);
+    public PluginCopyKey OverriddenPlugin { get; } = new(PluginName, OverriddenOrigin);
     public PluginCopyKey CopySourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
     public PluginCopyKey UnlistedPlugin { get; } = new(UnlistedPluginName, UnlistedOrigin);
 
     public FormKey WinningNpc { get; }
-    public FormKey LosingNpc { get; }
+    public FormKey OverriddenNpc { get; }
     public FormKey CopySourceNpc { get; }
     public FormKey UnlistedNpc { get; }
 
@@ -60,15 +60,15 @@ public sealed class LosingCopyFixture : IDisposable
     public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
     public CompilePluginHandler CompileHandler { get; }
 
-    private LosingCopyFixture()
+    private OverriddenAndUnlistedFixture()
     {
         var holder = new LoadOrderHolder();
-        WinningModFolder = Directory.CreateTempSubdirectory("medit-losing-copy-winner-").FullName;
-        LosingModFolder = Directory.CreateTempSubdirectory("medit-losing-copy-loser-").FullName;
-        SourceModFolder = Directory.CreateTempSubdirectory("medit-losing-copy-source-").FullName;
-        DestinationModFolder = Directory.CreateTempSubdirectory("medit-losing-copy-dest-").FullName;
-        UnlistedModFolder = Directory.CreateTempSubdirectory("medit-losing-copy-unlisted-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-losing-copy-game-").FullName;
+        WinningModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-winner-").FullName;
+        OverriddenModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-overridden-").FullName;
+        SourceModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-source-").FullName;
+        DestinationModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-dest-").FullName;
+        UnlistedModFolder = Directory.CreateTempSubdirectory("medit-overridden-unlisted-unlisted-").FullName;
+        GameDirectory = Directory.CreateTempSubdirectory("medit-overridden-unlisted-game-").FullName;
 
         var winningPath = Path.Combine(WinningModFolder, PluginName);
         var winningMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -76,11 +76,11 @@ public sealed class LosingCopyFixture : IDisposable
         winningMod.WriteToBinary(winningPath);
         WinningNpc = winningNpc.FormKey;
 
-        var losingPath = Path.Combine(LosingModFolder, PluginName);
-        var losingMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        var losingNpc = losingMod.Npcs.AddNew(LosingNpcEditorId);
-        losingMod.WriteToBinary(losingPath);
-        LosingNpc = losingNpc.FormKey;
+        var overriddenPath = Path.Combine(OverriddenModFolder, PluginName);
+        var overriddenMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        var overriddenNpc = overriddenMod.Npcs.AddNew(OverriddenNpcEditorId);
+        overriddenMod.WriteToBinary(overriddenPath);
+        OverriddenNpc = overriddenNpc.FormKey;
 
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
@@ -104,14 +104,14 @@ public sealed class LosingCopyFixture : IDisposable
         [
             new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
             new LoadOrderEntry(PluginName, winningPath, WinningOrigin, Slot: 1, Enabled: true, Winning: true),
-            new LoadOrderEntry(PluginName, losingPath, LosingOrigin, Slot: 1, Enabled: true, Winning: false),
+            new LoadOrderEntry(PluginName, overriddenPath, OverriddenOrigin, Slot: 1, Enabled: true, Winning: false),
             new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 2, Enabled: true, Winning: true),
             new LoadOrderEntry(UnlistedPluginName, unlistedPath, UnlistedOrigin, Slot: null, Enabled: true, Winning: true),
         ];
         LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         Track(WinningOrigin);
-        Track(LosingOrigin);
+        Track(OverriddenOrigin);
         Track(SourceOrigin);
         Track(DestinationOrigin);
         Track(UnlistedOrigin);
@@ -126,7 +126,7 @@ public sealed class LosingCopyFixture : IDisposable
         CompileHandler = TestEditService.CompileHandler(holder);
     }
 
-    public static LosingCopyFixture Create() => new();
+    public static OverriddenAndUnlistedFixture Create() => new();
 
     private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
@@ -135,7 +135,7 @@ public sealed class LosingCopyFixture : IDisposable
     public string ModFolderOf(PluginCopyKey plugin) => plugin.Origin switch
     {
         WinningOrigin => WinningModFolder,
-        LosingOrigin => LosingModFolder,
+        OverriddenOrigin => OverriddenModFolder,
         DestinationOrigin => DestinationModFolder,
         UnlistedOrigin => UnlistedModFolder,
         _ => SourceModFolder,
@@ -161,7 +161,7 @@ public sealed class LosingCopyFixture : IDisposable
     public void Dispose()
     {
         TryDelete(WinningModFolder);
-        TryDelete(LosingModFolder);
+        TryDelete(OverriddenModFolder);
         TryDelete(SourceModFolder);
         TryDelete(DestinationModFolder);
         TryDelete(UnlistedModFolder);

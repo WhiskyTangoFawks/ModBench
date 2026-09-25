@@ -21,7 +21,7 @@ public record PluginResponse(
     // Empty rather than null when every master resolved.
     IReadOnlyList<MasterIssue> MasterIssues,
     // InLoadOrder (ADR-0013 invariant 3): derived — the winning copy of a listed name, enabled
-    // or not. False for a losing copy or an unlisted file. See PluginMetadata.InLoadOrder.
+    // or not. False for an overridden plugin or an unlisted file. See PluginMetadata.InLoadOrder.
     bool InLoadOrder,
     // Enabled / Winning (ADR-0013): the two registration facts beside the slot, as Mod Management
     // stated them — what lets a row say *why* it does not participate (disabled, or overridden).

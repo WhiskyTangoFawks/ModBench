@@ -51,6 +51,17 @@ internal static class Wire
             ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} to carry a formKey.");
     }
 
+    internal static async Task<string> FirstFormKeyIn(
+        this HttpClient client, string plugin, string origin, string type = "npc_")
+    {
+        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type={type}");
+        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} ({origin}) to carry a formKey.");
+    }
+
+    internal static async Task<JsonElement> Body(this HttpResponseMessage response) =>
+        await response.Content.ReadFromJsonAsync<JsonElement>();
+
     internal static async Task<JsonElement> Record(this HttpClient client, string formKey, string? query = null) =>
         await client.GetFromJsonAsync<JsonElement>(
             $"/records/{Uri.EscapeDataString(formKey)}{(query is null ? string.Empty : "?" + query)}");

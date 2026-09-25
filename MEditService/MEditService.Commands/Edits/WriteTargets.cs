@@ -145,24 +145,29 @@ internal sealed class WriteTargets(
         (modFolder, repository) = (folder, opened);
 
         // Compile filters this door to ExternalChangeUnanswered alone: an open question must win
-        // over LosingCopy, or a losing copy with a question compiles unblocked.
+        // over the load-order refusals, or a plugin the game does not load compiles unblocked.
         if (BlockingQuestion(loadOrder.Current, folder) is { } question)
             return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
 
-        return RefuseIfLosingCopy(plugin);
+        return RefuseIfNotLoaded(plugin);
     }
 
-    // Tracking is per mod folder and does not imply winning (ADR-0012 invariant 5). Refuses only
-    // a copy the override order does not resolve to.
-    private RecordEditResult? RefuseIfLosingCopy(PluginCopyKey plugin)
-    {
-        if (loadOrder.Current.Registration(plugin) is not { Winning: false }) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.LosingCopy,
-            $"{plugin.Name} ({plugin.Origin}) is a losing copy — the game does not load this copy, " +
-            "so it is read-only. Raise its mod's priority to make this copy the one the game loads.");
-    }
+    // Tracking is per mod folder and implies neither winning nor a plugins.txt line (ADR-0012
+    // invariant 5). A disabled line is still a line, so its plugin stays writable.
+    private RecordEditResult? RefuseIfNotLoaded(PluginCopyKey plugin) =>
+        loadOrder.Current.Registration(plugin) switch
+        {
+            { Winning: false } => RecordEditResult.Refused(
+                RecordEditRefusal.OverriddenPlugin,
+                $"{plugin.Name} ({plugin.Origin}) is an overridden plugin — another mod's {plugin.Name} wins, " +
+                "so the game does not load this one and it is read-only. Raise its mod's priority to make " +
+                "it the one the game loads."),
+            { LoadOrderIndex: null } => RecordEditResult.Refused(
+                RecordEditRefusal.UnlistedPlugin,
+                $"{plugin.Name} ({plugin.Origin}) has no plugins.txt line, so the game does not load it and " +
+                "it is read-only. Plugin sync gives it a line."),
+            _ => null,
+        };
 
     /// <summary>The mod's unanswered question while its change still stands, or null, for every write
     /// to the mod, Track's included. The marker caches the last verdict (ADR-0003): present means
