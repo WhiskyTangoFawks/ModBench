@@ -178,7 +178,7 @@ describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const PATCH_FILES = originFiles(
-    [{ name: 'MyPatch.esp', path: '/instance/mods/ModA/MyPatch.esp', origin: 'ModA', slot: 0, enabled: true, winning: true }], 'ModA');
+    [{ path: '/instance/mods/ModA/MyPatch.esp', origin: 'ModA' }], 'ModA');
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);

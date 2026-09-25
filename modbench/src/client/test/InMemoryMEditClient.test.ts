@@ -12,7 +12,7 @@ describe('InMemoryMEditClient — recorded calls', () => {
 
   it('records a command call with its arguments', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', undefined);
+    client.setCommandResult('compile', { landed: [], refused: [] });
     await client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }], 'main');
     expect(client.calls).toContainEqual({ method: 'compile', args: [[{ name: 'MyMod.esp', origin: 'MyMod' }], 'main'] });
   });
@@ -90,7 +90,7 @@ describe('InMemoryMEditClient — a scripted command failure', () => {
 
     await expect(client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }], 'main')).rejects.toThrow('the compile step failed');
 
-    client.setCommandResult('compile', undefined);
+    client.setCommandResult('compile', { landed: [], refused: [] });
     await expect(client.compile([{ name: 'MyMod.esp', origin: 'MyMod' }], 'main')).rejects.toThrow('the compile step failed');
   });
 });
