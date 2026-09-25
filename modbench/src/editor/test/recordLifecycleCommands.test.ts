@@ -423,13 +423,12 @@ describe('registerRecordLifecycleCommands', () => {
 });
 
 describe('registerRecordCopyCommands', () => {
-  function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
+  function invoke(client: InMemoryMEditClient) {
     const treeSync = fakeTreeSync();
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
-    const ask = scriptedDialog(...answers);
-    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
-    return { treeSync, refreshMatchingPlugins, reporter, ask };
+    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, treeSync, refreshMatchingPlugins);
+    return { treeSync, refreshMatchingPlugins, reporter };
   }
 
   function scriptDestinationPick(client: InMemoryMEditClient) {
@@ -565,12 +564,11 @@ describe('registerRecordCopyCommands', () => {
       return Promise.resolve({ refused: true, message: refusalMessage });
     });
     scriptDestinationPick(client);
-    const { reporter, ask } = invoke(client);
+    const { reporter } = invoke(client);
 
     await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
 
     expect(capturedCallback).toBeUndefined();
     expect(reporter.reports).toEqual([{ severity: 'error', message: refusalMessage, detail: undefined }]);
-    expect(ask.asked).toEqual([]);
   });
 });

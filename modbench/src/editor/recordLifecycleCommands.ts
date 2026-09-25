@@ -271,7 +271,7 @@ async function runCopyRecordCommand(
 // a column header alike — `arg` resolves to the same identity either way.
 export function registerRecordCopyCommands(
   client: RecordCopyClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
+  reporter: Reporter,
   treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
