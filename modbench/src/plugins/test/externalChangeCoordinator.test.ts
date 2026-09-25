@@ -26,7 +26,6 @@ function makeDeps(
     client,
     showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
-    showError: vi.fn(),
     reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
@@ -72,7 +71,8 @@ describe('subscribeQuestionOpen', () => {
   it('dispatches Absorb; a landed Absorb is silent, and neither rebases the edit branch nor opens the merge editor', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
+    const reporter = recordingReporter();
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON), reporter });
     subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
@@ -80,7 +80,7 @@ describe('subscribeQuestionOpen', () => {
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
     expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
-    expect(deps.showError).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
     expect(deps.openMergeEditor).not.toHaveBeenCalled();
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });

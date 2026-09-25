@@ -51,7 +51,7 @@ public sealed class SourceRepositoryRefEncodingTests
     }
 
     [Fact]
-    public void CommitPristineToMain_Succeeds_ForASpaceNamedPlugin()
+    public void CommitBaselinesToMain_Succeeds_ForASpaceNamedPlugin()
     {
         var modFolder = NewModFolder();
         const string plugin = "LitR - Settings Holotapes Sorting.esp";

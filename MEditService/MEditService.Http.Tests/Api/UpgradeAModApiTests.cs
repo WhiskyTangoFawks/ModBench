@@ -99,22 +99,6 @@ public sealed class UpgradeAModApiTests : HostedTests
         return (fx, modFolder);
     }
 
-    // git's own hook aborts main's move to the commit naming the plugin, as another tool holding main
-    // would.
-    private static void AnotherToolHoldsMainAgainst(string modFolder, string plugin)
-    {
-        var hook = Path.Combine(modFolder, ".git", "hooks", "reference-transaction");
-        OtherTool.WritesTheFile(hook,
-            "#!/bin/sh\n" +
-            "[ \"$1\" = prepared ] || exit 0\n" +
-            "while read old new ref; do\n" +
-            $"  if [ \"$ref\" = refs/heads/main ] && git log -1 --format=%s \"$new\" | grep -qF '{plugin}'; then\n" +
-            "    echo 'main is held by another tool' >&2; exit 1\n" +
-            "  fi\n" +
-            "done\n");
-        FileModes.Set(hook, "755");
-    }
-
     [Fact]
     public async Task TheBaselineAnswer_WhenTheSecondPluginsCommitFails_AnswersTheFirstApplied_AndTheSecondRefused()
     {
@@ -124,7 +108,7 @@ public sealed class UpgradeAModApiTests : HostedTests
         OtherTool.WritesThePlugin(Path.Combine(modFolder, Plugin), mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
         OtherTool.WritesThePlugin(Path.Combine(modFolder, SecondPlugin), mod => mod.Npcs.AddNew(SecondNpc).HeightMax = 0.9f);
         await stream.EventsUntil("question-open");
-        AnotherToolHoldsMainAgainst(modFolder, SecondPlugin);
+        RefMoveHook.RefuseMainMovesNaming(modFolder, SecondPlugin);
 
         var answered = await Client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin });
 

@@ -250,7 +250,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
     }
 
     private void CommitToMain(IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines) =>
-        Assert.Null(SourceRepository.CommitPristineToMain(ModFolder, baselines));
+        Assert.Null(SourceRepository.CommitBaselinesToMain(ModFolder, baselines));
 
     private static void Track(string modFolder, string plugin)
     {

@@ -11,9 +11,7 @@ export interface ExternalChangeCoordinatorDeps {
   client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
   showDialog: AskQuestion;
   openMergeEditor: OpenMergeEditor;
-  /** ADR-0019: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
-  showError: (message: string) => void;
-  /** ADR-0019: Absorb's partial answer — each plugin that did not land, and the tracked files. */
+  /** ADR-0019: each gesture's refusal, and each plugin of Absorb's answer that did not land. */
   reporter: Pick<Reporter, 'report' | 'selectionOutcome'>;
   /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0017). */
   refreshTree: () => void;

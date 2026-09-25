@@ -26,16 +26,16 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
 // check never sees — unsurfaced it leaves the mod unchanged and still read-only with nothing
 // saying why (ADR-0019).
 function reportTypedRefusal(
-  deps: Pick<ExternalChangeCoordinatorDeps, 'log' | 'showError'>,
+  deps: Pick<ExternalChangeCoordinatorDeps, 'log' | 'reporter'>,
   callName: string, origin: string, summary: string, refusalReason: string | null | undefined,
 ): void {
   deps.log?.(`[externalChangeGestures] ${callName}(${origin}) refused: ${refusalReason ?? ''}`);
-  deps.showError(`${summary} — ${refusalReason ?? ''}`);
+  deps.reporter.report('error', `${summary} — ${refusalReason ?? ''}`);
 }
 
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.keepAsMyEdit(origin);
-  if (result && isRefused(result)) { deps.showError(result.message); return; }
+  if (result && isRefused(result)) { deps.reporter.report('error', result.message); return; }
   if (!result?.succeeded) {
     if (result) reportTypedRefusal(deps, 'keepAsMyEdit', origin, `Could not keep "${origin}" as your own edit`, result.refusalReason);
     return;
@@ -47,7 +47,7 @@ async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string)
 // did. The question stays open for it, and answering again finishes the update.
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.absorbUpstreamUpdate(origin);
-  if (isRefused(result)) { deps.showError(result.message); return; }
+  if (isRefused(result)) { deps.reporter.report('error', result.message); return; }
   const total = result.landed.length + result.refused.length;
   deps.reporter.selectionOutcome(
     `Could not absorb ${result.refused.length} of ${total} plugins of the upstream update for "${origin}".`,
@@ -75,12 +75,12 @@ async function dispatchOne(
 // The manual, re-runnable rebase gesture, origin-scoped: the repo, not any one plugin, is the unit
 // of baselines and rebase. Resumption-aware — a conflicted rebase re-runs this.
 export async function runRebase(
-  deps: Pick<ExternalChangeCoordinatorDeps, 'client' | 'openMergeEditor' | 'showError' | 'refreshTree' | 'refreshMatchingPlugins'>,
+  deps: Pick<ExternalChangeCoordinatorDeps, 'client' | 'openMergeEditor' | 'reporter' | 'refreshTree' | 'refreshMatchingPlugins'>,
   origin: string,
 ): Promise<RebaseResult | null> {
   const result = await deps.client.rebaseOntoMain(origin);
   if (!result) return null;
-  if (isRefused(result)) { deps.showError(result.message); return null; }
+  if (isRefused(result)) { deps.reporter.report('error', result.message); return null; }
   if (result.outcome === 'Conflicted') {
     for (const path of result.conflictedPaths) {
       await deps.openMergeEditor(origin, path);

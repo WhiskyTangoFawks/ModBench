@@ -14,8 +14,11 @@ internal static class PluginBaselines
     internal static void CommitToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
-        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null) =>
-        Assert.Null(SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges));
+        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
+    {
+        Assert.Null(SourceRepository.CommitBaselinesToMain(modFolder, baselines));
+        Assert.Null(SourceRepository.CommitTrackedFilesToMain(modFolder, trackedFileChanges ?? []));
+    }
 
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> Of(IEnumerable<TreeFile> files) =>
     [

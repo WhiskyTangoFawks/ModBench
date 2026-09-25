@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// `showError` must go through the injected reporter (ADR-0019) — the log line and the toast
-// come from the same call, not a raw `vscode.window.showErrorMessage`.
+// Every refusal goes through the injected reporter (ADR-0019) — the log line and the toast come
+// from the same call, not a raw `vscode.window.showErrorMessage`.
 const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   subscribeQuestionOpen: vi.fn(
-    (_deps: { showError: (message: string) => void; reporter: unknown; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
+    (_deps: { reporter: unknown; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
 }));
 
 import { EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
@@ -54,20 +54,11 @@ describe('wireQuestionOpen', () => {
     expect(wire(scriptedDialog(), presentCrashRepair).deps.presentCrashRepair).toBe(presentCrashRepair);
   });
 
-  it("hands the coordinator the reporter it was given, for Absorb's partial answer", () => {
+  // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is
+  // that the coordinator's refusals reach the reporter it was handed.
+  it('hands the coordinator the reporter it was given', () => {
     const { reporter, deps } = wire();
 
     expect(deps.reporter).toBe(reporter);
-  });
-
-  // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is
-  // that the coordinator's refusal reaches the reporter at all, at the error tier.
-  it('routes a gesture refusal to the reporter it was handed', () => {
-    const { reporter, deps } = wire();
-    deps.showError('Could not keep "ModA" as your own edit — x');
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined },
-    ]);
   });
 });

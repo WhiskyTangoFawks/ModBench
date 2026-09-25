@@ -122,8 +122,8 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<TrackResponse>()
             .ProducesProblem(400)
-            // A plugin that cannot be read or parsed, or git missing, refuses the whole answer before
-            // anything is written; every other refusal is an item of the answer.
+            // A plugin that cannot be read or parsed refuses the whole answer before anything is
+            // written; every other refusal but git missing (500) is an item of the answer.
             .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);

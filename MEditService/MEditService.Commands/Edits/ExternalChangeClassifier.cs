@@ -70,15 +70,18 @@ internal static class ExternalChangeClassifier
         LoadOrderSnapshot loadOrder, string modFolder)
     {
         var plugins = new List<(string, byte[])>();
-        foreach (var copy in loadOrder.Copies)
+        foreach (var copy in CopiesIn(loadOrder, modFolder))
         {
-            if (!string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal))
-                continue;
             if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
             plugins.Add((copy.Name, bytes));
         }
         return plugins;
     }
+
+    /// <summary>Every copy the load order holds in <paramref name="modFolder"/>.</summary>
+    public static IEnumerable<RegisteredCopy> CopiesIn(LoadOrderSnapshot loadOrder, string modFolder) =>
+        loadOrder.Copies.Where(copy =>
+            string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal));
 }
 
 /// <summary>What classification answers. Never both a crash and an external change for one

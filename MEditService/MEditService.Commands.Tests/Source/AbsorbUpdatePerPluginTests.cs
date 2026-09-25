@@ -91,7 +91,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         ChangeBothPluginsAndTheAsset();
         SourceRepository.RaiseExternalChangeQuestion(_modFolder, "unanswered");
-        RefuseEveryMoveOfMainTo(Second);
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, Second);
 
         await Absorb();
 
@@ -106,7 +106,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     public async Task Absorb_WhenTheSecondPluginsCommitFails_AnswersTheFirstApplied_AndTheSecondRefusedNamingItsCommit()
     {
         ChangeBothPluginsAndTheAsset();
-        RefuseEveryMoveOfMainTo(Second);
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, Second);
 
         var result = await Absorb();
 
@@ -114,14 +114,14 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         var refused = Assert.Single(result.Refused);
         Assert.Equal((new PluginCopyKey(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
         Assert.Contains($"'Update {Second}' could not be committed to main", refused.Message, StringComparison.Ordinal);
-        Assert.Null(result.TrackedFilesRefusal);
+        Assert.Contains($"'Update {Second}'", result.TrackedFilesRefusal, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Absorb_WhenTheFirstPluginsCommitFails_RefusesThePluginItNeverReached_NamingTheCommitThatStoppedIt()
     {
         ChangeBothPluginsAndTheAsset();
-        RefuseEveryMoveOfMainTo(First);
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, First);
 
         var result = await Absorb();
 
@@ -137,7 +137,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         ChangeBothPluginsAndTheAsset();
-        RefuseEveryMoveOfMainTo(Origin);
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, Origin);
 
         var result = await Absorb();
 
@@ -153,9 +153,9 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         ChangeBothPluginsAndTheAsset();
-        RefuseEveryMoveOfMainTo(Second);
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, Second);
         await Absorb();
-        File.Delete(ReferenceTransactionHook);
+        RefMoveHook.Remove(_modFolder);
 
         var result = await Absorb();
 
@@ -170,7 +170,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         WritePlugin(Second, heightMax: 2.0f);
-        RefuseEveryMoveOf(SourceRepository.LastCompileRef(Second));
+        RefMoveHook.RefuseEveryMoveOf(_modFolder, SourceRepository.LastCompileRef(Second));
 
         var result = await Absorb();
 
@@ -180,6 +180,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
         Assert.Contains($"landed on main, but {SourceRepository.LastCompileRef(Second)} could not be moved", refused.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("could not be committed", refused.Message, StringComparison.Ordinal);
+        Assert.Null(result.TrackedFilesRefusal);
     }
 
     [Fact]
@@ -195,7 +196,8 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
             var refusal = result.AnswerRefusal.Require();
             Assert.Equal(TrackRefusal.RoundTripFailed, refusal.Refusal);
-            Assert.Contains(Origin, refusal.Message, StringComparison.Ordinal);
+            Assert.Contains($"{Second} ({Origin})", refusal.Message, StringComparison.Ordinal);
+            Assert.Contains("denied", refusal.Message, StringComparison.Ordinal);
             Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main").Trim());
         }
         finally
@@ -204,41 +206,67 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Absorb_OfAModWhoseMetaIniRecordsAVersion_NamesTheVersionInEachPluginsSubject()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), "version=2.0.0\n");
+        ChangeBothPluginsAndTheAsset();
+        RefMoveHook.RefuseMainMovesNaming(_modFolder, Second);
+
+        var result = await Absorb();
+
+        Assert.Equal([$"Update {First} to 2.0.0"], SubjectsOnMainSince(mainBefore));
+        Assert.Contains($"'Update {Second} to 2.0.0' could not be committed to main", Assert.Single(result.Refused).Message, StringComparison.Ordinal);
+    }
+
+    // The scratch work tree is Absorb's own; failing to remove it is no failure of the answer.
+    [Fact]
+    public async Task Absorb_WhenItsScratchTreeCannotBeRemoved_StillAnswersEveryPluginApplied()
+    {
+        ChangeBothPluginsAndTheAsset();
+        var held = Path.Combine(_instanceRoot, "held-scratch-tree");
+        RefMoveHook.AfterMainMovesNaming(_modFolder, First, $"pwd > '{held}'; chmod 500 .");
+        try
+        {
+            var result = await Absorb();
+
+            Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+            Assert.Empty(result.Refused);
+            Assert.Null(result.TrackedFilesRefusal);
+        }
+        finally
+        {
+            if (File.Exists(held) && File.ReadAllText(held).Trim() is { Length: > 0 } scratch && Directory.Exists(scratch))
+            {
+                FileModes.Set(scratch, "700");
+                Directory.Delete(scratch, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Absorb_WhenTheTrackedFilesCannotBeStagedAfterEverythingLanded_AnswersThePluginsApplied_AndTheTrackedFilesRefused()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        ChangeBothPluginsAndTheAsset();
+        SourceRepository.RaiseExternalChangeQuestion(_modFolder, "unanswered");
+        File.WriteAllText(Path.Combine(_modFolder, ".git", "index.lock"), "");
+
+        var result = await Absorb();
+
+        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Empty(result.Refused);
+        Assert.Contains("index.lock", result.TrackedFilesRefusal, StringComparison.Ordinal);
+        Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(_modFolder));
+    }
+
     private void ChangeBothPluginsAndTheAsset()
     {
         WritePlugin(First, heightMax: 2.0f);
         WritePlugin(Second, heightMax: 2.0f);
         File.WriteAllText(Path.Combine(_modFolder, Asset), "new pixels");
-    }
-
-    private string ReferenceTransactionHook => Path.Combine(_modFolder, ".git", "hooks", "reference-transaction");
-
-    // git's own hook aborts the ref transaction, so the commit that names the plugin fails where git
-    // itself fails it: moving main.
-    private void RefuseEveryMoveOfMainTo(string plugin)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(ReferenceTransactionHook).Require());
-        File.WriteAllText(ReferenceTransactionHook,
-            "#!/bin/sh\n" +
-            "[ \"$1\" = prepared ] || exit 0\n" +
-            "while read old new ref; do\n" +
-            $"  if [ \"$ref\" = refs/heads/main ] && git log -1 --format=%s \"$new\" | grep -qF '{plugin}'; then\n" +
-            "    echo 'main is held by another tool' >&2; exit 1\n" +
-            "  fi\n" +
-            "done\n");
-        FileModes.Set(ReferenceTransactionHook, "755");
-    }
-
-    private void RefuseEveryMoveOf(string gitRef)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(ReferenceTransactionHook).Require());
-        File.WriteAllText(ReferenceTransactionHook,
-            "#!/bin/sh\n" +
-            "[ \"$1\" = prepared ] || exit 0\n" +
-            "while read old new ref; do\n" +
-            $"  if [ \"$ref\" = '{gitRef}' ]; then echo 'the ref is held by another tool' >&2; exit 1; fi\n" +
-            "done\n");
-        FileModes.Set(ReferenceTransactionHook, "755");
     }
 
     private QuestionOpenNotification Settle()

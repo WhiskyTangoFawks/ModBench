@@ -7,7 +7,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 /// <summary>The load-bearing claim is "no checkout at all": the edit branch's working tree, index
 /// and HEAD come out byte-identical, dirt included.</summary>
-public sealed class SourceRepositoryCommitPristineToMainTests
+public sealed class SourceRepositoryAbsorbCommitsTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-absorb-main-").FullName;
     private const string Plugin = "Test.esp";
@@ -23,7 +23,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         ([new TreeFile(relativePath, System.Text.Encoding.UTF8.GetBytes(content))], trailers);
 
     [Fact]
-    public void CommitPristineToMain_AdvancesMain_WithTheNewContentAndFreshTrailers()
+    public void AbsorbCommits_AdvancesMain_WithTheNewContentAndFreshTrailers()
     {
         var modFolder = NewModFolder();
         var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
@@ -45,7 +45,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     }
 
     [Fact]
-    public void CommitPristineToMain_CommitsEachPlugin_ThenTheChangedTrackedFiles_EachOnItsOwn()
+    public void AbsorbCommits_CommitsEachPlugin_ThenTheChangedTrackedFiles_EachOnItsOwn()
     {
         var root = Directory.CreateTempSubdirectory("medit-absorb-main-").FullName;
         var modFolder = Path.Combine(root, "UpdatedMod");
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
 
     // "[a].dds" read as a glob also names "a.dds", which changed on disk but is not in the answer.
     [Fact]
-    public void CommitPristineToMain_CommitsExactlyTheNamedTrackedFiles_WhenANameHoldsGlobCharacters()
+    public void AbsorbCommits_CommitsExactlyTheNamedTrackedFiles_WhenANameHoldsGlobCharacters()
     {
         var modFolder = NewModFolder();
         try
@@ -115,7 +115,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     [Fact]
-    public void CommitPristineToMain_AdvancesEachPluginsParkedRef_ToItsOwnNewBaselineCommit()
+    public void AbsorbCommits_AdvancesEachPluginsParkedRef_ToItsOwnNewBaselineCommit()
     {
         var modFolder = NewModFolder();
         var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
@@ -140,7 +140,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     }
 
     [Fact]
-    public void CommitPristineToMain_TouchesNeitherTheEditBranchsWorkingTreeNorItsHeadNorItsDirt()
+    public void AbsorbCommits_TouchesNeitherTheEditBranchsWorkingTreeNorItsHeadNorItsDirt()
     {
         var modFolder = NewModFolder();
         var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";

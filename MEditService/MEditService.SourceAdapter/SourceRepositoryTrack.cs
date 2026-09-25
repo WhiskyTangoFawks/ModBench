@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using Serilog;
 
 namespace MEditService.SourceAdapter;
 
@@ -106,13 +107,10 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
     }
 
-    /// <summary>Absorb's commits to main, by plumbing so the edit branch is untouched: each plugin's
-    /// baseline, then the changed tracked files. The first failure stops the run; a null baseline is
-    /// the tracked files'.</summary>
-    public static (BaselineTrailers? Baseline, string Subject, string Reason)? CommitPristineToMain(
-        string modFolder,
-        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
-        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
+    /// <summary>Absorb's baselines on main, one commit each, by plumbing so the edit branch is
+    /// untouched. The first failure stops the run and is answered with its baseline.</summary>
+    public static (BaselineTrailers Baseline, string Subject, string Reason)? CommitBaselinesToMain(
+        string modFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         GitCli.EnsureOnPath();
         var gitDir = Path.Combine(modFolder, ".git");
@@ -136,23 +134,30 @@ public sealed partial class SourceRepository
                     is { } refFailure)
                     return (trailers, subject, $"landed on main, but {LastCompileRef(trailers.Plugin)} could not be moved to it: {refFailure}");
             }
+            return null;
         }
         finally
         {
-            Directory.Delete(scratchDir, recursive: true);
+            // Thrown from here, it would replace the answer of commits that already landed.
+            if (FailureOf(() => Directory.Delete(scratchDir, recursive: true)) is { } cleanupFailure)
+                Log.Warning("Could not remove Absorb's scratch work tree {ScratchDir}: {Reason}", scratchDir, cleanupFailure);
         }
-
-        // A deleted file is missing from the work tree, so `add -A` stages its removal.
-        if (trackedFileChanges is { Count: > 0 } changes)
-        {
-            var subject = $"Update {ModNameIn(modFolder)}";
-            var failure = FailureOf(() => CommitToMain(gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
-            if (failure is { } reason) return (null, subject, $"could not be committed to main: {reason}");
-        }
-        return null;
     }
 
-    // No rollback beyond git's: the commits before a failed one stand.
+    /// <summary>The mod's changed tracked files on main in one commit, by plumbing, the failure
+    /// answered with its subject. A deleted file is missing from the work tree, so `add -A` stages
+    /// its removal.</summary>
+    public static (string Subject, string Reason)? CommitTrackedFilesToMain(string modFolder, IReadOnlyList<TrackedFileChange> changes)
+    {
+        if (changes.Count == 0) return null;
+        var subject = $"Update {ModNameIn(modFolder)}";
+        var failure = FailureOf(() => CommitToMain(
+            Path.Combine(modFolder, ".git"), modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
+        return failure is { } reason ? (subject, $"could not be committed to main: {reason}") : null;
+    }
+
+    // No rollback beyond git's: the commits before a failed one stand, and any failure, git missing
+    // mid-run included, is answered rather than thrown past them (ADR-0019).
     private static string? FailureOf(Action step)
     {
         try
@@ -160,7 +165,7 @@ public sealed partial class SourceRepository
             step();
             return null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandFailedException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return ex.Message.Trim();
         }

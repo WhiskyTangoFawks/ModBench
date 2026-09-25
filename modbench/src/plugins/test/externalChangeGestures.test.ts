@@ -16,7 +16,7 @@ function makeRebaseDeps(client: RebaseClient) {
   return {
     client: fullClient(client),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
-    showError: vi.fn(),
+    reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
   };
@@ -63,7 +63,7 @@ describe('runRebase', () => {
     const result = await runRebase(deps, 'ModA');
 
     expect(result).toBeNull();
-    expect(deps.showError).toHaveBeenCalledWith('Could not rebase "ModA" — boom');
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not rebase "ModA" — boom', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });
@@ -83,7 +83,6 @@ function makeDispatchDeps(client: RebaseClient, showDialogChoice: string | undef
     client: fullClient(client),
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
-    showError: vi.fn(),
     reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
@@ -131,7 +130,7 @@ describe('handleUnanswered', () => {
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('Could not keep "ModA" as your own edit — boom');
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — boom', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
@@ -142,7 +141,7 @@ describe('handleUnanswered', () => {
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('Could not keep "ModA" as your own edit — x');
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
@@ -153,7 +152,7 @@ describe('handleUnanswered', () => {
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.reporter.reports).toEqual([]);
     expect(deps.reporter.reports).toEqual([]);
   });
 
@@ -165,7 +164,7 @@ describe('handleUnanswered', () => {
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('Could not absorb the upstream update for "ModA" — could not be parsed');
+    expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not absorb the upstream update for "ModA" — could not be parsed', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 

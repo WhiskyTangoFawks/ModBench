@@ -31,7 +31,6 @@ export function wireQuestionOpen(
     client,
     showDialog: askQuestion,
     openMergeEditor: makeMergeEditorOpener(client, outputChannel, reporter),
-    showError: (message) => reporter.report('error', message),
     reporter,
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
