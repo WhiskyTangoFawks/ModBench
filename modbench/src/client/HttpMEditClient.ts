@@ -11,7 +11,7 @@ import {
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
-  type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
+  type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -345,45 +345,23 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** No confirmation — xEdit's own CopyInto asks nothing before an override copy. Success
-   *  carries no new FormKey: an override echoes the caller's own. */
-  async copyRecordAsOverride(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-  ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCopyAsOverrideResponse>({
-      op: `copyRecordAsOverride(${formKey})`,
-      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
-      post: () => this.apiClient.POST('/records/{formKey}/copy-as-override', {
-        params: { path: { formKey } },
-        body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
+  async copyRecords(
+    records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
+  ): Promise<SelectionOutcome<CopyItem> | WriteRefused> {
+    const counted = records.length === 1 ? '1 record' : `${records.length} records`;
+    const answer = await this.mutate({
+      op: `copyRecords(${counted}, ${mode})`,
+      failMsg: `Could not copy ${counted}`,
+      post: () => this.apiClient.POST('/records/copy', {
+        body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
     });
-  }
-
-  /** A deep copy under a fresh FormKey, no EditorID prompt. Resolves `undefined` when the caller
-   *  declines the ESL prompt. */
-  async copyRecordAsNewRecord(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-    requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCopyAsNewRecordResponse>({
-      op: `copyRecordAsNewRecord(${formKey})`,
-      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
-      post: () => this.apiClient.POST('/records/{formKey}/copy-as-new-record', {
-        params: { path: { formKey } },
-        body: {
-          sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey: requestedFormKey ?? null,
-        },
-      }),
-      onEslContradiction: onEslContradiction && (async (message) => (
-        (await onEslContradiction(message))
-          ? this.copyRecordAsNewRecord(
-            formKey, sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey,
-            onEslContradiction,
-          )
-          : undefined
-      )),
-    });
+    if (answer === undefined) return { refused: true, message: `Could not copy ${counted} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied.map(({ record, destination }) => ({ record, destination })),
+      refused: answer.refused.map((r) => ({ item: { record: r.record, destination: r.destination }, reason: r.message })),
+    };
   }
 
   /** {@link WriteRefused} on a transport/HTTP failure — distinct from `succeeded: false`, a typed
@@ -531,13 +509,12 @@ export class HttpMEditClient implements MEditClient {
     return data ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
-  // See the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
-  // yet", not a fault, same posture as getRecordOwner's own 404 case above.
-  async getRecordOverridePlugins(formKey: string): Promise<string[]> {
+  // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
+  async getRecordHolders(formKey: string): Promise<PluginAddress[]> {
     const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
     if (response.status === 404) return [];
-    this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
-    return (data?.overrides ?? []).map((o) => o.plugin);
+    this.ensureOk(`getRecordHolders(${formKey})`, response, error);
+    return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
   }
 
   async getReferences(formKey: string): Promise<ReferenceResult[]> {

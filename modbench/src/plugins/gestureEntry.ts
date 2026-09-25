@@ -110,6 +110,7 @@ export interface PluginsKeyContext {
   readonly allUntrackedInMod: boolean;
   readonly singleEditableRecordType: boolean;
   readonly allDeletableRecords: boolean;
+  readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
 }
 
@@ -123,6 +124,7 @@ export function pluginsKeyContext(
     allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
     singleEditableRecordType: hasFlags(onlySelected(selection, 'recordType'), 'tracked', 'editable'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
+    allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),
   };
 }
