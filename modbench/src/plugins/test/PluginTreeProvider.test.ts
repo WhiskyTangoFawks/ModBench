@@ -13,6 +13,7 @@ import {
   headerFormKeyFor,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
+import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
@@ -290,9 +291,9 @@ describe('RecordTypeNode', () => {
     expect(node.description).toBe('1,234');
   });
 
-  it('has contextValue "recordType"', () => {
+  it('states no record edit when no one has described its plugin', () => {
     const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 10);
-    expect(node.contextValue).toBe('recordType');
+    expect(node.contextValue).toBe('recordType untracked');
   });
 });
 
@@ -320,27 +321,26 @@ describe('RecordNode', () => {
     expect(firstCommandArgument(node.command).label).toBe(record.formKey);
   });
 
-  it('contextValue is recordTracked for a master row in a tracked plugin', () => {
+  it('states a record of a tracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, true);
-    expect(node.contextValue).toBe('recordTracked');
+    expect(node.contextValue).toBe('record tracked editable');
   });
 
-  it('contextValue is recordUntracked for a master row in an untracked plugin', () => {
+  it('states a record of an untracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false);
-    expect(node.contextValue).toBe('recordUntracked');
+    expect(node.contextValue).toBe('record untracked editable');
   });
 
-  // An override doesn't own its FormID; tracked-ness never rescues it.
-  it('contextValue is recordOverride when the row\'s plugin is not the FormKey\'s origin', () => {
+  // plugins.md, Menus and keys: the record menu is the same on every record row, an override's too.
+  it('states an override as it states the plugin\'s own records', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect(new RecordNode(record).contextValue).toBe('recordOverride');
-    expect(new RecordNode(record, undefined, false, true).contextValue).toBe('recordOverride');
+    expect(new RecordNode(record).contextValue).toBe('record untracked editable');
+    expect(new RecordNode(record, undefined, false, true).contextValue).toBe('record tracked editable');
   });
 
-  it('contextValue stays recordImmutable for an override of an immutable plugin', () => {
-    const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    const node = new RecordNode(record, undefined, true);
-    expect(node.contextValue).toBe('recordImmutable');
+  it('states a record of an immutable plugin read-only', () => {
+    const node = new RecordNode(makeRecord(0), undefined, true);
+    expect(node.contextValue).toBe('record untracked');
   });
 
   // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
@@ -410,6 +410,28 @@ describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () =>
 // A record-scoped command acts on the clicked row's own copy, so the row says which copy it is
 // ((plugin, origin), ADR-0012); rows whose plugin cannot be edited hide Remove.
 
+// plugins.md, Menus and keys: the record menu is on worldspaces, cells and placed references too,
+// so each states its record as the record gestures read one: FormKey, EditorID, plugin and origin.
+describe('worldspace, cell and placed rows state their record', () => {
+  it.each([
+    ['worldspace', new WorldspaceNode('A.esp', { formKey: '000801:A.esp', editorId: 'World', hasParseFailure: false }, 'ModA')],
+    ['cell', new CellNode('A.esp', {
+      formKey: '000801:A.esp', editorId: 'World', cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+    }, 'ModA')],
+    ['placed', new PlacedNode('A.esp', {
+      formKey: '000801:A.esp', editorId: 'World', baseFormKey: null, recordType: 'refr', hasParseFailure: false,
+    }, 'ModA')],
+  ])('a %s row', (_kind, node) => {
+    expect({ formKey: node.formKey, editorId: node.editorId, plugin: node.plugin, origin: node.origin })
+      .toEqual({ formKey: '000801:A.esp', editorId: 'World', plugin: 'A.esp', origin: 'ModA' });
+  });
+
+  it('states no EditorID for a record that has none', () => {
+    const node = new PlacedNode('A.esp', { formKey: '000801:A.esp', editorId: null, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false });
+    expect(node.editorId).toBeUndefined();
+  });
+});
+
 describe('record rows carry their copy identity', () => {
   it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
     const repo = makeClient();
@@ -421,17 +443,17 @@ describe('record rows carry their copy identity', () => {
     expect(expectInstanceOf(rec, RecordNode).origin).toBe('ModA');
   });
 
-  it('record rows of a plugin outside the load order are read-only: contextValue recordImmutable', async () => {
+  it('record rows of a plugin outside the load order are read-only', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
 
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('recordImmutable');
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
   });
 
-  it('record rows of an immutable plugin get contextValue recordImmutable, case-insensitively', async () => {
+  it('record rows of an immutable plugin are read-only, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
@@ -439,12 +461,12 @@ describe('record rows carry their copy identity', () => {
 
     const [rec] = await provider.getChildren(typeNode);
 
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('recordImmutable');
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
   });
 
   // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
-  // is fully actionable, and still read-only until tracked, which is what `recordUntracked` says.
-  it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
+  // is editable, and its records still wait on Track, which is what `untracked` says.
+  it('mutable but untracked load-order rows are untracked and editable', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     provider.setImmutablePlugins([{ name: 'SomethingElse.esm', origin: 'Data' }]);
@@ -452,13 +474,13 @@ describe('record rows carry their copy identity', () => {
 
     const [rec] = await provider.getChildren(typeNode);
 
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('recordUntracked');
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked editable');
   });
 
   // Tracked-ness reaches the row exactly the way immutability already does — a set pushed in
   // from the reconcile's own `GET /plugins` answer (`PluginResponse.IsTracked`), never a
   // filesystem probe made here.
-  it('record rows of a tracked plugin get contextValue recordTracked, case-insensitively', async () => {
+  it('record rows of a tracked plugin are tracked, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
@@ -466,10 +488,10 @@ describe('record rows carry their copy identity', () => {
 
     const [rec] = await provider.getChildren(typeNode);
 
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('recordTracked');
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked editable');
   });
 
-  it('an immutable plugin stays recordImmutable even when tracked', async () => {
+  it('an immutable plugin stays read-only even when tracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
@@ -478,7 +500,7 @@ describe('record rows carry their copy identity', () => {
 
     const [rec] = await provider.getChildren(typeNode);
 
-    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('recordImmutable');
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked');
   });
 
   // Tracking or untracking a plugin rides the reconcile the `mods/**` watcher already fires when
@@ -487,7 +509,7 @@ describe('record rows carry their copy identity', () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordUntracked');
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
     const callsAfterFirstRender = repo.calls.filter(c => c.method === 'getRecords').length;
 
     const changed = vi.fn();
@@ -495,34 +517,76 @@ describe('record rows carry their copy identity', () => {
     provider.setTrackedPlugins([{ name: 'Fallout4.esm', origin: 'Data' }]);
 
     expect(changed).toHaveBeenCalled();
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordTracked');
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record tracked editable');
     // And back again, for the untrack direction.
     provider.setTrackedPlugins([]);
-    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordUntracked');
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
+});
 
-  it('placed rows follow the same rule: refrImmutable under an immutable plugin, else refr', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
-    provider.setImmutablePlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
+// plugins.md, Menus and keys: every row beneath a plugin states that plugin's conditions, which
+// its plugin row hands down as it expands (ADR-0012: never looked up by filename alone).
+describe('a plugin\'s conditions reach every row beneath it', () => {
+  const TRACKED: PluginConditions = { tracked: true, editable: true };
+  const cell = {
+    formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+  };
+  const placed = { formKey: '000003:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
 
-    const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
-    const row = present(expectInstancesOf(await provider.getChildren(group), PlacedNode)[0], 'the sole PlacedNode');
+  function spatialClient(): InMemoryMEditClient {
+    const repo = makeClient({
+      recordTypes: [{ type: 'WEAP', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
+    });
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [cell],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [cell] }] }],
+    });
+    repo.setQueryAnswer('getInteriorCells', { items: [cell], total: 1 });
+    repo.setQueryAnswer('getCellReferences', { persistent: [placed], temporary: [placed] });
+    return repo;
+  }
 
-    expect(row.contextValue).toBe('refrImmutable');
+  // Every record row a plugin row expands into, at every depth, by its contextValue.
+  async function rowsBeneath(provider: PluginTreeProvider, origin: string | undefined, told: PluginConditions): Promise<string[]> {
+    const states: string[] = [];
+    const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
+      for (const node of nodes) {
+        if (['recordType', 'worldspace', 'cell', 'placed'].includes(node.kind)) states.push(String(node.contextValue));
+        if (node.kind !== 'recordType' && node.kind !== 'placed') await walk(await provider.getChildren(node));
+      }
+    };
+    await walk(await provider.getPluginChildren('Plugin0.esp', origin, told));
+    return states;
+  }
+
+  it('states a tracked, editable plugin on its group, worldspace, cells and placed references', async () => {
+    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), undefined, TRACKED);
+
+    expect(states).toEqual([
+      'worldspace tracked editable',
+      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
+      'recordType tracked editable',
+    ]);
   });
 
-  it('placed rows of a plugin outside the load order are refrImmutable even when the plugin is not listed immutable', async () => {
-    const repo = makeClient();
-    const provider = new PluginTreeProvider(repo);
-    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
+  // Two plugins that share a filename each state their own conditions, whatever the other is.
+  it('states an untracked plugin untracked, beside a tracked plugin of the same name', async () => {
+    const provider = new PluginTreeProvider(spatialClient());
+    provider.setTrackedPlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
 
-    const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], 'ModA');
-    const row = present(expectInstancesOf(await provider.getChildren(group), PlacedNode)[0], 'the sole PlacedNode');
+    const states = await rowsBeneath(provider, undefined, { tracked: false, editable: true });
 
-    expect(row.contextValue).toBe('refrImmutable');
+    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
+  });
+
+  it('states a plugin outside the load order read-only, whatever it is told', async () => {
+    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), 'ModA', TRACKED);
+
+    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['tracked']));
   });
 });
 

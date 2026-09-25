@@ -373,7 +373,7 @@ describe('registerSaveAndCompileCommand', () => {
     ]);
     showQuickPick.mockResolvedValue(undefined);
     const selected = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
-    selected.contextValue = 'plugin compilable';
+    selected.contextValue = 'plugin enabled inMod tracked editable';
     const { handler } = invokeSaveAndCompile(client, [selected]);
 
     await handler();
@@ -393,7 +393,7 @@ describe('registerSaveAndCompileCommand', () => {
     ]);
     showQuickPick.mockResolvedValue(undefined);
     const untracked = pluginNode('Untracked.esp');
-    untracked.contextValue = 'plugin untrackedInMod';
+    untracked.contextValue = 'plugin enabled inMod untracked editable';
     const { handler } = invokeSaveAndCompile(client, [untracked]);
 
     await handler();
