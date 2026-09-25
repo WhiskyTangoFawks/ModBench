@@ -1,3 +1,6 @@
+using MEditService.Watcher;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>A class whose subject is the running service: one host, one client for it, and the
@@ -32,8 +35,7 @@ public abstract class HostedTests : IDisposable
     // over in memory.
     protected void Restart()
     {
-        Client.Dispose();
-        _app.Dispose();
+        StopTheService();
         _app = CreateHost();
         Client = _app.CreateClient();
     }
@@ -41,10 +43,19 @@ public abstract class HostedTests : IDisposable
     // What the subclass built on disk, disposed after the host that was reading it.
     protected virtual void DisposeFixtures() { }
 
-    public void Dispose()
+    // The entry point's own RunAsync disposes the host too, and whichever disposal comes second
+    // returns at once; the watcher's Dispose returns only once no settle is still writing.
+    private void StopTheService()
     {
+        var watcher = _app.Services.GetRequiredService<ModFolderWatcher>();
         Client.Dispose();
         _app.Dispose();
+        watcher.Dispose();
+    }
+
+    public void Dispose()
+    {
+        StopTheService();
         foreach (var fixture in _owned) fixture.Dispose();
         DisposeFixtures();
         GC.SuppressFinalize(this);

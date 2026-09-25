@@ -117,6 +117,17 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         ARelease(fx);
     }
 
+    // A settle can close mid-release, naming only what had changed by then; the question is asked
+    // again at each settle that still finds the change (decompile-plugin, trigger 5).
+    private static Task<IReadOnlyList<JsonElement>> QuestionsUntilOneNames(
+        StreamReader stream, IReadOnlyList<string> trackedFiles) =>
+        stream.EventsUntil("question-open", question =>
+        {
+            var named = question.GetProperty("externalChangeTrackedFiles").EnumerateArray()
+                .Select(file => file.GetString()).ToList();
+            return trackedFiles.All(named.Contains);
+        });
+
     private Task<HttpResponseMessage> Answer(string verb, string origin) =>
         Client.PostAsJsonAsync($"/plugins/external-change/{verb}", new { origin });
 
@@ -275,11 +286,9 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
             OtherTool.WritesTheFile(Path.Combine(modFolder, name), "changed-by-the-release");
         ARelease(fx);
 
-        var question = Assert.Single(await stream.EventsUntil("question-open"));
+        var questions = await QuestionsUntilOneNames(stream, assets);
 
-        var named = question.GetProperty("externalChangeTrackedFiles").EnumerateArray()
-            .Select(file => file.GetString()).ToList();
-        Assert.All(assets, name => Assert.Contains(name, named));
+        Assert.All(questions, question => Assert.Equal(Origin, question.GetProperty("origin").GetString()));
     }
 
     [Fact]
@@ -450,11 +459,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         using (var stream = await Client.NotificationStream())
         {
             AReleaseOverTheAssets(fx);
-            var question = Assert.Single(await stream.EventsUntil("question-open"));
-            var files = question.GetProperty("externalChangeTrackedFiles").EnumerateArray()
-                .Select(file => file.GetString()).ToList();
-            Assert.Contains(ChangedAsset, files);
-            Assert.Contains(DeletedAsset, files);
+            await QuestionsUntilOneNames(stream, [ChangedAsset, DeletedAsset]);
         }
 
         var answered = await Answer("absorb", Origin);
