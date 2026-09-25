@@ -43,6 +43,14 @@ As a user, I want:
 One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the
 FormKey alone when there is no EditorID. It holds no controls. *ruling*
 
+## The FormID
+
+As a user, I want the record's FormID as the first row of the grid, under Record Header, edited as
+any field is. A new FormID changes the record's FormKey and nothing else: the records that
+reference it, the record itself included, are left as they are, and updating them is a script.
+The Index reads the record again under its new FormKey. A plugin header's FormID is read-only.
+*xedit.md, divergence 11; ruling*
+
 ## Columns
 
 As a user, I want:
@@ -203,7 +211,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `copy` as underride, and deep copy of a container | the catalog's planned Options |
 | Saying the panel is behind the disk | #973 |
 | The record tab as VS Code's own editor: preview and pinning, Go Back and Go Forward, a tooltip, and the deleted mark | #980 |
-| The record header's rows, with the record flags, and Partial Form cleared there | mEdit's answer |
+| The record header's other rows, with the record flags, and Partial Form cleared there | mEdit's answer |
 | The fields in xEdit's order | mEdit's answer |
 
 ## Test seam

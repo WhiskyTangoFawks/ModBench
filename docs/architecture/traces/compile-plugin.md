@@ -57,7 +57,7 @@ Commands refuses before any write, and names the cause.
 | A source file cannot be opened, naming it | Another program may hold it. |
 | A document the codec cannot reproduce, naming the path | Re-Track is the remedy (ADR-0006, invariants 5 and 6). |
 | Two documents claim one FormKey, naming them | The format holds one record per FormKey. |
-| A light plugin holds records outside the light range, naming them | The refusal names the remedies: clear the light flag in the header, rename the plugin off `.esl`, or renumber the records. |
+| A light plugin holds records outside the light range, naming them | The refusal names the remedies: clear the light flag in the header, rename the plugin off `.esl`, or change the records' FormIDs. |
 | A record the format cannot write, naming it | Compile refuses only what it cannot emit (ADR-0007, invariant 4). |
 
 ## Failure
