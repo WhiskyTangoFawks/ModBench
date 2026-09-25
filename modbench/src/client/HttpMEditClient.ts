@@ -13,7 +13,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
-  type RecordFilter, type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
+  type RecordFilter, type RecordRenumberResponse, type ReferenceResult, type PluginAddress, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -282,22 +282,27 @@ export class HttpMEditClient implements MEditClient {
     return true;
   }
 
-  /** The Track gesture (ADR-0007): every loaded plugin sharing `origin` is tracked together,
-   *  resolved backend-side. A 409 means it was already tracked. */
+  /** The Track gesture (ADR-0007) over a selection: each plugin lands or is refused on its own. A
+   *  cause no plugin escapes, git missing, refuses the whole selection. */
   async track(
-    origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
-  ): Promise<TrackResponse | WriteRefused> {
+    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
+    options: { onProgress?: (status: TrackStatus) => void } = {},
+  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
     // The POST stays blocking, so progress rides the track-progress notification alongside it.
     const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
     try {
-      const result = await this.mutate<TrackResponse>({
-        op: `track(${origin})`,
-        failMsg: `mEdit: Could not track "${origin}"`,
-        post: () => this.apiClient.POST('/plugins/track', { body: { origin, preset } }),
+      const answer = await this.mutate({
+        op: `track(${counted})`,
+        failMsg: `mEdit: Could not track ${counted}`,
+        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset } }),
       });
-      // track wires no `onEslContradiction`, `mutate`'s one other source of `undefined` — so this
-      // arm is unreachable on this endpoint's own wire contract (a 2xx always carries a body).
-      return result ?? { refused: true, message: `mEdit: Could not track "${origin}" — the backend answered with no data.` };
+      if (answer === undefined) return { refused: true, message: `mEdit: Could not track ${counted} — no answer` };
+      if (isRefused(answer)) return answer;
+      return {
+        landed: answer.applied,
+        refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+      };
     } finally {
       unsubscribe();
     }

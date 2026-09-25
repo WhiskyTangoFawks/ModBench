@@ -26,7 +26,7 @@ public sealed class TrackServiceTests
     // Track answers with a refusal for every way out it has, so the endpoint maps one value rather
     // than catching one exception type per outcome.
     [Fact]
-    public async Task TrackAsync_WithNoLoadedPluginForTheOrigin_RefusesWithoutThrowing()
+    public async Task TrackAsync_OfAPluginTheLoadOrderDoesNotHold_RefusesItWithoutThrowing()
     {
         var gameDir = Directory.CreateTempSubdirectory("medit-track-noorigin-game-").FullName;
         try
@@ -34,11 +34,11 @@ public sealed class TrackServiceTests
             var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(loadOrder, "NoSuchMod", SourcePreset.Edits);
+                .TrackAsync(loadOrder, [new PluginCopyKey("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits);
 
-            Assert.False(result.Applied);
-            Assert.Equal(TrackRefusal.NoPluginWithOrigin, result.Refusal);
-            Assert.Contains("NoSuchMod", result.Message, StringComparison.Ordinal);
+            var refused = Assert.Single(result.Refused);
+            Assert.Equal(TrackRefusal.PluginNotLoaded, refused.Refusal);
+            Assert.Contains("NoSuchMod", refused.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -46,10 +46,10 @@ public sealed class TrackServiceTests
         }
     }
 
-    // A copy the Plugin adapter cannot read has no bytes to deep-parse, so Track passes over it
-    // rather than failing the origin. The adapter answers, not the disk: this file exists.
+    // A copy the Plugin adapter cannot read has no bytes to deep-parse, so Track refuses it on its
+    // own. The adapter answers, not the disk: this file exists.
     [Fact]
-    public async Task TrackAsync_SkipsARegisteredCopyTheAdapterCannotRead()
+    public async Task TrackAsync_RefusesACopyTheAdapterCannotRead_AndTracksTheRest()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-unopened-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-track-unopened-game-").FullName;
@@ -70,9 +70,12 @@ public sealed class TrackServiceTests
             ]);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
-                .TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+                .TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
-            Assert.True(result.Applied, result.Message);
+            Assert.Equal([new PluginCopyKey("Fixture.esp", "FixtureMod")], result.Landed);
+            var refused = Assert.Single(result.Refused);
+            Assert.Equal((new PluginCopyKey("Locked.esp", "FixtureMod"), TrackRefusal.RoundTripFailed), (refused.Plugin, refused.Refusal));
+            Assert.Contains("cannot be read", refused.Message, StringComparison.Ordinal);
             Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"))));
             Assert.False(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Locked.esp"))));
         }
@@ -120,7 +123,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -192,7 +195,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
@@ -225,7 +228,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
@@ -241,7 +244,7 @@ public sealed class TrackServiceTests
     // The already-tracked check must fire before the deep-parse loop, or the worst case runs to
     // completion before the caller learns the cheap answer was available.
     [Fact]
-    public async Task TrackAsync_OnAnAlreadyTrackedModFolder_RefusesBeforeParsingAnything()
+    public async Task TrackAsync_OfAPluginAlreadyTracked_RefusesBeforeParsingIt()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-alreadytracked-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-alreadytracked-game-").FullName;
@@ -256,9 +259,9 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            // Track the mod folder once, for real, before corrupting anything — a dummy path shaped
-            // like what TrackAsync would actually have written, though the content doesn't matter
-            // for this test: only IsTracked's answer does.
+            // Track the plugin once, for real, before corrupting anything — a dummy path shaped like
+            // what TrackAsync would actually have written, though the content doesn't matter for
+            // this test: only that its source root is committed does.
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
                 [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())]);
@@ -269,7 +272,7 @@ public sealed class TrackServiceTests
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.AlreadyTracked, result.Refusal);
@@ -301,8 +304,8 @@ public sealed class TrackServiceTests
             ]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            var result = await service.TrackAsync(
-                loadOrder, PluginOrigin.DataDirectory, SourcePreset.Edits);
+            var result = (await service.TrackModAsync(
+                loadOrder, PluginOrigin.DataDirectory, SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.DataDirectoryOrigin, result.Refusal);
@@ -345,7 +348,7 @@ public sealed class TrackServiceTests
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
 
             var observed = new List<TrackProgress>();
-            var trackTask = service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var trackTask = service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
             while (!trackTask.IsCompleted)
                 observed.Add(service.Progress);
             await trackTask;
@@ -388,7 +391,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", CountingDeserialize));
 
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             Assert.Equal(1, deserializeCalls);
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -427,7 +430,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorruptTheNpc));
 
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -473,7 +476,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenMutateTheFloat));
 
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -519,7 +522,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
 
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
         }
@@ -573,7 +576,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter("Fixture.esp", DeserializeThenCorrupt));
 
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -607,7 +610,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -692,7 +695,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -734,7 +737,7 @@ public sealed class TrackServiceTests
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            var result = await service.TrackAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
+            var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.MissingLocalizationStrings, result.Refusal);

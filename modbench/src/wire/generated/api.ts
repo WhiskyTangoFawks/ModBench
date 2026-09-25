@@ -836,6 +836,15 @@ export interface components {
             recordType: string;
             hasParseFailure: boolean;
         };
+        PluginAddress: {
+            name: string;
+            origin: string;
+        };
+        PluginAddressRefusal: {
+            plugin: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["TrackRefusal"];
+            message: string;
+        };
         PluginCreatedResponse: {
             name: string;
             path: string;
@@ -1051,12 +1060,15 @@ export interface components {
             /** Format: int32 */
             pluginsTotal: number;
         };
+        /** @enum {string} */
+        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "ExternalChangeUnanswered" | "CommitFailed" | "GitUnavailable";
         TrackRequest: {
-            origin: string;
+            plugins: components["schemas"]["PluginAddress"][];
             preset: string;
         };
         TrackResponse: {
-            origin: string;
+            applied: components["schemas"]["PluginAddress"][];
+            refused: components["schemas"]["PluginAddressRefusal"][];
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -1677,33 +1689,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };

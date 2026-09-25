@@ -71,9 +71,7 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<TrackResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(409)
-            .ProducesProblem(422)
+            // git missing refuses the whole selection; every other refusal is an item of the answer.
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -219,33 +217,47 @@ public static class PluginEndpoints
                 $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
     }
 
-    // ADR-0007: the Track gesture. Origin names the mod folder (every loaded plugin sharing
-    // it gets tracked together — a mod can hold more than one plugin); the load order resolves
-    // which physical folder that is.
+    // ADR-0007: the Track gesture over a selection of plugins, each named by file name and origin
+    // (ADR-0012); the load order resolves which physical folder each lives in.
     internal static async Task<IResult> Track(
         TrackRequest req, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
+        var plugins = req.Plugins ?? [];
+        if (plugins.Count == 0)
+            return Results.Problem("At least one plugin is required.", statusCode: 400);
+        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
+            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
 
         try
         {
-            var result = await trackHandler.TrackAsync(req.Origin, preset);
-            if (result.Applied)
-                return Results.Ok(new TrackResponse(req.Origin));
+            var result = await trackHandler.TrackAsync([.. plugins.Select(p => new PluginCopyKey(p.Name, p.Origin))], preset);
+            if (result.SelectionRefusal is { } selectionRefusal)
+            {
+                logger.LogWarning("Refused to track {Count} plugin(s): {Refusal} — {Message}",
+                    plugins.Count, selectionRefusal.Refusal, selectionRefusal.Message);
+                return WriteEndpointMapping.Refusal(selectionRefusal);
+            }
 
-            logger.LogWarning("Refused to track {Origin}: {Refusal} — {Message}", req.Origin, result.Refusal, result.Message);
-            return WriteEndpointMapping.Refusal(result);
+            foreach (var refused in result.Refused)
+            {
+                logger.LogWarning("Refused to track {Plugin} ({Origin}): {Refusal} — {Message}",
+                    refused.Plugin.Name, refused.Plugin.Origin, refused.Refusal, refused.Message);
+            }
+            return Results.Ok(new TrackResponse(
+                [.. result.Landed.Select(Addressed)],
+                [.. result.Refused.Select(r => new PluginAddressRefusal(Addressed(r.Plugin), r.Refusal, r.Message))]));
         }
         catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "No loadOrder when tracking {Origin}", req.Origin);
+            logger.LogError(ex, "No loadOrder when tracking {Count} plugin(s)", plugins.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
+
+    private static PluginAddress Addressed(PluginCopyKey plugin) => new(plugin.Name, plugin.Origin);
 
     // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
     // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
@@ -406,11 +418,21 @@ public record CreatePluginRequest(string Name, string Path, string Origin);
 // are the Index's to state, and it has not seen this copy yet. Slot is 0 off a bare load order.
 public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
 
-// Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — no Plugin/Path
-// needed: Origin alone is enough for TrackService to resolve every plugin sharing that mod folder.
-public record TrackRequest(string Origin, string Preset);
+/// <summary>A plugin named by file name and origin (ADR-0012 invariant 1): one file name can be in
+/// two mods.</summary>
+public record PluginAddress(string Name, string Origin);
 
-public record TrackResponse(string Origin);
+/// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the
+/// message naming the way out.</summary>
+public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, string Message);
+
+// Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything"); a repository that
+// already stands keeps its own .gitignore.
+public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
+
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4): a refusal is an item of the
+/// answer, never the status of the call.</summary>
+public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
 
 // Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.

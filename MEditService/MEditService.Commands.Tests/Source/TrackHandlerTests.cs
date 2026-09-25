@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>The Track gesture's door takes the origin and the preset; the load order it tracks
+/// <summary>The Track gesture's door takes the plugins and the preset; the load order it tracks
 /// against is the holder's, read here and never handed in (ADR-0013 invariant 4).</summary>
 public sealed class TrackHandlerTests : IDisposable
 {
@@ -55,18 +55,18 @@ public sealed class TrackHandlerTests : IDisposable
         var handler = TestEditService.TrackHandler(_holder);
 
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.TrackAsync(Origin, SourcePreset.Edits));
+            () => handler.TrackAsync([new PluginCopyKey(PluginName, Origin)], SourcePreset.Edits));
     }
 
     [Fact]
-    public async Task Track_OverTheHeldLoadOrder_TracksTheOriginsModFolder()
+    public async Task Track_OverTheHeldLoadOrder_TracksThePluginIntoItsModFolder()
     {
         _holder.Apply(Snapshot);
         var handler = TestEditService.TrackHandler(_holder);
 
-        var result = await handler.TrackAsync(Origin, SourcePreset.Edits);
+        var result = await handler.TrackAsync([new PluginCopyKey(PluginName, Origin)], SourcePreset.Edits);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Equal([new PluginCopyKey(PluginName, Origin)], result.Landed);
         Assert.True(SourceRepository.HoldsTreeFor(_modFolder, PluginName));
     }
 }

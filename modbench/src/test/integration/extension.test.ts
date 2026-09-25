@@ -125,6 +125,8 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 // GET /implicit-masters: the plugins this install loads with no plugins.txt line. Empty by
 // default, so a suite's Data/ stubs are presence without being forced on.
 let mockImplicitMasters: string[] = [];
+// Makes GET /implicit-masters fail, so the client answers that mEdit cannot say.
+let implicitMastersShouldFail = false;
 // Makes the next PUT /load-order fail the way a bad game directory would. ADR-0013's contract
 // disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
@@ -195,6 +197,7 @@ function resetMockBackend(): void {
   putLoadOrders.length = 0;
   mockPluginsOverride = null;
   mockImplicitMasters = [];
+  implicitMastersShouldFail = false;
   putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
@@ -340,6 +343,11 @@ function createMockBackend(): http.Server {
     // Answered from the game directory alone, with no load order held — the Plugins rows and
     // plugin sync both ask it before any PUT (ADR-0016).
     if (url.startsWith('/implicit-masters')) {
+      if (implicitMastersShouldFail) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'simulated implicit-masters failure' }));
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockImplicitMasters));
       return;
@@ -1340,6 +1348,52 @@ function findRow<T>(rows: readonly T[], name: string): T {
 function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
+
+// update-load-order-file, Refusals: plugin sync's refusal reaches the Plugins view's message line,
+// and the first value lands before mEdit can answer, so a connect runs plugin sync again.
+describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const messageLine = (): string | undefined => ext?.exports.pluginListView?.message;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    await resetMockBackendDetached();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
+    await setGameDirectory(gameDir);
+  });
+
+  after(async () => {
+    if (!root) return;
+    exitEditing();
+    implicitMastersShouldFail = false;
+    await setGameDirectory(undefined);
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('says mEdit cannot answer in the message line, and clears it once the connect\'s run lands', async () => {
+    implicitMastersShouldFail = true;
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
+    await waitFor('the refusal in the Plugins view\'s message line', () =>
+      messageLine()?.includes('plugins.txt is not synced: mEdit cannot say'));
+    // Past every recompute the write queued, only the connect runs plugin sync again.
+    const instance = present(instanceExport(), "the activated extension's instance export");
+    for (let landed = instance.sequence; ; landed = instance.sequence) {
+      await nextLandingWithin(instance, PROBE_SPACING_MS);
+      if (instance.sequence === landed) break;
+    }
+
+    implicitMastersShouldFail = false;
+    await enterEditing();
+
+    await waitFor('the refusal to leave the message line', () =>
+      !(messageLine()?.includes('plugins.txt is not synced') ?? false));
+  });
+});
 
 describe('Plugin load-order rows expand into records', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

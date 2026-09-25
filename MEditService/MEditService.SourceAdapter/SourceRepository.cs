@@ -34,10 +34,45 @@ public sealed partial class SourceRepository
     /// answers empty rather than throwing.</summary>
     public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
-    /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
-    /// nothing broader (a folder that merely exists, or exists but was never tracked, is not
-    /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
-    public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
+    /// <summary>True exactly when <paramref name="modFolder"/> holds a repository whose <c>main</c>
+    /// exists. A <c>.git</c> with no <c>main</c> is Track's own, half made, or
+    /// <see cref="HoldsAnotherRepository"/>.</summary>
+    public static bool IsTracked(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && HasMainBranch(gitDir);
+    }
+
+    /// <summary>A repository with history but no <c>main</c>: someone else's, which Track never
+    /// writes to (ADR-0003). A <c>.git</c> with no branch at all is Track's own, half made.</summary>
+    public static bool HoldsAnotherRepository(string modFolder)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        return Directory.Exists(gitDir) && !HasMainBranch(gitDir) && HasAnyBranch(gitDir);
+    }
+
+    // Read off the ref store's files, not by running git: every read of a tracked copy asks this.
+    // A branch is a loose ref file until git packs it into packed-refs.
+    private static bool HasMainBranch(string gitDir) =>
+        File.Exists(Path.Combine(gitDir, "refs", "heads", "main")) || PackedBranches(gitDir).Contains("main");
+
+    private static bool HasAnyBranch(string gitDir)
+    {
+        var heads = Path.Combine(gitDir, "refs", "heads");
+        // A .lock file is a ref being written, never a ref.
+        return (Directory.Exists(heads) && Directory.EnumerateFiles(heads, "*", SearchOption.AllDirectories).Any(file => !file.EndsWith(".lock", StringComparison.Ordinal)))
+            || PackedBranches(gitDir).Count > 0;
+    }
+
+    private static HashSet<string> PackedBranches(string gitDir)
+    {
+        const string prefix = " refs/heads/";
+        var packedRefs = Path.Combine(gitDir, "packed-refs");
+        if (!File.Exists(packedRefs)) return [];
+        return [.. File.ReadLines(packedRefs)
+            .Select(line => line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0 ? line[(at + prefix.Length)..] : null)
+            .OfType<string>()];
+    }
 
     /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a copy's origin
     /// and path.</summary>
@@ -542,21 +577,4 @@ public enum TrackedFileChangeKind
 {
     Modified,
     Deleted,
-}
-
-/// <summary>Thrown by Track when the mod folder already has a <c>.git</c> — named so the endpoint
-/// layer maps it to a real HTTP conflict.</summary>
-public sealed class SourceAlreadyTrackedException : Exception
-{
-    public SourceAlreadyTrackedException() : base("This mod folder is already tracked.")
-    {
-    }
-
-    public SourceAlreadyTrackedException(string message) : base(message)
-    {
-    }
-
-    public SourceAlreadyTrackedException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
 }

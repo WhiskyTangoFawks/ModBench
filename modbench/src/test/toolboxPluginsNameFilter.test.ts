@@ -31,6 +31,7 @@ import { registerPluginsNameFilter } from '../toolbox';
 import { say } from '../editingTeardown';
 import { PluginsTreeProvider, type PluginListSource } from '../plugins/PluginsTreeProvider';
 import { InMemoryMEditClient, type PluginMetadata } from '../client';
+import { syncMessageDouble } from './syncMessageDouble';
 
 class FakeSource implements PluginListSource {
   setPluginEnabled(): Promise<void> { return Promise.resolve(); }
@@ -71,7 +72,7 @@ describe('the Plugins filter follows a row change with no keystroke', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    registerPluginsNameFilter(view, provider);
+    registerPluginsNameFilter(view, provider, syncMessageDouble());
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -95,7 +96,7 @@ describe('a running say() statement survives a background row change', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -113,7 +114,7 @@ describe('a running say() statement survives a background row change', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
     await command('modbench.plugin.filter')();
     currentBox().type('zzznomatch');
@@ -131,7 +132,7 @@ describe('the Plugins view, given the game folder not found', () => {
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
     return { provider, view, filter };
   }
 
@@ -163,7 +164,7 @@ describe('the Plugins view, given the game folder not found', () => {
     const instance = new FakeInstance(notFoundValueOf([]), 0);
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
     const view: { description?: string; message?: string } = {};
-    const filter = registerPluginsNameFilter(view, provider);
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
     filter.refresh();
     await flush();
@@ -217,7 +218,7 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     const instance = new FakeInstance(valueOf([plugin('Other.esp'), plugin('TestMod.esp')]));
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource(), client });
     const view: { description?: string; message?: string } = {};
-    registerPluginsNameFilter(view, provider);
+    registerPluginsNameFilter(view, provider, syncMessageDouble());
     provider.setRecordFilterSource('armor.sql');
     await provider.refreshFacts();
     return { client, provider, view };
@@ -247,5 +248,45 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
 
     await waitForMessage(view, (m) => m === undefined, 'the message clearing');
     expect(view.message).toBeUndefined();
+  });
+});
+
+describe('the Plugins view, given a plugin sync that refused', () => {
+  const SYNC_MESSAGE = 'plugins.txt is not synced: the game folder is not found.';
+
+  async function refusedView(value: InstanceValue) {
+    const instance = new FakeInstance(value);
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    await provider.getChildren();
+    const view: { description?: string; message?: string } = {};
+    const pluginSync = syncMessageDouble();
+    registerPluginsNameFilter(view, provider, pluginSync);
+    return { view, pluginSync };
+  }
+
+  // Rival: the sync's line replacing the view's own, or never reaching the line at all.
+  it('says it beside the game folder message, and drops only its own once the sync lands', async () => {
+    const { view, pluginSync } = await refusedView(notFoundValueOf([plugin('TestMod.esp')]));
+
+    pluginSync.say(SYNC_MESSAGE);
+    await waitForMessage(view, (m) => m === `${GAME_FOLDER_MESSAGE} ${SYNC_MESSAGE}`, 'both messages');
+
+    pluginSync.say(undefined);
+    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message alone');
+    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+  });
+
+  it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
+    const { view, pluginSync } = await refusedView(valueOf([plugin('TestMod.esp')]));
+    pluginSync.say(SYNC_MESSAGE);
+    await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message');
+
+    await command('modbench.plugin.filter')();
+    currentBox().type('zzznomatch');
+    await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the no-match message');
+
+    await command('modbench.plugin.clearFilter')();
+    await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message returning');
+    expect(view.message).toBe(SYNC_MESSAGE);
   });
 });

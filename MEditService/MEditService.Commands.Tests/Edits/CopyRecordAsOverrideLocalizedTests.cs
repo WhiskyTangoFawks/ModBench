@@ -51,7 +51,7 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
