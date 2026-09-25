@@ -17,6 +17,8 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
+const VIEW_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor'];
+
 export default tseslint.config(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
@@ -89,13 +91,14 @@ export default tseslint.config(
     },
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
+    // The views are README's driving band: Toolbox, Mods, Plugins, Downloads and Editor.
     {
-        files: ['src/plugins/**/*.ts'],
-        ignores: ['src/plugins/test/**'],
+        files: VIEW_BOXES.map((box) => `src/${box}/**/*.ts`),
+        ignores: VIEW_BOXES.map((box) => `src/${box}/test/**`),
         rules: {
             'no-restricted-imports': ['error', { paths: ['node:path', 'path'].map((name) => ({
                 name,
-                message: 'The Plugins view never builds a path: take it from the instance value, or inject the Instance adapter\'s path function at the composition root.',
+                message: 'A view never builds a path: take it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
             })) }],
         },
     },
