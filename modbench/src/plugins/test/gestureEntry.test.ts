@@ -83,8 +83,6 @@ describe('what VS Code hands a Plugins gesture becomes its entry', () => {
     expect(singularArgument(entry, 'plugin')).toBe(gamma);
   });
 
-  // Space takes the focused row's direction: a selection of one row stands for the focused row,
-  // since no stable API names it.
   it('fired from a key with one row selected, gives a plural gesture that one row', () => {
     const entry = entryWhenInvoked([beta], null);
     expect(pluralArgument(entry, 'plugin')).toEqual([beta]);

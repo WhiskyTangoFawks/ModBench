@@ -42,8 +42,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// Which command the menu offers, by row state, is package.json's own `when` clause (plugins.md,
-// Menus and keys, story 5); these tests pin what each command does once invoked.
 describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection, one command per direction', () => {
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
   const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false });

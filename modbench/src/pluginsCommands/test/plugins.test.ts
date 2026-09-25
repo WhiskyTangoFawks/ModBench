@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled } from '../plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
 import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../instanceAdapter/pluginFile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
@@ -83,6 +83,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     expect(await setPluginsEnabled(dir, PROFILE, ['Base.esp', 'Other.esp'], false))
       .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
     expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
+  });
+
+  // The check box's own shape: several rows, each its own target state, in the one splice.
+  it('setPluginsParticipation flips each named line to its own state, in one splice', async () => {
+    expect(await setPluginsParticipation(dir, PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]))
+      .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
+    expect(await plugins()).toBe('# header\r\nBase.esp\r\n*Other.esp\r\n');
   });
 
   // commands.md, "A selection is one gesture": each item lands or is refused on its own, in the

@@ -35,32 +35,38 @@ export type PluginsSelectionResult =
   | { applied: true; outcome: SelectionOutcome<string> }
   | { applied: false; refusal: string };
 
-// Read inside the write lock, so a plugin gone since the view last rendered is refused by name
-// while the rest land in the same write.
-async function spliceSelection(
-  instanceRoot: string, profile: string, names: readonly string[],
-  transform: (text: string, found: readonly string[]) => string,
+/** One plugin's target state — the check box's own shape, where several rows toggled at once can
+ *  each ask for a different state. */
+export interface PluginParticipation {
+  name: string;
+  enabled: boolean;
+}
+
+/** `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
+ *  selection in one splice (commands.md, "A selection is one gesture") — every entry lands or is
+ *  refused by name, whatever state each one asks for. */
+export async function setPluginsParticipation(
+  instanceRoot: string, profile: string, entries: readonly PluginParticipation[],
 ): Promise<PluginsSelectionResult> {
   let landed: string[] = [];
   let refused: ItemRefusal<string>[] = [];
   const outcome = await modifyPlugins(instanceRoot, profile, (text) => {
     const known = new Set(parsePlugins(text).map((entry) => entry.name));
-    landed = names.filter((name) => known.has(name));
-    refused = names.filter((name) => !known.has(name))
-      .map((name) => ({ item: name, reason: `Plugin not found in plugins.txt: ${name}` }));
-    return transform(text, landed);
+    const found = entries.filter((entry) => known.has(entry.name));
+    landed = found.map((entry) => entry.name);
+    refused = entries.filter((entry) => !known.has(entry.name))
+      .map((entry) => ({ item: entry.name, reason: `Plugin not found in plugins.txt: ${entry.name}` }));
+    return found.reduce((acc, entry) => setPluginEnabledInText(acc, entry.name, entry.enabled), text);
   });
   return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
 }
 
-/** `modbench.plugin.enable` / `modbench.plugin.disable`, over the whole selection in one splice
- *  (commands.md, "A selection is one gesture") — the menu, the key and the check box all reach
- *  this same core. */
+/** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
+ *  shape, which never mixes directions in one gesture. */
 export function setPluginsEnabled(
   instanceRoot: string, profile: string, pluginNames: readonly string[], enabled: boolean,
 ): Promise<PluginsSelectionResult> {
-  return spliceSelection(instanceRoot, profile, pluginNames, (text, found) =>
-    found.reduce((acc, name) => setPluginEnabledInText(acc, name, enabled), text));
+  return setPluginsParticipation(instanceRoot, profile, pluginNames.map((name) => ({ name, enabled })));
 }
 
 /** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without

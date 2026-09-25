@@ -2,7 +2,7 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled } from '../../pluginsCommands/plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
 import { switchProfile } from '../../instanceCommands/profile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
@@ -48,6 +48,25 @@ describe('plugins.txt + profile corpus', () => {
     const order = await pluginOrder(dir);
     expect(order).toContain('Tracked Patch Mod.esp');
     expect(order).toContain('Unofficial Fallout 4 Patch.esp');
+  });
+
+  // The check box's own shape: several rows, each its own target state, still one splice.
+  it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
+    const before = await snapshotTree(dir);
+    const result = await setPluginsParticipation(dir, PROFILE, [
+      { name: 'Tracked Patch Mod.esp', enabled: false },
+      { name: 'NonAsciiRetexture.esp', enabled: true },
+    ]);
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+
+    expect(result).toEqual({
+      applied: true,
+      outcome: { landed: ['Tracked Patch Mod.esp', 'NonAsciiRetexture.esp'], refused: [] },
+    });
+    const enabled = await enabledPlugins(dir);
+    expect(enabled).not.toContain('Tracked Patch Mod.esp');
+    expect(enabled).toContain('NonAsciiRetexture.esp');
   });
 
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {

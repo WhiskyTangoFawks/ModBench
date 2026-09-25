@@ -12,10 +12,6 @@ export interface GestureEntry {
  *  Plugins view's. */
 export const PLUGINS_KEY_ARGS = { view: 'modbench.pluginListTree' } as const;
 
-export function isPluginsKeyArgs(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && 'view' in value && value.view === PLUGINS_KEY_ARGS.view;
-}
-
 function isRow(value: unknown): value is PluginsTreeNode {
   return value instanceof vscode.TreeItem;
 }
