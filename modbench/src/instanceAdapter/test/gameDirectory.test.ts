@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  gameDirectoryResolver, normalizeGamePath,
+  dataFolderFile, gameDirectoryResolver, normalizeGamePath,
   type GameDetectors, type GameDirectoryOverrides,
 } from '../gameDirectory';
 
@@ -25,6 +25,18 @@ const STEAM_PLACE = 'the Steam install';
 const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
 ) => gameDirectoryResolver(() => overrides, detectors);
+
+describe('dataFolderFile', () => {
+  it('names a file at the root of the Data folder of a game folder found', () => {
+    const found = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
+    expect(dataFolderFile(found, 'Fallout4.esm')).toBe('/game/Data/Fallout4.esm');
+  });
+
+  it('names nothing while the game folder is not found', () => {
+    const notFound = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
+    expect(dataFolderFile(notFound, 'Fallout4.esm')).toBeUndefined();
+  });
+});
 
 describe('normalizeGamePath', () => {
   it('leaves a native Windows path untouched', async () => {

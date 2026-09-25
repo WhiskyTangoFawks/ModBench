@@ -164,7 +164,7 @@ function makeTree(
     instance: FakeInstance;
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
-    dataFolder: () => Promise<string | undefined>;
+    dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
@@ -178,7 +178,7 @@ function makeTree(
     instance, source, client, records,
     log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: extra.publishDiagnoses,
-    dataFolder: extra.dataFolder,
+    dataFolderFile: extra.dataFolderFile,
     implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
   });
@@ -355,7 +355,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const { tree } = makeTree([
       plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: '/unresolved/Fallout4.esm' }),
       plugin({ name: 'Mod.esp', slot: 1, origin: 'SomeMod' }),
-    ], { dataFolder: () => Promise.resolve(undefined) });
+    ], { dataFolderFile: () => undefined });
 
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
@@ -808,15 +808,16 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 // Implicit masters render as forced-on rows ahead of plugins.txt lines. The backend names
 // them (ADR-0016); this tree only places them.
 describe('PluginsTreeProvider — implicit master rows', () => {
-  const DATA = '/game/Data';
+  // The Instance adapter's answer, which the tree takes rather than builds.
+  const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
   // `null` stands for the absence in both slots: a backend that could not answer, and an
   // unresolved Data folder. An explicit `undefined` would select the default instead.
   const treeFor = (
     plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
     implicit: readonly string[] | null = [],
-    folder: string | null = DATA,
+    dataFolderFile: ((name: string) => string | undefined) | null = ADAPTER_ANSWER,
   ) => makeTree(plugins, {
-    dataFolder: () => Promise.resolve(folder ?? undefined),
+    dataFolderFile: dataFolderFile ?? (() => undefined),
     implicitMasters: () => Promise.resolve(implicit ?? undefined),
   }).tree;
 
@@ -835,9 +836,9 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows[2]).toBeInstanceOf(PluginNode);
   });
 
-  it('resolves each implicit row file inside the Data folder, for the graying decoration to key on', async () => {
+  it('takes each implicit row file from the Instance adapter, for the graying decoration to key on', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri?.path).toBe('/game/Data/Fallout4.esm');
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri?.path).toBe('/adapter/Data/Fallout4.esm');
   });
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {

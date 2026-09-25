@@ -9,7 +9,7 @@ import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/lo
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
-import { dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
+import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
@@ -195,7 +195,7 @@ interface PluginListDeps {
   reporterFor: (tag: string) => Reporter;
   instanceRoot: string;
   // A getter over the Instance value's own resolution, not a Promise settled once. Undefined
-  // when nothing resolved, which leaves an implicit row without a file to point at.
+  // when nothing resolved, which leaves an implicit row ungreyed.
   dataFolder: () => Promise<string | undefined>;
   /** The rows the game forces on, asked of the backend (ADR-0016). */
   implicitMasters: ImplicitMasterSource;
@@ -220,7 +220,8 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
   const pluginsTree = own(new PluginsTreeProvider({
-    instance, source, log, reporter: reporterFor('pluginList'), dataFolder, implicitMasters,
+    instance, source, log, reporter: reporterFor('pluginList'), implicitMasters,
+    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
     publishDiagnoses: (reports) => publishLoadDiagnoses(
