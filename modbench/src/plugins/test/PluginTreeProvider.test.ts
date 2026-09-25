@@ -959,6 +959,20 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 
+  // ADR-0012: a plugin is `(origin, filename)`, and both compare without case, as MO2 and a
+  // Windows filesystem compare them.
+  it('caches one copy once, whatever case its filename and origin arrive in', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const asListed = present(expectInstancesOf(await provider.getPluginChildren('Shared.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    const recased = present(expectInstancesOf(await provider.getPluginChildren('shared.ESP', 'moda'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    await provider.getChildren(asListed);
+    await provider.getChildren(recased);
+
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+  });
+
   it('omits origin when the row is an ordinary load-order plugin', async () => {
     // The server resolves it from the load order, which is unambiguous there — Mod Management's
     // own rows have no origin to give.

@@ -479,7 +479,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // own pages, and serving one copy's page under the other's node is a "right target, wrong
   // content" failure.
   private originKey(plugin: string, origin?: string): string {
-    return `${plugin}|${origin ?? ''}`;
+    return `${(origin ?? '').toLowerCase()}|${plugin.toLowerCase()}`;
   }
 
   private cacheKey(node: RecordTypeNode): string {
