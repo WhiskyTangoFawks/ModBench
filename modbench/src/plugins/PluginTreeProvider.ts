@@ -3,7 +3,7 @@ import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
-  ContainerChildSummary, MEditClient, PluginAddress,
+  ContainerChildSummary, MEditClient, PluginAddress, PluginRecordTypeCount,
 } from '../client';
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -21,10 +21,6 @@ const PAGE_SIZE = 50;
 // Int32.MaxValue as "no limit" fetches every record of a type in one call.
 const UNLIMITED_RECORDS = 2147483647;
 
-function formId(formKey: string): string {
-  return present(formKey.split(':')[0], 'first segment of a formKey');
-}
-
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
 function failureNote(subject: string, diagnosis: string | null | undefined): string {
@@ -37,6 +33,21 @@ function failureNote(subject: string, diagnosis: string | null | undefined): str
 function markFailure(item: vscode.TreeItem, tooltip: string): void {
   item.iconPath = failurePrefixIcon();
   item.tooltip = tooltip;
+}
+
+interface RecordRowFacts {
+  formKey: string;
+  fullName?: string | null;
+  hasParseFailure: boolean;
+}
+
+// xEdit's navigator: the EditorID or FormKey as the label, the FormKey beside it, and the name
+// (FULL) in its third column, which a tree row has only as its tooltip.
+function describeRecordRow(item: vscode.TreeItem, record: RecordRowFacts, failure: string): void {
+  item.description = record.formKey;
+  if (record.hasParseFailure) item.iconPath = failurePrefixIcon();
+  const lines = [record.fullName, record.hasParseFailure ? failure : undefined].filter(line => !!line);
+  item.tooltip = lines.length > 0 ? lines.join('\n') : undefined;
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
@@ -98,7 +109,7 @@ export class RecordNode extends vscode.TreeItem {
     // follow-up call.
     public readonly hasContainerChildren = false,
   ) {
-    const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
+    const label = record.editorId ?? record.formKey;
     const collapsible = containerChildType && hasContainerChildren;
     super(label, collapsible ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     this.contextValue = recordContextValue(record, immutable, tracked);
@@ -110,7 +121,7 @@ export class RecordNode extends vscode.TreeItem {
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
-    if (record.hasParseFailure) markFailure(this, failureNote('This record', record.parseDiagnosis));
+    describeRecordRow(this, record, failureNote('This record', record.parseDiagnosis));
   }
 }
 
@@ -121,10 +132,14 @@ export class RecordNode extends vscode.TreeItem {
 // needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
-  constructor(public readonly plugin: string, public readonly origin?: string, hasParseFailure = false) {
-    super('Worldspaces', vscode.TreeItemCollapsibleState.Collapsed);
+  constructor(
+    public readonly plugin: string, typeName: string, count: number,
+    public readonly origin?: string, hasParseFailure = false,
+  ) {
+    super(typeName, vscode.TreeItemCollapsibleState.Collapsed);
+    this.description = count.toLocaleString();
     this.contextValue = 'worldspaces';
-    if (hasParseFailure) markFailure(this, failureNote('Worldspaces', null));
+    if (hasParseFailure) markFailure(this, failureNote(typeName, null));
   }
 }
 
@@ -132,10 +147,10 @@ export class WorldspaceNode extends vscode.TreeItem {
   readonly kind = 'worldspace' as const;
   constructor(public readonly plugin: string, public readonly worldspace: WorldspaceSummary, public readonly origin?: string) {
     const label = worldspace.editorId ?? worldspace.formKey;
-    super(`${label} [WRLD:${formId(worldspace.formKey)}]`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspace';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
-    if (worldspace.hasParseFailure) markFailure(this, failureNote(label, null));
+    describeRecordRow(this, worldspace, failureNote(label, null));
   }
 }
 
@@ -169,20 +184,12 @@ function strRight3(n: number | null | undefined): string {
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    // xEdit's GetDisplayName runs GetFullName before any signature branch, so FULL wins even for
-    // a persistent worldspace cell. The EditorID-or-FormKey fallback below is this file's choice,
-    // not xEdit's precedence.
-    const label = cell.fullName
-      ? cell.fullName
-      : cell.isPersistentWorldspaceCell
-        ? '<Persistent Worldspace Cell>'
-        : cell.cellX != null
-          ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>`
-          : cell.editorId ?? cell.formKey;
+    const label = cell.editorId
+      ?? (cell.cellX != null ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>` : cell.formKey);
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
-    if (cell.hasParseFailure) markFailure(this, failureNote(label, null));
+    describeRecordRow(this, cell, failureNote(label, null));
   }
 }
 
@@ -213,21 +220,24 @@ export class PlacedNode extends vscode.TreeItem {
     public readonly origin?: string,
     immutable = false,
   ) {
-    const name = placed.editorId ?? placed.baseFormKey ?? placed.formKey;
-    const label = `${name} [${placed.recordType.toUpperCase()}:${formId(placed.formKey)}]`;
+    const label = placed.editorId ?? placed.baseEditorId ?? placed.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = immutable ? 'refrImmutable' : 'refr';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
-    if (placed.hasParseFailure) markFailure(this, failureNote(label, null));
+    describeRecordRow(this, placed, failureNote(label, null));
   }
 }
 
 export class InteriorCellsNode extends vscode.TreeItem {
   readonly kind = 'interiorCells' as const;
-  constructor(public readonly plugin: string, public readonly origin?: string, hasParseFailure = false) {
-    super('cell - Interior', vscode.TreeItemCollapsibleState.Collapsed);
+  constructor(
+    public readonly plugin: string, typeName: string, count: number,
+    public readonly origin?: string, hasParseFailure = false,
+  ) {
+    super(typeName, vscode.TreeItemCollapsibleState.Collapsed);
+    this.description = count.toLocaleString();
     this.contextValue = 'interiorCells';
-    if (hasParseFailure) markFailure(this, failureNote('Interior cells', null));
+    if (hasParseFailure) markFailure(this, failureNote(typeName, null));
   }
 }
 
@@ -257,20 +267,17 @@ export type PluginTreeNode =
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
   | ErrorNode | IndexingNode;
 
-// Record types that get their own dedicated node in the worldspace tree, keyed by raw signature —
-// one source of truth, since a set membership check and a separate per-type equality check could
-// drift.
-const SPATIAL_NODE_FACTORIES: Record<
-  string, (pluginName: string, origin: string | undefined, hasParseFailure: boolean) => PluginTreeNode
+// The groups whose records are the spatial hierarchy rather than a flat list, keyed by raw
+// signature. They take their place among the other groups, in mEdit's order.
+const SPATIAL_GROUP_FACTORIES: Record<
+  string, (pluginName: string, group: PluginRecordTypeCount, origin: string | undefined) => PluginTreeNode
 > = {
-  wrld: (pluginName, origin, hasParseFailure) => new WorldspacesNode(pluginName, origin, hasParseFailure),
-  cell: (pluginName, origin, hasParseFailure) => new InteriorCellsNode(pluginName, origin, hasParseFailure),
+  wrld: (pluginName, g, origin) => new WorldspacesNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure),
+  cell: (pluginName, g, origin) => new InteriorCellsNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure),
 };
 
-// Record types represented spatially in the worldspace tree — hidden from the flat type
-// list. refr/achr nest under the cell hierarchy (fetchCellGroups) rather than getting a
-// top-level node of their own, so they're not in SPATIAL_NODE_FACTORIES.
-const SPATIAL_TYPES = new Set([...Object.keys(SPATIAL_NODE_FACTORIES), 'refr', 'achr']);
+// refr/achr nest under the cell hierarchy (fetchCellGroups) rather than being a group of their own.
+const NESTED_TYPES = new Set(['refr', 'achr']);
 
 // Which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
 // expands via fetchContainerChildren) — a Quest's dialog topics/branches/scenes, a Dialog Topic's
@@ -506,21 +513,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
-      const typesPresent = new Set(types.map(t => t.type));
-      const nodes: PluginTreeNode[] = [];
-      // The spatial endpoints take the same optional origin the flat record routes do
-      // (RecordTypeNode below), so a plugin the load order does not name browses its own
-      // worldspaces and cells instead of having them omitted entirely.
-      const failureOf = new Map(types.map(t => [t.type, t.hasParseFailure] as const));
-      for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
-        if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin, failureOf.get(type) ?? false));
-      }
-      for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) {
-          nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure));
-        }
-      }
-      return nodes;
+      return types
+        .filter(t => !NESTED_TYPES.has(t.type))
+        .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin)
+          ?? new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure));
     });
   }
 

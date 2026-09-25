@@ -206,7 +206,7 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
     repo.setQueryFailureOnce('getInteriorCells', new Error('boom'));
 
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp');
+    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
     const firstChildren = await provider.getChildren(node);
     const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
 
@@ -228,7 +228,7 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
     repo.setQueryAnswerOnce('getInteriorCells', { items: secondPage, total: 2 });
 
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp');
+    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
     const firstChildren = await provider.getChildren(node);
     const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
 
@@ -250,7 +250,7 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
 
 describe('WorldspacesNode', () => {
   it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
-    const node = new WorldspacesNode('M.esp');
+    const node = new WorldspacesNode('M.esp', 'Worldspace', 0);
     expect(node.iconPath).toBeUndefined();
   });
 });
@@ -259,13 +259,8 @@ describe('WorldspacesNode', () => {
 
 describe('InteriorCellsNode', () => {
   it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
-    const node = new InteriorCellsNode('M.esp');
+    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
     expect(node.iconPath).toBeUndefined();
-  });
-
-  it('labels itself "cell - Interior" to group alphabetically near "Cell" (xEdit convention)', () => {
-    const node = new InteriorCellsNode('M.esp');
-    expect(node.label).toBe('cell - Interior');
   });
 });
 
@@ -309,7 +304,7 @@ describe('RecordNode', () => {
     expect(node.command).toEqual({
       command: 'modbench.openEditor',
       title: 'Open Record',
-      arguments: [{ formKey: record.formKey, label: `${record.editorId} [${record.formKey}]` }],
+      arguments: [{ formKey: record.formKey, label: record.editorId }],
     });
   });
 
@@ -555,28 +550,20 @@ describe('PluginTreeProvider.refresh', () => {
 // ── Worldspace / cell / placed-object tree ──────────────────────────
 
 describe('PluginTreeProvider worldspace tree', () => {
-  it('adds Worldspaces and Interior Cells nodes and hides spatial record types', async () => {
+  it('leaves placed references out of the groups, since they sit beneath their cells', async () => {
     const repo = makeClient({
       recordTypes: [
-        { type: 'wrld', count: 1 },
-        { type: 'cell', count: 4 },
-        { type: 'refr', count: 99 },
-        { type: 'achr', count: 12 },
-        { type: 'WEAP', count: 5 },
+        { type: 'cell', count: 4, displayName: 'Cell' },
+        { type: 'achr', count: 12, displayName: 'Placed NPC' },
+        { type: 'refr', count: 99, displayName: 'Placed Object' },
+        { type: 'WEAP', count: 5, displayName: 'Weapon' },
       ],
     });
     const provider = new PluginTreeProvider(repo);
 
     const children = await provider.getPluginChildren('Plugin0.esp');
-    const labels = children.map(c => c.label);
 
-    expect(labels).toContain('Worldspaces');
-    expect(labels).toContain('cell - Interior');
-    expect(labels).toContain('WEAP');
-    expect(labels).not.toContain('refr');
-    expect(labels).not.toContain('achr');
-    expect(labels).not.toContain('cell');
-    expect(labels).not.toContain('wrld');
+    expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon']);
   });
 
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
@@ -596,42 +583,12 @@ describe('PluginTreeProvider worldspace tree', () => {
     const cells = await provider.getChildren(subBlocks[0]);
 
     expect(wsChildren).toHaveLength(2); // persistent cell + 1 block
-    expect(present(topCellNode, 'the persistent-cell child').label).toBe('<Persistent Worldspace Cell>');
+    expect(present(topCellNode, 'the persistent-cell child').label).toBe('TopCell');
     expect(present(blockNode, 'the block child').label).toBe('Block 0, 0');
     expect(present(subBlocks[0], "the fixture's single sub-block").label).toBe('Sub-Block 0, 0');
     expect(expectInstanceOf(cells[0], CellNode).cell.cellX).toBe(12);
     // xEdit's StrRight right-justifies each coordinate to width 3 inside the angle brackets.
     expect(present(cells[0], "the fixture's single cell").label).toBe('< 12,  -5>');
-  });
-
-  // xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
-  // signature-specific branch — including the CELL branch's persistent-cell / grid-coordinate
-  // logic. A FULL name wins over both.
-  it('an exterior cell with a FULL name shows it, not the grid coordinates', () => {
-    const node = new CellNode('M.esp', {
-      formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
-      isPersistentWorldspaceCell: false, fullName: 'Sanctuary Hills', hasParseFailure: false,
-    });
-    expect(node.label).toBe('Sanctuary Hills');
-  });
-
-  it('an exterior cell with no FULL name still shows the padded grid coordinates', () => {
-    const node = new CellNode('M.esp', {
-      formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
-      isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
-    });
-    expect(node.label).toBe('< 12,  -5>');
-  });
-
-  // xEdit's GetDisplayName checks GetFullName first, unconditionally, and only reaches the
-  // GroupType=1 (persistent) check when FULL is empty (wbImplementation.pas). The rival that
-  // checks isPersistentWorldspaceCell first fails here.
-  it('the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
-    const node = new CellNode('M.esp', {
-      formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null,
-      isPersistentWorldspaceCell: true, fullName: 'Sanctuary Hills', hasParseFailure: false,
-    });
-    expect(node.label).toBe('Sanctuary Hills');
   });
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
@@ -651,7 +608,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     const wsChildren = await provider.getChildren(wsNode);
 
     expect(wsChildren.filter(c => c instanceof CellNode)).toHaveLength(2);
-    expect(present(wsChildren[0], 'the first cell row').label).toBe('<Persistent Worldspace Cell>');
+    expect(present(wsChildren[0], 'the first cell row').label).toBe('TopCell');
     expect(present(wsChildren[1], 'the second cell row').label).toBe('StrayCell');
   });
 
@@ -671,7 +628,7 @@ describe('PluginTreeProvider worldspace tree', () => {
 
     const placed = await provider.getChildren(persistentGroup);
     expect(placed).toHaveLength(1);
-    expect(present(placed[0], 'the sole placed row').label).toBe('barrelRef [REFR:b]');
+    expect(present(placed[0], 'the sole placed row').label).toBe('barrelRef');
   });
 
   it('paginates interior cells with a load-more node', async () => {
@@ -681,7 +638,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       total: 60,
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp');
+    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
 
     const children = await provider.getChildren(node);
     expect(children.filter(c => c instanceof CellNode)).toHaveLength(1);
@@ -697,10 +654,9 @@ describe('PluginTreeProvider fetch failures', () => {
   it('getPluginChildren: builds a plugin\'s children from its filename alone', async () => {
     const repo = makeClient({
       recordTypes: [
-        { type: 'wrld', count: 1 },
-        { type: 'cell', count: 4 },
-        { type: 'refr', count: 99 },
-        { type: 'WEAP', count: 5 },
+        { type: 'cell', count: 4, displayName: 'Cell' },
+        { type: 'WEAP', count: 5, displayName: 'Weapon' },
+        { type: 'wrld', count: 1, displayName: 'Worldspace' },
       ],
     });
     const provider = new PluginTreeProvider(repo);
@@ -710,7 +666,7 @@ describe('PluginTreeProvider fetch failures', () => {
     // Origin rides along as undefined for an ordinary load-order row — the backend resolves
     // it from the load order, where one filename names one plugin.
     expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Plugin0.esp', undefined] });
-    expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
+    expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon', 'Worldspace']);
   });
 
   // A record reached by expanding a load-order row is the same node carrying its own command, so
@@ -752,7 +708,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getWorldspaces', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspacesNode('Plugin0.esp');
+    const node = new WorldspacesNode('Plugin0.esp', 'Worldspace', 0);
 
     const children = await provider.getChildren(node);
 
@@ -788,7 +744,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getInteriorCells', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp');
+    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
 
     const children = await provider.getChildren(node);
 
@@ -818,7 +774,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const repo = makeClient();
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspacesNode('Shared.esp', 'ModB');
+    const node = new WorldspacesNode('Shared.esp', 'Worldspace', 0, 'ModB');
 
     const wsNode = present(expectInstancesOf(await provider.getChildren(node), WorldspaceNode)[0], 'the sole WorldspaceNode');
 
@@ -872,7 +828,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       total: 1,
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('Shared.esp', 'ModB');
+    const node = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
 
     const cellNode = present(expectInstancesOf(await provider.getChildren(node), CellNode)[0], 'the sole CellNode');
 
@@ -899,8 +855,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('interiorCache: caches each plugin\'s interior-cell page separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    const fromA = new InteriorCellsNode('Shared.esp', 'ModA');
-    const fromB = new InteriorCellsNode('Shared.esp', 'ModB');
+    const fromA = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModA');
+    const fromB = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
 
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
@@ -913,7 +869,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
     repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('Shared.esp', 'ModB');
+    const node = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
     const firstChildren = await provider.getChildren(node);
     const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
 
@@ -1000,9 +956,6 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific plug
     const interiorCells = children.find(c => c instanceof InteriorCellsNode);
     expect(worldspaces?.origin).toBe('ModB');
     expect(interiorCells?.origin).toBe('ModB');
-    expect(children.map(c => c.label)).toEqual(
-      expect.arrayContaining(['Worldspaces', 'cell - Interior', 'WEAP']),
-    );
   });
 
   it('still builds them for an ordinary load-order plugin', async () => {
