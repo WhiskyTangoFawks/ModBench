@@ -18,6 +18,25 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/comment-write.py\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-guard.py\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-watch.py\""
+          }
+        ]
       }
     ],
     "Stop": [
@@ -26,6 +45,14 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/code-quality.py\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-watch.py\""
           }
         ]
       }
@@ -42,6 +69,14 @@
     ]
   },
   "permissions": {
+    "ask": [
+      "Edit(//**/docs/architecture/**)",
+      "Edit(//**/docs/adr/**)",
+      "Edit(//**/CONTEXT.md)",
+      "Edit(//**/CLAUDE.md)",
+      "Edit(//**/.claude/settings*.json)",
+      "Edit(//**/.claude/hooks/**)"
+    ],
     "allow": [
       "Bash(xargs cat)",
       "Bash(git fetch *)",
