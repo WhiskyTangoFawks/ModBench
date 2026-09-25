@@ -259,9 +259,8 @@ export function DiffRow({
         const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column.
         const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
-        // ADR-0018: a text cell always carries its own right-click context, mutable or immutable
-        // alike — a read-only tab is still the only way to read a long immutable value in full. A
-        // string that resolves to a record reads as a reference, which is no text field.
+        // ADR-0018: a text cell has its menu even when immutable, as a read-only tab is the only
+        // way to read a long value whole. A string that resolves to a record is a reference.
         const isTextField = meta.type === 'string' && diff.resolutions?.[key] == null;
         const offersMenu = arrayEditable || isTextField;
         const arrayOps = arrayEditable ? {

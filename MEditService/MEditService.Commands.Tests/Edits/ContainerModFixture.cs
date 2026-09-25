@@ -70,9 +70,8 @@ public sealed class ContainerModFixture : IDisposable
     public const string Response2EditorId = "EmbedResponse2";
     public FormKey Response2 { get; }
 
-    // Two more siblings under the same Quest, so "delete, or edit the FormID of, a mid-list topic, then compile"
-    // has an actual middle and two actual survivors to pin the GRUP order of — one DialogTopic
-    // alone cannot exercise "gap, not shifted".
+    // Two more siblings under the same Quest, so a delete or FormID edit of a mid-list topic has
+    // an actual middle and two survivors to pin the compiled GRUP order of.
     public const string DialogTopic2EditorId = "EmbedTopic2";
     public FormKey DialogTopic2 { get; }
 
