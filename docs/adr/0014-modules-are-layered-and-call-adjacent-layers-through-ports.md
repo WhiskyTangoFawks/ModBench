@@ -20,11 +20,12 @@ live in the glossary.
    readers of the read model. The gesture is the interface.
 4. **A command returns applied-or-refusal and what it did.** The carrier is each gesture's own; a
    refusal is returned, never thrown; no command returns state the read side owns.
-5. **A driven adapter is one deep module that hides its layout.** The Source adapter is the
-   only repository, and turning an identity into a path is its work alone. The record index is one
-   module, projector and store, and nothing outside it names the store. On the Modbench side, each
-   MO2 file's format lives in one kernel module that imports only Node builtins, so the kernel
-   could compile as its own project.
+5. **A driven adapter is one deep module that hides its layout.** The Source adapter is
+   mEdit's only repository, and turning an identity into a path is its work alone. The record
+   index is one module, projector and store, and nothing outside it names the store. On the Modbench side, the
+   Instance adapter is the instance's repository: each of the mod manager's file formats lives
+   inside its implementation, and the game's `plugins.txt` format lives in one kernel module that
+   imports only Node builtins, so the kernel could compile as its own project.
 
 ## Alternatives rejected
 

@@ -7,8 +7,6 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
-codecs: @../target-architecture.modbench_kernel.codecs
-codecs.label: MO2 file codecs
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
 toolbox: @../target-architecture.modbench_driving.toolbox
 toolbox.label: Toolbox
@@ -19,10 +17,8 @@ client.label: mEdit client
 
 mo2 -> instanceloader: "watch: every file and folder, debounced" {class: signal}
 instanceloader -> instanceadapter: "get: ModOrganizer.ini first · modlist.txt · plugins.txt · meta.ini · the downloads' .meta · the game folder's plugins" {class: loadorder}
-instanceadapter -> instanceloader: bytes {class: loadorder}
-instanceloader -> codecs: bytes {class: loadorder}
-codecs -> instanceloader: "parsed, one codec per file" {class: loadorder}
-instanceloader."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
+instanceadapter -> instanceloader: "parsed: the game, the profile, the mods in order, the load order, each mod's meta, the downloaded files, the game folder's plugins" {class: loadorder}
+instanceloader."one immutable value, replaced whole; sequence +1; a read failure keeps the last"
 instanceloader -> views: value {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot as an argument, on change" {class: loadorder}
 instancecommands -> client: load order snapshot {class: loadorder}

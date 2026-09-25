@@ -22,8 +22,9 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
    loader itself.
 2. Plugins commands ask the mEdit client which plugins the game loads with no line, and, for a
    move, which masters each plugin has. An unreachable mEdit answers that it cannot say.
-3. Under one lock per file, the Core box reads the file as it is now and splices it through the
-   codec. Only the bytes the command names change: comments, blank lines, line endings, the byte
+3. Under one lock per file, the Instance adapter reads the file as it is now and splices the
+   command's change through the file's codec: the mod manager's own, inside its implementation,
+   or the game's, for `plugins.txt`. Only the bytes the command names change: comments, blank lines, line endings, the byte
    order mark and every line Modbench does not manage survive (ADR-0017, invariant 2). A result
    equal to the file writes nothing.
 4. The Instance adapter replaces the file whole, through a temporary file and a rename, then
