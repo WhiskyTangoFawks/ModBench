@@ -26,7 +26,7 @@ public sealed class ReconcileOriginTests
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
-        var opened = reads.OpenedCopies.Keys.Single(k => k.Name == "A.esp");
+        var opened = reads.OpenedPlugins.Keys.Single(k => k.Name == "A.esp");
         Assert.Equal("SomeMod", opened.Origin);
     }
 

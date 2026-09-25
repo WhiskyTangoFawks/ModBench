@@ -186,7 +186,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
         var readsAfterLeaving = ReadsOf(index);
-        Assert.DoesNotContain(readsAfterLeaving.OpenedCopies.Keys, k => k.Name == "B.esp");
+        Assert.DoesNotContain(readsAfterLeaving.OpenedPlugins.Keys, k => k.Name == "B.esp");
         Assert.False(index.Registers(bKey));
         Assert.Empty(readsAfterLeaving.GetDocuments(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
@@ -195,7 +195,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        Assert.Contains(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "B.esp");
+        Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "B.esp");
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
@@ -252,7 +252,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.DoesNotContain(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "Bad.esp");
+        Assert.DoesNotContain(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
 
         // The same snapshot again is a no-op — the failed parse is not paid twice, and no sweep runs.
         var sequence = index.Sequence;
@@ -263,7 +263,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
         Assert.Empty(index.Status.Failures);
-        Assert.Contains(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "Bad.esp");
+        Assert.Contains(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
     }
 
     [Fact]

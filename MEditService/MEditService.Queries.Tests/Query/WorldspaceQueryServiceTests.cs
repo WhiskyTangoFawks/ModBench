@@ -35,7 +35,7 @@ public class WorldspaceQueryServiceTests
             LastSearchOrigin = query.Origin;
             return new(records ?? [], (records ?? []).Count);
         }
-        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies =>
+        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins =>
             new Dictionary<PluginAddress, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
@@ -46,7 +46,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlySet<PluginAddress> GetTrackedCopies() => new HashSet<PluginAddress>(PluginAddress.Comparer);
+        public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
         public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];

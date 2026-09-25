@@ -111,7 +111,7 @@ internal sealed class WatcherSinks
                 return;
             }
 
-            ValidateWholeCopy(key, "a source change");
+            ValidateWholePlugin(key, "a source change");
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -123,7 +123,7 @@ internal sealed class WatcherSinks
 
     /// <summary>ADR-0015 invariant 4: one git listing for the whole copy, compared by content hash.
     /// The Index announces a copy it re-derives.</summary>
-    public void ValidateWholeCopy(PluginAddress key, string reason)
+    public void ValidateWholePlugin(PluginAddress key, string reason)
     {
         foreach (var report in _index.ValidateIndex(key))
         {

@@ -20,7 +20,7 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginRow> GetPlugins()
     {
         var reads = RequireReads();
-        var opened = reads.OpenedCopies;
+        var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A copy the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
@@ -33,7 +33,7 @@ public sealed class RecordQueryService(
                 ? MasterResolution.Classify(opened, status.Failures)
                 : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
-        var tracked = reads.GetTrackedCopies();
+        var tracked = reads.GetTrackedPlugins();
         PluginRow ToRow(RegisteredPlugin copy, bool hasMatchingRecords) =>
             new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Key) ?? [], hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)), tracked.Contains(copy.Key));
@@ -102,7 +102,7 @@ public sealed class RecordQueryService(
 
         // ADR-0012: keyed by the compound column identity — with a second copy of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
-        var pluginMasters = reads.OpenedCopies.ToDictionary(
+        var pluginMasters = reads.OpenedPlugins.ToDictionary(
             kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin), kv => kv.Value.Masters);
         // ADR-0013: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.

@@ -46,7 +46,7 @@ internal sealed class HeldPlugins
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
     /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>
-    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
+    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => Volatile.Read(ref _openedSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
     public HeldPlugins(

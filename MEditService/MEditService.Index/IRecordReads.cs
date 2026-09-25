@@ -7,10 +7,10 @@ namespace MEditService.Index;
 /// <c>Queries/</c>, built from the document body.</summary>
 public interface IRecordReads
 {
-    /// <summary>What the Index read out of each copy it has open, keyed by identity. A copy it has
-    /// not reached, or could not open, is absent, so this is also "which copies are open?".
+    /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
+    /// not reached, or could not open, is absent, so this is also "which plugins are open?".
     /// </summary>
-    IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies { get; }
+    IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins { get; }
 
     /// <summary>The winning override of <paramref name="formKey"/>, across every participating
     /// plugin. Null if the FormKey isn't indexed.</summary>
@@ -49,9 +49,9 @@ public interface IRecordReads
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses();
 
-    /// <summary>The registered copies whose rows were derived from a source tree: tracked, as the
-    /// Index knows it. A copy derived from its binary is absent.</summary>
-    IReadOnlySet<PluginAddress> GetTrackedCopies();
+    /// <summary>The registered plugins whose rows were derived from a source tree: tracked, as the
+    /// Index knows it. A plugin derived from its binary is absent.</summary>
+    IReadOnlySet<PluginAddress> GetTrackedPlugins();
 
     /// <summary>Every plugin holding at least one record Mutagen could not read, as
     /// <c>ColumnKey.Of(name, origin)</c> values: the tree's "has a failure below it" for a plugin

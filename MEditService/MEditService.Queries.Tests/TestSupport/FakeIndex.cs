@@ -11,14 +11,14 @@ internal sealed record FakeRow(PluginAddress Plugin, int LoadOrderIndex, bool Is
 /// <summary>The Index doors Queries drives, hand-built from <see cref="FakeRow"/> entries instead of
 /// a real DuckDB store.</summary>
 internal sealed class FakeReads(
-    IReadOnlyDictionary<PluginAddress, PluginContent> openedCopies, IReadOnlyList<FakeRow> rows) : IRecordReads
+    IReadOnlyDictionary<PluginAddress, PluginContent> openedPlugins, IReadOnlyList<FakeRow> rows) : IRecordReads
 {
     public IReadOnlySet<PluginAddress> MatchingPlugins { get; set; } = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
     public IReadOnlyDictionary<string, IReadOnlyList<ReferenceResult>> ReferencedBy { get; set; } =
         new Dictionary<string, IReadOnlyList<ReferenceResult>>(StringComparer.Ordinal);
 
-    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies => openedCopies;
+    public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins;
 
     public RecordDocument? GetDocument(string formKey) =>
         rows.FirstOrDefault(r => r.Document.FormKey == formKey && r.IsWinner)?.Document;
@@ -77,7 +77,7 @@ internal sealed class FakeReads(
     public IReadOnlySet<PluginAddress> Tracked { get; set; } = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => Diagnoses;
-    public IReadOnlySet<PluginAddress> GetTrackedCopies() => Tracked;
+    public IReadOnlySet<PluginAddress> GetTrackedPlugins() => Tracked;
     public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress plugin) => new HashSet<string>();
     public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
@@ -93,7 +93,7 @@ internal sealed class FakeReads(
 /// double states what it needs rather than computing it.</summary>
 internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IQueryIndex
 {
-    public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedCopies.Count, [], true, []);
+    public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
     public string? FilterSql { get; set; }
     public IRecordReads RequireReads() => reads;
 
@@ -106,6 +106,6 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     internal static (FakeIndex Index, LoadOrderHolder Holder) From(FakeFixtureData fixture)
     {
         var holder = FakeLoadOrder.Of(fixture.Release, [.. fixture.Copies]);
-        return (new FakeIndex(new FakeReads(fixture.OpenedCopies, fixture.Rows)), holder);
+        return (new FakeIndex(new FakeReads(fixture.OpenedPlugins, fixture.Rows)), holder);
     }
 }

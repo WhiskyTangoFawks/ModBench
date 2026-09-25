@@ -14,7 +14,7 @@ namespace MEditService.Queries.Tests.TestSupport;
 /// would have opened, and the documents each copy holds.</summary>
 internal sealed record FakeFixtureData(
     GameRelease Release,
-    IReadOnlyList<RegisteredPlugin> Copies, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
+    IReadOnlyList<RegisteredPlugin> Copies, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins, IReadOnlyList<FakeRow> Rows);
 
 // Build takes the column names a test reads, never every column a schema has: a scratch round
 // trip runs Mutagen's own master computation, then the real codec serializes each record once.

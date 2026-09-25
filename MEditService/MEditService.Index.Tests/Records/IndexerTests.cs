@@ -93,7 +93,7 @@ public sealed class IndexerTests
         Assert.All(snapshot.Plugins, copy => Assert.True(indexer.Registers(copy.Key)));
         Assert.Equal(
             snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
-            indexer.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
+            indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
         Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
@@ -109,7 +109,7 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedCopies;
+        var opened = indexer.RequireReads().OpenedPlugins;
         var patch = opened[snapshot.Plugins.Single(c => c.Name == "B.esp").Key];
         Assert.Equal(["A.esm"], patch.Masters);
         Assert.Equal(1, patch.RecordCount);
@@ -130,7 +130,7 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedCopies;
+        var opened = indexer.RequireReads().OpenedPlugins;
         Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
         Assert.Contains(snapshot.Plugins.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }

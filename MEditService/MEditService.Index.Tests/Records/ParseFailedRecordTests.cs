@@ -89,7 +89,7 @@ public sealed class ParseFailedRecordTests
 
         Assert.Equal([ColumnKey.Of(Fixture, Origin)], flagged.Order(StringComparer.Ordinal));
         // The stub masters really are indexed beside it, so "only" has something to exclude.
-        Assert.True(scratch.Reads.OpenedCopies.Count > 1);
+        Assert.True(scratch.Reads.OpenedPlugins.Count > 1);
     }
 
     [Fact]

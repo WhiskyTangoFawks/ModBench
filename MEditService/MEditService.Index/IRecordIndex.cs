@@ -13,10 +13,10 @@ internal interface IRecordIndex : IDisposable
     /// escaped.</summary>
     IRecordReads At(RecordRef recordRef);
 
-    /// <summary>Where <see cref="IRecordReads.OpenedCopies"/> reads from. The store holds no header
+    /// <summary>Where <see cref="IRecordReads.OpenedPlugins"/> reads from. The store holds no header
     /// flag, master list or record count, so the Indexer points it at the copies it holds
     /// open.</summary>
-    void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened);
+    void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened);
 
     void Initialize(GameRelease release);
 

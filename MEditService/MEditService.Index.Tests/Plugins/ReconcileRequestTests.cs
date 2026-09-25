@@ -57,7 +57,7 @@ public sealed class ReconcileRequestTests : IDisposable
         var reports = index.ValidateIndex(plugin: null);
 
         Assert.Equal(
-            index.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
+            index.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
             reports.Select(r => r.Plugin.Name).OrderBy(n => n, StringComparer.Ordinal));
     }
 }

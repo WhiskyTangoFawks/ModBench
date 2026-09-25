@@ -36,13 +36,13 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         new("cell_location", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("container_child", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new("record_type_failure", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new(CopySourceTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
+        new(PluginDerivationTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
         new(PluginDiagnosisTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
     ];
 
-    /// <summary>One row per indexed copy naming which truth its rows came from, its source tree or
+    /// <summary>One row per indexed plugin naming which truth its rows came from, its source tree or
     /// its binary: tracked-ness as a row, in the mirror because it is the rows' own fact.</summary>
-    internal const string CopySourceTable = "copy_source";
+    internal const string PluginDerivationTable = "plugin_derivation";
 
     /// <summary>The Kind B diagnoses a copy's binary proved when it was hashed, one row each, in
     /// record order.</summary>
@@ -82,7 +82,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
-        CreateCopySourceTable(connection);
+        CreatePluginDerivationTable(connection);
         CreatePluginDiagnosisTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
@@ -283,9 +283,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    internal static void CreateCopySourceTable(DuckDBConnection connection) =>
+    internal static void CreatePluginDerivationTable(DuckDBConnection connection) =>
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {MirrorSchema}.{CopySourceTable} (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDerivationTable} (
                 plugin       VARCHAR NOT NULL,
                 origin       VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 derived_from VARCHAR NOT NULL,

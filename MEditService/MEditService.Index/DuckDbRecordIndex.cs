@@ -160,7 +160,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         UpsertRegistration(plugin, origin, registration);
         // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
         // with them rather than beside them.
-        _store.StampCopy(plugin, origin, filePath, derivedFrom);
+        _store.StampPluginFacts(plugin, origin, filePath, derivedFrom);
 
         // Must run before the appender is created.
         RequirePluginIngest().DeletePriorDocuments(plugin, origin);
@@ -199,7 +199,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
         // The copy's facts go with the rows they describe — Unindex is the file-gone verb, so leaving
         // them behind would leave the files table asserting rows the index does not hold.
-        _store.DeleteCopyFacts(plugin, origin);
+        _store.DeletePluginFacts(plugin, origin);
         DeleteRegistration(plugin, origin);
         _store.BumpSequence();
 
@@ -432,7 +432,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
                                     && At(RecordRef.Head).GetDocument(formKey, key) == null))
         {
-            RederiveWholeCopyFromSource(key, modFolder, formKeys);
+            RederiveWholePluginFromSource(key, modFolder, formKeys);
             return;
         }
 
@@ -493,7 +493,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholeCopyFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
+    private void RederiveWholePluginFromSource(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys)
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
         // copy's rows came from its binary and a source key is not its to answer for.
@@ -613,11 +613,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // Empty until the Indexer points it somewhere: a store opened by a test that never reconciles
     // has no copies open, which is what an empty set says.
-    private Func<IReadOnlyDictionary<PluginAddress, PluginContent>> _openedCopies =
+    private Func<IReadOnlyDictionary<PluginAddress, PluginContent>> _openedPlugins =
         () => new Dictionary<PluginAddress, PluginContent>();
 
-    public void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
-        _openedCopies = opened;
+    public void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened) =>
+        _openedPlugins = opened;
 
     /// <summary>Reads answering from the extracted tables (<c>Resolve</c>, <c>GetReferencedBy</c>,
     /// <c>GetPlacement</c>) are identical at both refs: those tables carry no ref dimension and
@@ -637,7 +637,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // names, so a read cannot be ref-aware on one path and not the other.
     private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
-        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies => owner._openedCopies();
+        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => owner._openedPlugins();
 
         // A SELECT COUNT(*) always answers exactly one row with a non-null count.
         private static long ExecuteCount(DuckDBCommand cmd) =>
@@ -907,11 +907,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return rows;
         }
 
-        public IReadOnlySet<PluginAddress> GetTrackedCopies()
+        public IReadOnlySet<PluginAddress> GetTrackedPlugins()
         {
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.CopySourceTable} WHERE derived_from = $1";
+            cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.PluginDerivationTable} WHERE derived_from = $1";
             AddParams(cmd, [DerivedFrom.SourceTree.ToString()]);
             using var reader = cmd.ExecuteReader();
 

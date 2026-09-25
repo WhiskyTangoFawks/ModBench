@@ -159,7 +159,7 @@ public sealed class ProgressiveIndexingTests
         // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
         // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
         var reads = manager.RequireReads();
-        var opened = reads.OpenedCopies;
+        var opened = reads.OpenedPlugins;
         using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
 

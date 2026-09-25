@@ -42,7 +42,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(reads.OpenedCopies).Key.Name);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(reads.OpenedPlugins).Key.Name);
     }
 
     [Fact]

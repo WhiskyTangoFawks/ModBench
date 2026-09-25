@@ -41,7 +41,7 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsTracked() => _index.RequireReads().GetTrackedCopies().Contains(_mod.KeyOf());
+    private bool ReadsAsTracked() => _index.RequireReads().GetTrackedPlugins().Contains(_mod.KeyOf());
 
     // Track's documents carry the bytes the binary already gave, so the settled Source batch below
     // moves no row: what it moves is which truth answers for the copy.

@@ -351,7 +351,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
         var held = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
-        fresh.ReadOpenedCopiesFrom(() => held.OpenedCopies);
+        fresh.ReadOpenedPluginsFrom(() => held.OpenedPlugins);
 
         lock (_lock)
         {
@@ -418,7 +418,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // ADR-0007 invariant 3: which truth a copy reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
-        var stampedFromSource = index.At(RecordRef.Effective).GetTrackedCopies();
+        var stampedFromSource = index.At(RecordRef.Effective).GetTrackedPlugins();
         var reDerived = resolved
             .Where(r => open.ContainsKey(r.Key)
                         && SourceIngest.HoldsTree(r.Origin, r.Path, r.Name) != stampedFromSource.Contains(r.Key))
@@ -744,7 +744,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
             if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)
                 RefreshByKeysOrReadWhole(index, key, folder, report.ChangedKeys);
-            else if (report.NeedsRebuild || failed) ReindexHeldCopy(key);
+            else if (report.NeedsRebuild || failed) ReindexHeldPlugin(key);
             return report;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -774,7 +774,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // failure once the tree is sound; a key alone cannot vouch for the rest of the tree.
         if (_heldPlugins?.IsHeldWithAFailure(key) == true)
         {
-            ReindexHeldCopy(key);
+            ReindexHeldPlugin(key);
             return;
         }
 
@@ -793,7 +793,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
         catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
         {
-            ReindexHeldCopy(key);
+            ReindexHeldPlugin(key);
         }
     }
 
@@ -804,14 +804,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // Which truth it reads is the plugin's: an untracked copy from its binary, a tracked copy from
     // its source tree (ADR-0007 invariant 3), because reading a tracked copy's binary would discard
     // uncommitted edits.
-    private void ReindexHeldCopy(PluginAddress key)
+    private void ReindexHeldPlugin(PluginAddress key)
     {
         // Taken before anything reaches _lock: this runs on the watcher's timer. IndexWriteGate is a
         // Lock, thread-affine, so nothing under this scope may await — the thread that exits must be
         // the one that entered.
         using var _ = WriteGate.Enter();
 
-        var (metadata, index, gameRelease, dataFolderPath) = RequireHeldCopy(key);
+        var (metadata, index, gameRelease, dataFolderPath) = RequireHeldPlugin(key);
         // ADR-0015 invariant 3: a whole copy re-derived is one projection, so it is one advance
         // whichever branch below runs.
         using var projection = index.BeginProjection();
@@ -836,7 +836,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // reentrant gate makes that free.
         using var _ = WriteGate.Enter();
 
-        var (metadata, index, gameRelease, _) = RequireHeldCopy(key);
+        var (metadata, index, gameRelease, _) = RequireHeldPlugin(key);
         using var projection = index.BeginProjection();
         if (!SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
         {
@@ -880,7 +880,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         AnnouncePluginChanged(index, key);
     }
 
-    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease, string DataFolderPath) RequireHeldCopy(PluginAddress key)
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease, string DataFolderPath) RequireHeldPlugin(PluginAddress key)
     {
         lock (_lock)
         {
@@ -906,7 +906,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // The file is gone, so its rows go with it. A no-op while the held copy still exists or with no
     // load order: the watcher that calls this races teardowns and superseding load orders.
-    private void UnindexGoneCopy(PluginAddress key)
+    private void UnindexGonePlugin(PluginAddress key)
     {
         // The watcher's timer's other index write — a vanished binary — gated like its sibling
         // above. Outside _lock, never inside it.
@@ -944,14 +944,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         if (!File.Exists(path))
         {
             var wasIndexed = IndexedContentHash(key) is not null;
-            UnindexGoneCopy(key);
+            UnindexGonePlugin(key);
             return wasIndexed;
         }
 
         if (IndexedContentHash(key) is { } indexedHash)
         {
             if (ContentHashOnDisk(path) == indexedHash) return false;
-            ReindexHeldCopy(key);
+            ReindexHeldPlugin(key);
             return true;
         }
 

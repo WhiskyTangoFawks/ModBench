@@ -37,13 +37,13 @@ public sealed class TrackedCopyReadTests : IDisposable
     [Fact]
     public void ACopyIngestedFromItsSourceTree_ReadsAsTracked()
     {
-        Assert.Contains(Tracked, _index.RequireReads().GetTrackedCopies());
+        Assert.Contains(Tracked, _index.RequireReads().GetTrackedPlugins());
     }
 
     [Fact]
     public void ACopyIngestedFromItsBytes_ReadsAsUntracked()
     {
-        Assert.DoesNotContain(Plain, _index.RequireReads().GetTrackedCopies());
+        Assert.DoesNotContain(Plain, _index.RequireReads().GetTrackedPlugins());
     }
 
     // The rival this pins: a set keyed by the default equality, which would lose a copy whose
@@ -51,7 +51,7 @@ public sealed class TrackedCopyReadTests : IDisposable
     [Fact]
     public void TheTrackedSet_ComparesKeysAsEveryOtherLookupDoes()
     {
-        Assert.Contains(new PluginAddress("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedCopies());
+        Assert.Contains(new PluginAddress("TRACKED.ESP", "trackedmod"), _index.RequireReads().GetTrackedPlugins());
     }
 
     [Fact]
@@ -59,6 +59,6 @@ public sealed class TrackedCopyReadTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => p.Name != Tracked.Name)], GameRelease.Fallout4);
 
-        Assert.DoesNotContain(Tracked, _index.RequireReads().GetTrackedCopies());
+        Assert.DoesNotContain(Tracked, _index.RequireReads().GetTrackedPlugins());
     }
 }

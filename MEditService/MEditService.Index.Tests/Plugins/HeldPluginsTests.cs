@@ -57,7 +57,7 @@ public sealed class HeldPluginsTests
 
         using var held = Open(data, entries);
 
-        var opened = held.RequireReads().OpenedCopies.Keys;
+        var opened = held.RequireReads().OpenedPlugins.Keys;
         Assert.Contains(Key("Present.esp"), opened);
         Assert.DoesNotContain(Key("NonExistent.esp"), opened);
         Assert.Contains(held.Status.Failures, f => f.Name == "NonExistent.esp");
@@ -76,7 +76,7 @@ public sealed class HeldPluginsTests
 
         using var held = Open(data, entries);
 
-        var opened = held.RequireReads().OpenedCopies.Keys;
+        var opened = held.RequireReads().OpenedPlugins.Keys;
         Assert.Contains(Key("Good.esp"), opened);
         Assert.DoesNotContain(Key("Bad.esp"), opened);
         var failure = Assert.Single(held.Status.Failures);
@@ -96,7 +96,7 @@ public sealed class HeldPluginsTests
 
         using var held = Indexes.Reconciled(fx.GameDirectory, [winner, loser]);
 
-        Assert.Equal("ModA", Assert.Single(held.RequireReads().OpenedCopies.Keys).Origin);
+        Assert.Equal("ModA", Assert.Single(held.RequireReads().OpenedPlugins.Keys).Origin);
         var failure = Assert.Single(held.Status.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
@@ -118,7 +118,7 @@ public sealed class HeldPluginsTests
 
         held.Reconcile(holder, data.DataFolder, [resolved], GameRelease.Fallout4);
         Assert.Empty(held.Status.Failures);
-        Assert.Contains(Key("Fixed.esp"), held.RequireReads().OpenedCopies.Keys);
+        Assert.Contains(Key("Fixed.esp"), held.RequireReads().OpenedPlugins.Keys);
     }
 
     [Theory]
@@ -130,7 +130,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
         using var held = Open(data);
 
-        var content = held.RequireReads().OpenedCopies[Key(name)];
+        var content = held.RequireReads().OpenedPlugins[Key(name)];
         Assert.Equal(isLight, content.IsLight);
         Assert.Equal(isMaster, content.IsMaster);
     }
@@ -146,7 +146,7 @@ public sealed class HeldPluginsTests
             .Build();
         using var held = Open(data);
 
-        var opened = held.RequireReads().OpenedCopies;
+        var opened = held.RequireReads().OpenedPlugins;
         Assert.True(opened[Key("EslFlagged.esp")].IsLight);
         Assert.True(opened[Key("EsmFlagged.esp")].IsMaster);
     }
@@ -164,7 +164,7 @@ public sealed class HeldPluginsTests
             .Build();
         using var held = Open(data);
 
-        Assert.Equal(3, held.RequireReads().OpenedCopies[Key("WithRecords.esp")].RecordCount);
+        Assert.Equal(3, held.RequireReads().OpenedPlugins[Key("WithRecords.esp")].RecordCount);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class HeldPluginsTests
 
         Assert.True(held.Registers(Key("A.esp")));
         Assert.False(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
-        Assert.Contains(Key("A.esp"), held.RequireReads().OpenedCopies.Keys);
+        Assert.Contains(Key("A.esp"), held.RequireReads().OpenedPlugins.Keys);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class HeldPluginsTests
 
         Assert.Equal(["B.esp"], held.Status.IndexedPlugins.Select(p => p.Name));
         Assert.False(held.Registers(removed));
-        Assert.DoesNotContain(removed, held.RequireReads().OpenedCopies.Keys);
+        Assert.DoesNotContain(removed, held.RequireReads().OpenedPlugins.Keys);
     }
 
     [Fact]

@@ -23,7 +23,7 @@ internal sealed class OverflowValidation
         {
             try
             {
-                _sinks.ValidateWholeCopy(key, "a watch overflow");
+                _sinks.ValidateWholePlugin(key, "a watch overflow");
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
