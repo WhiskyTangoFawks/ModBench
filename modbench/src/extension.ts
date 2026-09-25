@@ -6,11 +6,10 @@ import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } from './client';
-import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
+import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { EXTENSION_TO_WEBVIEW } from './wire/messages';
 import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -109,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
   // (ADR-0007 — the one reliable point to do so).
   const notifyConflictsComputed = () => {
-    for (const panel of recordPanels) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    announceConflictsComputed(recordPanels, editsInFlight);
     void registerHeldTrackedRepositories(
       meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
   };

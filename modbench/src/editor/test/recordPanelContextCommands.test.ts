@@ -39,6 +39,8 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
+    // The right-clicked panel's gate, sending each write where it was addressed.
+    editGateOf: () => async (address, write) => { await write(address.formKey); },
     ...overrides,
   };
   return { deps, meditClient, onRecordEdited, report };
@@ -173,6 +175,50 @@ describe('right-click array ops write one envelope from the host', () => {
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(undefined);
 
     expect(editRecordCalls(meditClient)).toHaveLength(0);
+  });
+});
+
+// A right-click edit is an edit the panel makes, so it goes through that panel's gate: the gate
+// holds its reads, and sends the write to the FormKey the record is at now.
+describe('right-click edits go through the right-clicked panel\'s gate', () => {
+  const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
+    () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
+
+  it('an array op writes through the gate', async () => {
+    const gated: string[] = [];
+    const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
+      parentContext([{ kind: 'member', name: 'Entries' }]));
+
+    expect(gated).toEqual([IDENTITY.formKey]);
+    expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
+  });
+
+  // The menu names its panel (the body's webview context), whichever panel was focused last.
+  it('takes the gate of the panel the menu came from', async () => {
+    const asked: (string | undefined)[] = [];
+    const { deps } = makeDeps({ editGateOf: panelId => { asked.push(panelId); return async (address, write) => { await write(address.formKey); }; } });
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
+      { ...parentContext([{ kind: 'member', name: 'Entries' }]), panelId: 'panel-2' });
+
+    expect(asked).toEqual(['panel-2']);
+  });
+
+  it('a save of the extended editor writes through the gate of the panel it was opened from', async () => {
+    const gated: string[] = [];
+    const { deps, meditClient } = makeDeps({ editGateOf: movedGate(gated) });
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.openFieldValue'), 'the openFieldValue handler')(stringContext());
+    const [, editorDeps] = present(openExtendedFieldEditor.mock.calls.at(-1), 'the openExtendedFieldEditor call');
+    await editorDeps.onCommit('saved');
+
+    expect(gated).toEqual([IDENTITY.formKey]);
+    expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
   });
 });
 

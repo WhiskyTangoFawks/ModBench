@@ -32,10 +32,29 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       fsState.accessAnswered.push(String(args[0]));
     }
   });
-  return { ...actual, readFile, writeFile, mkdir, rename, access };
+  const readdir = vi.fn(actual.readdir);
+  const stat = vi.fn(actual.stat);
+  const lstat = vi.fn(actual.lstat);
+  const rm = vi.fn(actual.rm);
+  return { ...actual, readFile, writeFile, mkdir, rename, access, readdir, stat, lstat, rm };
 });
 
-import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import {
+  access, cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, utimes, writeFile,
+} from 'node:fs/promises';
+
+// Every call through the mock that takes a path, so a test can say which paths were reached.
+const pathCalls = (): (readonly unknown[])[][] => [
+  vi.mocked(access).mock.calls, vi.mocked(stat).mock.calls, vi.mocked(lstat).mock.calls,
+  vi.mocked(readdir).mock.calls, vi.mocked(readFile).mock.calls, vi.mocked(writeFile).mock.calls,
+  vi.mocked(mkdir).mock.calls, vi.mocked(rename).mock.calls, vi.mocked(rm).mock.calls,
+];
+const pathsReached = (): string[] =>
+  pathCalls().flatMap((calls) => calls.flatMap((args) => args.filter((a): a is string => typeof a === 'string')));
+const forgetPathsReached = (): void => {
+  for (const op of [access, stat, lstat, readdir, readFile, writeFile, mkdir, rename, rm]) vi.mocked(op).mockClear();
+};
+const listedDirs = (): string[] => vi.mocked(readdir).mock.calls.map(([path]) => String(path));
 import {
   createEmptyMod,
   deleteSeparators,
@@ -1084,6 +1103,72 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
+  // update-load-order-file, Refusals: `mods/` cannot be listed, so nothing is written. Rival:
+  // reading a mods/ gone by write time as no folders, which drops every line.
+  it('refuses, writing nothing, when mods/ is gone by the time the sync writes', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods'), { recursive: true });
+    vi.mocked(writeFile).mockClear();
+
+    assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
+  });
+
+  it('refuses, writing nothing, when mods/ cannot be listed for another reason', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods'), { recursive: true });
+    await writeFile(join(dir, 'mods'), 'not a folder');
+    vi.mocked(writeFile).mockClear();
+
+    assertRefusal(await sync(MOD_FOLDERS), 'ENOTDIR');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
+  });
+
+  // MO2 lists a linked mod folder as a mod (modinfo.cpp, QDir::Dirs without NoSymLinks). Rival:
+  // only a real directory counts, so a symlinked mod's line is dropped and never comes back.
+  it('keeps the line of a mod whose folder is a link to a folder', async () => {
+    const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
+    try {
+      await symlink(target, join(dir, 'mods', 'Linked Mod'), 'junction');
+      await writeFile(modlistPath(), `+Linked Mod\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+      const outcome = await sync(MOD_FOLDERS);
+
+      expect(outcome.applied && outcome.dropped).not.toContain('Linked Mod');
+      expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Linked Mod', enabled: true });
+    } finally {
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+
+  // MO2 skips a link it cannot follow, and has no mod by its name. Rival: refusing the whole sync
+  // on it, so one bad link stops every line from syncing.
+  it('skips a mod folder link whose target cannot be checked, and drops its line', async () => {
+    await symlink(join(dir, 'mods', 'Loop'), join(dir, 'mods', 'Loop'));
+    await writeFile(modlistPath(), `+Loop\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+    const outcome = await sync(MOD_FOLDERS);
+
+    expect(outcome.applied && outcome.dropped).toContain('Loop');
+  });
+
+  // MO2 matches a line to its folder without case (FileNameComparator); a Linux disk does not.
+  // Rival: looking up the line's own spelling on disk, which drops the line, state and place.
+  it('keeps a line whose folder differs only in case, when the handed list misses it', async () => {
+    const before = (await readFile(modlistPath(), 'utf8')).replace('-Harder VATS', '+harder vats');
+    await writeFile(modlistPath(), before);
+    const lagging = MOD_FOLDERS.filter((f) => f !== 'Harder VATS');
+
+    const outcome = await sync(lagging);
+
+    expect(outcome.applied && outcome.dropped).toEqual(['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator']);
+    const kept = parseModlist(before).filter((e) => e.name !== '[NODELETE] Radfall' && e.name !== 'Radfall - All-In-One Survival Overhaul');
+    expect(await readModlist()).toEqual(kept);
+    expect(kept).toContainEqual({ kind: 'mod', name: 'harder vats', enabled: true });
+  });
+
   // The value lags the disk: its folders were listed before a folder and its line landed, and the
   // sync splices the text as it is now. Rival: dropping by the handed list alone, which loses the
   // new line for good.
@@ -1101,11 +1186,12 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // the line (ADR-0017). Rivals: keeping the line for good, or building a path from the name.
   it('drops a separator line whose name MO2 never gives a folder, building no path from it', async () => {
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
-    vi.mocked(access).mockClear();
+    forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['Weapons/Armor_separator'] });
+    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(pathsReached().filter((p) => p.includes('Weapons'))).toEqual([]);
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
-    expect(vi.mocked(access).mock.calls.map(([path]) => String(path)).filter((p) => p.includes('Weapons'))).toEqual([]);
   });
 
   // A line another tool wrote with a `/` names no folder under mods/, and MO2 has no mod by that
@@ -1114,10 +1200,11 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     const outside = join(dir, 'Escaped');
     await mkdir(outside);
     await writeFile(modlistPath(), '+../Escaped\r\n+Harder VATS\r\n');
-    vi.mocked(access).mockClear();
+    forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
-    expect(vi.mocked(access).mock.calls.map(([path]) => String(path))).not.toContain(outside);
+    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 
   // MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator), and a

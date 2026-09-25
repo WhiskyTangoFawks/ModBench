@@ -24,8 +24,10 @@ export function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } 
   const inFlight = new Set<Promise<void>>();
   return {
     begin: (run) => {
-      inFlight.add(run);
-      void run.finally(() => inFlight.delete(run));
+      // A run that rejects has still ended: tracked by its settling, never by the run itself.
+      const ended = run.then(() => undefined, () => undefined);
+      inFlight.add(ended);
+      void ended.then(() => inFlight.delete(ended));
     },
     settled: async () => {
       while (inFlight.size > 0) await Promise.all([...inFlight]);

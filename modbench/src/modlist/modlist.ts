@@ -25,7 +25,7 @@ import {
   downloadFile, downloadSidecarFile, mo2FolderName, modDir, modFolderName, modlistFile, modsDir, separatorDir,
   separatorFolderName,
 } from '../instanceAdapter/layout';
-import { ensureDir, exists, get, put, putIfChanged, rename } from '../instanceAdapter/files';
+import { ensureDir, exists, get, listFolders, put, putIfChanged, rename } from '../instanceAdapter/files';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
@@ -432,10 +432,14 @@ export async function syncMods(
   }
   const listed = new Set(modFolders.map(modNameKey));
   const inGesture = (folder: string) => foldersInGesture.has(gestureKey(instanceRoot, folder));
-  const onDisk = (folder: string) => exists(modDir(instanceRoot, folder));
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, async (text) => {
+    // Matched by key, as MO2 matches a line to its folder, whatever case the disk keeps.
+    // A mods/ that cannot be listed, gone included, refuses the sync (update-load-order-file,
+    // Refusals).
+    const onDiskNow = new Set((await listFolders(modsDir(instanceRoot))).map(modNameKey));
+    const onDisk = (folder: string) => Promise.resolve(onDiskNow.has(modNameKey(folder)));
     // Under the write lock: each value lags the disk and the last write, so only the text about
     // to be spliced and the disk as it is now say what is still to do.
     const entries = parseModlist(text);
