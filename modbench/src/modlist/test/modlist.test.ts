@@ -1076,6 +1076,65 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
 
 // ADR-0015 invariant 1: a command never reads the Instance, the read model built only by watching.
 // src/test/commandInstanceScan.test.ts scans every command box too; this is this file's own guard.
+// A separator gesture writes its line, then makes or renames its folder. A mod sync whose value
+// was listed in between must leave both alone until the gesture is done.
+describe('a mod sync between a separator gesture\'s line and its folder', () => {
+  let dir: string;
+  const readEntries = async () => parseModlist(await readFile(join(dir, 'profiles', 'Default', 'modlist.txt'), 'utf8'));
+  const listedNow = () => readdir(join(dir, 'mods'));
+
+  // The gesture waits in its gap until released, and says when it got there.
+  function gap() {
+    let reached = (): void => {};
+    let release = (): void => {};
+    const reachedGap = new Promise<void>((resolve) => { reached = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    return { reachedGap, release, waitHere: async () => { reached(); await released; } };
+  }
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'modlist-gap-'));
+    await cp(fixture, dir, { recursive: true });
+  });
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  // Rival: the line first and nothing more, so the sync drops the new line whose folder is not
+  // made yet.
+  it('keeps the line of a separator being added', async () => {
+    const hold = gap();
+    const realMkdir = present(vi.mocked(mkdir).getMockImplementation(), 'the real mkdir');
+    vi.mocked(mkdir).mockImplementationOnce(async (...args) => { await hold.waitHere(); return realMkdir(...args); });
+    const adding = insertSeparator(dir, 'Default', 'Armor', { kind: 'mod', name: 'Harder VATS' });
+    await hold.reachedGap;
+
+    const synced = await syncMods(dir, 'Default', await listedNow());
+    hold.release();
+
+    expect(await adding).toMatchObject({ applied: true });
+    expect(synced.applied && synced.dropped).not.toContain('Armor_separator');
+    expect(await readEntries()).toContainEqual({ kind: 'separator', name: 'Armor', enabled: true });
+  });
+
+  // Rival: the same, for a rename: the sync drops the renamed line, whose folder has not moved
+  // yet, and gives the old folder a line of its own.
+  it('keeps the line of a separator being renamed, and gives its old folder none', async () => {
+    const hold = gap();
+    const realRename = present(vi.mocked(rename).getMockImplementation(), 'the real rename');
+    vi.mocked(rename).mockImplementationOnce(async (...args) => { await hold.waitHere(); return realRename(...args); });
+    const renaming = renameSeparator(dir, 'Default', 'Unassigned (Modlist Development)', 'Renamed');
+    await hold.reachedGap;
+
+    const synced = await syncMods(dir, 'Default', await listedNow());
+    hold.release();
+
+    expect(await renaming).toMatchObject({ applied: true });
+    expect(synced).toMatchObject({ applied: true });
+    const separators = (await readEntries()).filter((e) => e.kind === 'separator').map((e) => e.name);
+    expect(separators).toContain('Renamed');
+    expect(separators).not.toContain('Unassigned (Modlist Development)');
+  });
+});
+
 describe('modlist commands never import the Instance', () => {
   it('names no import from ../instanceLoader and no `Instance` identifier', () => {
     const path = join(__dirname, '..', 'modlist.ts');
