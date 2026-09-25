@@ -17,6 +17,12 @@ describe('collidingModName', () => {
     expect(message).toMatch(/Downloads/);
   });
 
+  // MO2 keys mods by name without case (modinfo.cpp, FileNameComparator). Rival: an exact match,
+  // which lets the prompt accept a name the create then refuses.
+  it('names the collision for a mod of that name in another case', () => {
+    expect(collidingModName(instanceWith([mod('Harder VATS')]), 'harder vats')).toMatch(/already exists/);
+  });
+
   it('is silent for a name no mod carries', () => {
     expect(collidingModName(instanceWith([mod('Harder VATS')]), 'A New Mod')).toBeUndefined();
   });

@@ -162,22 +162,21 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
   });
 }
 
-const RESERVED_DIR_NAMES = new Set([OVERWRITE_DIR_NAME]);
+/** MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator). */
+export const modNameKey = (name: string): string => name.toLowerCase();
 
-/** Excludes `overwrite` and the `<name>_separator` marker folders MO2 writes,
- *  neither of which is a mod. Sorted, for a deterministic registration order. */
+const RESERVED_DIR_NAMES = new Set([modNameKey(OVERWRITE_DIR_NAME)]);
+
+/** The folders under `mods/` no line names: a mod's by its name, a separator's by its
+ *  `<name>_separator` folder. Excludes `overwrite`. Sorted, for a deterministic registration order. */
 export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): string[] {
-  // Separators must not contribute to `registered` under their bare name: users
-  // name separators after what they group, so a real `mods/<name>/` folder
-  // sharing that name would silently stop being offered for registration.
+  // A separator registers its folder, never its bare name: users name separators after what they
+  // group, so a real `mods/<name>/` folder sharing that name still needs a line.
   const registered = new Set(
-    entries.filter((e) => e.kind !== 'separator').map((e) => e.name),
+    entries.map((e) => modNameKey(e.kind === 'separator' ? separatorModName(e.name) : e.name)),
   );
   return dirNames
-    .filter(
-      (name) =>
-        !RESERVED_DIR_NAMES.has(name) && !name.endsWith(SEPARATOR_SUFFIX) && !registered.has(name),
-    )
+    .filter((name) => !RESERVED_DIR_NAMES.has(modNameKey(name)) && !registered.has(modNameKey(name)))
     .sort((a, b) => a.localeCompare(b));
 }
 
