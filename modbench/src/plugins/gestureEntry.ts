@@ -82,13 +82,18 @@ export function onlySelected<K extends ArgumentKind>(selection: readonly Plugins
 
 const flagsOf = (row: PluginsTreeNode | undefined): string[] => (row?.contextValue ?? '').split(' ');
 
+/** The one selected plugin compile applies to: compile's Argument from the palette. */
+export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf<'plugin'> | undefined {
+  const only = onlySelected(selection, 'plugin');
+  return flagsOf(only).includes('compilable') ? only : undefined;
+}
+
 /** What the Plugins palette entries' `when` clauses read off the selection, since the palette is
  *  handed no row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
   readonly holdsUntrackedInMod: boolean;
   readonly singleRebasable: boolean;
-  readonly singleCompilable: boolean;
   readonly singleRecordType: boolean;
   readonly holdsDeletableRecord: boolean;
 }
@@ -98,7 +103,6 @@ export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): Plugin
     singlePlugin: onlySelected(selection, 'plugin') !== undefined,
     holdsUntrackedInMod: selection.some((row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
     singleRebasable: flagsOf(onlySelected(selection, 'plugin')).includes('rebasable'),
-    singleCompilable: flagsOf(onlySelected(selection, 'plugin')).includes('compilable'),
     singleRecordType: onlySelected(selection, 'recordType') !== undefined,
     holdsDeletableRecord: selection.some((row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
   };

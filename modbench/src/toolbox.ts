@@ -242,6 +242,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', pluginsTree.anyCompilable());
   };
   showKeyContext();
   own(pluginListView.onDidChangeSelection(showKeyContext));

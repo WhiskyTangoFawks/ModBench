@@ -804,6 +804,15 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
+// plugins.md, Compile: from the palette, the one selected compilable plugin, or a pick of them.
+describe('package.json compile\'s palette entry', () => {
+  it('is in the palette while any plugin compiles', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.saveAndCompile');
+    expect(entries.map((e) => e.when)).toEqual([`${IN_AN_INSTANCE} && modbench.plugin.anyCompilable`]);
+  });
+});
+
 // commands.md, No dead entries: each is listed only while the Plugins selection holds what it acts
 // on, as its row menu does.
 describe('package.json Plugins palette entries', () => {
@@ -811,7 +820,6 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
     ['modbench.plugin.track', 'modbench.plugin.holdsUntrackedInMod'],
     ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singleRebasable'],
-    ['modbench.saveAndCompile', 'modbench.plugin.singleCompilable'],
     ['modbench.record.create', 'modbench.plugin.singleRecordType'],
     ['modbench.record.delete', 'modbench.plugin.holdsDeletableRecord'],
   ] as const;

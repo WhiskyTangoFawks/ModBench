@@ -12,7 +12,7 @@ import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { onlySelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
+import { compilableSelected, onlySelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -152,11 +152,12 @@ export function registerSaveAndCompileCommand(
       await compileAndReport(client, diagnostics, originFiles, reporter, ask, header, undefined);
       return;
     }
-    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
+    const node = clicked ?? compilableSelected(viewSelection());
     const target = await resolveCompileTarget(isPluginRow(node) ? node.plugin.name : undefined, {
       ...compileTargetDeps(client, outputChannel, reporter),
       pickPlugin: async () => {
-        const plugins = await client.getPlugins();
+        // plugins.md, Compile: the pick lists the plugins compile applies to, tracked and editable.
+        const plugins = (await client.getPlugins()).filter((p) => p.isTracked && !p.isImmutable);
         const choice = await vscode.window.showQuickPick(
           plugins.map((p) => ({ label: p.name, description: p.origin })),
           { placeHolder: 'Compile which plugin?' },

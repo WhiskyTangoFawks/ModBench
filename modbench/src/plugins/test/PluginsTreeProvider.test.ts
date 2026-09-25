@@ -1769,6 +1769,17 @@ describe('PluginsTreeProvider — the row states where track, rebase edit branch
     }
   });
 
+  it('says whether any plugin compiles, which compile\'s palette entry reads', async () => {
+    const h = makeTree([A_ROW(), B_ROW()]);
+    expect(h.tree.anyCompilable()).toBe(false);
+
+    await reconcile(h, [held('A.esp'), held('B.esp', { isTracked: true, isImmutable: true })]);
+    expect(h.tree.anyCompilable()).toBe(false);
+
+    await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp')]);
+    expect(h.tree.anyCompilable()).toBe(true);
+  });
+
   it('offers neither before mEdit says whether the plugin is tracked', async () => {
     const h = makeTree([A_ROW()]);
 

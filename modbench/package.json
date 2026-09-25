@@ -544,7 +544,7 @@
         },
         {
           "command": "modbench.saveAndCompile",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCompilable"
+          "when": "modbench.folder == instance && modbench.plugin.anyCompilable"
         },
         {
           "command": "modbench.record.create",

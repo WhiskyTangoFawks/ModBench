@@ -505,15 +505,34 @@ describe('registerSaveAndCompileCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
-  // commands.md, Where: the palette hands the gesture no argument, so it takes the one selected plugin.
-  it('compiles the one selected plugin from the palette', async () => {
+  // plugins.md, Compile: the palette compiles the one selected compilable plugin, or asks which.
+  it('compiles the one selected compilable plugin from the palette', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
     client.setCommandResult('compile', compileResultFixture());
-    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')]);
+    const selected = pluginNode('MyPatch.esp');
+    selected.contextValue = 'plugin rebasable compilable';
+    const { handler } = invokeSaveAndCompile(client, [selected]);
 
     await handler();
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+  });
+
+  it('asks, from the palette with no compilable plugin selected, which of the tracked, editable plugins to compile', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Editable.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'Untracked.esp', origin: 'ModB', isTracked: false, isImmutable: false }),
+      pluginMetadataFixture({ name: 'ReadOnly.esp', origin: 'ModC', isTracked: true, isImmutable: true }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const untracked = pluginNode('Untracked.esp');
+    untracked.contextValue = 'plugin untrackedInMod';
+    const { handler } = invokeSaveAndCompile(client, [untracked]);
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith([{ label: 'Editable.esp', description: 'ModA' }], { placeHolder: 'Compile which plugin?' });
   });
 
   // editor.md, Menus and keys: compile on a column header, whose context names the column's plugin.

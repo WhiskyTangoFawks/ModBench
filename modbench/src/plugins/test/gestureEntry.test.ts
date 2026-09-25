@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PLUGINS_KEY_ARGS, pluginsKeyContext, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument,
+  PLUGINS_KEY_ARGS, compilableSelected, pluginsKeyContext, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument,
   type GestureEntry,
 } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
@@ -191,13 +191,13 @@ describe('what the Plugins palette entries read off the selection', () => {
     expect(pluginsKeyContext([rebasable, alpha]).singleRebasable).toBe(false);
   });
 
-  it('compile sees exactly one selected compilable plugin', () => {
+  it('compile takes exactly one selected compilable plugin', () => {
     const compilable = pluginRow('Eps.esp', 'ModE');
     compilable.contextValue = 'plugin rebasable compilable';
 
-    expect(pluginsKeyContext([compilable]).singleCompilable).toBe(true);
-    expect(pluginsKeyContext([alpha]).singleCompilable).toBe(false);
-    expect(pluginsKeyContext([compilable, alpha]).singleCompilable).toBe(false);
+    expect(compilableSelected([compilable])).toBe(compilable);
+    expect(compilableSelected([alpha])).toBeUndefined();
+    expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
   it('create sees exactly one selected record type', () => {

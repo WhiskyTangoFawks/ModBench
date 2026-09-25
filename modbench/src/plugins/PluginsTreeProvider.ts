@@ -512,6 +512,11 @@ export class PluginsTreeProvider
     return flags.join(' ');
   }
 
+  /** Whether compile applies to any plugin, which compile's palette entry reads. */
+  anyCompilable(): boolean {
+    return this.someCompilable;
+  }
+
   // Compile applies to a tracked plugin in a mod that is not read-only for editing.
   private compilable(file: string, origin: string): boolean {
     if (IN_NO_MOD.has(origin)) return false;
@@ -537,6 +542,7 @@ export class PluginsTreeProvider
 
   private heldFiles?: Set<string>;
   private facts?: ByPluginAddress<PluginFacts>;
+  private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
   private diagnoses?: ByPluginAddress<string[]>;
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
@@ -649,6 +655,7 @@ export class PluginsTreeProvider
       matches.set(p.name, p.origin, p.hasMatchingRecords);
     }
     this.facts = facts;
+    this.someCompilable = plugins.some((p) => this.compilable(p.name, p.origin));
     this.matches = matches;
     this.recordFilterMatchesNothing = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
