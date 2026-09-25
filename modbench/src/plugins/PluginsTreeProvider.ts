@@ -30,10 +30,10 @@ const notConnected = (): [ErrorNode] => [new ErrorNode(NOT_CONNECTED)];
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
 
-/** The two plugins.txt gestures the tree owns, bound to the instance root and the active
- *  profile by the composition root; a refused command reaches this provider as a rejection. */
+/** `reorderPlugins`, bound to the instance root and the active profile by the composition root;
+ *  a refused command reaches this provider as a rejection. Enable/disable reaches its own core
+ *  directly, never through the tree. */
 export interface PluginListSource {
-  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
   reorderPlugins(pluginNames: string[], drop: PluginsDrop): Promise<void>;
 }
 
@@ -149,12 +149,6 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
   return undefined;
 }
 
-/** Fired only from a real toggle, never a generic re-render, which carries nothing to apply. */
-export interface PluginParticipationChange {
-  plugin: string;
-  enabled: boolean;
-}
-
 // Everything one `GET /plugins` read knows about one plugin copy. One value rather than three
 // parallel collections: they arrive together, change together, and are keyed the same way.
 interface PluginFacts {
@@ -215,10 +209,6 @@ export class PluginsTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  // Distinct from onDidChangeTreeData: see PluginParticipationChange.
-  private readonly _onDidChangeParticipation = new vscode.EventEmitter<PluginParticipationChange>();
-  readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
-
   private readonly source: PluginListSource;
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
@@ -236,6 +226,8 @@ export class PluginsTreeProvider
   private lastOrder: string[] = [];
   private filterText = '';
   private filterLower = '';
+  private recordFilterSource?: string;
+  private recordFilterMatchesNothing = false;
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
@@ -267,7 +259,6 @@ export class PluginsTreeProvider
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
-    this._onDidChangeParticipation.dispose();
   }
 
   // ── rows ──────────────────────────────────────────────────────────────────
@@ -286,12 +277,24 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** What the view's message line says about its rows: the game folder not found, which the
-   *  rows of the plugins it holds need (common.md, States, story 5). */
+  /** What the view's message line says about its rows: the game folder not found (common.md,
+   *  States, story 5), else a record filter that matches nothing (plugins.md, States, story 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
-    if (this.instance.sequence === 0 || gameFolder.kind === 'found') return undefined;
-    return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
+    if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
+      return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
+    }
+    if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
+      return `No records match ${this.recordFilterSource}.`;
+    }
+    return undefined;
+  }
+
+  /** The source of the record filter in force, which the no-match message names; undefined while
+   *  none is. */
+  setRecordFilterSource(source: string | undefined): void {
+    this.recordFilterSource = source;
+    this.render();
   }
 
   /** Case-insensitive substring on plugin name; an empty string clears it. Render-only, so the
@@ -300,14 +303,6 @@ export class PluginsTreeProvider
     this.filterText = text;
     this.filterLower = text.toLowerCase();
     this.render();
-  }
-
-  /** The write reaches disk and returns (ADR-0015 invariant 2); the Instance owns the watcher
-   *  that brings the result back (invariant 7). `invalidate()` drops the cache ahead of it. */
-  async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
-    await this.source.setPluginEnabled(pluginName, enabled);
-    this.invalidate();
-    this._onDidChangeParticipation.fire({ plugin: pluginName, enabled });
   }
 
   /** The winning copy's own path, already resolved on the Instance value — undefined for a name
@@ -571,6 +566,7 @@ export class PluginsTreeProvider
     }
     this.facts = facts;
     this.matches = matches;
+    this.recordFilterMatchesNothing = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
   private async scanDiagnoses(generation: number): Promise<void> {

@@ -119,10 +119,12 @@ public static class IndexEndpoints
         }
         if (req.Sql is null)
             return Results.Problem("SQL is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.Source))
+            return Results.Problem("The filter's source is required.", statusCode: 400);
         try
         {
-            index.SetFilter(req.Sql);
-            return Results.Ok(new FilterResponse(req.Sql));
+            index.SetFilter(req.Sql, req.Source);
+            return Results.Ok(new FilterResponse(req.Sql, req.Source));
         }
         catch (NoLoadOrderException ex)
         {
@@ -169,7 +171,8 @@ public static class IndexEndpoints
         try
         {
             index.RequireReads();
-            return Results.Ok(new FilterResponse(index.FilterSql));
+            var filter = index.ActiveFilter;
+            return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
         }
         catch (NoLoadOrderException ex)
         {

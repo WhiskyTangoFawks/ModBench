@@ -333,6 +333,48 @@ describe('HttpMEditClient — rebuildIndex', () => {
   });
 });
 
+describe('HttpMEditClient — the record filter', () => {
+  it('POSTs the SQL with its source', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { sql: 'SELECT 1', source: 'armor.sql' })));
+    const client = makeClient(fetch);
+
+    const error = await client.setFilter({ sql: 'SELECT 1', source: 'armor.sql' });
+
+    expect(error).toBeNull();
+    expect(await fetch.mock.calls[0]?.[0].json()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
+  });
+
+  it('reads the filter in force with its source', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: 'SELECT 1', source: 'armor.sql' }))));
+
+    expect(await client.getActiveFilter()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
+  });
+
+  it('reads no filter when mEdit holds none', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: null, source: null }))));
+
+    expect(await client.getActiveFilter()).toBeNull();
+  });
+
+  it('answers a refused clear with the backend detail', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received yet.' }))));
+
+    expect(await client.clearFilter()).toBe('No load order has been received yet.');
+  });
+
+  it('answers a thrown clear with its reason, never a rejection', async () => {
+    const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
+
+    expect(await client.clearFilter()).toBe('fetch failed');
+  });
+
+  it('answers a clear mEdit took with null', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))));
+
+    expect(await client.clearFilter()).toBeNull();
+  });
+});
+
 // putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
 // lifetime, and the deliberate-abort outcome ('abandoned') that is not a WriteRefused-shaped
 // failure.

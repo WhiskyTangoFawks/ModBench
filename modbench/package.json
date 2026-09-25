@@ -199,20 +199,15 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.setFilter",
+        "command": "modbench.record.filter",
         "title": "Filter Records…",
         "icon": "$(filter)",
         "category": "Modbench"
       },
       {
-        "command": "modbench.clearFilter",
-        "title": "Clear Filter",
-        "icon": "$(filter-filled)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.setFilterFromDocument",
-        "title": "Apply SQL File as Filter",
+        "command": "modbench.record.clearFilter",
+        "title": "Clear Record Filter",
+        "icon": "$(clear-all)",
         "category": "Modbench"
       },
       {
@@ -387,6 +382,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.enable",
+        "title": "Enable Plugin",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.plugin.disable",
+        "title": "Disable Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.track",
         "title": "Track Plugin…",
         "category": "Modbench"
@@ -524,6 +529,14 @@
           "when": "false"
         },
         {
+          "command": "modbench.plugin.enable",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.plugin.disable",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.plugin.track",
           "when": "false"
         },
@@ -634,6 +647,14 @@
         {
           "command": "modbench.plugin.clearFilter",
           "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.record.filter",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.record.clearFilter",
+          "when": "modbench.folder == instance"
         }
       ],
       "view/title": [
@@ -658,19 +679,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.setFilter",
-          "when": "view == modbench.pluginListTree && modbench.folder == instance",
-          "group": "navigation@2"
+          "command": "modbench.record.filter",
+          "when": "view == modbench.pluginListTree && !modbench.record.filterActive && modbench.folder == instance",
+          "group": "navigation@3"
         },
         {
-          "command": "modbench.clearFilter",
-          "when": "view == modbench.pluginListTree && modbench.filterActive && modbench.folder == instance",
-          "group": "navigation@2"
+          "command": "modbench.record.clearFilter",
+          "when": "view == modbench.pluginListTree && modbench.record.filterActive && modbench.folder == instance",
+          "group": "navigation@3"
         },
         {
           "command": "modbench.plugin.create",
           "when": "view == modbench.pluginListTree && modbench.folder == instance",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "modbench.mod.filter",
@@ -729,11 +750,6 @@
         }
       ],
       "editor/title": [
-        {
-          "command": "modbench.clearFilter",
-          "when": "modbench.filterActive",
-          "group": "navigation"
-        },
         {
           "command": "modbench.saveAndCompile",
           "when": "activeWebviewPanelId == 'modbench'",

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendPlugin, syncPlugins, reorderPlugins, setPluginEnabled } from '../plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
 import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../instanceAdapter/pluginFile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
@@ -33,22 +33,6 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('setPluginEnabled(false) drops only the target marker and leaves every other byte', async () => {
-    expect(await setPluginEnabled(dir, PROFILE, 'Base.esp', false)).toEqual({ applied: true, wrote: true });
-    expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
-  });
-
-  it('setPluginEnabled to the state the line already has writes nothing', async () => {
-    expect(await setPluginEnabled(dir, PROFILE, 'Base.esp', true)).toEqual({ applied: true, wrote: false });
-    expect(await plugins()).toBe(INITIAL);
-    expect(await mtime()).toEqual(LONG_AGO);
-  });
-
-  it('setPluginEnabled refuses a name with no line, naming it, and writes nothing', async () => {
-    assertRefusal(await setPluginEnabled(dir, PROFILE, 'No Such.esp', false), 'No Such.esp');
-    expect(await mtime()).toEqual(LONG_AGO);
-  });
-
   it('reorderPlugins writes the moved line at the winning end', async () => {
     expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'winningEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
@@ -72,7 +56,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('a profile with no plugins.txt refuses rather than creating one', async () => {
-    const result = await setPluginEnabled(dir, 'NoSuchProfile', 'Base.esp', false);
+    const result = await appendPlugin(dir, 'NoSuchProfile', 'Base.esp');
     assertRefusal(result, 'ENOENT');
   });
 
@@ -80,11 +64,12 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   // second write lands on top of the first, losing it.
   it('two gestures fired without awaiting the first both survive: neither read-modify-write is lost', async () => {
     const [first, second] = await Promise.all([
-      setPluginEnabled(dir, PROFILE, 'Base.esp', false),
+      setPluginsEnabled(dir, PROFILE, ['Base.esp'], false),
       appendPlugin(dir, PROFILE, 'New.esp'),
     ]);
 
-    expect([first, second]).toEqual([{ applied: true, wrote: true }, { applied: true, wrote: true }]);
+    expect(first).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
+    expect(second).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n*New.esp\r\n');
   });
 
@@ -92,6 +77,42 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     await appendPlugin(dir, PROFILE, 'Base.esp');
     expect(await appendPlugin(dir, PROFILE, 'New.esp')).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\nOther.esp\r\n*New.esp\r\n');
+  });
+
+  it('setPluginsEnabled(false) flips every named line in one splice', async () => {
+    expect(await setPluginsEnabled(dir, PROFILE, ['Base.esp', 'Other.esp'], false))
+      .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
+    expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
+  });
+
+  // The check box's own shape: several rows, each its own target state, in the one splice.
+  it('setPluginsParticipation flips each named line to its own state, in one splice', async () => {
+    expect(await setPluginsParticipation(dir, PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]))
+      .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
+    expect(await plugins()).toBe('# header\r\nBase.esp\r\n*Other.esp\r\n');
+  });
+
+  // commands.md, "A selection is one gesture": each item lands or is refused on its own, in the
+  // one splice — a gone plugin never blocks the rest.
+  it('setPluginsEnabled refuses a gone plugin by name, and the rest still land', async () => {
+    const result = await setPluginsEnabled(dir, PROFILE, ['Base.esp', 'No Such.esp'], false);
+    expect(result).toEqual({
+      applied: true,
+      outcome: { landed: ['Base.esp'], refused: [{ item: 'No Such.esp', reason: 'Plugin not found in plugins.txt: No Such.esp' }] },
+    });
+    expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
+  });
+
+  it('setPluginsEnabled to the state every line already has writes nothing', async () => {
+    expect(await setPluginsEnabled(dir, PROFILE, ['Base.esp'], true)).toEqual({
+      applied: true, outcome: { landed: ['Base.esp'], refused: [] },
+    });
+    expect(await plugins()).toBe(INITIAL);
+    expect(await mtime()).toEqual(LONG_AGO);
+  });
+
+  it('setPluginsEnabled refuses the whole selection once when the profile has no plugins.txt', async () => {
+    assertRefusal(await setPluginsEnabled(dir, 'NoSuchProfile', ['Base.esp'], false), 'ENOENT');
   });
 });
 

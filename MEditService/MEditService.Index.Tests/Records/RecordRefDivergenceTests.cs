@@ -55,7 +55,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
         // Narrows the listing to KeepMe's two override rows out of the fixture's three.
-        index.SetFilter($"SELECT '{_keptNpc}' AS form_key");
+        index.SetFilter($"SELECT '{_keptNpc}' AS form_key", "filter.sql");
 
         var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(2, listing.Total);
