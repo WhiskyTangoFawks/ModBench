@@ -1049,9 +1049,8 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(names).toEqual(expect.arrayContaining(['mod:Harder VATS', 'separator:Unassigned (Modlist Development)']));
   });
 
-  // A name MO2 never gives a folder, as another tool may write one: MO2 has no mod by that name, so
-  // refreshing its list drops the line (ADR-0017). Rivals: keeping the line for good; or building a
-  // path from the name, which reaches outside the separator's folder.
+  // Another tool may write a name MO2 never gives a folder; MO2 has no mod by that name and drops
+  // the line (ADR-0017). Rivals: keeping the line for good, or building a path from the name.
   it('drops a separator line whose name MO2 never gives a folder, building no path from it', async () => {
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
     vi.mocked(access).mockClear();
@@ -1107,9 +1106,8 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
-  // The value lags the disk: a folder it still lists may be gone by write time, as a renamed
-  // separator's old folder is. Rival: adding from the handed list alone, a ghost line the next
-  // sync drops again, at the cost of two writes and two Output lines.
+  // A folder the lagging value still lists may be gone by write time, as a renamed separator's old
+  // folder is. Rival: adding from the handed list alone, a ghost line the next sync drops again.
   it('adds no line for a folder the value lists but that is gone from disk at write time', async () => {
     await rename(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), join(dir, 'mods', 'Renamed_separator'));
     await writeFile(modlistPath(), (await readFile(modlistPath(), 'utf8')).replace(

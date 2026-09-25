@@ -427,9 +427,8 @@ export async function syncMods(
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, async (text) => {
-    // Under the write lock: two values can hand over the same folders before the first write comes
-    // back, and each lags the disk, so only the text about to be spliced and the disk as it is now
-    // say what is still to do.
+    // Under the write lock: each value lags the disk and the last write, so only the text about
+    // to be spliced and the disk as it is now say what is still to do.
     const entries = parseModlist(text);
     const gone = await keepWhere(entries, async (entry) => {
       const folder = listedFolderOf(entry);
