@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
@@ -198,6 +198,41 @@ describe('Instance — the value', () => {
 
     expect(instance.value.modFolders).toContain('Hand Extracted Mod');
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
+  });
+
+  // MO2 lists a linked mod folder as a mod (modinfo.cpp, QDir::Dirs without NoSymLinks). Rival: only
+  // a real directory counts, so mod sync never hears of a symlinked mod.
+  it('carries a mod folder that is a link to a folder, and not a link to a file', async () => {
+    const { root, instance } = await realInstance();
+    const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
+    try {
+      await symlink(target, join(root, 'mods', 'Linked Mod'), 'junction');
+      await writeFile(join(target, 'readme.txt'), '');
+      await symlink(join(target, 'readme.txt'), join(root, 'mods', 'Linked File'));
+
+      await instance.refresh();
+
+      expect(instance.value.modFolders).toContain('Linked Mod');
+      expect(instance.value.modFolders).not.toContain('Linked File');
+    } finally {
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+
+  // MO2 skips a link it cannot follow. Rivals: failing the whole recompute on it, which stalls the
+  // instance; or a line per recompute, which every watched change would repeat.
+  it('skips a mod folder link whose target cannot be checked, and tells it once', async () => {
+    const { root, instance, logs, readFailureLines } = await realInstance();
+    await mkdir(join(root, 'mods', 'Real Mod'));
+    await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(readFailureLines).toEqual([]);
+    expect(instance.value.modFolders).toContain('Real Mod');
+    expect(instance.value.modFolders).not.toContain('Loop');
+    expect(logs.filter((line) => line.includes('Loop'))).toHaveLength(1);
   });
 
   // Only a directory can be a mod folder: a stray archive or Thumbs.db dropped into mods/ must
