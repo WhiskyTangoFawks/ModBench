@@ -152,8 +152,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    // A copy into a new folder is read whole, and until the original goes the tree holds the record
-    // twice.
     [Theory]
     [InlineData("SortedByHand/{0}")]
     [InlineData("SortedByHand/RenamedByHand.json")]
@@ -185,8 +183,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Select(f => f.GetProperty("reason").GetString())
             .FirstOrDefault();
 
-    // A tool that deletes first and writes the copy after: the record leaves with the delete, and the
-    // document that declares it again brings it back wherever it landed.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("SortedByHand/{0}")]
@@ -208,8 +204,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    // A container's document is its directory's RecordData.json, so the name a hand move drops is
-    // the directory's, and the placed reference inside moves with it.
     [Fact]
     public async Task ACommittedContainerCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
     {

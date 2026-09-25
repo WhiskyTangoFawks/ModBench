@@ -503,7 +503,6 @@ public sealed partial class SourceRepository
             _segments.Length == HeaderDocumentDepth && UnderTheSourceRoot && NamesAPlugin
             && Leaf.Equals(RecordDataFileName, StringComparison.Ordinal);
 
-        // At its group's own level, or in a folder the user sorted it into below it.
         internal bool IsFlatDocument =>
             _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
             && Leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)

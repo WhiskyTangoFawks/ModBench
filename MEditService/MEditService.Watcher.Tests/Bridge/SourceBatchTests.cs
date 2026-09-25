@@ -144,8 +144,6 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
-    // A move whose two halves settle apart: the new path's batch closed before the old path's
-    // delete arrived. A refresh by key finds the document wherever it went.
     [Fact]
     public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
     {
