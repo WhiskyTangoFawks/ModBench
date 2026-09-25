@@ -160,6 +160,22 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     [Fact]
+    public async Task EditingARecord_WhileTheModsQuestionIsOpen_IsAConflictNamingTheRefusal()
+    {
+        var fx = Owned(await Watched());
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+        ARelease(fx);
+        await stream.EventsUntil("question-open");
+
+        var response = await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ExternalChangeUnanswered", problem.GetProperty("refusal").GetString());
+    }
+
+    [Fact]
     public async Task AChangedAssetUnderEverything_OpensAQuestionNamingThePath()
     {
         var fx = Owned(await Watched(

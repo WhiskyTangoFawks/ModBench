@@ -33,9 +33,10 @@ internal static class WriteEndpointMapping
         detail: result.Message,
         statusCode: result.Refusal switch
         {
-            // Not-editable-at-all is a state conflict: the request is well-formed, and the answer is
-            // "not while this plugin is untracked" or "not while this copy loses".
-            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder or RecordEditRefusal.LosingCopy => 409,
+            // State conflicts: the request is well-formed, and the answer is "not while this plugin
+            // is untracked", "not while this copy loses" or "not while a change is unanswered".
+            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
+                or RecordEditRefusal.LosingCopy or RecordEditRefusal.ExternalChangeUnanswered => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
             // The envelope itself could not be read as a write: the request is malformed.
             RecordEditRefusal.InvalidEnvelope => 400,
