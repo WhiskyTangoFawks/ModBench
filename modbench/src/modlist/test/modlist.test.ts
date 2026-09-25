@@ -23,10 +23,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const writeFile = vi.fn(actual.writeFile);
   const mkdir = vi.fn(actual.mkdir);
   const rename = vi.fn(actual.rename);
-  return { ...actual, readFile, writeFile, mkdir, rename };
+  const access = vi.fn(actual.access);
+  return { ...actual, readFile, writeFile, mkdir, rename, access };
 });
 
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparators,
@@ -1022,13 +1023,16 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(names).toEqual(expect.arrayContaining(['mod:Harder VATS', 'separator:Unassigned (Modlist Development)']));
   });
 
-  // A name MO2 never gives a folder, as another tool may write one. Rival: reading its folder as
-  // the name plus `_separator`, which no folder in mods/ can ever be, so its line always goes.
-  it('keeps a separator whose name MO2 never gives a folder', async () => {
+  // A name MO2 never gives a folder, as another tool may write one: MO2 has no mod by that name, so
+  // refreshing its list drops the line (ADR-0017). Rivals: keeping the line for good; or building a
+  // path from the name, which reaches outside the separator's folder.
+  it('drops a separator line whose name MO2 never gives a folder, building no path from it', async () => {
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
+    vi.mocked(access).mockClear();
 
-    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: [] });
-    expect(await readFile(modlistPath(), 'utf8')).toContain('-Weapons/Armor_separator');
+    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['Weapons/Armor_separator'] });
+    expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
+    expect(vi.mocked(access).mock.calls.map(([path]) => String(path)).filter((p) => p.includes('Weapons'))).toEqual([]);
   });
 
   it('adds a disabled separator line at the winning end for a separator folder with none', async () => {

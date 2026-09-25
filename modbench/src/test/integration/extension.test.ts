@@ -927,24 +927,29 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
   const instance = () => present(instanceExport(), 'the Instance activate() exports');
   const separatorRow = async (name: string) =>
     (await provider().getChildren()).find((n) => n.kind === 'separator' && n.label === name);
-  // A name MO2 never gives a folder: mod sync keeps its line, and the delete trashes nothing.
-  const DOOMED = 'Doomed: Old';
+  const doomedDir = root ? path.join(root, 'mods', 'Doomed_separator') : '';
   let original = '';
 
   before(async () => {
     if (!root) return;
     original = fs.readFileSync(modlistPath, 'utf8');
-    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, '-Doomed: Old_separator\r\n'));
+    await writeAndAwaitInstance(() => {
+      fs.mkdirSync(doomedDir, { recursive: true });
+      fs.writeFileSync(modlistPath, '-Doomed_separator\r\n');
+    });
   });
 
   after(async () => {
     if (!root) return;
-    await writeAndAwaitInstance(() => fs.writeFileSync(modlistPath, original));
+    await writeAndAwaitInstance(() => {
+      fs.rmSync(doomedDir, { recursive: true, force: true });
+      fs.writeFileSync(modlistPath, original);
+    });
   });
 
   it('delete separator asks for no refresh, and its row goes when the watch lands the new value', async function () {
     if (!root) this.skip();
-    const doomed = present(await separatorRow(DOOMED), 'the Doomed separator row');
+    const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
     let refreshes = 0;
     const listening = provider().onDidChangeTreeData(() => { refreshes++; });
     const before = instance().sequence;
@@ -952,12 +957,13 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     try {
       await vscode.commands.executeCommand('modbench.separator.delete', doomed);
 
-      assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes(DOOMED), 'the delete should have written modlist.txt');
+      assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
+      assert.ok(!fs.existsSync(doomedDir), 'the delete should have trashed the separator\'s folder');
       assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
       assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
 
       await pastSequence(instance(), before);
-      assert.strictEqual(await separatorRow(DOOMED), undefined, 'the watch\'s value should have taken the row away');
+      assert.strictEqual(await separatorRow('Doomed'), undefined, 'the watch\'s value should have taken the row away');
     } finally {
       listening.dispose();
     }

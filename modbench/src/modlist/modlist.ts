@@ -11,6 +11,7 @@ import {
   parseModlist,
   removeModFromText,
   renameSeparatorInText,
+  separatorModName,
   setEnabledInText,
   unlistedModNames,
   type ModlistEntry,
@@ -391,7 +392,12 @@ export type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
-// A separator whose name MO2 never gives a folder names none, so its line never goes.
+// What a line carries after its prefix: a mod's name, or a separator's `<name>_separator`.
+const lineNameOf = (entry: ModlistEntry): string =>
+  (entry.kind === 'mod' ? entry.name : separatorModName(entry.name));
+
+// A separator whose name MO2 never gives a folder names none: MO2 has no mod by that name, so its
+// line goes (ADR-0017), and no path is built from it.
 const listedFolderOf = (entry: ModlistEntry): string | undefined =>
   (entry.kind === 'mod' ? entry.name : separatorFolderName(entry.name));
 
@@ -405,16 +411,18 @@ export async function syncMods(
   }
   const folders = new Set(modFolders);
   const inGesture = (folder: string) => foldersInGesture.has(modDir(instanceRoot, folder));
-  const goneFrom = (text: string) => parseModlist(text).flatMap((entry) => {
+  const goneFrom = (text: string) => parseModlist(text).flatMap((entry): { entry: ModlistEntry; folder: string | undefined }[] => {
     const folder = listedFolderOf(entry);
-    return folder !== undefined && !folders.has(folder) && !inGesture(folder) ? [{ entry, folder }] : [];
+    if (folder === undefined) return [{ entry, folder }];
+    return !folders.has(folder) && !inGesture(folder) ? [{ entry, folder }] : [];
   });
   // The value lags the disk, so a folder it misses is dropped only once it is gone from disk too.
   let goneOnDisk: ReadonlySet<string>;
   try {
     const candidates = goneFrom(await get(modlistFile(instanceRoot, profile)));
-    const onDisk = await Promise.all(candidates.map(({ folder }) => exists(modDir(instanceRoot, folder))));
-    goneOnDisk = new Set(candidates.filter((_, i) => !onDisk[i]).map(({ folder }) => folder));
+    const onDisk = await Promise.all(candidates.map(({ folder }) =>
+      folder === undefined ? Promise.resolve(false) : exists(modDir(instanceRoot, folder))));
+    goneOnDisk = new Set(candidates.filter((_, i) => !onDisk[i]).map(({ entry }) => lineNameOf(entry)));
   } catch (err) {
     return refuse(err);
   }
@@ -424,8 +432,8 @@ export async function syncMods(
     // Read inside the write lock: two values can hand over the same folders before the first
     // write comes back, and only the text about to be spliced says what is still to do.
     added = unlistedModNames([...modFolders], parseModlist(text)).filter((folder) => !inGesture(folder));
-    const gone = goneFrom(text).filter(({ folder }) => goneOnDisk.has(folder));
-    dropped = gone.map(({ folder }) => folder);
+    const gone = goneFrom(text).filter(({ entry }) => goneOnDisk.has(lineNameOf(entry)));
+    dropped = gone.map(({ entry }) => lineNameOf(entry));
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so
     // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
     const withoutGone = gone.reduce((out, { entry }) => (entry.kind === 'separator'
