@@ -87,12 +87,30 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
+    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEdit(string renamedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
+        var before = await Client.Sequence();
+
+        (await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("EditedAfterTheRename", (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
     // A tool that moves by copying and then deleting: the old path's delete settles in a batch the
     // new path is not in.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("SortedByHand/{0}")]
     [InlineData("SortedByHand/RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
     public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord(string copiedTo)
     {
         using var fx = await ATrackedMod();

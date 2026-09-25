@@ -47,6 +47,10 @@ internal sealed class WriteTargets(
         {
             found = repository.IdentityOf(plugin, formKey, schemaReflector.GetSchemas(release));
         }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+        }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Naming this record means reading the document that carries it, and the codec is the only

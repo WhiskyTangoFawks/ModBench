@@ -330,8 +330,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var declared = $"\"FormKey\": \"{_fixture.EmbedCell}\"";
         var text = File.ReadAllText(file);
         Assert.Contains(declared, text, StringComparison.Ordinal);
-        // A hand edit that moves the owner's own FormKey leaves this write nothing to read.
-        File.WriteAllText(file, ReplaceFirst(text, declared, "\"FormKey\": \"00FFFF:Absent.esp\""));
+        // A hand edit that leaves the owner's own FormKey unreadable leaves this write nothing to read.
+        File.WriteAllText(file, ReplaceFirst(text, declared, "\"FormKey\": \"NotAFormKey\""));
 
         var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
 

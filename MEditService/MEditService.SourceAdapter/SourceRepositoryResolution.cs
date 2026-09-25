@@ -42,7 +42,7 @@ public sealed partial class SourceRepository
     // One repository is one operation, so both live and die with it: the next Track, compile or edit
     // looks at the tree again (ADR-0009 — never a file timestamp).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, EmbeddedOwners> _ownersBySourceRoot = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
 
     /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
     /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
@@ -63,17 +63,13 @@ public sealed partial class SourceRepository
                 HeaderDocumentIn(_modFolder, plugin.Name), identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
-        // A flat record: the path is computed, then corrected if the file has been renamed out from
-        // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
-        try
+        // A flat record's own document is under its group folder, and where a new one would go is
+        // computed from its identity.
+        if (ComputedFlatPath(plugin, identity) is { } computed)
         {
-            var flat = FlatSourcePath(
-                _modFolder, plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release);
-            return Unit(flat, identity.FormKey, identity.RecordType, isEmbedded: false);
-        }
-        catch (NotSupportedException)
-        {
-            // Not flat — a container, or a child with no top-level group of its own. Fall through.
+            return Unit(
+                OwnDocumentUnder([PathShape.DirectoryOf(computed)], plugin.Name, identity.FormKey) ?? computed,
+                identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
         // Only a directory-per-record type (Cell, Worldspace) can have a directory of its own; a type
@@ -86,7 +82,7 @@ public sealed partial class SourceRepository
         }
 
         // Nothing of its own, so it is inlined in another record's document, which the owner map names.
-        if (OwnersUnder(sourceRoot).DocumentHolding(identity.FormKey) is not { } owner) return null;
+        if (ScanOf(sourceRoot).DocumentHolding(identity.FormKey) is not { } owner) return null;
 
         return Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true);
     }
@@ -117,7 +113,7 @@ public sealed partial class SourceRepository
 
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
-        if (OwnersUnder(sourceRoot).DocumentHolding(spelled) is not { } owner) return null;
+        if (ScanOf(sourceRoot).DocumentHolding(spelled) is not { } owner) return null;
         if (BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
         if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
             is not { } child)
@@ -173,13 +169,33 @@ public sealed partial class SourceRepository
         }
     }
 
-    // A record with a document of its own: its leaf name carries the FormKey and the text bears that
-    // out. A name the text contradicts is stale, and the record it claims is elsewhere or gone.
+    // A record with a document of its own, found as Locate finds it. A name the text contradicts is
+    // stale, and the record it claims is elsewhere or gone.
     private RecordIdentity? OwnDocumentIdentity(
         string sourceRoot, string pluginFileName, FormKey formKey, string spelled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        foreach (var documentPath in DocumentsNaming(sourceRoot, spelled))
+        var identified = IdentitiesIn(DocumentsNaming(sourceRoot, spelled), pluginFileName, formKey, spelled, schemas);
+        if (identified.Count == 0)
+        {
+            identified = IdentitiesIn(
+                ScanOf(sourceRoot).DocumentsDeclaring(spelled), pluginFileName, formKey, spelled, schemas);
+        }
+
+        return identified.Count switch
+        {
+            0 => null,
+            1 => identified[0].Identity,
+            _ => throw MoreThanOneDocumentHolds(spelled, identified.Select(i => i.Path)),
+        };
+    }
+
+    private List<(string Path, RecordIdentity Identity)> IdentitiesIn(
+        IEnumerable<string> documentPaths, string pluginFileName, FormKey formKey, string spelled,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var identified = new List<(string, RecordIdentity)>();
+        foreach (var documentPath in documentPaths)
         {
             if (ReadOrNull(documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_modFolder, documentPath);
@@ -194,16 +210,66 @@ public sealed partial class SourceRepository
             {
                 continue;
             }
-            return new RecordIdentity(spelled, recordType, document.EditorId);
+            identified.Add((documentPath, new RecordIdentity(spelled, recordType, document.EditorId)));
         }
-        return null;
+        return identified;
     }
+
+    private string? ComputedFlatPath(PluginCopyKey plugin, RecordIdentity identity)
+    {
+        try
+        {
+            return Path.Combine(
+                _modFolder,
+                FlatPathFor(plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release));
+        }
+        catch (NotSupportedException)
+        {
+            // Not flat: a container, or a child with no top-level group of its own.
+            return null;
+        }
+    }
+
+    // The one named for the FormKey, else one whose text declares it under any other name: a hand
+    // move can rename a document, and the name alone reads a live record as deleted.
+    private string? OwnDocumentUnder(IReadOnlyList<string> scanRoots, string pluginFileName, string formKey)
+    {
+        var roots = scanRoots.Where(Directory.Exists).ToList();
+        var documents = roots
+            .SelectMany(root => DocumentsNaming(root, formKey))
+            .Where(File.Exists)
+            .ToList();
+        if (documents.Count == 0)
+        {
+            documents = [.. ScanOf(Path.Combine(_modFolder, RootFor(pluginFileName)))
+                .DocumentsDeclaring(formKey)
+                .Where(document => roots.Exists(root => IsUnder(root, document)))];
+        }
+
+        return documents.Count switch
+        {
+            0 => null,
+            1 => documents[0],
+            _ => throw MoreThanOneDocumentHolds(formKey, documents),
+        };
+    }
+
+    private static bool IsUnder(string directory, string path) =>
+        path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+    // ADR-0006: a tree changed behind Modbench's back is diagnosed, never repaired, so neither copy
+    // is chosen.
+    private AmbiguousSourceUnitException MoreThanOneDocumentHolds(string formKey, IEnumerable<string> documents) =>
+        new($"More than one document in this plugin's source tree holds {formKey}: " +
+            $"{string.Join(", ", documents.Select(d => $"'{Path.GetRelativePath(_modFolder, d)}'"))}. A FormKey " +
+            "is unique within a plugin, so the tree is corrupt — most likely a copy or an interrupted " +
+            "rename. Remove the duplicate by hand.");
 
     /// <summary>True when another record's document in this plugin's tree carries
     /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
     /// needs no name and will not pay the codec read one costs.</summary>
     internal bool CarriesEmbedded(PluginCopyKey plugin, string formKey) =>
-        OwnersUnder(Path.Combine(_modFolder, RootFor(plugin.Name)))
+        ScanOf(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;
 
     /// <summary>True when this plugin's tree holds <paramref name="formKey"/> at the working tree or
@@ -286,63 +352,11 @@ public sealed partial class SourceRepository
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
     // or inside its worldspace's.
-    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey)
-    {
-        var suffix = FilesafeFormKey(formKey);
-        var scanRoots = RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
-            .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))
-            .Where(Directory.Exists)
-            .ToList();
-        var matches = new List<string>();
-        foreach (var scanRoot in scanRoots)
-        {
-            // The subtree is listed once per repository and the pre-filter runs in memory, leaving
-            // the name test below as the only real one.
-            var candidates = EntriesUnder(scanRoot)
-                .Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
-            matches.AddRange(candidates.Select(entry => AsSourceUnitFile(entry, suffix)).OfType<string>().Take(2));
-            if (matches.Count > 1) break;
-        }
-
-        // A move by hand can rename a container's directory, and the name alone reads a live record as
-        // deleted.
-        if (matches.Count == 0)
-        {
-            matches.AddRange(scanRoots
-                .SelectMany(EntriesUnder)
-                .Where(entry => IsDocumentOfADirectoryNamedForNoRecord(entry) && Declares(entry, pluginFileName, formKey))
-                .Take(2));
-        }
-
-        return matches.Count switch
-        {
-            0 => null,
-            1 => matches[0],
-            _ => throw new AmbiguousSourceUnitException(
-                $"More than one source unit under '{sourceRoot}' claims FormKey {formKey}. A FormKey is " +
-                "unique within a mod, so this tree is corrupt — resolve the duplicate by hand before editing."),
-        };
-    }
-
-    private static bool IsDocumentOfADirectoryNamedForNoRecord(string entry) =>
-        Path.GetFileName(entry).Equals(RecordDataFileName, StringComparison.Ordinal)
-        && !NamesAnyRecord(Path.GetFileName(PathShape.DirectoryOf(entry)));
-
-    // A directory whose name carries the FormKey holds RecordData.json; a file whose name carries it is
-    // the record.
-    private static string? AsSourceUnitFile(string entry, string filesafeFormKey)
-    {
-        var leaf = Path.GetFileName(entry);
-
-        if (Directory.Exists(entry))
-        {
-            if (!NameCarries(leaf, filesafeFormKey)) return null;
-            var recordData = Path.Combine(entry, RecordDataFileName);
-            return File.Exists(recordData) ? recordData : null;
-        }
-
-        return NameCarries(leaf, filesafeFormKey + JsonSuffix) ? entry : null;
-    }
+    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey) =>
+        OwnDocumentUnder(
+            [.. RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
+                .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
+            pluginFileName, formKey);
 
     // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree).
     private string[] EntriesUnder(string scanRoot)
@@ -358,16 +372,16 @@ public sealed partial class SourceRepository
     private void Forget()
     {
         _entriesByScanRoot.Clear();
-        _ownersBySourceRoot.Clear();
+        _scansBySourceRoot.Clear();
         _filesByPluginAndRef.Clear();
     }
 
-    private EmbeddedOwners OwnersUnder(string sourceRoot)
+    private TreeScan ScanOf(string sourceRoot)
     {
-        if (_ownersBySourceRoot.TryGetValue(sourceRoot, out var owners)) return owners;
-        owners = new EmbeddedOwners(sourceRoot, _release);
-        _ownersBySourceRoot[sourceRoot] = owners;
-        return owners;
+        if (_scansBySourceRoot.TryGetValue(sourceRoot, out var scan)) return scan;
+        scan = new TreeScan(sourceRoot, _release);
+        _scansBySourceRoot[sourceRoot] = scan;
+        return scan;
     }
 
     // Never exclusive owners of the file: it may be gone or locked since the listing named it.
@@ -383,9 +397,10 @@ public sealed partial class SourceRepository
         }
     }
 
-    // Which document carries a record no path names — a placed reference in its cell, a response in
-    // its quest. One map per plugin's source root, from one token scan of every document under it.
-    private sealed class EmbeddedOwners
+    // What every document under one plugin's source root declares, from one token scan: the record
+    // at its root, and the children it carries inline — a placed reference in its cell, a response
+    // in its quest.
+    private sealed class TreeScan
     {
         // The document a child sits inside: its file, the record at its root, and that record's type
         // where the path decides it — null means the document names its own.
@@ -393,63 +408,88 @@ public sealed partial class SourceRepository
 
         private readonly string _sourceRoot;
         private readonly GameRelease _release;
-        private Dictionary<string, OwnerDocument> _byChild;
+        private Dictionary<string, OwnerDocument> _byChild = new(StringComparer.Ordinal);
+        private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
         private bool _rescanned;
 
-        internal EmbeddedOwners(string sourceRoot, GameRelease release)
+        internal TreeScan(string sourceRoot, GameRelease release)
         {
             (_sourceRoot, _release) = (sourceRoot, release);
-            _byChild = Scan(sourceRoot, release);
+            Scan();
         }
 
         // Every answer is checked against the document's current text, so an entry the tree does not
         // bear out is absence, never a stale owner. Read again at most once per repository (ADR-0009).
         internal OwnerDocument? DocumentHolding(string formKey)
         {
-            if (_byChild.TryGetValue(formKey, out var owner) && StillCarries(owner.FullPath, formKey)) return owner;
-
-            if (!_rescanned)
-            {
-                _rescanned = true;
-                _byChild = Scan(_sourceRoot, _release);
-            }
-
-            return _byChild.TryGetValue(formKey, out var fresh) && StillCarries(fresh.FullPath, formKey)
-                ? fresh
-                : null;
+            if (Holding(formKey) is { } owner) return owner;
+            if (!RescanOnce()) return null;
+            return Holding(formKey);
         }
 
-        private static bool StillCarries(string documentPath, string formKey) =>
-            DocumentBytes(documentPath) is { } bytes
-            && FormKeysIn(bytes).Any(k => k.InAnEmbedSlot && k.FormKey.Equals(formKey, StringComparison.Ordinal));
+        internal List<string> DocumentsDeclaring(string formKey)
+        {
+            var declaring = Declaring(formKey);
+            if (declaring.Count > 0 || !RescanOnce()) return declaring;
+            return Declaring(formKey);
+        }
 
-        // First document wins a FormKey two of them claim: that tree is corrupt, and refusing to answer
+        private OwnerDocument? Holding(string formKey) =>
+            _byChild.TryGetValue(formKey, out var owner)
+            && Carried(owner.FullPath, formKey, k => k.InAnEmbedSlot)
+                ? owner
+                : null;
+
+        private List<string> Declaring(string formKey) =>
+            _byRoot.TryGetValue(formKey, out var documents)
+                ? [.. documents.Where(document => Carried(document, formKey, k => k.AtRoot))]
+                : [];
+
+        private bool RescanOnce()
+        {
+            if (_rescanned) return false;
+            _rescanned = true;
+            Scan();
+            return true;
+        }
+
+        private static bool Carried(
+            string documentPath, string formKey, Func<(string FormKey, bool AtRoot, bool InAnEmbedSlot), bool> where) =>
+            DocumentBytes(documentPath) is { } bytes
+            && FormKeysIn(bytes).Any(k => where(k) && k.FormKey.Equals(formKey, StringComparison.Ordinal));
+
+        // First document wins a child two of them claim: that tree is corrupt, and refusing to answer
         // at all would take every unrelated record down with it.
-        private static Dictionary<string, OwnerDocument> Scan(string sourceRoot, GameRelease release)
+        private void Scan()
         {
             var byChild = new Dictionary<string, OwnerDocument>(StringComparer.Ordinal);
-            if (!Directory.Exists(sourceRoot)) return byChild;
-
-            var modFolder = PathShape.DirectoryOf(PathShape.DirectoryOf(sourceRoot));
-            foreach (var documentPath in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
+            var byRoot = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            if (Directory.Exists(_sourceRoot))
             {
-                if (CarriesNoRecord(documentPath)) continue;
-                if (DocumentBytes(documentPath) is not { } bytes) continue;
-
-                var keys = FormKeysIn(bytes);
-                if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
-
-                // A null type is an answer, not a skip: a path-ambiguous group's documents name their
-                // own type, and dropping them leaves every child they carry unlocatable.
-                var recordType = RecordTypeOf(Path.GetRelativePath(modFolder, documentPath), release);
-
-                var owner = new OwnerDocument(documentPath, root, recordType);
-                foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
+                var modFolder = PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
+                foreach (var documentPath in Directory.EnumerateFiles(_sourceRoot, "*.json", SearchOption.AllDirectories))
                 {
-                    if (inAnEmbedSlot) byChild.TryAdd(childFormKey, owner);
+                    if (CarriesNoRecord(documentPath)) continue;
+                    if (DocumentBytes(documentPath) is not { } bytes) continue;
+
+                    var keys = FormKeysIn(bytes);
+                    if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
+
+                    if (!byRoot.TryGetValue(root, out var declaring)) byRoot[root] = declaring = [];
+                    declaring.Add(documentPath);
+
+                    // A null type is an answer, not a skip: a path-ambiguous group's documents name
+                    // their own type, and dropping them leaves every child they carry unlocatable.
+                    var recordType = RecordTypeOf(Path.GetRelativePath(modFolder, documentPath), _release);
+
+                    var owner = new OwnerDocument(documentPath, root, recordType);
+                    foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
+                    {
+                        if (inAnEmbedSlot) byChild.TryAdd(childFormKey, owner);
+                    }
                 }
             }
-            return byChild;
+            (_byChild, _byRoot) = (byChild, byRoot);
         }
 
         // Never exclusive owners of the file: it may be gone or locked since the listing.
