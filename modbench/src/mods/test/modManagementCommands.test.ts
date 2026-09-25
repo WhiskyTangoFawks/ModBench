@@ -1038,24 +1038,45 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     executeCommand.mock.calls.filter((c) => c[0] === 'revealInExplorer').map((c) => c[1]?.fsPath);
 
   it('reveals the clicked mod\'s own folder, as the value names it', async () => {
-    registerOpenFolderCommand(instance, recordingReporter());
+    registerOpenFolderCommand(instance, recordingReporter(), () => []);
     await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
 
     expect(revealed()).toEqual(['/instance/mods/My Mod']);
   });
 
   it('reveals the overwrite folder from the Overwrite row', async () => {
-    registerOpenFolderCommand(instance, recordingReporter());
+    registerOpenFolderCommand(instance, recordingReporter(), () => []);
     await invoke('modbench.mod.openFolder', new OverwriteNode(3));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
+  });
+
+  // commands.md, Where surfaces live: every gesture is in the palette, which hands it no row.
+  it.each<[string, ModlistNode, string]>([
+    ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
+    ['Overwrite', new OverwriteNode(3), '/instance/overwrite'],
+  ])('reveals the one selected %s row\'s folder from the palette', async (_kind, selected, folder) => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual([folder]);
+  });
+
+  it.each<[string, ModlistNode[]]>([
+    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3)]],
+    ['a separator', [new SeparatorNode({ kind: 'separator', name: 'Group', enabled: true }, [])]],
+  ])('reveals nothing from the palette over a selection of %s', async (_what, selection) => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => selection);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual([]);
   });
 
   it('reports a reveal that fails', async () => {
     executeCommand.mockRejectedValueOnce(new Error('no explorer'));
     const reporter = recordingReporter();
 
-    registerOpenFolderCommand(instance, reporter);
+    registerOpenFolderCommand(instance, reporter, () => []);
     await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
 
     expect(reporter.reports).toEqual([
@@ -1071,14 +1092,14 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   const opened = (): string[] => openExternal.mock.calls.map((c) => String(c[0]));
 
   it('opens the mod\'s Nexus page from a mod row', async () => {
-    registerViewOnNexusCommand(instance, recordingReporter());
+    registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/42']);
   });
 
   it('opens the mod\'s Nexus page from a downloaded file row', async () => {
-    registerViewOnNexusCommand(instance, recordingReporter());
+    registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
     await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
@@ -1088,7 +1109,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     openExternal.mockRejectedValueOnce(new Error('no browser'));
     const reporter = recordingReporter();
 
-    registerViewOnNexusCommand(instance, reporter);
+    registerViewOnNexusCommand(instance, reporter, () => undefined);
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
 
     expect(reporter.reports).toEqual([
@@ -1096,8 +1117,22 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
     ]);
   });
 
+  it('opens the selected row\'s Nexus page from the palette, which hands it no row', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter(), () => new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+    await invoke('modbench.mod.viewOnNexus');
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
+  });
+
+  it('opens the right-clicked row\'s page, never the selected one\'s', async () => {
+    registerViewOnNexusCommand(instance, recordingReporter(), () => new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
+
+    expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/42']);
+  });
+
   it('opens nothing for a row with no Nexus id', async () => {
-    registerViewOnNexusCommand(instance, recordingReporter());
+    registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
     await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z')));
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
 

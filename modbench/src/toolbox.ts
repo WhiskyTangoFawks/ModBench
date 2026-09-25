@@ -12,14 +12,14 @@ import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
-import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
+import { ModListProvider, ModNode, type ModlistNode } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { loadOrderSnapshotOf, originFolder, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
-import { DownloadsProvider } from './downloads/DownloadsProvider';
+import { DownloadNode, DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
@@ -32,7 +32,7 @@ import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, registerDownloadsView } from './mo2TreeViews';
+import { createModListView, registerDownloadsView, selectedInLastSelectedView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
@@ -542,15 +542,19 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     reporterFor('mod.move')));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, reporterFor('separator'), trash, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
-  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
-  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
+  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
+  const { downloadsProvider, downloadsView } = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
     nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
     warnIfFomod,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
   });
+  const selectedInFocus = selectedInLastSelectedView(own, [modListView, downloadsView]);
+  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), () => {
+    const [only, ...rest] = selectedInFocus();
+    return rest.length === 0 && (only instanceof ModNode || only instanceof DownloadNode) ? only : undefined;
+  }));
   own(registerRefreshCommand({
     refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));

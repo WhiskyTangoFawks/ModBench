@@ -76,7 +76,9 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, registerDownloadsView } from '../mo2TreeViews';
+import { createModListView, registerDownloadsView, selectedInLastSelectedView } from '../mo2TreeViews';
+import { DownloadNode } from '../downloads/DownloadsProvider';
+import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
@@ -426,5 +428,68 @@ describe('the Downloads decoration provider follows a rows change', () => {
     await instance.refresh();
 
     await vi.waitFor(() => expect(fired).toHaveBeenCalled());
+  });
+});
+
+// commands.md, view on Nexus: the palette hands the command no row, so the Downloads view says
+// whether its selection is one the gesture takes.
+describe('the Downloads view tells the palette whether its selection is one file with a Nexus id', () => {
+  const KEY = 'modbench.downloadedFile.singleNexusFile';
+  const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
+    view.selection = rows;
+    for (const listener of h.selectionListeners) listener({ selection: rows });
+  };
+
+  it('is true for one selected file with a Nexus id, and false for none, one without, or several', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const { downloadsView } = registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
+      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
+    });
+    const withId = new DownloadNode(downloadRowFixture('a.7z', { modID: '1' }));
+    const withoutId = new DownloadNode(downloadRowFixture('b.7z'));
+
+    expect(h.state.contextKeys.get(KEY)).toBe(false);
+    select(downloadsView, [withId]);
+    expect(h.state.contextKeys.get(KEY)).toBe(true);
+    select(downloadsView, [withoutId]);
+    expect(h.state.contextKeys.get(KEY)).toBe(false);
+    select(downloadsView, [withId, new DownloadNode(downloadRowFixture('c.7z', { modID: '2' }))]);
+    expect(h.state.contextKeys.get(KEY)).toBe(false);
+  });
+});
+
+describe('the selection of the view last selected in', () => {
+  type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
+  function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
+    const listeners: ((e: SelectionChange) => void)[] = [];
+    const view = {
+      selection: [] as readonly unknown[],
+      select(rows: readonly unknown[]) {
+        view.selection = rows;
+        for (const listener of listeners) listener({ selection: rows });
+      },
+      onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
+        listeners.push(listener);
+        return { dispose() { /* no-op */ } };
+      },
+    };
+    return view;
+  }
+
+  it('follows whichever view changed its selection last, read as that view holds it now', () => {
+    const mods = fakeView();
+    const downloads = fakeView();
+    const selected = selectedInLastSelectedView(own, [mods, downloads]);
+
+    expect(selected()).toEqual([]);
+    mods.select(['mod A']);
+    expect(selected()).toEqual(['mod A']);
+    downloads.select(['file B']);
+    expect(selected()).toEqual(['file B']);
+    mods.select(['mod C']);
+    expect(selected()).toEqual(['mod C']);
+    mods.selection = ['mod D'];
+    expect(selected()).toEqual(['mod D']);
   });
 });

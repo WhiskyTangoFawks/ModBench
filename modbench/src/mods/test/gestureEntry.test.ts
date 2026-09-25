@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({
 import {
   MODS_KEY_ARGS, modsKeyContext, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
 } from '../gestureEntry';
-import { ModNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
@@ -211,6 +211,22 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([group], byRow).singleRow).toBe(true);
     expect(modsKeyContext([group, separatorRow('Other')], byRow).singleRow).toBe(false);
     expect(modsKeyContext([], byRow).singleRow).toBe(false);
+  });
+
+  it('open folder sees exactly one selected row that has a folder: a mod, or Overwrite', () => {
+    expect(modsKeyContext([enabledMod], byRow).singleFolder).toBe(true);
+    expect(modsKeyContext([new OverwriteNode(0)], byRow).singleFolder).toBe(true);
+    expect(modsKeyContext([group], byRow).singleFolder).toBe(false);
+    expect(modsKeyContext([enabledMod, disabledMod], byRow).singleFolder).toBe(false);
+    expect(modsKeyContext([], byRow).singleFolder).toBe(false);
+  });
+
+  it('view on Nexus sees exactly one selected mod, with a Nexus id', () => {
+    const nexusMod = new ModNode({ kind: 'mod', name: 'Nexus', enabled: true, nexusId: '42' });
+    expect(modsKeyContext([nexusMod], byRow).singleNexusMod).toBe(true);
+    expect(modsKeyContext([enabledMod], byRow).singleNexusMod).toBe(false);
+    expect(modsKeyContext([nexusMod, enabledMod], byRow).singleNexusMod).toBe(false);
+    expect(modsKeyContext([new OverwriteNode(0)], byRow).singleNexusMod).toBe(false);
   });
 
   it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', () => {
