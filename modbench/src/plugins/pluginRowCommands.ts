@@ -12,7 +12,7 @@ import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { pluralArgument, registerPluginsGesture } from './gestureEntry';
+import { onlySelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -108,9 +108,10 @@ export function registerRebaseCommand(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
   outputChannel: vscode.LogOutputChannel, reporter: Reporter,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
-  originFiles: OriginFilesOf,
+  originFiles: OriginFilesOf, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (node?: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (clicked?: PluginListNode) => {
+    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));

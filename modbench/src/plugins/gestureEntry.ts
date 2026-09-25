@@ -70,3 +70,30 @@ export function pluralArgument<K extends ArgumentKind>(entry: GestureEntry, ...k
 export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
   return entry.selection.filter(isOf(kinds));
 }
+
+// The record rows the row menu offers delete on: a record its own plugin can have removed.
+const DELETABLE_RECORD = new Set(['recordTracked', 'recordUntracked', 'recordOverride']);
+
+/** The one selected row, when it is of `kind`: a singular gesture's Argument from the palette. */
+export function onlySelected<K extends ArgumentKind>(selection: readonly PluginsTreeNode[], kind: K): RowOf<K> | undefined {
+  const [only, ...rest] = selection;
+  return rest.length === 0 && only !== undefined && isOf([kind])(only) ? only : undefined;
+}
+
+/** What the Plugins palette entries' `when` clauses read off the selection, since the palette is
+ *  handed no row. */
+export interface PluginsKeyContext {
+  readonly singlePlugin: boolean;
+  readonly holdsPlugin: boolean;
+  readonly singleRecordType: boolean;
+  readonly holdsDeletableRecord: boolean;
+}
+
+export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): PluginsKeyContext {
+  return {
+    singlePlugin: onlySelected(selection, 'plugin') !== undefined,
+    holdsPlugin: selection.some(isOf(['plugin'])),
+    singleRecordType: onlySelected(selection, 'recordType') !== undefined,
+    holdsDeletableRecord: selection.some((row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
+  };
+}

@@ -521,7 +521,7 @@
         },
         {
           "command": "modbench.plugin.reveal",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
         },
         {
           "command": "modbench.plugin.enable",
@@ -533,7 +533,7 @@
         },
         {
           "command": "modbench.plugin.track",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsPlugin"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
@@ -541,15 +541,15 @@
         },
         {
           "command": "modbench.mod.rebaseEditBranch",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
         },
         {
           "command": "modbench.record.create",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRecordType"
         },
         {
           "command": "modbench.record.delete",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsDeletableRecord"
         },
         {
           "command": "modbench.record.copyAsOverride",

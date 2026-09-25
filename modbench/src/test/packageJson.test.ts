@@ -556,11 +556,6 @@ describe('package.json command titles and categories', () => {
     'modbench.record.moveElementUp',
     'modbench.record.moveElementDown',
     'modbench.record.openFieldValue',
-    'modbench.plugin.reveal',
-    'modbench.plugin.track',
-    'modbench.mod.rebaseEditBranch',
-    'modbench.record.create',
-    'modbench.record.delete',
   ] as const;
 
   const PALETTE_GATED: readonly string[] = [...LEGACY_PALETTE_GATED, ...CATALOG_GESTURES_HIDDEN_FROM_THE_PALETTE];
@@ -761,6 +756,24 @@ describe('package.json Downloads delete key', () => {
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
     expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+  });
+});
+
+// commands.md, No dead entries: each is listed only while the Plugins selection holds what it acts
+// on, as its row menu does.
+describe('package.json Plugins palette entries', () => {
+  const PLUGINS_PALETTE = [
+    ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
+    ['modbench.plugin.track', 'modbench.plugin.holdsPlugin'],
+    ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singlePlugin'],
+    ['modbench.record.create', 'modbench.plugin.singleRecordType'],
+    ['modbench.record.delete', 'modbench.plugin.holdsDeletableRecord'],
+  ] as const;
+
+  it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && ${holds}`]);
   });
 });
 

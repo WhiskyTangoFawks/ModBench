@@ -176,14 +176,15 @@ describe('registerTrackCommand', () => {
 // ── registerRebaseCommand ──────────────────────────────────────────────────
 
 describe('registerRebaseCommand', () => {
-  function invokeRebase(client: InMemoryMEditClient) {
+  function invokeRebase(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const modA = { name: 'MyMod.esp', path: '/instance/mods/ModA/MyMod.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
     registerRebaseCommand(
-      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin));
+      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin),
+      () => viewSelection);
     return {
       handler: present(handlers.get('modbench.mod.rebaseEditBranch'), 'the rebase command registerRebaseCommand registers'),
       refresh, refreshMatchingPlugins, reporter,
@@ -202,6 +203,17 @@ describe('registerRebaseCommand', () => {
     expect(reporter.reports).toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
+  });
+
+  // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
+  it('rebases the one selected plugin\'s mod from the palette', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
+    const { handler } = invokeRebase(client, [pluginNode()]);
+
+    await handler();
+
+    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
   });
 
   it('reports an unresolvable origin at error and never asks the backend to rebase', async () => {

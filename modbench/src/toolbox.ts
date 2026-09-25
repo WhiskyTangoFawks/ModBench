@@ -47,6 +47,7 @@ import {
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
+import { pluginsKeyContext } from './plugins/gestureEntry';
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
@@ -235,6 +236,14 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
+  const showKeyContext = () => {
+    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection))) {
+      void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
+    }
+  };
+  showKeyContext();
+  own(pluginListView.onDidChangeSelection(showKeyContext));
+  own(pluginsTree.onDidChangeTreeData(showKeyContext));
   session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
   // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
   // against the tree's own locked row URIs so it never drifts from what is rendered.
@@ -243,7 +252,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
     e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
-  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer')));
+  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
   ownAll(own, registerPluginEnableCommands(
     instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
   return pluginsTree;

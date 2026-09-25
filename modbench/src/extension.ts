@@ -259,7 +259,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),
     registerRebaseCommand(
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles),
+      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles,
+      () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
 }

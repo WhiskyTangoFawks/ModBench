@@ -97,7 +97,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins),
+      meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins,
+      mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, outputChannel, deps.reporterFor('recordCopy'), treeSync, refreshMatchingPlugins),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
