@@ -199,6 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
       setStatusText: (t) => { statusBarItem.text = t; },
       abandonReconcile: () => session.loadOrderSender?.abandon(),
       refreshTree: () => { void refreshMatchingPlugins(session); },
+      setUnreachable: (reason) => session.pluginsTree?.applyBackendUnreachable(reason),
     }),
   });
 

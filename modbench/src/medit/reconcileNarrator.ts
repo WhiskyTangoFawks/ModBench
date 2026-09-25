@@ -1,4 +1,6 @@
-import { toLoadOrderStatus, type LoadOrderProgress, type MEditClient, type PluginLoadFailure } from '../client';
+import {
+  toLoadOrderStatus, type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginLoadFailure,
+} from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { makeReconcileProgressHandler, reportIndexRefusal } from './loadOrderProgress';
 
@@ -6,6 +8,9 @@ export interface ReconcileNarratorDeps {
   /** Opens the Plugins view's progress, closed when `until` settles. */
   showProgress: (until: Promise<void>) => void;
   applyIndexed: (indexedPlugins: string[], failures: PluginLoadFailure[]) => void;
+  /** plugins.md, States 4: the load order's own refusal, handed to the Plugins tree alongside the
+   *  status bar so every row names it too. */
+  applyRefused: (refusal: LoadOrderRefusal) => void;
   setStatusText: (text: string) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
   settle: (status: LoadOrderProgress) => Promise<void>;
@@ -36,7 +41,7 @@ interface Span {
 }
 
 const terminal = (status: LoadOrderProgress): boolean =>
-  status.conflictsComputed || status.refusalMessage !== undefined;
+  status.conflictsComputed || status.refusal !== undefined;
 
 /** The narrator hears every index status the stream carries; the answer is the unsubscribe. */
 export function subscribeNarratorToLoadOrderStatus(
@@ -74,8 +79,9 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   };
 
   const settle = (status: LoadOrderProgress, reconcileSeen: boolean): void => {
-    if (status.refusalMessage !== undefined) {
+    if (status.refusal !== undefined) {
       reportIndexRefusal(status, deps);
+      deps.applyRefused(status.refusal);
       markSettled(status.version);
       return;
     }

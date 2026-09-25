@@ -23,7 +23,7 @@ export function makeReconcileProgressHandler(deps: {
 export function reportIndexRefusal(
   status: LoadOrderProgress, deps: { setStatusText: (text: string) => void },
 ): boolean {
-  if (status.refusalMessage === undefined) return false;
-  deps.setStatusText(`$(error) mEdit: ${status.refusalMessage}`);
+  if (status.refusal === undefined) return false;
+  deps.setStatusText(`$(error) mEdit: ${status.refusal.message}`);
   return true;
 }

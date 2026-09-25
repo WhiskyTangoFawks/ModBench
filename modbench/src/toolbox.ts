@@ -299,6 +299,7 @@ function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNar
   const narrator = createReconcileNarrator({
     showProgress: (until) => void withPluginsViewProgress(session, () => until),
     applyIndexed: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
+    applyRefused: (refusal) => session.pluginsTree?.applyRefused(refusal),
     setStatusText,
     settle: (status) => settleReconciled(status, {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),
@@ -357,7 +358,7 @@ async function applyLoadOrderToTree(
     outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
     reporter.report(
       'warning',
-      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
+      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records.',
     );
     return;
   }

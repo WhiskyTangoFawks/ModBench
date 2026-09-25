@@ -55,7 +55,7 @@ describe('reportIndexRefusal', () => {
     const setStatusText = vi.fn();
 
     const refused = reportIndexRefusal(
-      status({ refusalMessage: 'This instance\'s index is open in another Modbench window.' }),
+      status({ refusal: { kind: 'heldElsewhere', message: 'This instance\'s index is open in another Modbench window.' } }),
       { setStatusText },
     );
 
@@ -68,7 +68,7 @@ describe('reportIndexRefusal', () => {
   it('shows the ready-to-show message on the status bar, an unknown failure', () => {
     const setStatusText = vi.fn();
 
-    reportIndexRefusal(status({ refusalMessage: 'the reconcile threw something unexpected' }), { setStatusText });
+    reportIndexRefusal(status({ refusal: { kind: 'failed', message: 'the reconcile threw something unexpected' } }), { setStatusText });
 
     expect(setStatusText).toHaveBeenCalledWith('$(error) mEdit: the reconcile threw something unexpected');
   });
