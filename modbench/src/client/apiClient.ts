@@ -89,9 +89,13 @@ export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
  *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
 export type NotificationEvent = Schemas['NotificationEvent'];
 
+/** The two refusal states carry different scope (ADR-0009 point 5): `heldElsewhere` overrides
+ *  even an already-held row, `failed` only a row not yet held. Internal to the client, not a
+ *  wire type. */
+export type LoadOrderRefusal = { kind: 'heldElsewhere' | 'failed'; message: string };
+
 /** The `load-order-status` notification's payload, subscribed alongside the in-flight
- *  `PUT /load-order`. The wire's `state` is deliberately not carried: it duplicates
- *  `conflictsComputed`, and a second, coincidentally equal field would invite the wrong read. */
+ *  `PUT /load-order`. The wire's `state` survives only as `refusal.kind` and `holdsNone`. */
 export interface LoadOrderStatus {
   /** How many plugin copies the snapshot resolved to — the denominator for progress. Copies that
    *  fail to open still count toward it. */
@@ -106,9 +110,9 @@ export interface LoadOrderStatus {
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0019). */
   failures: PluginLoadFailure[];
-  /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0009 point 5; ADR-0019) — the one
-   *  place either reaches the extension, since the put's own outcome reports applied regardless. */
-  refusalMessage?: string;
+  /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0019) — the one place either
+   *  reaches the extension, since the put's own outcome reports applied regardless. */
+  refusal?: LoadOrderRefusal;
   /** The Apply this status answers for. A client waits for this to reach its own Apply's
    *  version, never for a tick a fast or no-op reconcile can settle before it subscribes. */
   version: number;
@@ -116,18 +120,24 @@ export interface LoadOrderStatus {
   holdsNone: boolean;
 }
 
-const REFUSAL_STATES = new Set<Schemas['LoadOrderStatus']['state']>(['HeldElsewhere', 'Failed']);
+// A refusal state with no message is not carried as a refusal at all — same as before this typed.
+function refusalOf(wire: Schemas['LoadOrderStatus']): LoadOrderRefusal | undefined {
+  if (wire.message == null) return undefined;
+  if (wire.state === 'HeldElsewhere') return { kind: 'heldElsewhere', message: wire.message };
+  if (wire.state === 'Failed') return { kind: 'failed', message: wire.message };
+  return undefined;
+}
 
 /** The transform a `load-order-status` payload needs before it is this side's
  *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
- *  consumer keys on filename alone; `state` is kept as its two refusal values and `None`. */
+ *  consumer keys on filename alone; `state` is kept as `refusal.kind` and `holdsNone`. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
     indexedPlugins: wire.indexedPlugins.map((p) => p.name),
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
-    refusalMessage: REFUSAL_STATES.has(wire.state) ? (wire.message ?? undefined) : undefined,
+    refusal: refusalOf(wire),
     version: wire.version,
     holdsNone: wire.state === 'None',
   };
@@ -136,7 +146,7 @@ export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderSt
 /** Ready, or either refusal, and for the version an Apply actually answers — a status still
  *  settling an older version, or one a no-op resend left untouched, is not this one's answer. */
 export function isTerminalLoadOrderStatusFor(status: LoadOrderStatus, appliedVersion: number): boolean {
-  return status.version >= appliedVersion && (status.conflictsComputed || status.refusalMessage !== undefined);
+  return status.version >= appliedVersion && (status.conflictsComputed || status.refusal !== undefined);
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

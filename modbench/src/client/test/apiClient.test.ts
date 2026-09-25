@@ -58,7 +58,7 @@ describe('toLoadOrderStatus', () => {
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
       holdsNone: false,
     });
-    expect(status.refusalMessage).toBeUndefined();
+    expect(status.refusal).toBeUndefined();
   });
 
   // A rebuild drops the index before it refills: the one state that says nothing is held, which
@@ -72,9 +72,10 @@ describe('toLoadOrderStatus', () => {
     expect(tick('Reconciling').holdsNone).toBe(false);
   });
 
-  // The two refusal states this transform carries: nothing else here can say "another window has
-  // this instance open" or "the reconcile hit something unknown".
-  it('carries refusalMessage for the HeldElsewhere state', () => {
+  // The wire's `state` survives only as `refusal.kind` (ADR-0009 point 5): a caller tells
+  // "another window has this instance open" apart from "the reconcile hit something unknown"
+  // only through this field, never by re-deriving it.
+  it('carries a heldElsewhere refusal for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
       totalPlugins: 0, version: 1,
@@ -84,10 +85,12 @@ describe('toLoadOrderStatus', () => {
       message: 'This instance\'s index is open in another Modbench window.',
     });
 
-    expect(status.refusalMessage).toBe('This instance\'s index is open in another Modbench window.');
+    expect(status.refusal).toEqual({
+      kind: 'heldElsewhere', message: 'This instance\'s index is open in another Modbench window.',
+    });
   });
 
-  it('carries refusalMessage for the Failed state', () => {
+  it('carries a failed refusal for the Failed state', () => {
     const status = toLoadOrderStatus({
       state: 'Failed',
       totalPlugins: 0, version: 1,
@@ -97,6 +100,19 @@ describe('toLoadOrderStatus', () => {
       message: 'the reconcile threw something unexpected',
     });
 
-    expect(status.refusalMessage).toBe('the reconcile threw something unexpected');
+    expect(status.refusal).toEqual({ kind: 'failed', message: 'the reconcile threw something unexpected' });
+  });
+
+  it('carries no refusal when a refusal state has no message', () => {
+    const status = toLoadOrderStatus({
+      state: 'HeldElsewhere',
+      totalPlugins: 0, version: 1,
+      indexedPlugins: [],
+      conflictsComputed: false,
+      failures: [],
+      message: null,
+    });
+
+    expect(status.refusal).toBeUndefined();
   });
 });

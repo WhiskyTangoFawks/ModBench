@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../client';
+import type {
+  MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal,
+} from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
@@ -21,10 +23,10 @@ export function isDropPayload(value: unknown): value is { names: string[] } {
   return Array.isArray(witness.names) && witness.names.every((n): n is string => typeof n === 'string');
 }
 
-// The record browser is always wired in production (ADR-0002); reaching this means a test
-// exercised rows with none, which reads to the user the same as a disconnect.
-const NOT_CONNECTED = 'mEdit is not connected.';
-const notConnected = (): [ErrorNode] => [new ErrorNode(NOT_CONNECTED)];
+// toolbox.ts's composition root always wires a real RecordBrowser; reaching this means a test
+// exercised rows with none.
+const NO_RECORD_BROWSER = 'mEdit is not connected.';
+const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
@@ -199,6 +201,10 @@ type RowDecoration = {
   iconPath: vscode.TreeItem['iconPath'];
 };
 
+// plugins.md, States 3-4: what a row not resolved by the load order shows. `everyRow`: a second
+// window (ADR-0009 point 5). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
+type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
+
 // plugins.md, A row: the four statuses, in the order that sets the icon. `words` is the
 // description's vocabulary; `tooltipLine` is that status's one tooltip line.
 interface PluginStatus {
@@ -367,27 +373,20 @@ export class PluginsTreeProvider
     return this.expandPluginRow(element, file);
   }
 
-  // plugins.md, States 2-4: what a plugin row expands into.
+  // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
-    // A second window's refusal names itself on every row until a later tick or reconcile clears
-    // it — never "Still indexing…" for a load that cannot land here.
-    if (this.indexRefusal !== undefined) return [new ErrorNode(this.indexRefusal)];
-    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019). Nothing has
-    // landed yet reads as "Still indexing…", unless the last attempt to reach mEdit itself
-    // failed, which names the reason instead.
-    if (this.heldFiles === undefined) {
-      return [this.unreachableReason !== undefined ? new ErrorNode(this.unreachableReason) : new IndexingNode()];
+    if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
+    if (this.heldFiles?.has(file.toLowerCase()) === true) {
+      // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
+      // does not name" downstream, which would make every record row read-only. The backend
+      // resolves a load-order filename itself.
+      return this.records?.getPluginChildren(file) ?? noRecordBrowser();
     }
-    if (!this.heldFiles.has(file.toLowerCase())) {
-      // A plugin the load order gave up on will never be reached by a later tick — saying
-      // "still indexing" would promise a completion that is not coming (ADR-0019).
-      const failure = this.reachableFailureOf(element);
-      return [failure !== undefined ? new ErrorNode(failure) : new IndexingNode()];
-    }
-    // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
-    // does not name" downstream, which would make every record row read-only. The backend
-    // resolves a load-order filename itself.
-    return this.records?.getPluginChildren(file) ?? notConnected();
+    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
+    const failure = this.reachableFailureOf(element);
+    if (failure !== undefined) return [new ErrorNode(failure)];
+    if (this.expansionOverride?.scope === 'unheldRow') return [new ErrorNode(this.expansionOverride.message)];
+    return [new IndexingNode()];
   }
 
   private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
@@ -518,16 +517,11 @@ export class PluginsTreeProvider
   // each time: a plugin not yet reached this reload reads as "still indexing", never a stale
   // failure from before the reload began.
   private reachableFailures = new ByPluginCopy<string>();
-  // plugins.md, States 3: the reason the last plugin-facts read failed — distinct from
-  // `heldFiles === undefined` meaning no reconcile has landed yet. Cleared the moment a read
-  // succeeds.
-  private unreachableReason?: string;
-  // plugins.md, States 4; ADR-0009 point 5: the load order's own refusal — a second window holds
-  // the instance's index. Every row's expansion names this instead, until a later tick or
-  // reconcile clears it.
-  private indexRefusal?: string;
-  // Bumped by every write to the held load order, so a slow read answering after a newer
-  // reconcile — or after teardown — cannot resurrect a stale answer.
+  // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
+  // that reaches even an already-held row. One field, so the two never disagree on precedence.
+  private expansionOverride?: ExpansionOverride;
+  // Bumped by every state-changing call this provider receives, so a slow read answering after a
+  // newer one — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
 
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
@@ -535,18 +529,27 @@ export class PluginsTreeProvider
    *  this reload's own ticks. */
   applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
-    this.indexRefusal = undefined;
+    this.expansionOverride = undefined;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** ADR-0009 point 5; plugins.md, States 4: the load order's own refusal, named on every row
-   *  until a later `applyIndexed` or `applyReconciled` lands and clears it. */
-  applyRefused(reason: string): void {
+  /** ADR-0009 point 5; plugins.md, States 4: the load order's own refusal. `heldElsewhere`
+   *  overrides every row; `failed` only a row this reload never reached. */
+  applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
-    this.indexRefusal = reason;
+    this.expansionOverride = { scope: refusal.kind === 'heldElsewhere' ? 'everyRow' : 'unheldRow', message: refusal.message };
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** ADR-0002 invariant 2; plugins.md, States 3: mEdit confirmed unreachable — the status bar's
+   *  own Disconnected/Stopped, not Connecting. Named on a row not yet held; never downgrades an
+   *  `everyRow` refusal already in force. */
+  applyBackendUnreachable(reason: string): void {
+    this.generation++;
+    if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message: reason };
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -557,7 +560,7 @@ export class PluginsTreeProvider
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
-    this.indexRefusal = undefined;
+    this.expansionOverride = undefined;
     this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -592,13 +595,12 @@ export class PluginsTreeProvider
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
-      const plugins = (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
-      this.unreachableReason = undefined;
-      return plugins;
+      return (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
     } catch (err) {
       const message = errorMessage(err);
       this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
-      this.unreachableReason = message;
+      // A second window's refusal is not this read's to downgrade.
+      if (this.expansionOverride?.scope !== 'everyRow') this.expansionOverride = { scope: 'unheldRow', message };
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
       this.matches = undefined;
       this._onDidChangeTreeData.fire(undefined);

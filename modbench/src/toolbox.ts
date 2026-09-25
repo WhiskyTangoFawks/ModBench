@@ -299,7 +299,7 @@ function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNar
   const narrator = createReconcileNarrator({
     showProgress: (until) => void withPluginsViewProgress(session, () => until),
     applyIndexed: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
-    applyRefused: (reason) => session.pluginsTree?.applyRefused(reason),
+    applyRefused: (refusal) => session.pluginsTree?.applyRefused(refusal),
     setStatusText,
     settle: (status) => settleReconciled(status, {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),

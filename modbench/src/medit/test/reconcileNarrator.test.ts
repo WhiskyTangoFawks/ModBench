@@ -103,7 +103,7 @@ describe('the reconcile narrator', () => {
     const { deps, progress, narrator } = narrated();
     narrator.hear(tick());
 
-    narrator.hear(tick({ refusalMessage: 'another Modbench window holds this instance' }));
+    narrator.hear(tick({ refusal: { kind: 'heldElsewhere', message: 'another Modbench window holds this instance' } }));
     await flushed();
 
     expect(progress).toEqual([{ closed: true }]);
@@ -115,11 +115,24 @@ describe('the reconcile narrator', () => {
   // row must name it, never keep promising "Still indexing…" for a load that cannot land here.
   it('hands the refusal to the tree as well as the status bar', async () => {
     const { deps, narrator } = narrated();
+    const refusal = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
 
-    narrator.hear(tick({ refusalMessage: 'another Modbench window holds this instance' }));
+    narrator.hear(tick({ refusal }));
     await flushed();
 
-    expect(deps.applyRefused).toHaveBeenCalledWith('another Modbench window holds this instance');
+    expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
+  });
+
+  // The two refusal kinds carry different row-level scope (ADR-0009 point 5) — the narrator
+  // passes the kind through untouched rather than collapsing both into one shape.
+  it('hands a Failed refusal to the tree with its own kind, not relabeled as heldElsewhere', async () => {
+    const { deps, narrator } = narrated();
+    const refusal = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };
+
+    narrator.hear(tick({ refusal }));
+    await flushed();
+
+    expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
   it('answers settled(version) once that version is handed to the views, not when its Ready is heard', async () => {
@@ -180,7 +193,7 @@ describe('the reconcile narrator: the refill a rebuild starts', () => {
     const refilled = narrator.nextRefill().ended;
 
     narrator.hear(dropped());
-    narrator.hear(tick({ refusalMessage: 'another window' }));
+    narrator.hear(tick({ refusal: { kind: 'heldElsewhere', message: 'another window' } }));
 
     await expect(refilled).resolves.toBeUndefined();
   });

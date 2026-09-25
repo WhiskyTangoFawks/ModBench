@@ -65,7 +65,10 @@ describe('reportPutOutcome', () => {
 
   it('does not warn over a terminal refusal, which is the index status\'s to say', () => {
     const deps = putDeps();
-    const heldElsewhere = { outcome: 'applied' as const, status: { ...readyStatus, conflictsComputed: false, refusalMessage: 'another window' } };
+    const heldElsewhere = {
+      outcome: 'applied' as const,
+      status: { ...readyStatus, conflictsComputed: false, refusal: { kind: 'heldElsewhere' as const, message: 'another window' } },
+    };
 
     reportPutOutcome([], heldElsewhere, deps);
 

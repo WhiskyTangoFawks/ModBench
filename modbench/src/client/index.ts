@@ -6,7 +6,7 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
   PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult, ExternalChangeActionResult, LoadOrderStatus,
-  UnansweredExternalChange, PluginLoadFailure,
+  LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isRefused, isCrashRepairReason } from './MEditClient';

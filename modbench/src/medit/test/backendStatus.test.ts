@@ -4,7 +4,7 @@ import { InMemoryMEditClient, createLoadOrderSender } from '../../client';
 import { present } from '../../ports/present';
 
 function makeViews() {
-  return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn() };
+  return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn(), setUnreachable: vi.fn() };
 }
 
 // common.md, The status bar, names these four verbatim; Ready is the reconcile's own.
@@ -97,6 +97,50 @@ describe('wireBackendStatus', () => {
     expect(views.setStatusText).not.toHaveBeenCalled();
     expect(views.abandonReconcile).not.toHaveBeenCalled();
   });
+
+  // plugins.md, States 3: the Plugins tree's own unreachable signal, wired from the same status
+  // the bar reads — not inferred from a read a caller happens to attempt.
+  it('names the tree unreachable when the backend disconnects', () => {
+    const client = new InMemoryMEditClient();
+    const views = makeViews();
+    wireBackendStatus(client, views);
+
+    client.setStatus('disconnected');
+
+    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is disconnected — start MEditService and reload.');
+  });
+
+  it('names the tree unreachable when the backend stops', () => {
+    const client = new InMemoryMEditClient();
+    const views = makeViews();
+    wireBackendStatus(client, views);
+
+    client.setStatus('stopped');
+
+    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is stopped.');
+  });
+
+  // The rival this guards: Connecting treated as unreachable, which would read a fresh launch as
+  // broken before it has had a chance to attach.
+  it('never names the tree unreachable while the backend is starting', () => {
+    const client = new InMemoryMEditClient();
+    const views = makeViews();
+    wireBackendStatus(client, views);
+
+    client.setStatus('starting');
+
+    expect(views.setUnreachable).not.toHaveBeenCalled();
+  });
+
+  it('never names the tree unreachable once attached', () => {
+    const client = new InMemoryMEditClient();
+    const views = makeViews();
+    wireBackendStatus(client, views);
+
+    client.setStatus('attached');
+
+    expect(views.setUnreachable).not.toHaveBeenCalled();
+  });
 });
 
 // The whole point of the abandon: the user hears "abandoned", not a network failure they cannot
@@ -117,7 +161,7 @@ describe('a backend that disconnects mid-send', () => {
     }));
     const sender = createLoadOrderSender(client);
     wireBackendStatus(client, {
-      setStatusText: vi.fn(), abandonReconcile: () => sender.abandon(), refreshTree: vi.fn(),
+      setStatusText: vi.fn(), abandonReconcile: () => sender.abandon(), refreshTree: vi.fn(), setUnreachable: vi.fn(),
     });
 
     const outcome = sender.send({

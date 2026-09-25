@@ -1467,6 +1467,10 @@ describe('Plugin load-order rows expand into records', () => {
       tree.getTreeItem(findRow(rows, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'an enabled row is collapsible from launch — there is no mode for mEdit not having started yet',
     );
+    assert.strictEqual(
+      tree.getTreeItem(findRow(rows, 'Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'a disabled row has no expander, whatever mEdit has or has not done',
+    );
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
     assert.strictEqual(nodeKind(children[0]), 'recordType',
@@ -1526,6 +1530,10 @@ describe('Plugin load-order rows expand into records', () => {
     );
     assert.strictEqual(
       tree.getTreeItem(findRow(rows, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+    );
+    assert.strictEqual(
+      tree.getTreeItem(findRow(rows, 'Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'closing mEdit does not give a disabled row an expander',
     );
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
@@ -1833,8 +1841,8 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
       'a stopped client is not a reason to un-narrow a view the user narrowed');
   });
 
-  // The expand is the discriminator: a tree that forgot its load order answers "mEdit is not
-  // connected" for every row, whatever the row's own content would have been.
+  // The expand is the discriminator: a tree that forgot its load order would answer "Still
+  // indexing…" for every row, whatever the row's own content would have been.
   it('a row still in the tree keeps the load order behind its chevron', async () => {
     mockPluginsOverride = null; // this one is about the rows the filter left alone
     const tree = pluginsTree();
@@ -1844,8 +1852,8 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
     await clientOf()?.stop();
 
     const children = await tree.getChildren(row);
-    assert.ok(children.length > 0, 'the row must still expand into something');
-    assert.ok(!children.some((c) => tree.getTreeItem(c).label === 'mEdit is not connected.'),
+    assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
       'the tree kept its load order, so the row expands into records');
   });
 });
