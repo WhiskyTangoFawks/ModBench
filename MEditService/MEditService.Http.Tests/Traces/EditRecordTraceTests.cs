@@ -307,6 +307,33 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task CopyingARecordAsNew_LandsUnderADerivedEditorID_DifferentFromTheSources()
+    {
+        using var fx = await Loaded(Origin, OtherOrigin);
+        var formKey = await Client.FirstFormKey(Plugin);
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
+            new
+            {
+                sourcePlugin = Plugin,
+                sourceOrigin = Origin,
+                destinationPlugin = OtherPlugin,
+                destinationOrigin = OtherOrigin,
+                requestedFormKey = (string?)null,
+            });
+
+        response.EnsureSuccessStatusCode();
+        var newFormKey = (await Body(response)).GetProperty("newFormKey").GetString().Require();
+        Assert.NotEqual(formKey, newFormKey);
+
+        var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, newFormKey);
+        var text = File.ReadAllText(document);
+        Assert.Contains($"\"EditorID\": \"{Npc}DUPLICATE001\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain($"\"EditorID\": \"{Npc}\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CopyingARecordTheCodecCannotRead_AsANewRecord_IsTheSameRefusal()
     {
         using var fx = await Loaded(Origin, OtherOrigin);

@@ -13,12 +13,15 @@ public readonly record struct NamedDocument(string Text, string? EditorId);
 /// rule 2).</summary>
 public static class RecordDocumentEdits
 {
-    /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared — what
-    /// Copy as New Record lands for a record with a group of its own.</summary>
+    /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its
+    /// EditorID replaced through <paramref name="deriveEditorId"/> — what Copy as New Record lands
+    /// for a record with a group of its own.</summary>
     public static NamedDocument DuplicatedWithoutChildren(
-        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey)
+        RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
+        Func<string?, string?> deriveEditorId)
     {
         var duplicate = Duplicated(codec, text, release, recordType, newFormKey);
+        duplicate.EditorID = deriveEditorId(duplicate.EditorID);
         ContainerChildFields.ClearAllChildSlots(duplicate);
         return Named(codec, duplicate, release);
     }
@@ -31,13 +34,14 @@ public static class RecordDocumentEdits
             .Select(child => child.FormKey.ToString())];
 
     /// <summary>The record under <paramref name="newFormKey"/> carrying its whole embedded subtree,
-    /// each descendant re-keyed by <paramref name="rekeys"/> with its own self-link moved with
-    /// it.</summary>
+    /// each descendant re-keyed by <paramref name="rekeys"/> with its own self-link moved with it,
+    /// and every EditorID replaced through <paramref name="deriveEditorId"/>.</summary>
     public static NamedDocument DuplicatedWithSubtreeRekeyed(
         RecordTextCodec codec, string text, GameRelease release, string? recordType, string newFormKey,
-        IReadOnlyDictionary<string, string> rekeys)
+        IReadOnlyDictionary<string, string> rekeys, Func<string?, string?> deriveEditorId)
     {
         var duplicate = Duplicated(codec, text, release, recordType, newFormKey);
+        duplicate.EditorID = deriveEditorId(duplicate.EditorID);
         // Links between copied siblings are left alone, which is xEdit's own behavior.
         foreach (var child in EmbeddedDescendants(duplicate))
         {
@@ -51,6 +55,7 @@ public static class RecordDocumentEdits
             }
 
             child.FormKey = FormKey.Factory(childFormKey);
+            child.EditorID = deriveEditorId(child.EditorID);
             RemapSelfLink(child, oldFormKey, childFormKey);
         }
         return Named(codec, duplicate, release);

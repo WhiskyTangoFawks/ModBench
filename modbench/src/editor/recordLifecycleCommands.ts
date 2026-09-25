@@ -319,11 +319,12 @@ async function pickCopyDestination(
 }
 
 // No confirmation modal: xEdit's CopyInto asks nothing before an override copy, and Copy as New
-// Record prompts for neither an EditorID nor a FormKey — land immediately, rename via the grid.
+// Record prompts for neither an EditorID nor a FormKey. No free FormID refuses plainly, with no
+// flag-removal retry unlike create.
 async function runCopyRecordCommand(
   gesture: CopyGesture, arg: unknown, client: RecordCopyClient,
   resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
-  reporter: Reporter, ask: AskQuestion,
+  reporter: Reporter,
   onWritten: () => void,
 ): Promise<void> {
   const identity = recordIdentity(arg);
@@ -343,9 +344,8 @@ async function runCopyRecordCommand(
   } else {
     const result = await client.copyRecordAsNewRecord(
       identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin, undefined,
-      message => offerEslFlagRemoval(destination, message, 'Copy the Record', client, ask, reporter),
     );
-    if (!result) return; // the ESL prompt was declined — nothing happened
+    if (!result) return;
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     onWritten();
     reporter.landed(`Copied as ${result.newFormKey} into ${destination.name}.`);
@@ -356,7 +356,7 @@ async function runCopyRecordCommand(
 // a column header alike — `arg` resolves to the same identity either way.
 export function registerRecordCopyCommands(
   client: RecordCopyClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
+  reporter: Reporter,
   treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
@@ -366,10 +366,10 @@ export function registerRecordCopyCommands(
 
   return [
     vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-override', arg, client, resolveOriginOrReport, reporter, ask, onWritten);
+      await runCopyRecordCommand('copy-as-override', arg, client, resolveOriginOrReport, reporter, onWritten);
     }),
     vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-new', arg, client, resolveOriginOrReport, reporter, ask, onWritten);
+      await runCopyRecordCommand('copy-as-new', arg, client, resolveOriginOrReport, reporter, onWritten);
     }),
   ];
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -23,10 +24,95 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
 
         // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_DerivesTheCopysEditorID_InTheCreationKitsShape()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.NotEqual(CopyFixture.SourceNpcEditorId, document.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_TwoCopiesOfOneRecordIntoOneDestination_GetDistinctEditorIDs()
+    {
+        using var mod = CopyFixture.Create();
+
+        var first = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var second = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(first.Applied, first.Message);
+        Assert.True(second.Applied, second.Message);
+        Assert.NotNull(first.NewFormKey);
+        Assert.NotNull(second.NewFormKey);
+        var firstDocument = mod.Document(mod.DestinationPlugin, first.NewFormKey);
+        var secondDocument = mod.Document(mod.DestinationPlugin, second.NewFormKey);
+        Assert.NotNull(firstDocument);
+        Assert.NotNull(secondDocument);
+        Assert.NotEqual(firstDocument.EditorId, secondDocument.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", firstDocument.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", secondDocument.EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_SkipsToTheNextCounter()
+    {
+        using var mod = CopyFixture.Create();
+        Assert.True(mod.EditHandler.Set(
+            mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
+            JsonDocument.Parse("\"SourceNpcDUPLICATE001\"").RootElement).Applied);
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheDestinationHoldsACaseVariantOfTheDerivedName_StillCounts()
+    {
+        using var mod = CopyFixture.Create();
+        Assert.True(mod.EditHandler.Set(
+            mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
+            JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_WhenTheSourceHasNoEditorID_TheCopyHasNone()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+            mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey);
+        Assert.NotNull(document);
+        Assert.Null(document.EditorId);
     }
 
     [Fact]
@@ -126,6 +212,8 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+        Assert.Contains("Clear the light flag", result.Message, StringComparison.Ordinal);
+        Assert.Contains("renumber", result.Message, StringComparison.Ordinal);
     }
 
     // A Cell is on xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —
