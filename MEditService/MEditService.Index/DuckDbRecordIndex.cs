@@ -1084,14 +1084,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             // ADR-0007: the placed ref's base form comes out of the document rather than a `base`
             // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
-            // base reads NULL. The base's EditorID is its winning copy's, else any copy's: a base in a
-            // plugin the game does not load has no winner.
+            // base reads NULL.
             var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
                        json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
+                       -- A base in a plugin the game does not load has no winning copy, so any copy names it.
                        (SELECT b.editor_id FROM {records} b
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY b.is_winner DESC
@@ -1166,8 +1166,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 reader.IsDBNull(11) ? null : reader.GetString(11));
 
         // '$.Name.Value' is what the codec emits for an unlocalized plugin's FULL; a localized plugin
-        // serializes '$.Name.Values' instead, which this misses.
-        private static string FullNameOf(string alias) => $"json_extract_string({alias}.body, '$.Name.Value')";
+        // serializes '$.Name.Values' instead, which this misses. An empty FULL names nothing.
+        private static string FullNameOf(string alias) => $"NULLIF(json_extract_string({alias}.body, '$.Name.Value'), '')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.
