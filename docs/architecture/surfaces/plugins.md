@@ -168,13 +168,13 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Plugin menu | reveal · enable or disable · create record… · track… · compile · compile from `main`… · rebase edit branch · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record |
-| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · renumber… · copy value · delete |
+| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
 | Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. Ctrl+F: filter. |
 
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
-   Argument in the catalog says: enable or disable, compile, delete, copy, renumber and open take
+   Argument in the catalog says: enable or disable, compile, delete, copy and open take
    the selection. Several records open each in a tab of its own, until #23 makes them one
    comparison. *catalog Argument; commands.md, A selection is one gesture*
 2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
@@ -188,8 +188,8 @@ As a user, I want:
    where the catalog's condition holds: track on an untracked plugin in a mod, rebase on a tracked
    plugin's mod while no rebase is in progress, and compile on a tracked, editable plugin. *catalog
    Where*
-7. The gestures that edit a plugin's records absent on an untracked plugin: create record, renumber
-   and delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
+7. The gestures that edit a plugin's records absent on an untracked plugin: create record and
+   delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
    file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
@@ -250,14 +250,6 @@ As a user, I want:
 As a user, I want, on a group, a new record of that type with no prompt, and on a plugin a pick of the
 record type first. The new record is selected and opens in the record panel. *catalog `create`
 under Record, record type Option; xEdit selects what it adds*
-
-### Renumber
-
-As a user, I want a prompt filled with the next free ID and selected, where an empty answer takes the
-suggestion. Renumber changes this record's FormKey and nothing else: updating the records that
-reference it is a script (xedit.md, divergence 11). When other records reference it, a confirmation
-says how many will point at nothing until they are updated. Esc renumbers nothing. *catalog
-`renumber`; ruling*
 
 ### Copy
 
@@ -326,7 +318,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `repair`, `validate`, sort rules, `apply suggested sort`, `rename`, `relink source`, `remove source` | their design |
 | `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
 | `create` in a new mod, and moving a plugin out of Overwrite | the Overwrite inbox design |
-| `create` record inside a container, `renumber` a plugin | the catalog's planned Options |
+| `create` record inside a container | the catalog's planned Options |
 | A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
 ## Test seam
