@@ -75,7 +75,7 @@ The Core box refuses before it writes, and names the cause.
 | A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
 | `mods/` cannot be listed | `mod sync` | Nothing is written. The reason goes to the Mods view's message line and the Output. |
-| mEdit cannot say which plugins load with no line, or a folder cannot be listed, the game folder included | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. |
+| mEdit cannot say which plugins load with no line, or a folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. Before mEdit first attaches, plugin sync waits and runs on attach, so a launch reports nothing. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
 
 A system command reports a failure once when it begins, and again only when its reason changes
 ([common.md](../surfaces/common.md), States, story 2).
@@ -88,7 +88,9 @@ Exceptions to the principles:
 
 - **A failed gesture writes nothing.** `uninstall` writes the folder, the line and the `.meta`. When
   the line fails after the trash, the line names a folder that is gone, and `mod sync` drops it. A
-  failed `.meta` mark is a line in the Output, and the uninstall stands. A downloaded file `delete`
+  failed `.meta` mark is a line in the Output, and the uninstall stands. A separator `delete` trashes
+  the folder first, then drops its line; when the line fails after the trash, the line names a
+  folder that is gone, and `mod sync` drops it. A downloaded file `delete`
   whose `.meta` fails after the file leaves a lone `.meta`, which no view shows
   ([downloads.md](../surfaces/downloads.md), Reporting).
 

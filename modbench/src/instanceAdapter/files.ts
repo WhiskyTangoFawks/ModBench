@@ -143,13 +143,13 @@ export async function put(path: string, edit: (before: string) => string, opts: 
 }
 
 /** Like {@link put}, but skips the write when `edit` changed nothing, so an unwritten file never
- *  fires its watcher. Answers whether it wrote. */
+ *  fires its watcher. Answers whether it wrote. An `edit` that awaits holds the lock meanwhile. */
 export function putIfChanged(
-  path: string, edit: (before: string) => string, opts: PutOptions = {},
+  path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {
   return withLock(path, async () => {
     const before = await readOr(path, opts.ifMissing);
-    const after = edit(before);
+    const after = await edit(before);
     if (after === before) return { wrote: false };
     await writeFile(path, after);
     return { wrote: true };
