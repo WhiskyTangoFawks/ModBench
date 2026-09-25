@@ -413,7 +413,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
                         // case, not one to gate out.
                         vscodeContext={combineVscodeContexts(
-                          headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
+                          headerCellContext(
+                            col.override.formKey, col.override.plugin, col.override.origin,
+                            trackedSet.has(col.key) && !isImmutable,
+                          ),
                         )}
                         // The annotated synthetic member is the one sanctioned header-flag write —
                         // exempt from the backend's Partial Form read-only guard, so it lands

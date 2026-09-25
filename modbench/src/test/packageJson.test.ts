@@ -792,14 +792,15 @@ describe('package.json field gestures\' palette entries', () => {
   });
 });
 
-// commands.md, compile: Editor, on a tracked and editable plugin. The record tab's button is its
-// own command, so what the title bar hands it never decides what it compiles.
-describe('package.json the record tab\'s compile button', () => {
-  it('shows only while the open record\'s plugin is tracked and editable', () => {
-    const titleBar = present(pkg.contributes.menus['editor/title'], "contributes.menus['editor/title']");
-    expect(titleBar.map((e) => [e.command, e.when])).toEqual([
-      ['modbench.recordPanel.compile', "activeWebviewPanelId == 'modbench' && modbench.record.compilable"],
+// commands.md, compile: Editor, context menu (plugin tracked and editable); editor.md, Menus and
+// keys: the column header. The header's context hands the command its own plugin.
+describe('package.json compile on the record tab', () => {
+  it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
+    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+    expect(webviewMenu.filter((e) => e.command === 'modbench.saveAndCompile').map((e) => e.when)).toEqual([
+      String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && compilable`,
     ]);
+    expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
   });
 });
 
@@ -1185,9 +1186,8 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     outOfPalette: ['modbench.openHeader'],
   },
   {
-    gesture: 'compile', removedBy: '#961',
-    ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain', 'modbench.recordPanel.compile'],
-    outOfPalette: ['modbench.pluginListTree.compileAtMain', 'modbench.recordPanel.compile'],
+    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
+    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
   },
   {
     gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],

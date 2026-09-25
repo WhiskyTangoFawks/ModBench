@@ -347,17 +347,18 @@ describe('combineVscodeContexts', () => {
 // headline use case, unlike every row-scoped context above.
 describe('headerCellContext', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
-    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
+    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', true)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      preventDefaultContextMenuItems: true,
+      compilable: true, preventDefaultContextMenuItems: true,
     });
   });
 
   it('combines like every other context, for a header cell that one day carries more than one', () => {
-    const result = combineVscodeContexts(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA'));
+    const result = combineVscodeContexts(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', false));
     if (!result) throw new Error('expected a combined context for the header cell context');
     expect(JSON.parse(result)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      compilable: false,
       preventDefaultContextMenuItems: true,
     });
   });

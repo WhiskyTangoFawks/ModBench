@@ -402,12 +402,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.recordPanel.compile",
-        "title": "Compile Plugin",
-        "icon": "$(check)",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.pluginListTree.compileAtMain",
         "title": "Compile Plugin from main…",
         "category": "Modbench"
@@ -551,10 +545,6 @@
         {
           "command": "modbench.saveAndCompile",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCompilable"
-        },
-        {
-          "command": "modbench.recordPanel.compile",
-          "when": "false"
         },
         {
           "command": "modbench.record.create",
@@ -751,13 +741,6 @@
           "command": "modbench.downloadedFile.sort",
           "when": "view == modbench.downloads && modbench.folder == instance",
           "group": "1_sort"
-        }
-      ],
-      "editor/title": [
-        {
-          "command": "modbench.recordPanel.compile",
-          "when": "activeWebviewPanelId == 'modbench' && modbench.record.compilable",
-          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -967,6 +950,11 @@
           "command": "modbench.record.moveElementDown",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
           "group": "modbench@4"
+        },
+        {
+          "command": "modbench.saveAndCompile",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
+          "group": "modbench@10"
         },
         {
           "command": "modbench.record.copyAsOverride",

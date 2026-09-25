@@ -82,6 +82,8 @@ export interface ColumnHeaderContext {
   formKey: string;
   plugin: string;
   origin: string;
+  // commands.md, compile: the column's plugin is tracked and editable.
+  compilable: boolean;
   preventDefaultContextMenuItems: true;
 }
 

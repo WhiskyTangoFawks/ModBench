@@ -512,8 +512,8 @@ export class PluginsTreeProvider
     return flags.join(' ');
   }
 
-  /** Whether compile applies to this plugin: tracked, in a mod, and not read-only for editing. */
-  compilable(file: string, origin: string): boolean {
+  // Compile applies to a tracked plugin in a mod that is not read-only for editing.
+  private compilable(file: string, origin: string): boolean {
     if (IN_NO_MOD.has(origin)) return false;
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;

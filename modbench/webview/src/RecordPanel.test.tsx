@@ -435,7 +435,35 @@ describe('RecordPanel — column header native right-click menu', () => {
     if (!headerContext) throw new Error('expected the PluginHeader root to carry a data-vscode-context attribute');
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      preventDefaultContextMenuItems: true,
+      compilable: false, preventDefaultContextMenuItems: true,
+    });
+  });
+
+  // commands.md, compile: Editor, context menu (plugin tracked and editable).
+  it.each([
+    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
+    ['an untracked', { isTracked: false, isImmutable: false }, false],
+    ['a read-only', { isTracked: true, isImmutable: true }, false],
+  ])('the header of %s plugin says whether compile applies to it', async (_what, facts, compilable) => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = compareResultFixture({
+      conflictAll: 'OnlyOne',
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      })],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', cellStates: {},
+      })],
+    });
+    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }] });
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    await waitFor(() => {
+      const headerContext = container.querySelector('th > div')?.getAttribute('data-vscode-context') ?? '{}';
+      expect(parseJsonRecord(headerContext).compilable).toBe(compilable);
     });
   });
 });

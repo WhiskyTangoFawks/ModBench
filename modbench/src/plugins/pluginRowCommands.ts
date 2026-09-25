@@ -30,7 +30,7 @@ export interface PluginsViewProgress {
 
 // Everything compile and compile at ref call: resolving an origin and a record's owner,
 // compiling, and (on an ESL contradiction) editing the header to retry.
-type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
+type CompileClient = Pick<MEditClient, 'getPlugins' | 'compile' | 'editRecord'>;
 
 // ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
 // mod cannot be resolved has none, and none is invented for it.
@@ -147,8 +147,13 @@ export function registerSaveAndCompileCommand(
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.saveAndCompile', async (clicked?: unknown) => {
+    const header = columnHeaderOf(clicked);
+    if (header) {
+      await compileAndReport(client, diagnostics, originFiles, reporter, ask, header, undefined);
+      return;
+    }
     const node = clicked ?? onlySelected(viewSelection(), 'plugin');
-    const target = await resolveCompileTarget(isPluginRow(node) ? node.plugin.name : undefined, undefined, {
+    const target = await resolveCompileTarget(isPluginRow(node) ? node.plugin.name : undefined, {
       ...compileTargetDeps(client, outputChannel, reporter),
       pickPlugin: async () => {
         const plugins = await client.getPlugins();
@@ -170,36 +175,11 @@ export function registerSaveAndCompileCommand(
   });
 }
 
-// The record tab's title-bar button: the open record's own plugin, never a QuickPick, which risks
-// compiling the wrong plugin.
-export function registerCompileOpenRecordCommand(
-  client: CompileClient,
-  // Editor's own `ActiveRecordTracker`, structural: this module names no Editor type.
-  activeRecordTracker: { current(): string | undefined },
-  outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
-  diagnostics: vscode.DiagnosticCollection,
-  originFiles: OriginFilesOf,
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.recordPanel.compile', async () => {
-    const openRecord = activeRecordTracker.current();
-    if (openRecord === undefined) return;
-    const target = await resolveCompileTarget(undefined, openRecord, {
-      ...compileTargetDeps(client, outputChannel, reporter),
-      pickPlugin: () => Promise.resolve(undefined),
-    });
-    if (!target) return;
-
-    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
-  });
-}
-
 function compileTargetDeps(
   client: CompileClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
 ): Omit<ResolveCompileTargetDeps, 'pickPlugin'> {
   return {
     resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-    getRecordOwner: (formKey) => client.getRecordOwner(formKey),
     onError: (message) => reporter.report('error', message),
   };
 }
@@ -214,9 +194,8 @@ export function registerCompileAtRefCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
-    const target = await resolveCompileTarget(node.plugin.name, undefined, {
+    const target = await resolveCompileTarget(node.plugin.name, {
       resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-      getRecordOwner: () => Promise.resolve(undefined),
       onError: (message) => reporter.report('error', message),
       pickPlugin: () => Promise.resolve(undefined),
     });
@@ -380,4 +359,12 @@ export function refreshSourceControlFor(
 
 function isPluginRow(value: unknown): value is Extract<PluginListNode, { kind: 'plugin' }> {
   return typeof value === 'object' && value !== null && Reflect.get(value, 'kind') === 'plugin';
+}
+
+// A record tab's column header names its plugin and origin (editor.md, Menus and keys).
+function columnHeaderOf(value: unknown): { name: string; origin: string } | undefined {
+  if (typeof value !== 'object' || value === null || Reflect.get(value, 'webviewSection') !== 'recordHeader') return undefined;
+  const name: unknown = Reflect.get(value, 'plugin');
+  const origin: unknown = Reflect.get(value, 'origin');
+  return typeof name === 'string' && typeof origin === 'string' ? { name, origin } : undefined;
 }

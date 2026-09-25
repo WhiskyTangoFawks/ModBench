@@ -19,15 +19,13 @@ import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './ed
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
-import { showOpenRecordCompilable } from './editor/openRecordCompilable';
 import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileOpenRecordCommand,
-  registerCompileAtRefCommand,
+  registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
   watchRepositoryStates, type MinimalRepository,
 } from './plugins/pluginRowCommands';
@@ -141,7 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
+    session, client: meditClient, outputChannel, compileDiagnostics, treeProvider,
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -220,14 +218,6 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
-  context.subscriptions.push(showOpenRecordCompilable({
-    onDidChangeOpenRecord: (listener) => activeRecordTracker.onDidChangeActiveRecord(listener),
-    openRecord: () => activeRecordTracker.current(),
-    onDidChangeFacts: (listener) => session.pluginsTree?.onDidChangeTreeData(() => { listener(); }) ?? { dispose: () => undefined },
-    ownerOf: (formKey) => meditClient.getRecordOwner(formKey),
-    compilable: (plugin, origin) => session.pluginsTree?.compilable(plugin, origin) === true,
-    show: (compilable) => { void vscode.commands.executeCommand('setContext', 'modbench.record.compilable', compilable); },
-  }));
 
   // Exposed for integration tests — unused in production. `client`: a test drives a status
   // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
@@ -248,7 +238,6 @@ export function activate(context: vscode.ExtensionContext) {
 interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
@@ -268,7 +257,7 @@ function holdPluginRepositories(session: ExtensionSession, repos: Map<string, Mi
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
@@ -284,9 +273,6 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerSaveAndCompileCommand(
       client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
       compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileOpenRecordCommand(
-      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'recordPanel.compile'), askQuestion,
-      compileDiagnostics, originFiles),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),
