@@ -508,8 +508,15 @@ export class PluginsTreeProvider
     if (!facts.tracked) return 'plugin untrackedInMod';
     const flags = ['plugin'];
     if (!this.rebaseInProgress(file, joinedOrigin)) flags.push('rebasable');
-    if (facts.readOnly !== true) flags.push('compilable');
+    if (this.compilable(file, joinedOrigin)) flags.push('compilable');
     return flags.join(' ');
+  }
+
+  /** Whether compile applies to this plugin: tracked, in a mod, and not read-only for editing. */
+  compilable(file: string, origin: string): boolean {
+    if (IN_NO_MOD.has(origin)) return false;
+    const facts = this.facts?.get(file, origin);
+    return facts?.tracked === true && facts.readOnly !== true;
   }
 
   // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load

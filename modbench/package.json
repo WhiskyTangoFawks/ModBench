@@ -399,6 +399,11 @@
       {
         "command": "modbench.saveAndCompile",
         "title": "Compile Plugin",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.recordPanel.compile",
+        "title": "Compile Plugin",
         "icon": "$(check)",
         "category": "Modbench"
       },
@@ -546,6 +551,10 @@
         {
           "command": "modbench.saveAndCompile",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCompilable"
+        },
+        {
+          "command": "modbench.recordPanel.compile",
+          "when": "false"
         },
         {
           "command": "modbench.record.create",
@@ -746,8 +755,8 @@
       ],
       "editor/title": [
         {
-          "command": "modbench.saveAndCompile",
-          "when": "activeWebviewPanelId == 'modbench'",
+          "command": "modbench.recordPanel.compile",
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.compilable",
           "group": "navigation"
         }
       ],

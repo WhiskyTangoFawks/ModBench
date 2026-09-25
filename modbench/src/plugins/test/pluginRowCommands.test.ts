@@ -34,7 +34,7 @@ vi.mock('vscode', () => ({
 
 import {
   registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
-  registerSaveAndCompileCommand, registerCompileAtRefCommand, rebaseInProgressIn, watchRepositoryStates,
+  registerSaveAndCompileCommand, registerCompileOpenRecordCommand, registerCompileAtRefCommand, rebaseInProgressIn, watchRepositoryStates,
   type MinimalRepository,
 } from '../pluginRowCommands';
 import { pluginAddressKey } from '../trackedRepositories';
@@ -467,12 +467,10 @@ describe('publishCompileDiagnostics', () => {
 // ── registerSaveAndCompileCommand ─────────────────────────────────────────
 
 describe('registerSaveAndCompileCommand', () => {
-  function invokeSaveAndCompile(
-    client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = [], activeRecord?: string,
-  ) {
+  function invokeSaveAndCompile(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
     const reporter = recordingReporter();
     registerSaveAndCompileCommand(
-      client, { current: () => activeRecord }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
+      client, new FakeLogOutputChannel(), reporter, scriptedDialog(),
       new FakeDiagnosticCollection(), () => undefined, () => viewSelection);
     return {
       handler: present(handlers.get('modbench.saveAndCompile'), 'the save-and-compile command registerSaveAndCompileCommand registers'),
@@ -511,23 +509,11 @@ describe('registerSaveAndCompileCommand', () => {
   it('compiles the one selected plugin from the palette', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
     client.setCommandResult('compile', compileResultFixture());
-    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')], '000801:Other.esp');
+    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')]);
 
     await handler();
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
-  });
-
-  // The record tab's title bar hands the command its editor, never a plugin row.
-  it('compiles the active record\'s plugin from the record tab\'s title bar, whatever the Plugins selection', async () => {
-    const client = clientWithOrigin('Other.esp', 'ModB');
-    client.setQueryAnswer('getRecordOwner', { plugin: 'Other.esp', origin: 'ModB' });
-    client.setCommandResult('compile', compileResultFixture());
-    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')], '000801:Other.esp');
-
-    await handler({ scheme: 'webview-panel' }, { groupId: 1 });
-
-    expect(client.calls.filter((c) => c.method === 'compile').map((c) => c.args[0])).toEqual(['Other.esp']);
   });
 
   it('asks which plugin to compile in the catalog\'s own verb, when no row is in hand', async () => {
@@ -551,6 +537,36 @@ describe('registerSaveAndCompileCommand', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not resolve which mod "MyPatch.esp" belongs to.', detail: undefined },
     ]);
+  });
+});
+
+// The record tab's title-bar button: its own command, so nothing it is handed decides between it
+// and the palette's.
+describe('registerCompileOpenRecordCommand', () => {
+  function invokeCompileOpenRecord(client: InMemoryMEditClient, openRecord: string | undefined) {
+    registerCompileOpenRecordCommand(
+      client, { current: () => openRecord }, new FakeLogOutputChannel(), recordingReporter(), scriptedDialog(),
+      new FakeDiagnosticCollection(), () => undefined);
+    return present(handlers.get('modbench.recordPanel.compile'), 'the open record\'s compile command');
+  }
+
+  it('compiles the open record\'s plugin, whatever it is handed', async () => {
+    const client = clientWithOrigin('Other.esp', 'ModB');
+    client.setQueryAnswer('getRecordOwner', { plugin: 'Other.esp', origin: 'ModB' });
+    client.setCommandResult('compile', compileResultFixture());
+
+    await invokeCompileOpenRecord(client, '000801:Other.esp')(pluginNode('MyPatch.esp'));
+
+    expect(client.calls.filter((c) => c.method === 'compile').map((c) => c.args.slice(0, 2))).toEqual([['Other.esp', 'ModB']]);
+  });
+
+  it('compiles nothing, and asks nothing, with no record open', async () => {
+    const client = clientWithOrigin('Other.esp', 'ModB');
+
+    await invokeCompileOpenRecord(client, undefined)();
+
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+    expect(showQuickPick).not.toHaveBeenCalled();
   });
 });
 

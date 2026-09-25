@@ -19,13 +19,15 @@ import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './ed
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
+import { showOpenRecordCompilable } from './editor/openRecordCompilable';
 import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileOpenRecordCommand,
+  registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
   watchRepositoryStates, type MinimalRepository,
 } from './plugins/pluginRowCommands';
@@ -218,6 +220,14 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
+  context.subscriptions.push(showOpenRecordCompilable({
+    onDidChangeOpenRecord: (listener) => activeRecordTracker.onDidChangeActiveRecord(listener),
+    openRecord: () => activeRecordTracker.current(),
+    onDidChangeFacts: (listener) => session.pluginsTree?.onDidChangeTreeData(() => { listener(); }) ?? { dispose: () => undefined },
+    ownerOf: (formKey) => meditClient.getRecordOwner(formKey),
+    compilable: (plugin, origin) => session.pluginsTree?.compilable(plugin, origin) === true,
+    show: (compilable) => { void vscode.commands.executeCommand('setContext', 'modbench.record.compilable', compilable); },
+  }));
 
   // Exposed for integration tests — unused in production. `client`: a test drives a status
   // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
@@ -272,8 +282,11 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerSaveAndCompileCommand(
-      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
+      client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
       compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
+    registerCompileOpenRecordCommand(
+      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'recordPanel.compile'), askQuestion,
+      compileDiagnostics, originFiles),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),

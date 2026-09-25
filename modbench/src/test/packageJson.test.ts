@@ -792,6 +792,17 @@ describe('package.json field gestures\' palette entries', () => {
   });
 });
 
+// commands.md, compile: Editor, on a tracked and editable plugin. The record tab's button is its
+// own command, so what the title bar hands it never decides what it compiles.
+describe('package.json the record tab\'s compile button', () => {
+  it('shows only while the open record\'s plugin is tracked and editable', () => {
+    const titleBar = present(pkg.contributes.menus['editor/title'], "contributes.menus['editor/title']");
+    expect(titleBar.map((e) => [e.command, e.when])).toEqual([
+      ['modbench.recordPanel.compile', "activeWebviewPanelId == 'modbench' && modbench.record.compilable"],
+    ]);
+  });
+});
+
 // commands.md, No dead entries: each is listed only while the Plugins selection holds what it acts
 // on, as its row menu does.
 describe('package.json Plugins palette entries', () => {
@@ -1174,8 +1185,9 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     outOfPalette: ['modbench.openHeader'],
   },
   {
-    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
-    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
+    gesture: 'compile', removedBy: '#961',
+    ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain', 'modbench.recordPanel.compile'],
+    outOfPalette: ['modbench.pluginListTree.compileAtMain', 'modbench.recordPanel.compile'],
   },
   {
     gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],

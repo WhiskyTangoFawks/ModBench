@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveCompileTarget } from './compileTarget';
+import { resolveCompileTarget, type ResolveCompileTargetDeps } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
@@ -136,51 +136,72 @@ export function registerRebaseCommand(
   });
 }
 
-// Reachable from a plugin row, from the record editor's title bar (the *active* record's owning
-// plugin — never a QuickPick, which risks compiling the wrong plugin), and from the palette
-// (QuickPick fallback only when neither is in hand).
+// A plugin row, or from the palette the one selected plugin; the QuickPick only when neither is in
+// hand.
 export function registerSaveAndCompileCommand(
   client: CompileClient,
-  // Editor's own `ActiveRecordTracker`, structural: this module names no Editor type, only
-  // the one reader it needs — the active panel's own FormKey.
-  activeRecordTracker: { current(): string | undefined },
   outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
   originFiles: OriginFilesOf,
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.saveAndCompile', async (...args: unknown[]) => {
-    // The palette hands no argument at all, so it takes the Plugins selection; the record tab's
-    // title bar hands its editor, so it takes the active record.
-    const [clicked] = args;
-    const node = args.length === 0 ? onlySelected(viewSelection(), 'plugin') : clicked;
-    const target = await resolveCompileTarget(
-      isPluginRow(node) ? node.plugin.name : undefined,
-      activeRecordTracker.current(),
-      {
-        resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-        getRecordOwner: (formKey) => client.getRecordOwner(formKey),
-        onError: (message) => reporter.report('error', message),
-        pickPlugin: async () => {
-          const plugins = await client.getPlugins();
-          const choice = await vscode.window.showQuickPick(
-            plugins.map((p) => ({ label: p.name, description: p.origin })),
-            { placeHolder: 'Compile which plugin?' },
-          );
-          if (!choice) return undefined;
-          if (!choice.description) {
-            reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
-            return undefined;
-          }
-          return { name: choice.label, origin: choice.description };
-        },
+  return vscode.commands.registerCommand('modbench.saveAndCompile', async (clicked?: unknown) => {
+    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
+    const target = await resolveCompileTarget(isPluginRow(node) ? node.plugin.name : undefined, undefined, {
+      ...compileTargetDeps(client, outputChannel, reporter),
+      pickPlugin: async () => {
+        const plugins = await client.getPlugins();
+        const choice = await vscode.window.showQuickPick(
+          plugins.map((p) => ({ label: p.name, description: p.origin })),
+          { placeHolder: 'Compile which plugin?' },
+        );
+        if (!choice) return undefined;
+        if (!choice.description) {
+          reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
+          return undefined;
+        }
+        return { name: choice.label, origin: choice.description };
       },
-    );
+    });
     if (!target) return;
 
     await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
   });
+}
+
+// The record tab's title-bar button: the open record's own plugin, never a QuickPick, which risks
+// compiling the wrong plugin.
+export function registerCompileOpenRecordCommand(
+  client: CompileClient,
+  // Editor's own `ActiveRecordTracker`, structural: this module names no Editor type.
+  activeRecordTracker: { current(): string | undefined },
+  outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter, ask: AskQuestion,
+  diagnostics: vscode.DiagnosticCollection,
+  originFiles: OriginFilesOf,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.recordPanel.compile', async () => {
+    const openRecord = activeRecordTracker.current();
+    if (openRecord === undefined) return;
+    const target = await resolveCompileTarget(undefined, openRecord, {
+      ...compileTargetDeps(client, outputChannel, reporter),
+      pickPlugin: () => Promise.resolve(undefined),
+    });
+    if (!target) return;
+
+    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
+  });
+}
+
+function compileTargetDeps(
+  client: CompileClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
+): Omit<ResolveCompileTargetDeps, 'pickPlugin'> {
+  return {
+    resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
+    getRecordOwner: (formKey) => client.getRecordOwner(formKey),
+    onError: (message) => reporter.report('error', message),
+  };
 }
 
 // One confirmation names the ref literally, never "pristine" — there is no stored mode
