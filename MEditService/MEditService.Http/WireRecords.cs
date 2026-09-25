@@ -42,9 +42,8 @@ public record RecordEditRequest(
     IReadOnlyList<PathHop> Path,
     JsonElement? Value = null);
 
-/// <summary>The success shape for an applied edit, with <see cref="NewFormKey"/> the record's FormKey
-/// after an edit of its FormID. A refusal is ProblemDetails carrying refusal and path extensions
-/// instead, so an HTTP client's ordinary success check is also the correct check (ADR-0019).</summary>
+/// <summary>An applied edit; <see cref="NewFormKey"/> is set by an edit of the FormID. A refusal is
+/// ProblemDetails with refusal and path extensions, so a plain success check is correct (ADR-0019).</summary>
 public record RecordEditResponse(bool Applied, string FormKey, string Path, string? NewFormKey = null);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound

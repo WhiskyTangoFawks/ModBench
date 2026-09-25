@@ -89,9 +89,8 @@ export interface LoadOrderOptions {
   signal?: AbortSignal;
 }
 
-/** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
- *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'` is
- *  this side's own addition. `newFormKey` is the record's FormKey after an edit of its FormID. */
+/** A refusal is an outcome, not an exception: `refusal` is the backend's own name for it, and
+ *  `'Unknown'` this side's own addition. `newFormKey` is set by an edit of the FormID. */
 export type RecordEditOutcome =
   | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };

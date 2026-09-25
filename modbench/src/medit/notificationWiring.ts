@@ -12,10 +12,9 @@ export function subscribeTreeToNotifications(
   return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
 
-// One FormKey spans its whole override chain, so matching it alone is enough — no plugin/origin
-// check. A plugin read again whole names no rows, so every panel reads again. LOAD_RECORD already
-// re-reads unconditionally, even for an already-shown FormKey. `activeRecordTracker` and `Panel`
-// are both structural — Editor's own types unnamed here.
+// One FormKey spans its whole override chain, so matching it alone is enough. A plugin read again
+// whole names no rows, so every panel reads again. `activeRecordTracker` and `Panel` are
+// structural, so Editor's own types go unnamed here.
 export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
   client: Pick<MEditClient, 'subscribe'>,
   recordPanels: Set<Panel>,
