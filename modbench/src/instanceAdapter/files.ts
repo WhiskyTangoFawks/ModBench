@@ -123,6 +123,22 @@ export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
 
+/** The folders directly in `path`, each link followed as MO2 follows it (QDir::Dirs without
+ *  NoSymLinks): a link or junction to a folder is one, a link to a file or to nothing is not. */
+export async function listFolders(path: string): Promise<string[]> {
+  const folders = await Promise.all((await listDir(path)).map(async (dirent) => {
+    if (dirent.isDirectory()) return dirent.name;
+    if (!dirent.isSymbolicLink()) return undefined;
+    try {
+      return (await stat(join(path, dirent.name))).isDirectory() ? dirent.name : undefined;
+    } catch (err) {
+      if (errnoCode(err) === 'ENOENT') return undefined;
+      throw err;
+    }
+  }));
+  return folders.filter((name): name is string => name !== undefined);
+}
+
 /** Creates `path` and every missing parent; a no-op when it is already there. */
 export async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });

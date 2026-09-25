@@ -35,7 +35,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile, writeFile, mkdir, rename, access };
 });
 
-import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparators,
@@ -1082,6 +1082,43 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(before.filter((line) => !after.includes(line))).toEqual([
       '+[NODELETE] Radfall', '-Radfall - All-In-One Survival Overhaul_separator',
     ]);
+  });
+
+  // update-load-order-file, Refusals: `mods/` cannot be listed, so nothing is written. Rival:
+  // reading a mods/ gone by write time as no folders, which drops every line.
+  it('refuses, writing nothing, when mods/ is gone by the time the sync writes', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods'), { recursive: true });
+    vi.mocked(writeFile).mockClear();
+
+    assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
+  });
+
+  it('refuses, writing nothing, when mods/ cannot be listed for another reason', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods'), { recursive: true });
+    await writeFile(join(dir, 'mods'), 'not a folder');
+    vi.mocked(writeFile).mockClear();
+
+    assertRefusal(await sync(MOD_FOLDERS), 'ENOTDIR');
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(writesToModlist()).toBe(0);
+  });
+
+  // MO2 lists a linked mod folder as a mod (modinfo.cpp, QDir::Dirs without NoSymLinks). Rival:
+  // only a real directory counts, so a symlinked mod's line is dropped and never comes back.
+  it('keeps the line of a mod whose folder is a link to a folder', async () => {
+    const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
+    await symlink(target, join(dir, 'mods', 'Linked Mod'), 'junction');
+    await writeFile(modlistPath(), `+Linked Mod\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+    const outcome = await sync(MOD_FOLDERS);
+
+    expect(outcome.applied && outcome.dropped).not.toContain('Linked Mod');
+    expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Linked Mod', enabled: true });
+    await rm(target, { recursive: true });
   });
 
   // MO2 matches a line to its folder without case (FileNameComparator); a Linux disk does not.

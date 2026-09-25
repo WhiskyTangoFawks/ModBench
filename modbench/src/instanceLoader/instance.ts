@@ -33,7 +33,7 @@ import {
 import type { DownloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
-import { get, listDir } from '../instanceAdapter/files';
+import { get, listDir, listFolders } from '../instanceAdapter/files';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -148,8 +148,7 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
 // none. Any other listing failure is a real one and fails the recompute.
 async function readModFolderNames(instanceRoot: string): Promise<string[] | undefined> {
   try {
-    const dirents = await listDir(modsDir(instanceRoot));
-    return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    return await listFolders(modsDir(instanceRoot));
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;

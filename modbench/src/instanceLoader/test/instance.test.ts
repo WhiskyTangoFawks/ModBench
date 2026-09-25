@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
@@ -198,6 +198,22 @@ describe('Instance — the value', () => {
 
     expect(instance.value.modFolders).toContain('Hand Extracted Mod');
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
+  });
+
+  // MO2 lists a linked mod folder as a mod (modinfo.cpp, QDir::Dirs without NoSymLinks). Rival: only
+  // a real directory counts, so mod sync never hears of a symlinked mod.
+  it('carries a mod folder that is a link to a folder, and not a link to a file', async () => {
+    const { root, instance } = await realInstance();
+    const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
+    await symlink(target, join(root, 'mods', 'Linked Mod'), 'junction');
+    await writeFile(join(target, 'readme.txt'), '');
+    await symlink(join(target, 'readme.txt'), join(root, 'mods', 'Linked File'));
+
+    await instance.refresh();
+
+    expect(instance.value.modFolders).toContain('Linked Mod');
+    expect(instance.value.modFolders).not.toContain('Linked File');
+    await rm(target, { recursive: true });
   });
 
   // Only a directory can be a mod folder: a stray archive or Thumbs.db dropped into mods/ must
