@@ -212,7 +212,9 @@ describe('subscribeQuestionOpen — one dialog per mod', () => {
     return { open, showDialog, answerOpen };
   }
 
-  it('shows a mod\'s later question only once its open dialog closes, over the whole release, and dispatches that answer alone', async () => {
+  // Either answer covers the whole mod, so a question the backend published before the answer
+  // landed is answered by it; mEdit publishes again at the next settle that still finds a change.
+  it('carries out the answer over a mod\'s question that arrived mid-dialog, and asks no second dialog', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const { open, showDialog, answerOpen } = heldDialogs();
     subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
@@ -220,15 +222,53 @@ describe('subscribeQuestionOpen — one dialog per mod', () => {
     client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds'] }));
     client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds', 'b.dds'] }));
     await flush();
+    await answerOpen(0, APPLY_BUTTON);
+
+    expect(open).toHaveLength(1);
+    expect(client.calls.filter((c) => c.method === 'keepAsMyEdit')).toHaveLength(1);
+  });
+
+  it('asks nothing of a question that arrived while its mod\'s answer was being carried out, and asks the next one', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    let land: () => void = () => undefined;
+    const keepAsMyEdit = vi.fn(() => new Promise<{ succeeded: true; refusalReason: null }>((resolve) => {
+      land = () => { resolve({ succeeded: true, refusalReason: null }); };
+    }));
+    const { open, showDialog, answerOpen } = heldDialogs();
+    const heldClient = {
+      keepAsMyEdit, absorbUpstreamUpdate: vi.fn(), rebaseOntoMain: vi.fn(),
+    };
+    subscribeQuestionOpen({ ...makeDeps(client, { showDialog }), client: heldClient }, client);
+
+    client.emit(pendingEvent());
+    await flush();
+    await answerOpen(0, APPLY_BUTTON);
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['b.dds'] }));
+    land();
+    await flush();
     expect(open).toHaveLength(1);
 
-    await answerOpen(0, APPLY_BUTTON);
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['c.dds'] }));
+    await flush();
     expect(open).toHaveLength(2);
-    expect(present(open[1], 'the second dialog').detail).toContain('b.dds');
-    expect(client.calls.map((c) => c.method)).not.toContain('keepAsMyEdit');
+  });
 
-    await answerOpen(1, APPLY_BUTTON);
-    expect(client.calls.filter((c) => c.method === 'keepAsMyEdit')).toHaveLength(1);
+  it('goes on to the next mod\'s question when one mod\'s dialog throws, and logs the mod that threw', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const log = vi.fn();
+    const shownFor: string[] = [];
+    const showDialog = vi.fn((message: string) => {
+      shownFor.push(message);
+      return message === 'ModA' ? Promise.reject(new Error('modal failed')) : Promise.resolve(undefined);
+    });
+    subscribeQuestionOpen(makeDeps(client, { showDialog, log }), client);
+
+    client.emit(pendingEvent({ origin: 'ModA' }));
+    client.emit(pendingEvent({ origin: 'ModB' }));
+    await flush();
+
+    expect(shownFor).toEqual(['ModA', 'ModB']);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('handling ModA failed'));
   });
 
   it('asks nothing more of a mod whose open dialog the user dismissed', async () => {

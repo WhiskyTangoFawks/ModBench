@@ -54,33 +54,29 @@ export function subscribeQuestionOpen(
   });
 }
 
-// ADR-0003, invariant 3: one dialog asks. A settle can split a release into questions, and a
-// modal cannot be updated, so a later question waits and is asked over the whole release.
+// ADR-0003, invariant 3: either answer covers the whole mod, so it covers a question arriving while
+// its mod is asked or answered; mEdit asks again at the next settle that still finds a change.
 function oneDialogAtATime(deps: ExternalChangeCoordinatorDeps, log: (msg: string) => void): (change: UnansweredExternalChange) => void {
   const waiting = new Map<string, UnansweredExternalChange>();
-  let asking = false;
+  let answering: string | undefined;
   const answerEach = async (): Promise<void> => {
     for (let next = waiting.values().next(); !next.done; next = waiting.values().next()) {
-      let change = next.value;
+      const change = next.value;
       waiting.delete(change.origin);
-      let answer = await askOne(deps, change);
-      for (let later = waiting.get(change.origin); later !== undefined; later = waiting.get(change.origin)) {
-        waiting.delete(change.origin);
-        if (answer === 'defer') break;
-        change = later;
-        answer = await askOne(deps, change);
+      answering = change.origin;
+      try {
+        await dispatchOne(deps, change.origin, await askOne(deps, change));
+      } catch (e) {
+        // ADR-0019: a dialog/dispatch failure gets a log line, never a second toast on top of
+        // whatever the dialog or the mutate call already surfaced.
+        log(`[externalChangeCoordinator] handling ${change.origin} failed: ${errorMessage(e)}`);
       }
-      await dispatchOne(deps, change.origin, answer);
     }
+    answering = undefined;
   };
   return (change) => {
+    if (change.origin === answering) return;
     waiting.set(change.origin, change);
-    if (asking) return;
-    asking = true;
-    // ADR-0019: a dialog/dispatch failure gets a log line, never a second toast on top of
-    // whatever the dialog or the mutate call already surfaced.
-    answerEach()
-      .catch((e: unknown) => { log(`[externalChangeCoordinator] handling ${change.origin} failed: ${errorMessage(e)}`); })
-      .finally(() => { asking = false; });
+    if (answering === undefined) void answerEach();
   };
 }
