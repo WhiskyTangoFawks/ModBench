@@ -709,8 +709,8 @@ export class PluginsTreeProvider
   }
 
   // ADR-0012 keys every fact by origin. mEdit files a plugin the game loads with no line under the
-  // Data folder's origin; a plugin row whose origin the client's answer names no plugin for falls
-  // back to the filename.
+  // Data folder's origin; a plugin row whose origin names no plugin in mEdit's answer falls back
+  // to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
     if (row.kind === 'implicitMaster') return DATA_DIRECTORY_ORIGIN;
     const origin = row.kind === 'plugin' ? row.origin : undefined;

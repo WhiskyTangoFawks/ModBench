@@ -10,9 +10,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>ADR-0007's compile, for one plugin: source (working tree or a named git ref) to binary. Reads
-/// the source's own bytes, never the DB index; refuses only what it structurally cannot emit, and
-/// the rest becomes diagnostics.</summary>
+/// <summary>ADR-0007's compile, for one plugin: source (working tree or a git ref) to binary. Reads the
+/// source's own bytes, never the index; refuses only what it cannot emit, and the rest becomes
+/// diagnostics.</summary>
 public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
@@ -103,8 +103,8 @@ public sealed class PluginCompileService(
             .ToList();
 
         // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
-        // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
-        // until Commit(), so the refusal wrote nothing and leaves no mark.
+        // caught, and any other throw leaves the mark. PluginWriter touches the plugin only at
+        // Commit(), so that refusal wrote nothing.
         string? writeRefusal = null;
         await CompileJournal.RunAsync(modFolder, plugin.Name, async () =>
         {

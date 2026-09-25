@@ -136,7 +136,7 @@ export function registerCompileCommand(
   );
 }
 
-/** compile's Argument: the plugins it sends, and those refused before it could, each named. */
+// compile's Argument: the plugins it sends, and those refused before it could, each named.
 interface CompileArgument {
   addressed: PluginAddress[];
   unaddressed: ItemRefusal<TrackedRow>[];
@@ -195,9 +195,9 @@ async function confirmedFromMain(ask: AskQuestion, plugins: readonly PluginAddre
   return choice === accept;
 }
 
-/** The compile itself, under the view's progress bar, reported once when it lands. Nothing re-reads
- *  `GET /plugins` after it: a compiled binary changes only bytes on disk, which the index's own
- *  mirror watch re-reads. */
+// The compile itself, under the view's progress bar, reported once when it lands. Nothing re-reads
+// `GET /plugins` after it: a compiled binary changes only bytes on disk, which the index's own
+// mirror watch re-reads.
 async function compilePlugins(deps: CompileDeps, argument: CompileArgument, source: CompileSource): Promise<void> {
   const { addressed: plugins, unaddressed } = argument;
   const total = plugins.length + unaddressed.length;

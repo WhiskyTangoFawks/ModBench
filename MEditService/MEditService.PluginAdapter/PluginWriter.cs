@@ -5,8 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.PluginAdapter;
 
 /// <summary>Replaces a plugin binary: sibling temp file, commit by rename. It keeps no copy of the
-/// binary it replaces: a tracked plugin's source is the truth, and git keeps every state of it
-/// (compile-plugin). Mechanism only, no edit semantics.</summary>
+/// binary it replaces, since git keeps every state of the source (compile-plugin). Mechanism only.</summary>
 public static class PluginWriter
 {
     // loadOrder orders the written master list explicitly, so the file matches what xEdit shows,

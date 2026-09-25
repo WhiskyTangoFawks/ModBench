@@ -24,9 +24,9 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
     }
 
-    // The crash is injected at the real door a production caller uses. The mod folder (not .git, which
-    // keeps separate permissions) is made read-only so PluginWriter's temp write throws partway
-    // through, and writable again before CompileFixture.Dispose() cleans up.
+    // The crash is injected at the real door a production caller uses: the mod folder (not .git, which
+    // keeps separate permissions) is read-only so PluginWriter's temp write throws, and writable
+    // again before CompileFixture.Dispose().
     [Fact]
     public async Task Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {

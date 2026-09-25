@@ -2,18 +2,17 @@ using System.Text.Json;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>compile-plugin, steps 5 and 7: the mark that a compile has begun, so an interrupted one
-/// is never read as another program's change. A marker file inside <c>.git</c>, one per repo, naming
-/// every plugin of the mod whose compile began and has not landed since.</summary>
+/// <summary>compile-plugin, steps 5 and 7: the mark that a compile began, so an interrupted one is
+/// never read as another program's change. One file in <c>.git</c> names each plugin not landed since.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
 
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
-    /// <summary>Marks <paramref name="plugin"/> before <paramref name="compile"/> runs, and clears it
-    /// once it lands. <paramref name="compile"/> answers false for a refusal that wrote nothing, which
-    /// puts the mark back as it was; a throw leaves the plugin marked.</summary>
+    /// <summary>Marks <paramref name="plugin"/> while <paramref name="compile"/> runs, and clears it
+    /// once it lands. False from it is a refusal that wrote nothing, which puts the mark back as it
+    /// was; a throw leaves the plugin marked.</summary>
     public static async Task<bool> RunAsync(string modFolder, string plugin, Func<Task<bool>> compile)
     {
         var earlier = UnfinishedBatch(modFolder);
@@ -38,9 +37,9 @@ public static class CompileJournal
         else WriteMarker(modFolder, state);
     }
 
-    /// <summary>The marker's content, or null when no plugin it names is unlanded: a marker means the
-    /// disk/parked-ref mismatch is Modbench's own interrupted compile, not an external change. A marker
-    /// whose every plugin landed is one a crash kept from being deleted, and means nothing.</summary>
+    /// <summary>The marker's content, or null when every plugin it names landed, as when a crash kept it
+    /// from being deleted. A marker means the bytes differ from the parked ref because Modbench's own
+    /// compile was interrupted.</summary>
     public static CompileJournalState? UnfinishedBatch(string modFolder)
     {
         var path = MarkerPath(modFolder);
