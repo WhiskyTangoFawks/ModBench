@@ -34,7 +34,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private IRecordIndex? _index;
     // Dropped with the scope it was materialized against (see DisposeCurrent): a filter names
     // tables a freshly opened store has no _filter for.
-    private string? _filterSql;
+    private (string Sql, string Source)? _filter;
     // The reconcile's own progress. Guarded by _lock like _heldPlugins/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
@@ -947,14 +947,18 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
-    public string? FilterSql { get { lock (_lock) return _filterSql; } }
+    public string? FilterSql => ActiveFilter?.Sql;
+
+    /// <summary>The filter in force and the source its SQL came from, read together so a
+    /// concurrent set never pairs one filter's SQL with another's source.</summary>
+    public (string Sql, string Source)? ActiveFilter { get { lock (_lock) return _filter; } }
 
     /// <summary>Throws <see cref="ArgumentException"/> if the SQL does not return a form_key
     /// column.</summary>
-    public void SetFilter(string sql) => ApplyFilter(sql);
+    public void SetFilter(string sql, string source) => ApplyFilter((sql, source));
     public void ClearFilter() => ApplyFilter(null);
 
-    private void ApplyFilter(string? sql)
+    private void ApplyFilter((string Sql, string Source)? filter)
     {
         // Materializing _filter is an index write, and the filter box is live while an edit runs, so
         // racing an in-flight edit is the ordinary case. Gated at the public doors' one shared
@@ -968,8 +972,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         lock (_lock)
         {
             var (_, index) = RequireScopeCore();
-            index.SetFilter(sql);
-            _filterSql = sql;
+            index.SetFilter(filter?.Sql);
+            _filter = filter;
         }
     }
 
@@ -979,10 +983,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     {
         lock (_lock)
         {
-            if (_filterSql is not { } sql || _index is null) return;
+            if (_filter is not { } filter || _index is null) return;
             try
             {
-                _index.SetFilter(sql);
+                _index.SetFilter(filter.Sql);
             }
             catch (System.Data.Common.DbException ex)
             {
@@ -1060,7 +1064,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         _heldPlugins = null;
         _index?.Dispose();
         _index = null;
-        _filterSql = null;
+        _filter = null;
         _indexed.Clear();
         _failedHashes.Clear();
         _conflictsComputed = false;
