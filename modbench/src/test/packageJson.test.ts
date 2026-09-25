@@ -630,8 +630,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
-      ['modbench.saveAndCompile', '4_sourceControl'],
-      ['modbench.pluginListTree.compileAtMain', '4_sourceControl'],
+      ['modbench.plugin.compile', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
   });
@@ -864,7 +863,7 @@ describe('package.json field gestures\' palette entries', () => {
 describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
-    expect(webviewMenu.filter((e) => e.command === 'modbench.saveAndCompile').map((e) => e.when)).toEqual([
+    expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
       String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && compilable`,
     ]);
     expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
@@ -875,7 +874,7 @@ describe('package.json compile on the record tab', () => {
 describe('package.json compile\'s palette entry', () => {
   it('is in the palette while any plugin compiles', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === 'modbench.saveAndCompile');
+      .filter((e) => e.command === 'modbench.plugin.compile');
     expect(entries.map((e) => e.when)).toEqual([`${IN_AN_INSTANCE} && modbench.plugin.anyCompilable`]);
   });
 });
@@ -1217,10 +1216,6 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     outOfPalette: ['modbench.openHeader'],
   },
   {
-    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
-    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
-  },
-  {
     gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
     outOfPalette: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
   },
@@ -1266,30 +1261,21 @@ describe('package.json registers every command under its catalog Command ID', ()
 
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
-function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, title: string): void {
+function expectTitleNamesVerbAndObject(id: string, title: string): void {
   const [, object = '', verb = ''] = present(
-    /^modbench\.(\w+)\.(\w+)$/.exec(catalogId) ?? undefined, `${catalogId} as modbench.<object>.<verb>`);
+    /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
   const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
   const objectWords = wordsOf(object);
   const noun = present(objectWords.pop(), `the noun of ${object}`);
-  expect(titleWords, `the title of ${registeredId} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
-  expect(titleWords, `the title of ${registeredId} names the object`).toEqual(expect.arrayContaining(objectWords));
-  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${registeredId} names the ${noun}`).toBe(true);
+  expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
+  expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
+  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
 }
 
 describe('package.json palette titles are the verb and the object', () => {
   const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command));
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
-    expectTitleNamesVerbAndObject(id, id, title);
+    expectTitleNamesVerbAndObject(id, title);
   });
-
-  const compile = present(LEGACY_GESTURES.find((g) => g.gesture === 'compile'), 'the compile legacy gesture');
-  const legacyCompile = pkg.contributes.commands.filter((c) => compile.ids.includes(c.command));
-
-  it.each(legacyCompile.map((c) => [c.command, c.title]))(
-    '%s, still under its legacy ID, is titled by the catalog\'s compile: "%s"', (id, title) => {
-      expectTitleNamesVerbAndObject('modbench.plugin.compile', id, title);
-      expect(title.toLowerCase().split(/\s+/)[0], `the title of ${id} leads with the verb`).toBe('compile');
-    });
 });

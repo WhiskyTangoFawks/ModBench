@@ -43,7 +43,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var scratch = new TrackedScratch(fileName);
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
 
-        await new PluginWriter(NullLogger<PluginWriter>.Instance).SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
+        await PluginWriter.SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
 
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }

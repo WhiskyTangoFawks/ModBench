@@ -25,19 +25,19 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     }
 
     // The crash is injected at the real door a production caller uses. The mod folder (not .git, which
-    // keeps separate permissions) is made unwritable so PluginWriter's backup-then-write sequence
-    // throws partway through.
+    // keeps separate permissions) is made read-only so PluginWriter's temp write throws partway
+    // through, and writable again before CompileFixture.Dispose() cleans up.
     [Fact]
     public async Task Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
-        FileModes.Set(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
+        FileModes.Set(_mod.ModFolder, "500");
         try
         {
             await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree()));
         }
         finally
         {
-            FileModes.Set(_mod.ModFolder, "700"); // restored before CompileFixture.Dispose() needs to clean up
+            FileModes.Set(_mod.ModFolder, "700");
         }
 
         var recovery = CompileJournal.UnfinishedBatch(_mod.ModFolder);

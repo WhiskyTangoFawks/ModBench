@@ -1,5 +1,4 @@
 using MEditService.PluginAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -22,14 +21,13 @@ public sealed class BinaryRoundTripGateTests
             File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
             var original = await File.ReadAllBytesAsync(pluginPath);
 
-            var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
 
-            await ProductionSave(pluginPath, writer);
+            await ProductionSave(pluginPath);
             var write1 = await File.ReadAllBytesAsync(pluginPath);
 
             // Reloads exactly the bytes write1 produced (SaveAsync re-imports from pluginPath on
             // disk each call) and writes again.
-            await ProductionSave(pluginPath, writer);
+            await ProductionSave(pluginPath);
             var write2 = await File.ReadAllBytesAsync(pluginPath);
 
             Assert.True(original.SequenceEqual(write1),
@@ -45,14 +43,14 @@ public sealed class BinaryRoundTripGateTests
 
     // A fresh overlay and link cache built from the plugin's current on-disk state each call, not
     // one held across saves.
-    private static async Task ProductionSave(string pluginPath, PluginWriter writer)
+    private static async Task ProductionSave(string pluginPath)
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), pluginPath), GameRelease.Fallout4);
         var linkCache = TypedLinkCacheFactory.Create([overlay], GameRelease.Fallout4);
         string[] loadOrder = [CutDownPluginFixture.PluginFileName, "Fallout4.esm"];
 
-        await writer.SaveAsync(pluginPath, GameRelease.Fallout4, loadOrder);
+        await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4, loadOrder);
     }
 
     [Fact]

@@ -73,7 +73,8 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CompilePluginHandler(
             sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<PluginCompileService>()));
+            sp.GetRequiredService<PluginCompileService>(),
+            sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new AbsorbExternalChangeHandler(
             sp.GetRequiredService<IPluginAdapter>(),

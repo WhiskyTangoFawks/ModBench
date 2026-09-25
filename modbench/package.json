@@ -397,13 +397,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.saveAndCompile",
+        "command": "modbench.plugin.compile",
         "title": "Compile Plugin",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.pluginListTree.compileAtMain",
-        "title": "Compile Plugin from main…",
         "category": "Modbench"
       },
       {
@@ -530,11 +525,7 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod"
         },
         {
-          "command": "modbench.pluginListTree.compileAtMain",
-          "when": "false"
-        },
-        {
-          "command": "modbench.saveAndCompile",
+          "command": "modbench.plugin.compile",
           "when": "modbench.folder == instance && modbench.plugin.anyCompilable"
         },
         {
@@ -891,14 +882,9 @@
           "group": "4_sourceControl@1"
         },
         {
-          "command": "modbench.saveAndCompile",
+          "command": "modbench.plugin.compile",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
           "group": "4_sourceControl@2"
-        },
-        {
-          "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
-          "group": "4_sourceControl@3"
         },
         {
           "command": "modbench.record.copyValue",
@@ -968,7 +954,7 @@
           "group": "modbench@4"
         },
         {
-          "command": "modbench.saveAndCompile",
+          "command": "modbench.plugin.compile",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
           "group": "modbench@10"
         },

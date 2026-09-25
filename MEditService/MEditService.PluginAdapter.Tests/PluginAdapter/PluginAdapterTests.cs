@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -98,8 +97,7 @@ public sealed class PluginAdapterTests
             Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
         }
 
-        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
-        await writer.SaveAsync(patchPath, GameRelease.Fallout4, reversed);
+        await PluginWriter.SaveAsync(patchPath, GameRelease.Fallout4, reversed);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4);

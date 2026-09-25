@@ -17,7 +17,7 @@ public sealed class WriteRouteSeamTests
         ("POST /records/{formKey}/copy-as-new-record", "CopyRecordAsNewRecord"),
         ("POST /plugins/create", "CreatePlugin"),
         ("POST /plugins/track", "Track"),
-        ("POST /plugins/{plugin}/compile", "Compile"),
+        ("POST /plugins/compile", "Compile"),
         ("POST /plugins/{plugin}/records", "CreateRecord"),
         ("POST /plugins/external-change/absorb", "AbsorbExternalChange"),
         ("POST /plugins/external-change/keep", "KeepExternalChange"),

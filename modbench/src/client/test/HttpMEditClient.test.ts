@@ -258,6 +258,48 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
   });
 });
 
+describe('HttpMEditClient — compiling plugins answers per plugin', () => {
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModB' };
+  const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
+
+  it('sends the whole selection from the working tree as one call, and reads each compiled plugin and each refusal with its message', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
+      refused: [{ plugin: second, refusal: 'None', message: 'Second.esp is not tracked, so there is no source to compile.' }],
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.compile([first, second], 'workingTree');
+
+    expect(outcome).toEqual({
+      landed: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
+      refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
+    });
+    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
+    expect(await request?.json()).toEqual({ plugins: [first, second], ref: null });
+  });
+
+  it('names main as the ref when the source is main', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: [], refused: [] })));
+    const client = makeClient(fetch);
+
+    await client.compile([first], 'main');
+
+    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
+    expect(await request?.json()).toEqual({ plugins: [first], ref: 'main' });
+  });
+
+  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, 'No load order has been received.')));
+    const client = makeClient(fetch);
+
+    const result = await client.compile([first, second], 'workingTree');
+
+    expect(result).toEqual({ refused: true, message: 'Could not compile 2 plugins — No load order has been received.' });
+  });
+});
+
 describe('HttpMEditClient — an applied edit', () => {
   it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {

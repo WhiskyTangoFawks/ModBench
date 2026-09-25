@@ -75,15 +75,15 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // No "confirmed" flag: the compile-at-main modal is extension-side UX that must not leak
-        // through the wire. Refusal is a typed 200 (CompileResult.Succeeded == false), never an
-        // HTTP error.
-        app.MapPost("/plugins/{plugin}/compile", Compile)
+        // No "confirmed" flag: compile from main's confirmation is the extension's, and never reaches
+        // the wire. Every refusal is a plugin's own item of the answer, never an HTTP error.
+        app.MapPost("/plugins/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)
-            .Produces<CompileResult>()
+            .Produces<CompileResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         // Create-record — the plugin hosts the new group, so it owns the route the way Compile
         // does; the FormKey doesn't exist yet, which is exactly why this isn't under /records/{formKey}.
@@ -227,27 +227,32 @@ public static class PluginEndpoints
         }
     }
 
-    // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
-    // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
-    internal static async Task<IResult> Compile(string plugin, CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
+    // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012), and the
+    // source. req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree.
+    internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
+        var plugins = req.Plugins ?? [];
+        if (plugins.Count == 0)
+            return Results.Problem("At least one plugin is required.", statusCode: 400);
+        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
+            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
 
-        // The write touches a file inside a git working tree Modbench does not own exclusively
-        // (root CLAUDE.md), so the I/O failure is shaped here rather than escaping as a bodyless 500.
+        CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
         try
         {
-            CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = await compileHandler.CompileAsync(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), source);
-            return Results.Ok(result);
+            var result = await compileHandler.CompileAsync(plugins, source);
+            foreach (var refused in result.Refused)
+            {
+                logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Message}",
+                    refused.Plugin.Name, refused.Plugin.Origin, refused.Message);
+            }
+            return Results.Ok(new CompileResponse(result.Landed, result.Refused));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "Could not compile {Plugin}", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not compile {decoded}: {ex.Message}");
+            logger.LogError(ex, "No loadOrder when compiling {Count} plugin(s)", plugins.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -369,9 +374,11 @@ public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 public record TrackResponse(
     IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
 
-// Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
-// means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
-public record CompileRequest(string Origin, string? Ref);
+// Ref null means CompileSource.WorkingTree; a name (e.g. "main") means CompileSource.AtRef.
+public record CompileRequest(IReadOnlyList<PluginAddress> Plugins, string? Ref);
+
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);
 
 // Absorb / Keep are origin-scoped — the mod, not one plugin in it, is
 // the unit of a baseline.

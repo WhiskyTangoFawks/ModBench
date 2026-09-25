@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
+import {
+  isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type CompileSource, type PluginAddress,
+} from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveCompileTarget, type ResolveCompileTargetDeps } from './compileTarget';
-import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
@@ -10,7 +10,9 @@ import {
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { compilableSelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
+import {
+  compilableSelected, pluginsGestureEntry, pluralArgument, registerPluginsGesture, selectionArgument, type GestureEntry,
+} from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -25,10 +27,6 @@ export interface PluginsViewProgress {
   /** `undefined` gives the line back to whatever else had something to say. */
   say: (message: string | undefined) => void;
 }
-
-// Everything compile and compile at ref call: resolving an origin and a record's owner,
-// compiling, and (on an ESL contradiction) editing the header to retry.
-type CompileClient = Pick<MEditClient, 'getPlugins' | 'compile' | 'editRecord'>;
 
 // ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
 // mod cannot be resolved has none, and none is invented for it.
@@ -99,88 +97,156 @@ export function registerTrackCommand(
   });
 }
 
-// A plugin row or a column header names its plugin. The palette names none, and an extension cannot
-// tell whether the Plugins view has focus, so it always asks, a selected compilable plugin first.
-export function registerSaveAndCompileCommand(
-  client: CompileClient,
-  outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
-  diagnostics: vscode.DiagnosticCollection,
-  originFiles: OriginFilesOf,
+/** What compile needs: the plugins' origins and the compile itself, the view's progress bar, where
+ *  the diagnostics go, and how the user is told and asked. */
+export interface CompileDeps {
+  client: Pick<MEditClient, 'getPlugins' | 'compile'>;
+  progress: PluginsViewProgress;
+  reporter: Reporter;
+  ask: AskQuestion;
+  diagnostics: vscode.DiagnosticCollection;
+  originFiles: OriginFilesOf;
+  log: (message: string) => void;
+}
+
+/** compile's Option, as a caller that supplies it passes it after the Argument. */
+export interface CompileOptions {
+  source: CompileSource;
+}
+
+function sourceOf(option: unknown): CompileSource {
+  return typeof option === 'object' && option !== null && Reflect.get(option, 'source') === 'main' ? 'main' : 'workingTree';
+}
+
+/** commands.md, `compile`: the plugins, the selection included, from a Plugins row, a record tab's
+ *  column header, or the palette's pick; the source is the working tree unless the caller names
+ *  `main`. */
+export function registerCompileCommand(
+  deps: CompileDeps, viewSelection: () => readonly PluginsTreeNode[],
+): vscode.Disposable {
+  return vscode.commands.registerCommand(
+    'modbench.plugin.compile',
+    async (clicked?: unknown, selected?: readonly PluginsTreeNode[], option?: unknown) => {
+      const source = sourceOf(option);
+      const argument = await argumentOf(deps, clicked, selected, viewSelection);
+      if (argument === undefined) return;
+      if (source === 'main' && argument.addressed.length > 0 && !await confirmedFromMain(deps.ask, argument.addressed)) return;
+      await compilePlugins(deps, argument, source);
+    },
+  );
+}
+
+/** compile's Argument: the plugins it sends, and those refused before it could, each named. */
+export interface CompileArgument {
+  addressed: PluginAddress[];
+  unaddressed: ItemRefusal<TrackedRow>[];
+}
+
+async function argumentOf(
+  deps: CompileDeps, clicked: unknown, selected: readonly PluginsTreeNode[] | undefined,
   viewSelection: () => readonly PluginsTreeNode[],
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.saveAndCompile', async (clicked?: unknown) => {
-    const header = columnHeaderOf(clicked);
-    if (header) {
-      await compileAndReport(client, diagnostics, originFiles, reporter, ask, header, undefined);
-      return;
-    }
-    const target = await resolveCompileTarget(isPluginRow(clicked) ? clicked.plugin.name : undefined, {
-      ...compileTargetDeps(client, outputChannel, reporter),
-      pickPlugin: async () => {
-        // plugins.md, Compile: the pick lists the plugins compile applies to, tracked and editable.
-        const selected = compilableSelected(viewSelection());
-        const isSelected = (p: { name: string; origin?: string | null }) =>
-          selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
-        const plugins = (await client.getPlugins()).filter((p) => p.isTracked && !p.isImmutable)
-          .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
-        const choice = await vscode.window.showQuickPick(
-          plugins.map((p) => ({ label: p.name, description: p.origin })),
-          { placeHolder: 'Compile which plugin?' },
-        );
-        if (!choice) return undefined;
-        if (!choice.description) {
-          reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
-          return undefined;
-        }
-        return { name: choice.label, origin: choice.description };
-      },
-    });
-    if (!target) return;
+): Promise<CompileArgument | undefined> {
+  const header = columnHeaderOf(clicked);
+  if (header) return { addressed: [header], unaddressed: [] };
+  const entry = pluginsGestureEntry(clicked, selected, viewSelection);
+  return entry.clicked === undefined ? pickCompilable(deps, entry) : addressed(deps, entry);
+}
 
-    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
+// ADR-0012: a row's origin, when it has none, is resolved; a plugin whose mod cannot be resolved is
+// refused by name, and none is invented for it.
+async function addressed(deps: CompileDeps, entry: GestureEntry): Promise<CompileArgument> {
+  const argument: CompileArgument = { addressed: [], unaddressed: [] };
+  for (const node of selectionArgument(entry, 'plugin')) {
+    const name = node.plugin.name;
+    const origin = node.origin ?? await resolveOrigin(deps.client, name, deps.log);
+    if (origin) argument.addressed.push({ name, origin });
+    else argument.unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
+  }
+  return argument;
+}
+
+// plugins.md, Compile, story 5: from the palette, a pick of the tracked, editable plugins. An
+// extension cannot tell whether the Plugins view has focus, so it always asks, a selected
+// compilable plugin first.
+async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<CompileArgument | undefined> {
+  const selected = compilableSelected(entry.selection);
+  const isSelected = (p: PluginAddress) => selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
+  const compilable = (await deps.client.getPlugins())
+    .filter((p) => p.isTracked && !p.isImmutable)
+    .flatMap((p) => (p.origin ? [{ name: p.name, origin: p.origin }] : []))
+    .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
+  const choice = await vscode.window.showQuickPick(
+    compilable.map((p) => ({ label: p.name, description: p.origin })),
+    { placeHolder: 'Compile which plugin?' },
+  );
+  return choice && { addressed: [{ name: choice.label, origin: choice.description }], unaddressed: [] };
+}
+
+// plugins.md, Compile, story 2: compile from main confirms, and Esc compiles nothing.
+async function confirmedFromMain(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
+  const [only, ...more] = plugins;
+  const named = only !== undefined && more.length === 0 ? `"${only.name}"` : `${plugins.length} plugins`;
+  const accept = 'Compile from main';
+  const choice = await ask(`Compile ${named} from main?`, {
+    modal: true,
+    detail: `${more.length === 0 ? 'Its binary is' : 'Their binaries are'} written from what main holds. ` +
+      'Your edit branch and your working tree stay as they are.',
+  }, accept);
+  return choice === accept;
+}
+
+/** The compile itself, under the view's progress bar, reported once when it lands. Nothing re-reads
+ *  `GET /plugins` after it: a compiled binary changes only bytes on disk, which the index's own
+ *  mirror watch re-reads. */
+export async function compilePlugins(deps: CompileDeps, argument: CompileArgument, source: CompileSource): Promise<void> {
+  const { addressed: plugins, unaddressed } = argument;
+  const total = plugins.length + unaddressed.length;
+  if (plugins.length === 0) {
+    if (total > 0) reportCompiled(deps.reporter, { landed: [], refused: [] }, unaddressed, total, source);
+    return;
+  }
+  await deps.progress.while(async () => {
+    const outcome = await deps.client.compile(plugins, source);
+    if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
+    publishLanded(deps, outcome);
+    reportCompiled(deps.reporter, outcome, unaddressed, total, source);
   });
 }
 
-function compileTargetDeps(
-  client: CompileClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-): Omit<ResolveCompileTargetDeps, 'pickPlugin'> {
-  return {
-    resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-    onError: (message) => reporter.report('error', message),
-  };
+// One mod's diagnostics replace what that mod's folder held, so every plugin of the mod that
+// compiled is published together.
+function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {
+  const byOrigin = new Map<string, CompileDiagnostic[]>();
+  for (const compiled of outcome.landed) {
+    byOrigin.set(compiled.plugin.origin, [...(byOrigin.get(compiled.plugin.origin) ?? []), ...compiled.diagnostics]);
+  }
+  for (const [origin, diagnostics] of byOrigin) publishCompileDiagnostics(deps.diagnostics, deps.originFiles(origin), diagnostics);
 }
 
-// One confirmation names the ref literally, never "pristine" — there is no stored mode
-// (ADR-0007). Tree-row only: naming a ref with no plugin in hand isn't worth a QuickPick.
-export function registerCompileAtRefCommand(
-  client: CompileClient,
-  outputChannel: vscode.LogOutputChannel, reporter: Reporter, ask: AskQuestion,
-  diagnostics: vscode.DiagnosticCollection,
-  originFiles: OriginFilesOf,
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
-    if (node?.kind !== 'plugin') return;
-    const target = await resolveCompileTarget(node.plugin.name, {
-      resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-      onError: (message) => reporter.report('error', message),
-      pickPlugin: () => Promise.resolve(undefined),
-    });
-    if (!target) return;
+function diagnosticsWords(count: number): string {
+  return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
+}
 
-    const confirmed = await ask(
-      `Compile "${target.name}" at ref "main"?`,
-      {
-        modal: true,
-        detail: `This overwrites the binary with what "main" holds, without touching your edit branch. ` +
-          `Your working-tree changes stay exactly where they are.`,
-      },
-      'Compile at main',
-    );
-    if (confirmed !== 'Compile at main') return;
-
-    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, 'main');
-  });
+// plugins.md, Compile, story 3, and Reporting: one notification when it lands, naming each refused
+// plugin and why, and pointing at the Problems panel when it left diagnostics.
+function reportCompiled(
+  reporter: Reporter, outcome: CompileOutcome, unaddressed: readonly ItemRefusal<TrackedRow>[], total: number,
+  source: CompileSource,
+): void {
+  const diagnostics = outcome.landed.reduce((sum, compiled) => sum + compiled.diagnostics.length, 0);
+  const refused: ItemRefusal<TrackedRow>[] = [...unaddressed, ...outcome.refused];
+  if (refused.length > 0) {
+    const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
+    reporter.selectionOutcome(
+      `Could not compile ${refused.length} of ${total} plugins.${rest}`,
+      { landed: outcome.landed.map((compiled) => compiled.plugin), refused }, rowName);
+    return;
+  }
+  const [only, ...more] = outcome.landed;
+  if (only === undefined) return;
+  const what = more.length === 0 ? `"${only.plugin.name}"` : `${outcome.landed.length} plugins`;
+  const from = source === 'main' ? ' from main' : '';
+  reporter.landed(diagnostics > 0 ? `Compiled ${what}${from} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}${from}.`);
 }
 
 // A join, not an Editing-only gesture (its argument is Mod Management's own row type), so it
@@ -195,41 +261,11 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   });
 }
 
-/** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
- *  disk, which the index's own mirror watch re-reads. */
-export async function compileAndReport(
-  client: CompileClient, diagnostics: vscode.DiagnosticCollection, originFiles: OriginFilesOf,
-  reporter: Reporter, ask: AskQuestion,
-  target: { name: string; origin: string }, atRef: string | undefined,
-): Promise<void> {
-  const result = await client.compile(target.name, target.origin, atRef);
-  if (!result) return;
-  if (isRefused(result)) { reporter.report('error', result.message); return; }
-
-  publishCompileDiagnostics(diagnostics, originFiles(target.origin), result);
-
-  const refSuffix = atRef ? ` at "${atRef}"` : '';
-  if (!result.succeeded) {
-    if (result.eslContradiction
-        && await offerEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client, ask, reporter)) {
-      await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, atRef);
-      return;
-    }
-    reporter.report('error', `Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
-    return;
-  }
-  reporter.landed(
-    result.diagnostics.length > 0
-      ? `Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
-      : `Compiled "${target.name}"${refSuffix}.`,
-  );
-}
-
-/** Replaces whatever this plugin's source files held from the last compile — never additive, or
+/** Replaces whatever this mod's source files held from the last compile — never additive, or
  *  a fixed diagnostic would survive forever. `files` is the Instance value's answer for the
  *  origin: `overwrite` and `Data` are not under `mods/` (ADR-0012). */
 export function publishCompileDiagnostics(
-  collection: vscode.DiagnosticCollection, files: OriginFiles | undefined, result: CompileResult,
+  collection: vscode.DiagnosticCollection, files: OriginFiles | undefined, diagnostics: readonly CompileDiagnostic[],
 ): void {
   if (files === undefined) return;
 
@@ -240,7 +276,7 @@ export function publishCompileDiagnostics(
   }
 
   const byUri = new Map<string, vscode.Diagnostic[]>();
-  for (const d of result.diagnostics) {
+  for (const d of diagnostics) {
     const fsPath = files.file(d.sourceRelativePath);
     const list = byUri.get(fsPath) ?? [];
     list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
@@ -302,10 +338,6 @@ export function refreshSourceControlFor(
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);
   });
-}
-
-function isPluginRow(value: unknown): value is Extract<PluginListNode, { kind: 'plugin' }> {
-  return typeof value === 'object' && value !== null && Reflect.get(value, 'kind') === 'plugin';
 }
 
 // A record tab's column header names its plugin and origin (editor.md, Menus and keys).

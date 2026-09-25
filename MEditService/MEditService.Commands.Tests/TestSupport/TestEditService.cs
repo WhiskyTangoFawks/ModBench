@@ -28,7 +28,6 @@ internal static class TestEditService
             .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddSingleton<TrackService>()
-            .AddSingleton<PluginWriter>()
             .AddSingleton<PluginCompileService>()
             .AddCommandHandlers()
             .BuildServiceProvider();

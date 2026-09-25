@@ -82,10 +82,9 @@ public sealed class OverriddenAndUnlistedRefusalTests
         mod.RaiseExternalChangeOn(mod.OverriddenPlugin, "unanswered");
         var before = mod.PluginBytes(mod.OverriddenPlugin);
 
-        var result = await mod.CompileHandler.CompileAsync(mod.OverriddenPlugin, new CompileSource.WorkingTree());
+        var result = await mod.CompileHandler.CompileAsync([mod.OverriddenPlugin], new CompileSource.WorkingTree());
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, mod.PluginBytes(mod.OverriddenPlugin));
     }
 

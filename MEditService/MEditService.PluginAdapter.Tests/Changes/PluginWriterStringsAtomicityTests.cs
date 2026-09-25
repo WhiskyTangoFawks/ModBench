@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -74,9 +73,8 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     {
         var originalFiles = ReadStringsFiles();
 
-        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
         var modifiedMod = BuildModifiedMod();
-        await writer.SaveFromModAsync(modifiedMod, _pluginPath);
+        await PluginWriter.SaveFromModAsync(modifiedMod, _pluginPath);
 
         // Commit() must have moved the new content into the real Strings/ files — same file names,
         // different bytes (a second save of the same plugin: this is the overwrite path, not a

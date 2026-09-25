@@ -57,6 +57,58 @@ public sealed class CompileJournalTests : IDisposable
     }
 
     [Fact]
+    public async Task RunBatch_OfAnotherPluginOfTheMod_KeepsAnInterruptedPluginMarkedUnlanded()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => throw new InvalidOperationException("simulated crash")));
+
+        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => Task.FromResult(true));
+
+        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
+        Assert.NotNull(recovery);
+        Assert.Equal(["B.esp"], recovery.Unlanded);
+    }
+
+    [Fact]
+    public async Task RunBatch_OfTheInterruptedPlugin_ClearsTheMarker_OnceItLands()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => throw new InvalidOperationException("simulated crash")));
+        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => Task.FromResult(true));
+
+        await CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => Task.FromResult(true));
+
+        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
+    }
+
+    [Fact]
+    public async Task RunBatch_OfAPluginThatLandedBefore_MarksItUnlandedAgain_WhenThisCompileIsInterrupted()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp"], plugin =>
+                plugin == "B.esp" ? throw new InvalidOperationException("simulated crash") : Task.FromResult(true)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => throw new InvalidOperationException("simulated crash")));
+
+        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
+        Assert.NotNull(recovery);
+        Assert.Equal(["A.esp", "B.esp"], recovery.Unlanded);
+    }
+
+    // No public door leaves this marker: only a crash between the last rewrite and the delete does,
+    // so the marker is laid down as that crash leaves it.
+    [Fact]
+    public void UnfinishedBatch_OfAMarkerWhoseEveryPluginLanded_IsNone()
+    {
+        File.WriteAllText(
+            Path.Combine(_modFolder, ".git", "MEDIT_COMPILE_JOURNAL"),
+            """{"plugins":["A.esp","B.esp"],"landed":["A.esp","B.esp"]}""");
+
+        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
+    }
+
+    [Fact]
     public async Task RunBatch_OfOnePlugin_BehavesTheSameAsAnyOtherBatch()
     {
         await CompileJournal.RunBatchAsync(_modFolder, ["Solo.esp"], _ => Task.FromResult(true));

@@ -78,9 +78,6 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
-        // The .bak survives a refused compile on purpose: nothing says a backup taken for a
-        // write that never happened is safe to delete.
-        Assert.Single(Directory.GetFiles(_modFolder, "*.bak.esp"));
     }
 
     public void Dispose()

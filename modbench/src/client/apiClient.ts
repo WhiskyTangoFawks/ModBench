@@ -21,9 +21,9 @@ export type MasterIssue = Schemas['MasterIssue'];
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
-/** Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
- *  successful (HTTP 200) answer (`succeeded: false` with a `refusalReason`), never an HTTP error. */
-export type CompileResult = Schemas['CompileResult'];
+/** A plugin compile wrote — `POST /plugins/compile` — with the masters its content needs and the
+ *  diagnostics the reference check left. */
+export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
 /** One mod's queued question. `plugins`/`trackedFiles` can each be empty; `metaChanged` only
@@ -56,8 +56,7 @@ export interface CrashRepairOffer {
   reason: CrashRepairReason;
 }
 
-/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
- *  same posture {@link CompileResult} uses. */
+/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every

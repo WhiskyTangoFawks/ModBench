@@ -4,7 +4,7 @@ namespace MEditService.SourceAdapter;
 
 /// <summary>Journals a compile batch so a crash cannot leave it silently half-done; a single plugin's
 /// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch is one
-/// mod folder.</summary>
+/// mod folder — naming every plugin not landed since a compile of it began, whichever batch began it.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
@@ -12,14 +12,18 @@ public static class CompileJournal
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
     /// <summary>The marker is written before the first compile, rewritten after each landed plugin, and
-    /// deleted only once every plugin has landed. A refusal stops the batch and leaves the rest
-    /// unlanded — deliberately indistinguishable from a crash.</summary>
+    /// deleted only once every plugin it names has landed, an earlier batch's unlanded ones included. A
+    /// refusal stops the batch and leaves the rest unlanded — deliberately indistinguishable from a
+    /// crash.</summary>
     public static async Task<IReadOnlyList<string>> RunBatchAsync(
         string modFolder, IReadOnlyList<string> plugins, Func<string, Task<bool>> compileOne)
     {
         if (plugins.Count == 0) return [];
 
-        WriteMarker(modFolder, plugins, landed: []);
+        var earlier = UnfinishedBatch(modFolder);
+        var named = (earlier?.Plugins ?? []).Union(plugins, StringComparer.Ordinal).ToList();
+        var landedBefore = (earlier?.Landed ?? []).Except(plugins, StringComparer.Ordinal).ToList();
+        WriteMarker(modFolder, named, landedBefore);
 
         var landed = new List<string>();
         foreach (var plugin in plugins)
@@ -27,17 +31,18 @@ public static class CompileJournal
             if (!await compileOne(plugin)) break;
 
             landed.Add(plugin);
-            WriteMarker(modFolder, plugins, landed);
+            WriteMarker(modFolder, named, [.. landedBefore, .. landed]);
         }
 
-        if (landed.Count == plugins.Count)
+        if (new CompileJournalState(named, [.. landedBefore, .. landed]).Unlanded.Count == 0)
             File.Delete(MarkerPath(modFolder));
 
         return landed;
     }
 
-    /// <summary>The marker's content, or null when the last batch completed cleanly: a marker means the
-    /// disk/parked-ref mismatch is Modbench's own interrupted compile, not an external change.</summary>
+    /// <summary>The marker's content, or null when no plugin it names is unlanded: a marker means the
+    /// disk/parked-ref mismatch is Modbench's own interrupted compile, not an external change. A marker
+    /// whose every plugin landed is one a crash kept from being deleted, and means nothing.</summary>
     public static CompileJournalState? UnfinishedBatch(string modFolder)
     {
         var path = MarkerPath(modFolder);
@@ -46,7 +51,8 @@ public static class CompileJournal
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         var plugins = ReadStringArray(doc.RootElement, "plugins");
         var landed = ReadStringArray(doc.RootElement, "landed");
-        return new CompileJournalState(plugins, landed);
+        var state = new CompileJournalState(plugins, landed);
+        return state.Unlanded.Count == 0 ? null : state;
     }
 
     private static List<string> ReadStringArray(JsonElement root, string propertyName) =>

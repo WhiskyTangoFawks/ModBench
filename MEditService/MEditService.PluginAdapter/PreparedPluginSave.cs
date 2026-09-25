@@ -1,18 +1,14 @@
 namespace MEditService.PluginAdapter;
 
-/// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
-/// already made. Commit renames them into place; Dispose discards the temp state either way.</summary>
+/// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
+/// into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave(
     string tmpPath,
     string finalPath,
-    string backupPath,
     IReadOnlyList<(string TempPath, string FinalPath)>? stringsFiles = null) : IDisposable
 {
     private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles = stringsFiles ?? [];
     private string? _rollbackPath;
-
-    /// <summary>The timestamped user-facing <c>.bak</c> this attempt created.</summary>
-    public string BackupPath => backupPath;
 
     public void Commit()
     {

@@ -69,11 +69,8 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("0xFFF", result.Message, StringComparison.Ordinal);
     }
 
-    // The compile-time coherence gate: an ESL-flagged plugin whose content overflows the light
-    // range refuses to compile, with the typed EslContradiction marker the frontend turns into the
-    // remove-the-flag prompt.
     [Fact]
-    public async Task Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
+    public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheThreeRemedies()
     {
         Assert.True(_fixture.CreateHandler.CreateRecord(
             _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
@@ -82,14 +79,24 @@ public sealed class HeaderFlagEditTests : IDisposable
         var compile = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(compile.Succeeded);
-        Assert.True(compile.EslContradiction);
         Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
+        Assert.EndsWith(
+            "Clear the light flag in the header, rename the plugin off .esl, or change the records' FormIDs " +
+            "into the light range.",
+            compile.RefusalReason, StringComparison.Ordinal);
+    }
 
-        // The accepted prompt's own path: clear the flag, compile again — clean.
+    [Fact]
+    public async Task Compile_OfAnOutOfRangeRecord_Succeeds_OnceTheLightFlagIsCleared()
+    {
+        Assert.True(_fixture.CreateHandler.CreateRecord(
+            _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
-        var second = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
-        Assert.True(second.Succeeded, second.RefusalReason);
-        Assert.False(second.EslContradiction);
+
+        var compile = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
+
+        Assert.True(compile.Succeeded, compile.RefusalReason);
     }
 
     private PluginCompileService CompileService() =>

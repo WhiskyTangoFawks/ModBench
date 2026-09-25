@@ -38,6 +38,10 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string preset = "Edits") =>
         client.PostAsJsonAsync("/plugins/track", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), preset });
 
+    internal static Task<HttpResponseMessage> Compile(
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string? source = null) =>
+        client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), @ref = source });
+
     internal static Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>
         client.PostAsJsonAsync(

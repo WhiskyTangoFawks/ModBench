@@ -15,70 +15,158 @@ public sealed class CompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Compiled.esp";
     private const string Origin = "CompiledMod";
+    private const string OtherPlugin = "AlsoCompiled.esp";
+    private const string OtherOrigin = "AlsoCompiledMod";
+    private const string UntrackedPlugin = "Untracked.esp";
+    private const string UntrackedOrigin = "UntrackedMod";
 
-    private static ScatteredFixtureData OneTrackableMod() =>
+    private static ScatteredFixtureData ThreeMods() =>
         new PluginFixtureBuilder("trace-compile-a-plugin")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledNpc"), origin: Origin)
+            .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("AlsoCompiledNpc"), origin: OtherOrigin)
+            .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
             .BuildScattered();
 
     private async Task<ScatteredFixtureData> LoadedAndTracked()
     {
-        var fx = OneTrackableMod();
+        var fx = ThreeMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track([(Plugin, Origin), (OtherPlugin, OtherOrigin)])).EnsureSuccessStatusCode();
         return fx;
     }
 
-    private Task<HttpResponseMessage> Compile(string origin) =>
-        Client.PostAsJsonAsync($"/plugins/{Plugin}/compile", new { origin, @ref = (string?)null });
+    private static async Task<JsonElement> Answer(HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
 
     [Fact]
-    public async Task CompilingAnEditedPlugin_SucceedsAndItsBytesCarryTheEdit()
+    public async Task CompilingAnEditedPlugin_AnswersItApplied_AndItsBytesCarryTheEdit()
     {
         using var fx = await LoadedAndTracked();
         var formKey = await Client.FirstFormKey(Plugin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
-        var compiled = await Compile(Origin);
+        var answer = await Answer(await Client.Compile([(Plugin, Origin)]));
 
-        compiled.EnsureSuccessStatusCode();
-        var result = await compiled.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(result.GetProperty("succeeded").GetBoolean(), result.GetProperty("refusalReason").GetString());
-        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, formKey), 3);
+        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
+        var applied = Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("plugin");
+        Assert.Equal((Plugin, Origin), (applied.GetProperty("name").GetString(), applied.GetProperty("origin").GetString()));
+        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
     }
 
-    // A second service, loading the compiled file alone as an untracked plugin, so what answers is
-    // the bytes on disk and nothing this host still holds in its own store.
-    private static async Task<double> HeightMaxOfTheWrittenBytes(ScatteredFixtureData fx, string formKey)
+    [Fact]
+    public async Task CompilingASelection_WithAnUntrackedPlugin_CompilesTheOthers_AndRefusesItByName()
+    {
+        using var fx = await LoadedAndTracked();
+        var formKey = await Client.FirstFormKey(Plugin);
+        var otherFormKey = await Client.FirstFormKey(OtherPlugin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        (await Client.Edit(otherFormKey, OtherPlugin, OtherOrigin, "HeightMax", 0.5)).EnsureSuccessStatusCode();
+
+        var answer = await Answer(await Client.Compile(
+            [(Plugin, Origin), (UntrackedPlugin, UntrackedOrigin), (OtherPlugin, OtherOrigin)]));
+
+        Assert.Equal(
+            [(Plugin, Origin), (OtherPlugin, OtherOrigin)],
+            answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin"))
+                .Select(p => (p.GetProperty("name").GetString(), p.GetProperty("origin").GetString())));
+        var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
+        Assert.Equal(
+            (UntrackedPlugin, UntrackedOrigin),
+            (refused.GetProperty("plugin").GetProperty("name").GetString(), refused.GetProperty("plugin").GetProperty("origin").GetString()));
+        Assert.Equal(
+            $"{UntrackedPlugin} is not tracked, so there is no source to compile.",
+            refused.GetProperty("message").GetString());
+        Assert.Equal(0.75, await HeightMaxOfTheWrittenBytes(fx, Plugin, Origin, formKey), 3);
+        Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
+    }
+
+    [Fact]
+    public async Task CompilingFromMain_BuildsWhatMainHolds_NotTheWorkingTreesEdit()
+    {
+        using var fx = await LoadedAndTracked();
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Edit(formKey, Plugin, Origin, "EditorID", "EditedInTheWorkingTree")).EnsureSuccessStatusCode();
+
+        var answer = await Answer(await Client.Compile([(Plugin, Origin)], source: "main"));
+
+        Assert.Single(answer.GetProperty("applied").EnumerateArray());
+        var written = await RecordInTheWrittenBytes(fx, Plugin, Origin, formKey);
+        Assert.Equal("CompiledNpc", written.GetProperty("editorId").GetString());
+    }
+
+    [Fact]
+    public async Task Compiling_LeavesNoOtherPluginFileInTheModsRoot()
+    {
+        using var fx = await LoadedAndTracked();
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+
+        await Answer(await Client.Compile([(Plugin, Origin)]));
+        await Answer(await Client.Compile([(Plugin, Origin)]));
+
+        Assert.Equal(
+            [Plugin],
+            Directory.EnumerateFiles(OtherTool.ModFolderOf(fx, Origin), "*.esp").Select(Path.GetFileName));
+    }
+
+    private static async Task<double> HeightMaxOfTheWrittenBytes(
+        ScatteredFixtureData fx, string plugin, string origin, string formKey) =>
+        (await RecordInTheWrittenBytes(fx, plugin, origin, formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
+            .GetProperty("value").GetDouble();
+
+    // A second service, loading a copy of the compiled file alone, in a folder no repository holds,
+    // so what answers is the bytes compile wrote: in its tracked mod the plugin reads as its source.
+    private static async Task<JsonElement> RecordInTheWrittenBytes(
+        ScatteredFixtureData fx, string plugin, string origin, string formKey)
     {
         using var elsewhere = new PluginFixtureBuilder("trace-compile-reader").BuildScattered();
         using var reader = new MEditHost();
         using var client = reader.CreateClient();
-        var compiledFile = fx.Plugins.Single(p => p.Origin == Origin).Path;
+        var copied = Path.Combine(Directory.CreateDirectory(Path.Combine(elsewhere.Root, "ReadingMod")).FullName, plugin);
+        File.Copy(fx.Plugins.Single(p => p.Origin == origin).Path, copied);
 
         (await client.PutLoadOrder(
             elsewhere,
-            [new LoadOrderEntry(Plugin, compiledFile, "ReadingMod", Slot: 0, Enabled: true, Winning: true)]))
+            [new LoadOrderEntry(plugin, copied, "ReadingMod", Slot: 0, Enabled: true, Winning: true)]))
             .EnsureSuccessStatusCode();
 
-        var record = await client.Record(formKey);
-        return record.GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
-            .GetProperty("value").GetDouble();
+        return await client.Record(formKey);
     }
 
     [Fact]
-    public async Task CompilingWithoutAnOrigin_Is400()
+    public async Task CompilingBeforeAnyLoadOrder_RefusesTheWholeSelectionOnce_503()
+    {
+        var response = await Client.Compile([(Plugin, Origin), (OtherPlugin, OtherOrigin)]);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompilingNoPlugin_Is400()
     {
         using var fx = await LoadedAndTracked();
 
-        var response = await Compile(string.Empty);
+        var response = await Client.Compile([]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task CompilingWhenTheBytesCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task CompilingAPluginWithoutAnOrigin_Is400()
+    {
+        using var fx = await LoadedAndTracked();
+
+        var response = await Client.Compile([(Plugin, string.Empty)]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompilingWhenOnePluginsBytesCannotBeWritten_RefusesItByName_AndCompilesTheOthers()
     {
         using var fx = await LoadedAndTracked();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
@@ -86,11 +174,14 @@ public sealed class CompilePluginTraceTests : HostedTests
         OtherTool.SetsThePermissions(modFolder, "500");
         try
         {
-            var response = await Compile(Origin);
+            var answer = await Answer(await Client.Compile([(Plugin, Origin), (OtherPlugin, OtherOrigin)]));
 
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
+            Assert.Equal(
+                [OtherPlugin],
+                answer.GetProperty("applied").EnumerateArray().Select(a => a.GetProperty("plugin").GetProperty("name").GetString()));
+            var refused = Assert.Single(answer.GetProperty("refused").EnumerateArray());
+            Assert.Equal(Plugin, refused.GetProperty("plugin").GetProperty("name").GetString());
+            Assert.StartsWith($"Could not write {Plugin}: ", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
         }
         finally
         {

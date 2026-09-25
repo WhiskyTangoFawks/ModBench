@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>ADR-0007's Save &amp; Compile: source (working tree or a named git ref) to binary. Reads
+/// <summary>ADR-0007's compile, for one plugin: source (working tree or a named git ref) to binary. Reads
 /// the source's own bytes, never the DB index; refuses only what it structurally cannot emit, and
 /// the rest becomes diagnostics.</summary>
 public sealed class PluginCompileService(
@@ -18,7 +18,6 @@ public sealed class PluginCompileService(
     SchemaReflector schemaReflector,
     RecordTextCodec codec,
     IPluginAdapter adapter,
-    PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
     public async Task<CompileResult> CompileAsync(PluginAddress plugin, CompileSource source)
@@ -59,9 +58,8 @@ public sealed class PluginCompileService(
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
-        // An ESL-addressable plugin with native records outside the light FormID range would compile
-        // to a binary the game mis-addresses, so refuse it. Only a header flag can be removed; a
-        // plugin light by .esl extension needs renaming.
+        // A light plugin with native records outside the light FormID range would compile to a
+        // binary the game mis-addresses, so refuse it (compile-plugin, Refusals).
         if (tree.IsLight(plugin.Name) && tree.SmallMasterRange is { } lightRange)
         {
             var outOfRange = tree.FormKeys
@@ -71,16 +69,12 @@ public sealed class PluginCompileService(
                 .ToList();
             if (outOfRange.Count > 0)
             {
-                var flagRemovable = tree.IsSmallMaster;
-                var remedy = flagRemovable
-                    ? "Remove the ESL flag (the header's IsSmallMaster member), or change the records' FormIDs into the light range."
-                    : "Rename the plugin off the .esl extension, or change the records' FormIDs into the light range.";
                 return CompileResult.Refused(
-                    $"{plugin.Name} is ESL-addressable but holds native FormID(s) outside the light range " +
+                    $"{plugin.Name} is a light plugin but holds native FormID(s) outside the light range " +
                     $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    $". {remedy}",
-                    eslContradiction: flagRemovable);
+                    ". Clear the light flag in the header, rename the plugin off .esl, or change the records' " +
+                    "FormIDs into the light range.");
             }
         }
 
@@ -116,7 +110,7 @@ public sealed class PluginCompileService(
         {
             try
             {
-                await tree.SaveThroughAsync(writer, registered.Path, loadOrderNames);
+                await tree.SaveThroughAsync(registered.Path, loadOrderNames);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {

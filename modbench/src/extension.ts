@@ -25,8 +25,8 @@ import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
-  registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
+  registerTrackCommand, registerCompileCommand, type CompileDeps,
+  registerOpenHeaderCommand, compilePlugins, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
@@ -146,10 +146,10 @@ export function activate(context: vscode.ExtensionContext) {
   const showCrashRepairOffers = (offers: CrashRepairOffer[]) => presentCrashRepairOffers(
     offers,
     askQuestion,
-    (offer, atRef) => compileAndReport(
-      meditClient, compileDiagnostics, pluginRowDeps.originFiles,
-      makeReporter(outputChannel, 'crashRepair'), askQuestion,
-      { name: offer.plugin, origin: offer.origin }, atRef,
+    (offer, atRef) => compilePlugins(
+      { ...compileDeps(pluginRowDeps), reporter: makeReporter(outputChannel, 'crashRepair') },
+      { addressed: [{ name: offer.plugin, origin: offer.origin }], unaddressed: [] },
+      atRef === 'main' ? 'main' : 'workingTree',
     ),
   );
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
@@ -245,7 +245,7 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, treeProvider, notifyConflictsComputed } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
@@ -257,14 +257,22 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       },
       () => session.pluginsTreeView?.selection ?? [],
     ),
-    registerSaveAndCompileCommand(
-      client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileAtRefCommand(
-      client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
-      compileDiagnostics, originFiles),
+    registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
+}
+
+function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
+  const { session, client, outputChannel, compileDiagnostics, originFiles } = deps;
+  return {
+    client,
+    progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+    reporter: makeReporter(outputChannel, 'plugin.compile'),
+    ask: askQuestion,
+    diagnostics: compileDiagnostics,
+    originFiles,
+    log: (message) => outputChannel.info(message),
+  };
 }
 
 

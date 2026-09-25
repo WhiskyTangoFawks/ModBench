@@ -159,22 +159,4 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);
         Assert.Contains("Re-Track", result.RefusalReason, StringComparison.Ordinal);
     }
-
-    // Every write backs up the target plugin first; compile is a new write
-    // path, not a new exemption from it.
-    [Fact]
-    public async Task Compile_LeavesATimestampedBackupBesideTheBinary()
-    {
-        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
-        var originalBytes = File.ReadAllBytes(pluginPath);
-
-        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
-        Assert.True(result.Succeeded, result.RefusalReason);
-
-        var backups = Directory.GetFiles(_mod.ModFolder, $"{Path.GetFileNameWithoutExtension(CompileFixture.PluginName)}.*.bak.esp");
-        var backup = Assert.Single(backups);
-        Assert.True(originalBytes.AsSpan().SequenceEqual(File.ReadAllBytes(backup)),
-            "The backup should hold the pre-compile bytes, not the compiled output.");
-    }
 }
