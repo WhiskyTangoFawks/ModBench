@@ -5,12 +5,12 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
-import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } from './client';
+import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
+import { warnCompileUnfinished } from './plugins/compileUnfinishedWarning';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -26,7 +26,7 @@ import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
   registerTrackCommand, registerCompileCommand, type CompileDeps,
-  registerOpenHeaderCommand, compilePlugins, registerHeldTrackedRepositories, refreshSourceControlFor,
+  registerOpenHeaderCommand, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
@@ -141,17 +141,6 @@ export function activate(context: vscode.ExtensionContext) {
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
-  // Run once per completed reconcile, never a poller: a reconcile is the only moment either offer
-  // reason can newly arise.
-  const showCrashRepairOffers = (offers: CrashRepairOffer[]) => presentCrashRepairOffers(
-    offers,
-    askQuestion,
-    (offer, atRef) => compilePlugins(
-      { ...compileDeps(pluginRowDeps), reporter: makeReporter(outputChannel, 'crashRepair') },
-      { addressed: [{ name: offer.plugin, origin: offer.origin }], unaddressed: [] },
-      atRef === 'main' ? 'main' : 'workingTree',
-    ),
-  );
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
     outputChannel, session, client: meditClient,
@@ -175,10 +164,10 @@ export function activate(context: vscode.ExtensionContext) {
         client: meditClient, outputChannel, treeProvider,
         refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
         askQuestion,
-        presentCrashRepair: showCrashRepairOffers,
         reporter: makeReporter(outputChannel, 'externalChange'),
       }),
     },
+    { dispose: warnCompileUnfinished(makeReporter(outputChannel, 'compile'), meditClient) },
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),

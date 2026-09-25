@@ -85,7 +85,6 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     externalChangeOldVersion?: NotificationEvent['externalChangeOldVersion'];
     externalChangeNewVersion?: NotificationEvent['externalChangeNewVersion'];
     externalChangeTrackedFiles?: NotificationEvent['externalChangeTrackedFiles'];
-    crashRepairReason?: NotificationEvent['crashRepairReason'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
   if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
@@ -98,7 +97,6 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     externalChangeMetaChanged: w.externalChangeMetaChanged,
     externalChangeOldVersion: w.externalChangeOldVersion, externalChangeNewVersion: w.externalChangeNewVersion,
     externalChangeTrackedFiles: w.externalChangeTrackedFiles,
-    crashRepairReason: w.crashRepairReason,
   };
 }
 

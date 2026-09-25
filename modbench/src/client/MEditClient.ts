@@ -1,7 +1,6 @@
 import type { components } from '../wire/generated/api';
 import {
-  CRASH_REPAIR_REASONS,
-  type CompiledPlugin, type CompileDiagnostic, type CrashRepairOffer, type CrashRepairReason,
+  type CompiledPlugin, type CompileDiagnostic,
   type ExternalChangeActionResult, type NotificationEvent,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -34,27 +33,21 @@ export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
 
-/** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
+/** The wire's six kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind =
-  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'question-open';
+  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'question-open'
+  | 'compile-unfinished';
 
 const NOTIFICATION_KINDS = new Set<string>([
   'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'question-open',
+  'compile-unfinished',
 ]);
 
-/** Whether `kind` is one of the five the wire defines — the one place `NotificationEvent.kind`
+/** Whether `kind` is one of the six the wire defines — the one place `NotificationEvent.kind`
  *  (the schema's honest `string`) is narrowed to `NotificationKind` for dispatch. */
 export function isNotificationKind(kind: string): kind is NotificationKind {
   return NOTIFICATION_KINDS.has(kind);
-}
-
-const CRASH_REPAIR_REASON_SET = new Set<string>(CRASH_REPAIR_REASONS);
-
-/** `question-open`'s `crashRepairReason` (the schema's honest `string`) narrowed to
- *  `CrashRepairReason`, on the port for the same reason `isRefused` is. */
-export function isCrashRepairReason(reason: string): reason is CrashRepairReason {
-  return CRASH_REPAIR_REASON_SET.has(reason);
 }
 
 /** Re-exported under its own name because it is a callback contract, not merely a query return
@@ -215,7 +208,7 @@ export interface MEditClient {
 }
 
 export type {
-  CrashRepairOffer, CrashRepairReason, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
+  NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
   ExternalChangeActionResult, LoadOrderStatus, LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,

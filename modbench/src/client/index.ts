@@ -1,6 +1,6 @@
 export type {
   MEditClient, WriteRefused, AbsorbOutcome, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
-  NotificationKind, NotificationEvent, BackendStatus, CrashRepairOffer, CrashRepairReason, RecordEditOutcome, RecordPage, CellPage,
+  NotificationKind, NotificationEvent, BackendStatus, RecordEditOutcome, RecordPage, CellPage,
   PluginRecordTypeCount, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
   RecordCopyAsOverrideResponse, RecordCopyAsNewRecordResponse, ReferenceResult, RecordFilter,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
@@ -10,7 +10,7 @@ export type {
   LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
-export { isRefused, isCrashRepairReason } from './MEditClient';
+export { isRefused } from './MEditClient';
 export { toLoadOrderStatus } from './apiClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
 export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';

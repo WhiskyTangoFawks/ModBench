@@ -201,8 +201,8 @@ internal sealed class WriteTargets(
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return null;
             default:
-                // An interrupted compile is the repair offer's state, not this question's; the marker
-                // waits for a verdict either way.
+                // An interrupted compile is a warning, not this question; the marker waits for a
+                // verdict either way.
                 return null;
         }
     }

@@ -6,7 +6,7 @@ const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoist
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   subscribeQuestionOpen: vi.fn(
-    (_deps: { reporter: unknown; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
+    (_deps: { reporter: unknown; showDialog: unknown }, _client: unknown) => () => {}),
 }));
 
 import { EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
@@ -27,13 +27,13 @@ import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
-function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockResolvedValue(undefined)) {
+function wire(askQuestion = scriptedDialog()) {
   const outputChannel = new FakeLogOutputChannel();
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
   const reporter = recordingReporter();
   wireQuestionOpen({
-    client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, presentCrashRepair, reporter,
+    client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, reporter,
   });
   return {
     outputChannel, reporter,
@@ -48,12 +48,6 @@ describe('wireQuestionOpen', () => {
     const askQuestion = scriptedDialog();
 
     expect(wire(askQuestion).deps.showDialog).toBe(askQuestion);
-  });
-
-  it('hands the coordinator the crash-repair presenter it was given', () => {
-    const presentCrashRepair = vi.fn().mockResolvedValue(undefined);
-
-    expect(wire(scriptedDialog(), presentCrashRepair).deps.presentCrashRepair).toBe(presentCrashRepair);
   });
 
   // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is

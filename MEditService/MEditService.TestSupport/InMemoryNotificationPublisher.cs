@@ -7,8 +7,7 @@ namespace MEditService.TestSupport;
 /// arrow to the ports and so names no notification type.</summary>
 public sealed record PublishedNotification(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys,
-    IReadOnlyList<string> TrackedFiles, bool? MetaChanged, string? OldVersion, string? NewVersion,
-    string? CrashRepairReason);
+    IReadOnlyList<string> TrackedFiles, bool? MetaChanged, string? OldVersion, string? NewVersion);
 
 /// <summary>The notification port's second adapter: a plain recorder, so a test asserts the port
 /// fired without a live HTTP stream.</summary>
@@ -30,7 +29,7 @@ public sealed class InMemoryNotificationPublisher : INotificationPublisher
     public IReadOnlyList<PublishedNotification> Published =>
         [.. Notifications.Select(n => n.ToEvent()).Select(e => new PublishedNotification(
             e.Kind, e.Plugin, e.Origin, e.Keys, e.ExternalChangeTrackedFiles ?? [],
-            e.ExternalChangeMetaChanged, e.ExternalChangeOldVersion, e.ExternalChangeNewVersion, e.CrashRepairReason))];
+            e.ExternalChangeMetaChanged, e.ExternalChangeOldVersion, e.ExternalChangeNewVersion))];
 
     /// <summary>Registers this recorder as the port, for a suite composing a box's handlers without
     /// naming the port's type.</summary>
