@@ -4,12 +4,12 @@ import { isNotificationKind, type MEditClient, type NotificationKind, type Notif
 // distinction is architectural, not behavioural.
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences'
+  | 'getRecordOwner' | 'getRecordOverridePlugins' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
   | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
-  | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords' | 'renumberRecord'
+  | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
   | 'copyRecordAsOverride' | 'copyRecordAsNewRecord' | 'compile' | 'absorbUpstreamUpdate'
   | 'keepAsMyEdit' | 'rebaseOntoMain' | 'continueRebase' | 'editRecord' | 'putLoadOrder';
 
@@ -208,9 +208,6 @@ export class InMemoryMEditClient implements MEditClient {
   deleteRecords(...args: Parameters<MEditClient['deleteRecords']>): ReturnType<MEditClient['deleteRecords']> {
     return this.command('deleteRecords', args);
   }
-  renumberRecord(...args: Parameters<MEditClient['renumberRecord']>): ReturnType<MEditClient['renumberRecord']> {
-    return this.command('renumberRecord', args);
-  }
   copyRecordAsOverride(
     ...args: Parameters<MEditClient['copyRecordAsOverride']>
   ): ReturnType<MEditClient['copyRecordAsOverride']> {
@@ -260,11 +257,6 @@ export class InMemoryMEditClient implements MEditClient {
     ...args: Parameters<MEditClient['getRecordOverridePlugins']>
   ): ReturnType<MEditClient['getRecordOverridePlugins']> {
     return this.query('getRecordOverridePlugins', args);
-  }
-  peekNextFreeFormKey(
-    ...args: Parameters<MEditClient['peekNextFreeFormKey']>
-  ): ReturnType<MEditClient['peekNextFreeFormKey']> {
-    return this.query('peekNextFreeFormKey', args);
   }
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);

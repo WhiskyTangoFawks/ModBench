@@ -89,11 +89,10 @@ export interface LoadOrderOptions {
   signal?: AbortSignal;
 }
 
-/** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
- *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'` is
- *  this side's own addition. */
+/** A refusal is an outcome, not an exception: `refusal` is the backend's own name for it, and
+ *  `'Unknown'` this side's own addition. `newFormKey` is set by an edit of the FormID. */
 export type RecordEditOutcome =
-  | { applied: true }
+  | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
 /** `rebuildIndex`'s own outcome (ADR-0009 invariant 5): a 423 — this instance's index held by
@@ -121,7 +120,6 @@ export type RecordCreateResponse = components['schemas']['RecordCreateResponse']
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
 export type RecordAddress = components['schemas']['RecordAddress'];
-export type RecordRenumberResponse = components['schemas']['RecordRenumberResponse'];
 export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];
 export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
@@ -147,9 +145,6 @@ export interface MEditClient {
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
-  renumberRecord(
-    formKey: string, plugin: string, origin: string, newFormKey?: string,
-  ): Promise<RecordRenumberResponse | WriteRefused | undefined>;
   copyRecordAsOverride(
     formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
   ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined>;
@@ -176,7 +171,6 @@ export interface MEditClient {
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
-  peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;

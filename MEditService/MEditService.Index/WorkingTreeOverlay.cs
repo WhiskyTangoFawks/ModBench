@@ -383,7 +383,7 @@ internal sealed class WorkingTreeOverlay
         RederiveContainmentForRecord(key, formKey, recordType, containerType, children);
 
         // A child absent from the document is gone at Effective, unless another container's document
-        // holds it (a renumbered container re-derives its children under the new identity first).
+        // holds it (a container whose FormID changed re-derives its children under the new identity first).
         var carriedNow = children
             .Where(c => ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, c.SlotName)))
             .Select(c => c.FormKey)

@@ -30,7 +30,6 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
     public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
         inner.ImplicitPluginsIn(dataFolder, gameRelease);
 
-    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) => inner.ReadFormIds(modPath, gameRelease);
 
     public LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder, GameRelease gameRelease,

@@ -63,7 +63,7 @@ Commands refuses before it writes the record, and names the cause.
 | A field or element that is not there, or a move off either end, naming the path | the element and field gestures | |
 | A value the codec rejects, naming the field | `edit field`, `add element` | Refuse, do not repair. |
 | Two elements with one key in a keyed array, naming the key | `edit field`, `add element` | The key is the element's identity. |
-| A read-only field, with the reason: the schema's, a Partial Form's own field, a container's child slots, or the header's masters | the element and field gestures | ADR-0005, invariant 6; ADR-0008. |
+| A read-only field, with the reason: the schema's, a Partial Form's own field, a container's child slots, the header's masters, or a plugin header's FormID | the element and field gestures | ADR-0005, invariant 6; ADR-0008. |
 | A record type that cannot be created, or a container record | `create` | Choosing a container's containment is planned (#462). |
 | No free FormID is left, naming the remedies: clear the light flag in the header, or change a record's FormID | `create`, `copy` as new | |
 | The FormKey asked for is taken | `create`, `edit field` on the FormID | |

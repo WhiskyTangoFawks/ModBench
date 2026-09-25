@@ -16,7 +16,7 @@ import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
-import { registerEditorCommands, ActiveRecordTracker } from './editor';
+import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
@@ -92,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
+  const editsInFlight = new EditsInFlight(activeRecordTracker);
   const filterScripts = setupScriptsFolder(meditConfig());
   const filterProvider = new FilterCodeLensProvider();
 
@@ -99,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
   // backend by the mEdit client itself.
   context.subscriptions.push(
     { dispose: subscribeTreeToNotifications(meditClient, treeProvider) },
-    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker) },
+    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
@@ -188,7 +189,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
@@ -237,7 +238,7 @@ interface PluginRowCommandDeps {
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands (create/delete/renumber/copy — Editor's own registration).
+// editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };

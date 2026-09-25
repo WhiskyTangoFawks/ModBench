@@ -76,10 +76,11 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         Assert.True(result.Succeeded, result.RefusalReason);
 
         // The recompiled binary keeps the Localized flag.
-        var formIds = TestAdapters.Mutagen().ReadFormIds(new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
-        using var header = JsonDocument.Parse(formIds.HeaderText);
-        var flags = header.RootElement.GetProperty("ModHeader").GetProperty("Flags").EnumerateArray().Select(f => f.GetString());
-        Assert.Contains("Localized", flags);
+        using (var recompiled = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName(PluginName), pluginPath), Fallout4Release.Fallout4))
+        {
+            Assert.True(recompiled.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized));
+        }
 
         // Every strings file compile rewrote is byte-identical to what Track captured. A real change
         // (StringsWriter re-assigns sequential keys in registration order) would show up here even though

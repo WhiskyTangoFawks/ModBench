@@ -15,17 +15,17 @@ export interface RecordWriteDeps {
   reporter: Reporter;
 }
 
-/** An edit travels through the extension host rather than straight to the backend because a
- *  refusal has to become a native notification (ADR-0019), a surface only the host has. A refusal
- *  is a warning, a transport failure an error. */
+/** An edit goes through the extension host because a refusal becomes a native notification
+ *  (ADR-0019): a refusal a warning, a transport failure an error. Resolves the new FormKey an edit
+ *  of the FormID landed under. */
 export async function applyRecordEdit(
   deps: RecordWriteDeps, formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
-): Promise<void> {
+): Promise<string | undefined> {
   try {
     const outcome = await deps.meditClient.editRecord(formKey, plugin, origin, envelope);
     if (outcome.applied) {
       deps.onRecordEdited(formKey, plugin, origin);
-      return;
+      return outcome.newFormKey;
     }
     deps.reporter.report('warning', outcome.message);
   } catch (err) {

@@ -63,9 +63,4 @@ internal static class TestEditService
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CreatePluginHandler>();
 
-    internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<PeekNextFreeFormKeyHandler>();
-
-    internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<RenumberRecordHandler>();
 }

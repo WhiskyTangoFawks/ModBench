@@ -122,59 +122,6 @@ public sealed class CreateRecordHandlerTests
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-    // Peek is a read, so tracking is not its business: an untracked copy has no source tree and the
-    // Plugin adapter answers from its own bytes instead.
-    [Fact]
-    public void PeekNextFreeFormKey_OnAnUntrackedPlugin_AnswersFromThePluginsOwnBinary()
-    {
-        using var mod = SourceEditFixture.Untracked();
-
-        var result = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
-
-        Assert.True(result.Applied, result.Message);
-        // The fixture's plugin holds four records from 000800; the next free local ID is the fifth.
-        Assert.Equal("000804:Fixture.esp", result.NewFormKey);
-    }
-
-    // Not registered at all, so neither a tree nor a file answers for it — and "not tracked" would
-    // be a claim about a plugin the load order has never heard of.
-    [Fact]
-    public void PeekNextFreeFormKey_ForAPluginTheLoadOrderDoesNotRegister_RefusesAsRecordNotFound()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var result = mod.PeekHandler.PeekNextFreeFormKey(new PluginCopyKey("NotRegistered.esp", "NoSuchMod"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-    }
-
-    // Registered, untracked, and its file replaced by something that is not a plugin: peek reads it
-    // now, so an unreadable copy has to be a refusal rather than a fault.
-    [Fact]
-    public void PeekNextFreeFormKey_WhenTheCopysFileCannotBeRead_RefusesRatherThanThrowing()
-    {
-        using var mod = SourceEditFixture.Untracked();
-        File.WriteAllText(Path.Combine(mod.ModFolder, mod.ActualPluginName), "not a plugin");
-
-        var result = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-    }
-
-    [Fact]
-    public void PeekNextFreeFormKey_OnATrackedPlugin_MatchesWhatCreateAllocates()
-    {
-        using var mod = SourceEditFixture.Tracked();
-
-        var suggested = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
-        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AfterThePeek");
-
-        Assert.True(suggested.Applied, suggested.Message);
-        Assert.Equal(suggested.NewFormKey, created.NewFormKey);
-    }
-
     [Fact]
     public void CreateRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
     {

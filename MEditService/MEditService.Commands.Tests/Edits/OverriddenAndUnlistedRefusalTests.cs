@@ -116,11 +116,12 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void RenumberingARecord_InAnOverriddenPlugin_IsRefused()
+    public void EditingTheFormId_OfARecordInAnOverriddenPlugin_IsRefused()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.RenumberHandler.RenumberRecord(mod.OverriddenPlugin, mod.OverriddenNpc.ToString());
+        var result = mod.EditHandler.SetFormId(
+            mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), $"000F00:{mod.OverriddenPlugin.Name}");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
@@ -215,11 +216,12 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public void RenumberingARecord_InAPluginWithNoLine_IsRefused()
+    public void EditingTheFormId_OfARecordInAPluginWithNoLine_IsRefused()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.RenumberHandler.RenumberRecord(mod.UnlistedPlugin, mod.UnlistedNpc.ToString());
+        var result = mod.EditHandler.SetFormId(
+            mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), $"000F00:{mod.UnlistedPlugin.Name}");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
