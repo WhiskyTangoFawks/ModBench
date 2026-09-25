@@ -68,6 +68,16 @@ describe('ImplicitMasterDecorationProvider', () => {
     expect(await provider.provideFileDecoration(dataUri('Fallout4.esm'))).toBeUndefined();
   });
 
+  // `dirname` never carries a trailing separator, so a Data folder setting that does must be
+  // normalized before the equality check, not left to fail it.
+  it('grays an implicit master row when the Data folder setting ends in a separator', async () => {
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(`${dataFolder}/`), () => new Set(['fallout4.esm']));
+    const decoration = present(
+      await provider.provideFileDecoration(dataUri('Fallout4.esm')), 'the decoration for the trailing-separator setting',
+    );
+    expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
+  });
+
   // Rival this rules out: comparing by `.fsPath` with a hardcoded `/` join, which never matches a
   // real Windows `fsPath` (backslash-separated) against a POSIX-style literal.
   it('grays an implicit master row given a Windows-style Data folder and file path', async () => {

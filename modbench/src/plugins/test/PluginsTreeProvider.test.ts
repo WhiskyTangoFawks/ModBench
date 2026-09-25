@@ -1815,15 +1815,13 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     expect(item.tooltip).toContain('second diagnosis');
   });
 
-  // plugins.md, A row: "no blink" — the scan's answer is held back deliberately, so this
-  // observes the state strictly before it resolves, not a microtask-ordering race.
+  // plugins.md, A row: "no blink".
   it('keeps the last diagnoses through a reconcile until its own scan lands', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
     await reconcile(h, [held('A.esp')]);
     expect((await rowItem(h)).description).toBe('malformed');
 
-    // Held back deliberately, so this observes the state strictly before the scan resolves.
     let resolveScan!: (reports: PluginDiagnosisReport[]) => void;
     const slow = new Promise<PluginDiagnosisReport[]>((resolve) => { resolveScan = resolve; });
     h.client.setQueryAnswerOnce('getDiagnoses', slow);
@@ -1831,9 +1829,10 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     await h.tree.applyReconciled([]);
     expect((await rowItem(h)).description).toBe('malformed');
 
-    resolveScan([diagnosis('A.esp', 'some diagnosis')]);
+    // A different answer than the one already showing: only a landed scan can produce this.
+    resolveScan([]);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect((await rowItem(h)).description).toBe('malformed');
+    expect((await rowItem(h)).description).toBeUndefined();
   });
 
   it('keeps the last diagnoses if the next scan fails', async () => {

@@ -16,9 +16,10 @@ export class ImplicitMasterDecorationProvider implements vscode.FileDecorationPr
   async provideFileDecoration(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
     const dataFolder = await this.dataFolder();
     if (!dataFolder) return undefined;
-    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). The row's
-    // parent must equal the Data folder's own URI — a prefix match also catches a sibling.
-    if (posix.dirname(uri.path) !== vscode.Uri.file(dataFolder).path) return undefined;
+    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). `dirname`
+    // never carries a trailing separator, so a Data folder setting that does needs stripping.
+    const dataPath = vscode.Uri.file(dataFolder).path.replace(/\/+$/, '');
+    if (posix.dirname(uri.path) !== dataPath) return undefined;
     if (!this.implicitMasterNames().has(posix.basename(uri.path).toLowerCase())) return undefined;
     return { color: new vscode.ThemeColor('disabledForeground') };
   }
