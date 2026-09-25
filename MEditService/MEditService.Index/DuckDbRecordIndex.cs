@@ -432,7 +432,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
                                     && At(RecordRef.Head).GetDocument(formKey, key) == null))
         {
-            RederiveWholeCopyFromSource(key, modFolder);
+            RederiveWholeCopyFromSource(key, modFolder, formKeys);
             return;
         }
 
@@ -493,7 +493,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholeCopyFromSource(PluginCopyKey key, string modFolder)
+    private void RederiveWholeCopyFromSource(PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys)
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
         // copy's rows came from its binary and a source key is not its to answer for.
@@ -502,6 +502,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Ingest, head reconcile and winner sweep are one whole-plugin projection, so they are one
         // advance and the notification below carries the number a subscriber can await.
+        var before = EffectiveContentHashes(key);
         using (BeginProjection())
         {
             SourceIngest.Ingest(
@@ -509,9 +510,24 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 _release, _schemaReflector, _logger);
             ResweepWinners();
         }
+        var after = EffectiveContentHashes(key);
 
-        // ADR-0015 invariant 3: too many rows to name, so the copy is named, at the sequence it landed on.
-        _store.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
+        // ADR-0015 invariant 3: the keys asked about, and every row the tree read again moved, gone
+        // or gained, at the sequence it landed on.
+        var moved = before.Keys.Union(after.Keys, StringComparer.Ordinal)
+            .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now);
+        PublishRowsChanged(key, [.. formKeys.Union(moved, StringComparer.Ordinal)]);
+    }
+
+    private Dictionary<string, string> EffectiveContentHashes(PluginCopyKey key)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "SELECT form_key, content_hash FROM records WHERE plugin = $1 AND origin = $2";
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
+        using var reader = cmd.ExecuteReader();
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        while (reader.Read()) hashes[reader.GetString(0)] = reader.IsDBNull(1) ? "" : reader.GetString(1);
+        return hashes;
     }
 
     // The three facts the copy's registration row carries (ADR-0013), read back for a re-ingest that

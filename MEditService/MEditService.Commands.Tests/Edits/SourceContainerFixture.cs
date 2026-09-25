@@ -13,7 +13,7 @@ using Noggog;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A tracked mod holding the one shape a flat record cannot show: a worldspace, whose
-/// directory a renumber moves whole, subtree and all. No index anywhere in it.</summary>
+/// directory a FormID edit moves whole, subtree and all. No index anywhere in it.</summary>
 public sealed class SourceContainerFixture : IDisposable
 {
     public const string PluginName = "SourceContainer.esp";

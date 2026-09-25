@@ -141,6 +141,26 @@ public sealed class EditRecordTraceTests : HostedTests
         [.. (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require())];
 
+    private static string[] KeysOf(JsonElement rowsChanged) =>
+        [.. rowsChanged.GetProperty("keys").EnumerateArray().Select(k => k.GetString().Require())];
+
+    [Fact]
+    public async Task CreatingARecord_IsPushedAsRowsChangedNamingItsNewKey_AndAnsweredByTheNextRead()
+    {
+        using var fx = await Loaded(Origin);
+        using var stream = await Client.NotificationStream();
+
+        var created = await Client.PostAsJsonAsync(
+            $"/plugins/{Plugin}/records", new { origin = Origin, recordType = "npc_", editorId = "Fresh", formKey = (string?)null });
+
+        created.EnsureSuccessStatusCode();
+        var formKey = (await Body(created)).GetProperty("formKey").GetString().Require();
+        var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
+        Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
+        Assert.Equal(Origin, rows.GetProperty("origin").GetString());
+        Assert.Equal("Fresh", (await Client.Record(formKey)).GetProperty("editorId").GetString());
+    }
+
     private static (string FormKey, string Plugin, string Origin) Addressed(JsonElement record) => (
         record.GetProperty("formKey").GetString().Require(),
         record.GetProperty("plugin").GetString().Require(),
@@ -198,11 +218,10 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(samePluginBefore, File.ReadAllText(samePluginReferencer));
         Assert.Equal(trackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin)));
         Assert.Equal(untrackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin)));
-        // A document the Index never saw moves which records the plugin has, so the plugin is read
-        // again whole and named, not its rows.
-        var changed = Assert.Single(await stream.EventsUntil(
-            "plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin));
-        Assert.Equal(Origin, changed.GetProperty("origin").GetString());
+        var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))[^1];
+        Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
+        Assert.Equal(Origin, rows.GetProperty("origin").GetString());
+        Assert.Contains(oldFormKey, KeysOf(rows));
         Assert.Equal("MovedRace", (await Client.Record(newFormKey)).GetProperty("editorId").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}")).StatusCode);
     }

@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>The search descends every embedded slot at every level, verified through
-/// RecordDocumentEdits' renumber of an embedded child, since the search itself is Codec's internal.</summary>
+/// RecordDocumentEdits' FormKey change of an embedded child, since the search itself is Codec's internal.</summary>
 public sealed class EmbeddedChildSearchTests
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);

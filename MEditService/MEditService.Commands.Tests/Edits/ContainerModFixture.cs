@@ -63,16 +63,16 @@ public sealed class ContainerModFixture : IDisposable
     public FormKey DialogTopic { get; }
 
     // Two responses inline in the first topic's document: a sibling is what shows an edit, a delete
-    // or a renumber touching only its own element, and two is the shortest list with an order.
+    // or a FormID edit touching only its own element, and two is the shortest list with an order.
     public const string ResponseEditorId = "EmbedResponse";
     public FormKey Response { get; }
 
     public const string Response2EditorId = "EmbedResponse2";
     public FormKey Response2 { get; }
 
-    // Two more siblings under the same Quest, so "delete/renumber a mid-list topic, then compile"
+    // Two more siblings under the same Quest, so "delete, or edit the FormID of, a mid-list topic, then compile"
     // has an actual middle and two actual survivors to pin the GRUP order of — one DialogTopic
-    // alone cannot exercise "gap, not renumbered".
+    // alone cannot exercise "gap, not shifted".
     public const string DialogTopic2EditorId = "EmbedTopic2";
     public FormKey DialogTopic2 { get; }
 

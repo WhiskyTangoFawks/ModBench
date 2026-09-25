@@ -926,12 +926,12 @@
         {
           "command": "modbench.record.copyAsOverride",
           "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@3"
+          "group": "recordActions@2"
         },
         {
           "command": "modbench.record.copyAsNewRecord",
           "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@4"
+          "group": "recordActions@3"
         }
       ],
       "webview/context": [

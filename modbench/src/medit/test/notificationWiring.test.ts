@@ -60,28 +60,13 @@ describe('subscribeRecordPanelsToNotifications', () => {
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
   });
 
-  // A plugin read again whole names no rows, so any record it holds may have changed, a record
-  // that moved to a new FormKey among them.
-  it('plugin-changed re-reads every record panel, each under its own FormKey', () => {
-    const client = new InMemoryMEditClient();
-    const first = fakePanel();
-    const second = fakePanel();
-    const recordPanels = new Set([first, second]);
-    const tracker = fakeActiveRecordTracker();
-    tracker.setFormKey(first, '000001:Test.esp');
-    tracker.setFormKey(second, '000002:Other.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
-
-    client.emit(pluginChanged());
-
-    expect(first.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: '000001:Test.esp' }]]);
-    expect(second.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: '000002:Other.esp' }]]);
-  });
-
-  it('plugin-changed re-reads nothing in a panel that shows no record yet', () => {
+  it('plugin-changed never reaches a record panel — only rows-changed does', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
-    subscribeRecordPanelsToNotifications(client, new Set([panel]), fakeActiveRecordTracker());
+    const recordPanels = new Set([panel]);
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
 
     client.emit(pluginChanged());
 
@@ -98,7 +83,6 @@ describe('subscribeRecordPanelsToNotifications', () => {
 
     unsubscribe();
     client.emit(rowsChanged(['000001:Test.esp']));
-    client.emit(pluginChanged());
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
   });

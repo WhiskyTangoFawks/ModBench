@@ -31,9 +31,11 @@ describe('followRecordInPanels', () => {
     followRecordInPanels(recordPanels, tracker, '000800:Mod.esp', '000900:Mod.esp');
 
     expect(moved.webview.postMessage).not.toHaveBeenCalled();
-    client.emit({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', keys: [], sequence: 2 });
+    client.emit({
+      kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys: ['000800:Mod.esp', '000900:Mod.esp'], sequence: 2,
+    });
     expect(moved.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: '000900:Mod.esp' }]]);
-    expect(other.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: '000801:Mod.esp' }]]);
+    expect(other.webview.postMessage).not.toHaveBeenCalled();
   });
 
   it('retitles a tab titled with the old FormKey, and leaves one titled with the EditorID', () => {

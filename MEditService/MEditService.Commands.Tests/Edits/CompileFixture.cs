@@ -84,17 +84,17 @@ public sealed class CompileFixture : IDisposable
     public void Write(IMajorRecordGetter record, string recordType) =>
         SourceEdits.Write(Repository, Plugin, record, recordType, Release);
 
-    /// <summary>The tree as a renumber leaves it: a FormKey is a string in the document, so the text
-    /// the codec would produce for the renumbered record differs from this one only there.</summary>
-    public FormKey Renumber(FormKey formKey, string recordType, string? editorId, uint newId)
+    /// <summary>The tree as a FormID edit leaves it: a FormKey is a string in the document, so the
+    /// text the codec would produce for the moved record differs from this one only there.</summary>
+    public FormKey ChangeFormId(FormKey formKey, string recordType, string? editorId, uint newId)
     {
         var identity = new RecordIdentity(formKey.ToString(), recordType, editorId);
-        var renumbered = FormKey.Factory($"{newId:X6}:{PluginName}");
+        var moved = FormKey.Factory($"{newId:X6}:{PluginName}");
         var body = Repository.Get(Plugin, identity).Require().Body
-            .Replace(formKey.ToString(), renumbered.ToString(), StringComparison.Ordinal);
+            .Replace(formKey.ToString(), moved.ToString(), StringComparison.Ordinal);
         Repository.Remove(Plugin, identity);
-        Repository.Put(Plugin, new SourceDocument(renumbered.ToString(), recordType, editorId, body));
-        return renumbered;
+        Repository.Put(Plugin, new SourceDocument(moved.ToString(), recordType, editorId, body));
+        return moved;
     }
 
     public FormKey CreateNpc(string editorId, uint id)

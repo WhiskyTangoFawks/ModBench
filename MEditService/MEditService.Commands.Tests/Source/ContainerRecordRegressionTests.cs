@@ -124,7 +124,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.DoesNotContain("structural gesture", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("renumbering it do not yet", result.Message, StringComparison.Ordinal);
         Assert.Contains("creating one from scratch is not supported", result.Message, StringComparison.Ordinal);
     }
 

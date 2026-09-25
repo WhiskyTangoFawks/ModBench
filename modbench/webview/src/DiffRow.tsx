@@ -259,10 +259,11 @@ export function DiffRow({
         const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column.
         const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
-        // ADR-0018: a `string` cell always carries its own right-click context, mutable or
-        // immutable alike — a read-only tab is still the only way to read a long immutable
-        // value in full.
-        const offersMenu = arrayEditable || meta.type === 'string';
+        // ADR-0018: a text cell always carries its own right-click context, mutable or immutable
+        // alike — a read-only tab is still the only way to read a long immutable value in full. A
+        // string that resolves to a record reads as a reference, which is no text field.
+        const isTextField = meta.type === 'string' && diff.resolutions?.[key] == null;
+        const offersMenu = arrayEditable || isTextField;
         const arrayOps = arrayEditable ? {
           add: isArrayParentRow ? () => onArrayOp(key, 'add') : undefined,
           remove: isArrayElementRow ? () => onArrayOp(key, 'remove') : undefined,
@@ -286,7 +287,7 @@ export function DiffRow({
           isArrayElementRow
             ? arrayElementContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
-          meta.type === 'string'
+          isTextField
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
                 modelValue(diff.values[key], meta), !cellEditable, hops,

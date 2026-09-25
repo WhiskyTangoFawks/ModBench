@@ -62,9 +62,15 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
 
         const string newFormKey = "000F00:Editable.esp";
         var beforeEdit = await _client.GetFromJsonAsync<long>("/load-order/sequence");
+        using var stream = await _client.NotificationStream();
         var edited = await _client.Edit(oldFormKey, Plugin, Origin, "FormKey", newFormKey);
         edited.EnsureSuccessStatusCode();
         Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
+
+        // edit-record.md, Hand-off: the rows that changed are named, the old FormKey's and the new one's.
+        var named = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))
+            .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains(oldFormKey, named);
 
         // ADR-0014: the edit's create and delete settle as one batch and that batch is one advance,
         // so one await is the whole wait — no poll for an end state.
@@ -89,6 +95,9 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reached").GetBoolean();
     }
+
+    private static string[] KeysOf(JsonElement rowsChanged) =>
+        [.. rowsChanged.GetProperty("keys").EnumerateArray().Select(k => k.GetString().Require())];
 
     private async Task<List<string>> NpcFormKeys()
     {

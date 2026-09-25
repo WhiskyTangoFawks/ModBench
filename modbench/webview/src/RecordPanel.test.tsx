@@ -1595,6 +1595,17 @@ describe('RecordPanel — the Record Header', () => {
     });
   });
 
+  // editor.md, Menus and keys: open field value is a text field's; the FormID reads as a reference.
+  it('offers the FormID no open-field-value menu, where a text field offers one', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    const menuOf = (cell: Element) => cell.closest('[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '';
+    expect(menuOf(formIdCell(container))).not.toContain('stringValue');
+    expect(menuOf(required(screen.getByText('A Name').closest('td'), "Name's cell"))).toContain('stringValue');
+  });
+
   it('opens no editor on a plugin header\'s FormID, where its other fields open one', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
     const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
