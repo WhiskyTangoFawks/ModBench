@@ -64,6 +64,23 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
+    public void DirtOf_AnEditToADocumentSortedBelowItsGroup_NamesItsRecordAsThatGroupsType()
+    {
+        var sortedPath = Path.Combine("source", PluginName, "Npcs", "SortedByHand", $"Sorted - 000900_{PluginName}.json");
+        var repository = Tracked(new TreeFile(sortedPath, Encoding.UTF8.GetBytes($"{{\"FormKey\":\"000900:{PluginName}\"}}")));
+
+        File.WriteAllText(Path.Combine(_modFolder, sortedPath), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Edited\"}}");
+
+        var dirt = repository.DirtOf(Plugin);
+
+        var only = Assert.Single(dirt.Documents);
+        Assert.Equal($"000900:{PluginName}", only.FormKey);
+        Assert.Equal("npc_", only.RecordType);
+        Assert.True(only.InWorkingTree);
+        Assert.False(dirt.NeedsStructuralPass);
+    }
+
+    [Fact]
     public void DirtOf_ReportsNothing_ForACleanRepo()
     {
         var repository = Tracked();

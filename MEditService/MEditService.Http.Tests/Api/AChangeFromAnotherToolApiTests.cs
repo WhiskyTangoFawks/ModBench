@@ -22,6 +22,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private const string Quest = "SharedQuest";
     private const string Cell = "SharedCell";
     private const string PlacedRef = "SharedRef";
+    private const string World = "SharedWorld";
 
     private async Task<ScatteredFixtureData> ATrackedMod()
     {
@@ -37,6 +38,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
                 var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
                 block.SubBlocks.Add(subBlock);
                 mod.Cells.Records.Add(block);
+                mod.Worldspaces.Add(new Worldspace(mod) { EditorID = World });
             }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -227,25 +229,46 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
     }
 
-    [Fact]
-    public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack()
+    [Theory]
+    [InlineData(Cell, "cell")]
+    [InlineData(World, "wrld")]
+    public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack(
+        string editorId, string recordType)
     {
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var cell = await Client.FirstFormKey(Plugin, "cell");
-        var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell);
+        var container = await Client.FirstFormKey(Plugin, recordType);
+        var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"");
         var original = Path.GetDirectoryName(document).Require();
         var text = File.ReadAllText(document);
         using var stream = await Client.NotificationStream();
         OtherTool.DeletesTheDirectory(original);
-        await stream.EventsUntil("rows-changed", e => Names(e, cell));
+        await stream.EventsUntil("rows-changed", e => Names(e, container));
         var afterTheDelete = await Client.Sequence();
 
         OtherTool.WritesTheFile(
             Path.Combine(OtherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
 
         await Client.SequenceReaches(afterTheDelete + 1);
-        Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
+        Assert.Equal(editorId, (await Client.Record(container)).GetProperty("editorId").GetString());
+    }
+
+    [Theory]
+    [InlineData(Cell, "cell")]
+    [InlineData(World, "wrld")]
+    public async Task AContainerWhoseDirectoryWasRenamedByHand_TakesAnEdit(string editorId, string recordType)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var container = await Client.FirstFormKey(Plugin, recordType);
+        var directory = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"")).Require();
+        Directory.Move(directory, OtherTool.Beside(directory, "RenamedByHand"));
+        var before = await Client.Sequence();
+
+        (await Client.Edit(container, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("EditedAfterTheRename", (await Client.Record(container)).GetProperty("editorId").GetString());
     }
 
     // Only the folder's own arrival is an event: nothing inside it was watched when it was written.
