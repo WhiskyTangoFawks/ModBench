@@ -59,20 +59,6 @@ public sealed partial class SourceRepository
             ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
             : null;
 
-    /// <summary>True when a document anywhere in <paramref name="pluginFileName"/>'s working tree is
-    /// named for <paramref name="formKey"/> and declares it. A move by hand keeps the name, and no
-    /// event need have named where it went.</summary>
-    public static bool FilesADocumentNamedFor(string modFolder, string pluginFileName, string formKey)
-    {
-        var sourceRoot = RootIn(modFolder, pluginFileName);
-        if (!FormKey.TryFactory(formKey, out _) || !Directory.Exists(sourceRoot)) return false;
-
-        return DocumentsNamingIn(
-                Directory.EnumerateFileSystemEntries(sourceRoot, "*", SearchOption.AllDirectories), formKey)
-            .Any(document => string.Equals(
-                FormKeyDeclaredBy(document, pluginFileName), formKey, StringComparison.Ordinal));
-    }
-
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
     public static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>

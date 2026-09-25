@@ -145,9 +145,9 @@ public sealed class SourceBatchTests
     }
 
     // A move whose two halves settle apart: the new path's batch closed before the old path's
-    // delete arrived, and the folder it went to is where no refresh by key looks.
+    // delete arrived. A refresh by key finds the document wherever it went.
     [Fact]
-    public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_ValidatesTheCopyWhole()
+    public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, "A.esp");
@@ -163,8 +163,10 @@ public sealed class SourceBatchTests
 
         tree.AdvancePastBothWindows();
 
-        Assert.Single(tree.Index.Of("validate"));
-        Assert.Single(tree.Index.Of("refresh"));
+        Assert.Equal(
+            [["000800:A.esp"], ["000800:A.esp"]],
+            tree.Index.Of("refresh").Select(refresh => refresh.Keys));
+        Assert.Empty(tree.Index.Of("validate"));
     }
 
     [Fact]

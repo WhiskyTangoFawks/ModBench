@@ -158,16 +158,13 @@ public sealed partial class SourceRepository
         }
     }
 
-    private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled) =>
-        DocumentsNamingIn(EntriesUnder(sourceRoot), spelled);
-
     // Every entry whose leaf name carries the FormKey, as the path of the document it stands for: a
     // directory holds its record in RecordData.json, a file is the record.
-    private static IEnumerable<string> DocumentsNamingIn(IEnumerable<string> entries, string spelled)
+    private IEnumerable<string> DocumentsNaming(string sourceRoot, string spelled)
     {
         // Computed once rather than per entry: NameCarriesFormKey reparses the FormKey on every call.
         var filesafe = FilesafeFormKey(spelled);
-        foreach (var entry in entries)
+        foreach (var entry in EntriesUnder(sourceRoot))
         {
             var leaf = Path.GetFileName(entry);
             if (!NameCarries(leaf, filesafe) && !NameCarries(leaf, filesafe + JsonSuffix)) continue;
