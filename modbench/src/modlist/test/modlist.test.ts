@@ -1084,6 +1084,22 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
+  // A line and its folder may differ in case, which MO2 matches (FileNameComparator) and a Linux
+  // disk does not. Rival: looking up the line's own spelling on disk, which misses the folder,
+  // drops the line, and loses its enabled state and its place.
+  it('keeps a line whose folder differs only in case, when the handed list misses it', async () => {
+    const before = (await readFile(modlistPath(), 'utf8')).replace('-Harder VATS', '+harder vats');
+    await writeFile(modlistPath(), before);
+    const lagging = MOD_FOLDERS.filter((f) => f !== 'Harder VATS');
+
+    const outcome = await sync(lagging);
+
+    expect(outcome.applied && outcome.dropped).toEqual(['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator']);
+    const kept = parseModlist(before).filter((e) => e.name !== '[NODELETE] Radfall' && e.name !== 'Radfall - All-In-One Survival Overhaul');
+    expect(await readModlist()).toEqual(kept);
+    expect(kept).toContainEqual({ kind: 'mod', name: 'harder vats', enabled: true });
+  });
+
   // The value lags the disk: its folders were listed before a folder and its line landed, and the
   // sync splices the text as it is now. Rival: dropping by the handed list alone, which loses the
   // new line for good.
