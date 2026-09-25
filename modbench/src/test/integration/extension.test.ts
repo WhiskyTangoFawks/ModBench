@@ -111,6 +111,8 @@ const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 const putLoadOrders: string[][] = [];
+// Each POST /records/{formKey}/edit the extension sends: the FormKey and the body, as mEdit gets them.
+const recordEdits: { formKey: string; body: unknown }[] = [];
 
 function pluginNamesOf(body: string): string[] {
   const parsed: unknown = JSON.parse(body);
@@ -138,12 +140,13 @@ let getPluginsShouldFail = false;
 // Mutable per-test so a suite can script a load landing one plugin at a time. `state` is carried
 // even though the mEdit client drops it: it is non-nullable on the wire.
 type MockLoadOrderStatus = {
-  state: 'None' | 'Reconciling' | 'Ready';
+  state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
   totalPlugins: number;
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
   failures: { name: string; origin: string; reason: string }[];
   version: number;
+  message?: string;
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
@@ -195,6 +198,7 @@ function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
   putLoadOrders.length = 0;
+  recordEdits.length = 0;
   mockPluginsOverride = null;
   mockImplicitMasters = [];
   implicitMastersShouldFail = false;
@@ -350,6 +354,17 @@ function createMockBackend(): http.Server {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockImplicitMasters));
+      return;
+    }
+    const edit = /^\/records\/([^/]+)\/edit$/.exec(url);
+    if (method === 'POST' && edit) {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', () => {
+        recordEdits.push({ formKey: decodeURIComponent(edit[1] ?? ''), body: JSON.parse(body) });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ applied: true }));
+      });
       return;
     }
     // A plugin row's children come from here once the backend is running.
@@ -509,6 +524,26 @@ describe('modbench command registration', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
+  });
+});
+
+// commands.md, The system commands: mod sync takes the instance value as its Argument.
+describe('modbench.mod.sync syncs the instance value it is handed', () => {
+  // A profile the landed value does not name, so no run of the trigger writes its modlist.txt.
+  const PROFILE = 'Handed Profile';
+  const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
+  const profileDir = path.join(root, 'profiles', PROFILE);
+
+  after(() => fs.rmSync(profileDir, { recursive: true, force: true }));
+
+  it('drops the line of a gone folder from the profile the handed value names', async () => {
+    fs.mkdirSync(profileDir, { recursive: true });
+    fs.writeFileSync(path.join(profileDir, 'modlist.txt'), '+Gone Mod\r\n');
+    const instance = present(instanceExport(), "the activated extension's instance export");
+
+    await vscode.commands.executeCommand('modbench.mod.sync', { ...instance.value, activeProfile: PROFILE });
+
+    assert.strictEqual(fs.readFileSync(path.join(profileDir, 'modlist.txt'), 'utf8'), '');
   });
 });
 
@@ -1464,6 +1499,17 @@ describe('Plugin sync says why it wrote nothing, and runs again on connect', () 
     await waitFor('the refusal to leave the message line', () =>
       !(messageLine()?.includes('plugins.txt is not synced') ?? false));
   });
+
+  // commands.md, The system commands: plugin sync takes the instance value as its Argument.
+  it('modbench.plugin.sync syncs the instance value it is handed: a Data folder it lists empty drops the line', async () => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
+    const instance = present(instanceExport(), "the activated extension's instance export");
+    const handed = { ...instance.value, dataFolderPlugins: { kind: 'listed', names: new Set<string>() } };
+
+    await vscode.commands.executeCommand('modbench.plugin.sync', handed);
+
+    assert.ok(!fs.readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'), 'the line the handed value drops');
+  });
 });
 
 describe('Plugin load-order rows expand into records', () => {
@@ -2197,6 +2243,53 @@ describe('Progressive load', () => {
       'Immutable.esm was indexed but never named in a progress tick — it must still browse once the completion hand-off lands',
     );
   });
+
+  // plugins.md, States 3-4: what the stream or the client says reaches the rows as their expansion.
+  const expandsTo = async (name: string): Promise<string | undefined> => {
+    const [child] = await childrenFor(name);
+    return nodeKind(child) === 'error' && child !== undefined ? describeTooltip(pluginsTree().getTreeItem(child).tooltip) : undefined;
+  };
+  const heldAndLoaded = async (): Promise<{ launch: Promise<void> }> => {
+    const launched = await launchAndAwaitOpeningTick();
+    setIndexed(['TestMod.esp']);
+    await waitForIndexed('TestMod.esp');
+    return launched;
+  };
+
+  it('expands every row, held or not, to the second window\'s refusal the stream carries', async () => {
+    const { launch } = await heldAndLoaded();
+    const HELD_ELSEWHERE = 'This instance\'s index is open in another Modbench window.';
+
+    setIndexed(['TestMod.esp'], { state: 'HeldElsewhere', message: HELD_ELSEWHERE });
+
+    for (const name of ['TestMod.esp', 'Other.esp']) {
+      await waitFor(`${name} to expand to the refusal`, async () => (await expandsTo(name)) === HELD_ELSEWHERE);
+    }
+    releasePut();
+    await launch;
+  });
+
+  it('expands a row the load never reached to a Failed refusal, and leaves a held row its records', async () => {
+    const { launch } = await heldAndLoaded();
+    const FAILED = 'the reconcile hit something it cannot name';
+
+    setIndexed(['TestMod.esp'], { state: 'Failed', message: FAILED });
+
+    await waitFor('Other.esp to expand to the refusal', async () => (await expandsTo('Other.esp')) === FAILED);
+    assert.notStrictEqual(await expandsTo('TestMod.esp'), FAILED, 'a held row keeps what already landed');
+    releasePut();
+    await launch;
+  });
+
+  it('expands a row the load never reached to why mEdit cannot be reached once the client stops', async () => {
+    const { launch } = await heldAndLoaded();
+
+    await ext?.exports.client.stop();
+
+    await waitFor('Other.esp to expand to the unreachable reason', async () => (await expandsTo('Other.esp')) === 'mEdit is stopped.');
+    releasePutLoadOrder?.();
+    await launch;
+  });
 });
 
 // pickCopyDestination opens with an unguarded repository.getPlugins(); a rejection escapes the
@@ -2241,3 +2334,31 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
     });
   }
 });
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
+// in focus. The palette hands the command no argument, as this test does.
+describe('A field gesture from the palette acts on the focused cell of the record tab in focus', () => {
+  before(async () => {
+    await resetMockBackendDetached();
+    await enterEditing();
+  });
+
+  after(() => { exitEditing(); });
+
+  it('removes the element the focused cell holds', async () => {
+    const formKey = '000801:TestMod.esp';
+    await vscode.commands.executeCommand('modbench.openEditor', { formKey, label: 'Focused Record' });
+    await waitFor('the record tab', () => openTabs().some((t) => t.label === 'Focused Record') || undefined);
+    const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
+    present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({
+      webviewSection: 'arrayElement', formKey, plugin: 'TestMod.esp', origin: 'Data', path,
+      canMoveUp: false, canMoveDown: true, preventDefaultContextMenuItems: true,
+    });
+
+    await vscode.commands.executeCommand('modbench.record.removeElement');
+
+    const sent = await waitFor('the edit to reach mEdit', () => recordEdits.at(-1));
+    assert.deepStrictEqual(sent, { formKey, body: { plugin: 'TestMod.esp', origin: 'Data', op: 'remove', path } });
+  });
+});
+

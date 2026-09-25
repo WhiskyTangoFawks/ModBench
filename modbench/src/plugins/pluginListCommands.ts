@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
+import { PluginsTreeProvider, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import { onlySelected } from './gestureEntry';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
 import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -12,8 +13,10 @@ import { errorMessage } from '../ports/errorMessage';
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
   pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,
+  viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.plugin.reveal', async (node: PluginListNode | undefined) => {
+  return vscode.commands.registerCommand('modbench.plugin.reveal', async (clicked: PluginListNode | undefined) => {
+    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const filePath = await pluginsTree.resolvePluginPath(name);

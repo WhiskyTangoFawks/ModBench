@@ -42,6 +42,25 @@ describe('install holds only install', () => {
   });
 });
 
+// The Instance adapter hides the manager's file formats and their splices (target-architecture.d2):
+// a verb that marks a downloaded file hands the adapter its edit, and never splices the `.meta`
+// itself.
+describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
+  const importsTheSidecarPath = (source: string): boolean =>
+    [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));
+
+  it('sees the sidecar path among an import\'s names, the form any other touch of the .meta takes', () => {
+    expect(importsTheSidecarPath("import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';")).toBe(true);
+    expect(importsTheSidecarPath("import {\n  downloadSidecarFile,\n} from './layout';")).toBe(true);
+    expect(importsTheSidecarPath("import { downloadFile } from '../instanceAdapter/layout';")).toBe(false);
+  });
+
+  it('is imported nowhere outside the Instance adapter', () => {
+    const offenders = sourceFiles().filter((f) => !f.startsWith('instanceAdapter/') && importsTheSidecarPath(read(f)));
+    expect(offenders).toEqual([]);
+  });
+});
+
 // A verb is an exported function whose signature answers with a result — `applied` inline, one
 // of the named `…Result` types every gesture returns (ADR-0015 invariant 2), or a selection's
 // outcome.

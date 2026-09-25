@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveCompileTarget } from './compileTarget';
+import { resolveCompileTarget, type ResolveCompileTargetDeps } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
@@ -12,7 +12,7 @@ import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { pluralArgument, registerPluginsGesture } from './gestureEntry';
+import { compilableSelected, onlySelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -28,9 +28,9 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-// Everything Save & Compile and Compile at Ref call: resolving an origin and a record's owner,
+// Everything compile and compile at ref call: resolving an origin and a record's owner,
 // compiling, and (on an ESL contradiction) editing the header to retry.
-type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
+type CompileClient = Pick<MEditClient, 'getPlugins' | 'compile' | 'editRecord'>;
 
 // ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
 // mod cannot be resolved has none, and none is invented for it.
@@ -108,9 +108,10 @@ export function registerRebaseCommand(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
   outputChannel: vscode.LogOutputChannel, reporter: Reporter,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
-  originFiles: OriginFilesOf,
+  originFiles: OriginFilesOf, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (node?: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (clicked?: PluginListNode) => {
+    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
@@ -135,46 +136,56 @@ export function registerRebaseCommand(
   });
 }
 
-// Reachable from a plugin row, from the record editor's title bar (the *active* record's owning
-// plugin — never a QuickPick, which risks compiling the wrong plugin), and from the palette
-// (QuickPick fallback only when neither is in hand).
+// A plugin row or a column header names its plugin. The palette names none, and an extension cannot
+// tell whether the Plugins view has focus, so it always asks, a selected compilable plugin first.
 export function registerSaveAndCompileCommand(
   client: CompileClient,
-  // Editor's own `ActiveRecordTracker`, structural: this module names no Editor type, only
-  // the one reader it needs — the active panel's own FormKey.
-  activeRecordTracker: { current(): string | undefined },
   outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
   originFiles: OriginFilesOf,
+  viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
-    const target = await resolveCompileTarget(
-      node?.kind === 'plugin' ? node.plugin.name : undefined,
-      activeRecordTracker.current(),
-      {
-        resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-        getRecordOwner: (formKey) => client.getRecordOwner(formKey),
-        onError: (message) => reporter.report('error', message),
-        pickPlugin: async () => {
-          const plugins = await client.getPlugins();
-          const choice = await vscode.window.showQuickPick(
-            plugins.map((p) => ({ label: p.name, description: p.origin })),
-            { placeHolder: 'Save & Compile which plugin?' },
-          );
-          if (!choice) return undefined;
-          if (!choice.description) {
-            reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
-            return undefined;
-          }
-          return { name: choice.label, origin: choice.description };
-        },
+  return vscode.commands.registerCommand('modbench.saveAndCompile', async (clicked?: unknown) => {
+    const header = columnHeaderOf(clicked);
+    if (header) {
+      await compileAndReport(client, diagnostics, originFiles, reporter, ask, header, undefined);
+      return;
+    }
+    const target = await resolveCompileTarget(isPluginRow(clicked) ? clicked.plugin.name : undefined, {
+      ...compileTargetDeps(client, outputChannel, reporter),
+      pickPlugin: async () => {
+        // plugins.md, Compile: the pick lists the plugins compile applies to, tracked and editable.
+        const selected = compilableSelected(viewSelection());
+        const isSelected = (p: { name: string; origin?: string | null }) =>
+          selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
+        const plugins = (await client.getPlugins()).filter((p) => p.isTracked && !p.isImmutable)
+          .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
+        const choice = await vscode.window.showQuickPick(
+          plugins.map((p) => ({ label: p.name, description: p.origin })),
+          { placeHolder: 'Compile which plugin?' },
+        );
+        if (!choice) return undefined;
+        if (!choice.description) {
+          reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
+          return undefined;
+        }
+        return { name: choice.label, origin: choice.description };
       },
-    );
+    });
     if (!target) return;
 
     await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
   });
+}
+
+function compileTargetDeps(
+  client: CompileClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
+): Omit<ResolveCompileTargetDeps, 'pickPlugin'> {
+  return {
+    resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
+    onError: (message) => reporter.report('error', message),
+  };
 }
 
 // One confirmation names the ref literally, never "pristine" — there is no stored mode
@@ -187,9 +198,8 @@ export function registerCompileAtRefCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
-    const target = await resolveCompileTarget(node.plugin.name, undefined, {
+    const target = await resolveCompileTarget(node.plugin.name, {
       resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
-      getRecordOwner: () => Promise.resolve(undefined),
       onError: (message) => reporter.report('error', message),
       pickPlugin: () => Promise.resolve(undefined),
     });
@@ -276,11 +286,29 @@ export function publishCompileDiagnostics(
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
- *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
- *  manual Refresh button has. */
+/** The shape this extension needs from a `vscode.git` `Repository`: `status()`, the SCM panel's
+ *  own Refresh, and the state's rebase commit, set while a rebase is in progress. */
 export interface MinimalRepository {
   status(): Thenable<unknown>;
+  readonly state: {
+    readonly rebaseCommit: unknown;
+    onDidChange(listener: () => void): vscode.Disposable;
+  };
+}
+
+/** Whether the plugin's mod is mid-rebase, as its repository says; a plugin with none is not. */
+export function rebaseInProgressIn(
+  pluginRepositories: ReadonlyMap<string, MinimalRepository> | undefined, plugin: string, origin: string,
+): boolean {
+  return pluginRepositories?.get(pluginAddressKey(plugin, origin))?.state.rebaseCommit !== undefined;
+}
+
+/** Hears every repository's state change, a rebase starting or ending among them. */
+export function watchRepositoryStates(
+  pluginRepositories: ReadonlyMap<string, MinimalRepository>, onChange: () => void,
+): vscode.Disposable {
+  const subscriptions = [...new Set(pluginRepositories.values())].map((repo) => repo.state.onDidChange(onChange));
+  return { dispose: () => { for (const s of subscriptions) s.dispose(); } };
 }
 // Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can
 // drift against an API this extension otherwise never touches. `openRepository` resolves `null`
@@ -331,4 +359,16 @@ export function refreshSourceControlFor(
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);
   });
+}
+
+function isPluginRow(value: unknown): value is Extract<PluginListNode, { kind: 'plugin' }> {
+  return typeof value === 'object' && value !== null && Reflect.get(value, 'kind') === 'plugin';
+}
+
+// A record tab's column header names its plugin and origin (editor.md, Menus and keys).
+function columnHeaderOf(value: unknown): { name: string; origin: string } | undefined {
+  if (typeof value !== 'object' || value === null || Reflect.get(value, 'webviewSection') !== 'recordHeader') return undefined;
+  const name: unknown = Reflect.get(value, 'plugin');
+  const origin: unknown = Reflect.get(value, 'origin');
+  return typeof name === 'string' && typeof origin === 'string' ? { name, origin } : undefined;
 }

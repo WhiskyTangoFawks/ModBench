@@ -22,10 +22,11 @@ import {
 } from '../mo2Codecs/modlistText';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
 import {
-  downloadFile, downloadSidecarFile, mo2FolderName, modDir, modFolderName, modlistFile, modsDir, separatorDir,
+  downloadFile, mo2FolderName, modDir, modFolderName, modlistFile, modsDir, separatorDir,
   separatorFolderName,
 } from '../instanceAdapter/layout';
-import { ensureDir, exists, get, listFolders, put, putIfChanged, rename } from '../instanceAdapter/files';
+import { ensureDir, exists, get, listFolders, putIfChanged, rename } from '../instanceAdapter/files';
+import { spliceDownloadMeta } from '../instanceAdapter/downloadMeta';
 import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
@@ -310,7 +311,7 @@ export function deleteSeparators(
 // keys' precedence.
 async function unmarkDownload(downloadsDir: string, name: string): Promise<void> {
   if (!(await exists(downloadFile(downloadsDir, name)))) return;
-  await put(downloadSidecarFile(downloadsDir, name), setUninstalledInText, { ifMissing: '' });
+  await spliceDownloadMeta(downloadsDir, name, setUninstalledInText);
 }
 
 /** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,

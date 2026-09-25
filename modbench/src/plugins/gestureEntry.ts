@@ -70,3 +70,44 @@ export function pluralArgument<K extends ArgumentKind>(entry: GestureEntry, ...k
 export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, ...kinds: K[]): RowOf<K>[] {
   return entry.selection.filter(isOf(kinds));
 }
+
+// The record rows the row menu offers delete on: a record its own plugin can have removed.
+const DELETABLE_RECORD = new Set(['recordTracked', 'recordUntracked', 'recordOverride']);
+
+/** The one selected row, when it is of `kind`: a singular gesture's Argument from the palette. */
+export function onlySelected<K extends ArgumentKind>(selection: readonly PluginsTreeNode[], kind: K): RowOf<K> | undefined {
+  const [only, ...rest] = selection;
+  return rest.length === 0 && only !== undefined && isOf([kind])(only) ? only : undefined;
+}
+
+const flagsOf = (row: PluginsTreeNode | undefined): string[] => (row?.contextValue ?? '').split(' ');
+
+// A palette gesture sends no item it would refuse, so it needs every selected row to qualify.
+const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTreeNode) => boolean): boolean =>
+  selection.length > 0 && selection.every(qualifies);
+
+/** The one selected plugin compile applies to: compile's Argument from the palette. */
+export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf<'plugin'> | undefined {
+  const only = onlySelected(selection, 'plugin');
+  return flagsOf(only).includes('compilable') ? only : undefined;
+}
+
+/** What the Plugins palette entries' `when` clauses read off the selection, since the palette is
+ *  handed no row. */
+export interface PluginsKeyContext {
+  readonly singlePlugin: boolean;
+  readonly allUntrackedInMod: boolean;
+  readonly singleRebasable: boolean;
+  readonly singleRecordType: boolean;
+  readonly allDeletableRecords: boolean;
+}
+
+export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): PluginsKeyContext {
+  return {
+    singlePlugin: onlySelected(selection, 'plugin') !== undefined,
+    allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
+    singleRebasable: flagsOf(onlySelected(selection, 'plugin')).includes('rebasable'),
+    singleRecordType: onlySelected(selection, 'recordType') !== undefined,
+    allDeletableRecords: every(selection, (row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
+  };
+}

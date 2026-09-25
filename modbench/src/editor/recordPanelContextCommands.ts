@@ -4,6 +4,7 @@ import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import type { EditGate } from './followRecord';
+import type { FocusedCellContext } from './focusedCells';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
   // Load order-static: the same field files and channel every panel's tabs would get.
@@ -12,6 +13,8 @@ export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
   // A right-click's edits are the panel's it came from, through its gate. The panel is named by its
   // webview context's `panelId`, which the body carries.
   editGateOf: (panelId: string | undefined) => EditGate;
+  // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.
+  focusedCell: () => FocusedCellContext | undefined;
 }
 
 interface ContextCommand {
@@ -25,7 +28,9 @@ function hasWebviewSection<Ctx extends { webviewSection: string }>(
   value: unknown, webviewSection: Ctx['webviewSection'],
 ): value is Ctx {
   if (typeof value !== 'object' || value === null) return false;
-  return (value as { webviewSection?: unknown }).webviewSection === webviewSection;
+  // One cell can carry several sections, space-separated, as its menu's `=~` reads them.
+  const sections: unknown = Reflect.get(value, 'webviewSection');
+  return typeof sections === 'string' && sections.split(' ').includes(webviewSection);
 }
 
 function panelIdOf(ctx: object): string | undefined {
@@ -95,6 +100,9 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
  *  the envelope its own `data-vscode-context` spells (ADR-0007), posting nothing into the panel. */
 export function registerRecordPanelContextCommands(deps: RecordPanelContextCommandDeps): vscode.Disposable[] {
   return CONTEXT_COMMANDS.map(({ command, run }) =>
-    vscode.commands.registerCommand(command, (ctx?: unknown) => (ctx ? run(deps, ctx) : undefined)),
+    vscode.commands.registerCommand(command, (clicked?: unknown) => {
+      const ctx = clicked ?? deps.focusedCell();
+      return ctx ? run(deps, ctx) : undefined;
+    }),
   );
 }

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
-import { IN_AN_INSTANCE, isRecord, requires } from './manifest';
+import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
 } from './vscodeMock';
@@ -188,7 +188,36 @@ describe('package.json outside an instance', () => {
     expect(requires(`view == modbench.modList && !${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
     expect(requires(`view == modbench.modList || ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
     expect(requires('view == modbench.modList', IN_AN_INSTANCE)).toBe(false);
+  });
+
+  // `&&` binds tighter than `||` in a when clause, so a term in every alternative gates them all.
+  it('recognizes the gate as a conjunct of every alternative', () => {
+    expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b`, IN_AN_INSTANCE)).toBe(false);
     expect(requires(undefined, IN_AN_INSTANCE)).toBe(false);
+  });
+
+  it('reads parentheses as VS Code groups them', () => {
+    expect(requires(`${IN_AN_INSTANCE} && (view == a || view == b)`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`(view == a && ${IN_AN_INSTANCE}) || (view == b && ${IN_AN_INSTANCE})`, IN_AN_INSTANCE)).toBe(true);
+    expect(requires(`(view == a || ${IN_AN_INSTANCE}) && view == b`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires(`!(${IN_AN_INSTANCE}) && view == a`, IN_AN_INSTANCE)).toBe(false);
+    expect(requires(String.raw`${IN_AN_INSTANCE} && !(viewItem =~ /\b(a|b)\b/)`, IN_AN_INSTANCE)).toBe(true);
+  });
+
+  it('evaluates a clause against the context it is given', () => {
+    const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
+    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
+    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\buntrackedInMod\b/`, on)).toBe(false);
+    expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
+    expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
+    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
+    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
+  });
+
+  it('refuses a clause it cannot read, rather than reading it as ungated', () => {
+    expect(() => requires(`${IN_AN_INSTANCE} && (view == a`, IN_AN_INSTANCE)).toThrow(/cannot read/);
+    expect(() => requires(`${IN_AN_INSTANCE} && view == a)`, IN_AN_INSTANCE)).toThrow(/cannot read/);
   });
 });
 
@@ -530,67 +559,29 @@ describe('package.json command titles and categories', () => {
     expect(offenders.map((c) => c.command)).toEqual([]);
   });
 
-  // These do something only when invoked with a tree/webview argument the palette never supplies,
-  // and none has an ambient fallback: left live, each is a silent no-op or a guaranteed error
-  // toast. Exhaustive both ways, like EXPECTED_COMMANDS.
-  const PALETTE_GATED = [
-    'modbench.openHeader',
-    // Each needs the clicked cell's own row/column identity from its
-    // data-vscode-context — no ambient fallback worth a QuickPick-over-QuickPick, same posture as
-    // the tree-row-gated commands below.
-    'modbench.record.addElement',
-    'modbench.record.removeElement',
-    'modbench.record.moveElementUp',
-    'modbench.record.moveElementDown',
-    // ADR-0018: each needs the clicked cell's or VMAD row's own identity from its
-    // data-vscode-context — no ambient fallback, same posture as the array ops above.
-    'modbench.record.openFieldValue',
-    'modbench.downloads.install',
-    'modbench.mod.viewOnNexus',
-    'modbench.downloadedFile.open',
-    // Absent when the file has no .meta (its own context-menu `when`), and even offered it still
-    // needs the clicked row's own identity — no ambient fallback.
-    'modbench.downloadedFile.openMeta',
-    // Has the Delete key's own ambient selection fallback; still gated here, because no palette
-    // entry names it.
-    'modbench.downloadedFile.delete',
-    'modbench.downloadedFile.exclude',
-    'modbench.downloadedFile.include',
-    'modbench.mod.openFolder',
-    'modbench.plugin.reveal',
-    // Needs the clicked row's plugin name to resolve which mod folder to track.
-    'modbench.plugin.track',
-    // Needs the clicked row's plugin name — compiling "at main" from the palette with no
-    // plugin in hand isn't a gesture worth a QuickPick-over-QuickPick (unlike modbench.saveAndCompile
-    // itself, which falls back to one and stays palette-visible).
-    'modbench.pluginListTree.compileAtMain',
-    // Needs the clicked row's plugin name to resolve which mod folder (origin) to rebase —
-    // same posture as Track/compileAtMain, no ambient fallback worth a QuickPick.
-    'modbench.mod.rebaseEditBranch',
-    // Each needs the clicked row's own identity (recordType node's plugin/recordType, or a
-    // record row's own FormKey/plugin) — no ambient fallback worth a QuickPick-over-QuickPick,
-    // same posture as the tree-row-gated commands above.
-    'modbench.record.create',
-    'modbench.record.delete',
-    // Reached from a plugins-tree record row or the record editor's column header, neither with an
-    // ambient fallback worth a QuickPick-over-QuickPick.
-    'modbench.record.copyAsOverride',
-    'modbench.record.copyAsNewRecord',
-  ] as const;
+  const paletteGated = (): readonly string[] => LEGACY_GESTURES.flatMap((g) => g.outOfPalette);
+  const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
-  it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(22);
-    const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
-    const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
-    const unexpectedGate = [...gatedFalse].filter(
-      (c) => !(PALETTE_GATED as readonly string[]).includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
+  it('gates exactly the listed commands out of the palette', () => {
+    const missingGate = paletteGated().filter((c) => !gatedFalse().has(c));
+    const unexpectedGate = [...gatedFalse()].filter(
+      (c) => !paletteGated().includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
     );
     expect(missingGate).toEqual([]);
     expect(unexpectedGate).toEqual([]);
   });
 
+  it('offers every catalog gesture in the palette', () => {
+    const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
+    expect(
+      hidden,
+      'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
+    ).toEqual([]);
+  });
+
   // System commands (commands.md): Modbench runs each on its own trigger — no gesture, no entry
-  // point, and (unlike PALETTE_GATED above) no argument a picker could ever ask for.
+  // point, and no argument a picker could ever ask for.
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
     'modbench.mod.sync',
@@ -604,8 +595,7 @@ describe('package.json command titles and categories', () => {
       notASystemCommand,
       notASystemCommand.map((c) => `${c} is not a Command ID in commands.md's System commands table.`).join('\n'),
     ).toEqual([]);
-    const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
-    const missingGate = INTERNAL_COMMANDS.filter((c) => !gatedFalse.has(c));
+    const missingGate = INTERNAL_COMMANDS.filter((c) => !gatedFalse().has(c));
     expect(missingGate).toEqual([]);
   });
 });
@@ -639,18 +629,43 @@ describe('package.json record-row context menu', () => {
 describe('package.json plugin-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
+  // Every contextValue a plugin row can carry, so a menu entry any of them opens is on the plugin
+  // menu, whatever flag it asks for. Open Header has no entries: it opens via row click.
+  const PLUGIN_ROWS = ['plugin', 'plugin untrackedInMod', 'plugin compilable', 'plugin rebasable', 'plugin rebasable compilable'];
+  const forPluginRows = () => contextMenus().filter((e) =>
+    PLUGIN_ROWS.some((viewItem) => holds(e.when, { view: 'modbench.pluginListTree', viewItem })));
 
-  // Every command reachable from a plugin row, listed, with exactly one contextValue (`plugin`).
-  // Open Header has no entries: it opens via row click, not a menu entry.
+  // Each plugin-menu command, with the row flag it needs.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
+    const ON = 'view == modbench.pluginListTree && viewItem =~ ';
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
-      ['modbench.plugin.reveal', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.plugin.track', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.mod.rebaseEditBranch', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.plugin.reveal', String.raw`${ON}/\bplugin\b/`],
+      ['modbench.plugin.track', String.raw`${ON}/\buntrackedInMod\b/`],
+      ['modbench.saveAndCompile', String.raw`${ON}/\bcompilable\b/`],
+      ['modbench.pluginListTree.compileAtMain', String.raw`${ON}/\bcompilable\b/`],
+      ['modbench.mod.rebaseEditBranch', String.raw`${ON}/\brebasable\b/`],
     ]);
+  });
+
+  // plugins.md, Menus and keys, story 6: offered only where the catalog's condition holds.
+  it('offers track, rebase and compile only where the catalog\'s condition holds', () => {
+    const offered = (command: string, contextValue: string) => {
+      const entry = present(forPluginRows().find((e) => e.command === command), command);
+      const pattern = present(/viewItem =~ \/(.*)\/$/.exec(entry.when)?.[1], `the viewItem pattern of ${command}`);
+      return new RegExp(pattern).test(contextValue);
+    };
+    expect(offered('modbench.plugin.track', 'plugin untrackedInMod')).toBe(true);
+    expect(offered('modbench.plugin.track', 'plugin rebasable')).toBe(false);
+    expect(offered('modbench.plugin.track', 'plugin')).toBe(false);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin rebasable')).toBe(true);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin untrackedInMod')).toBe(false);
+    expect(offered('modbench.mod.rebaseEditBranch', 'plugin')).toBe(false);
+    expect(offered('modbench.plugin.reveal', 'pluginImplicit')).toBe(false);
+    for (const compile of ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain']) {
+      expect(offered(compile, 'plugin rebasable compilable')).toBe(true);
+      expect(offered(compile, 'plugin rebasable')).toBe(false);
+      expect(offered(compile, 'plugin untrackedInMod')).toBe(false);
+    }
   });
 });
 
@@ -698,11 +713,11 @@ describe('package.json Downloads row menu order', () => {
   });
 
   // Ties the two halves together, as Mods' own enable/disable test does. Exclude's own clause
-  // negates (`!(...hidden...)`), unlike enable/disable, so satisfies() reads the sign, not just
+  // negates (`!(...excluded...)`), unlike enable/disable, so satisfies() reads the sign, not just
   // the flag name.
   it('an excluded row satisfies include\'s when-clause, and not exclude\'s — and vice versa', () => {
-    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { hidden: true }));
-    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { hidden: false }));
+    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { excluded: true }));
+    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { excluded: false }));
     const exclude = present(
       downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.exclude'),
       'a modbench.downloadedFile.exclude row-menu entry',
@@ -767,6 +782,84 @@ describe('package.json Downloads delete key', () => {
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
     expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+  });
+});
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
+// in focus, and is in the palette only while one has focus, on the cell its menu is offered on.
+describe('package.json field gestures\' palette entries', () => {
+  // The active editor is a record tab and no sidebar or panel holds the focus: VS Code documents no
+  // key for a webview's own focus (when-clause-contexts.md).
+  const ON_A_RECORD_TAB = "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus";
+  const FIELD_PALETTE = [
+    ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
+    ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],
+    ['modbench.record.moveElementUp', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveUp`],
+    ['modbench.record.moveElementDown', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveDown`],
+    ['modbench.record.openFieldValue', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
+  ] as const;
+
+  it.each(FIELD_PALETTE)('%s is in the palette only while a record tab has focus on a cell that holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`${ON_A_RECORD_TAB} && ${holds}`]);
+  });
+});
+
+// commands.md, compile: Editor, context menu (plugin tracked and editable); editor.md, Menus and
+// keys: the column header. The header's context hands the command its own plugin.
+describe('package.json compile on the record tab', () => {
+  it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
+    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+    expect(webviewMenu.filter((e) => e.command === 'modbench.saveAndCompile').map((e) => e.when)).toEqual([
+      String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && compilable`,
+    ]);
+    expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
+  });
+});
+
+// plugins.md, Compile: from the palette, the one selected compilable plugin, or a pick of them.
+describe('package.json compile\'s palette entry', () => {
+  it('is in the palette while any plugin compiles', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.saveAndCompile');
+    expect(entries.map((e) => e.when)).toEqual([`${IN_AN_INSTANCE} && modbench.plugin.anyCompilable`]);
+  });
+});
+
+// commands.md, No dead entries: each is listed only while the Plugins selection holds what it acts
+// on, as its row menu does.
+describe('package.json Plugins palette entries', () => {
+  const PLUGINS_PALETTE = [
+    ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
+    ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
+    ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singleRebasable'],
+    ['modbench.record.create', 'modbench.plugin.singleRecordType'],
+    ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
+  ] as const;
+
+  it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && ${holds}`]);
+  });
+});
+
+// commands.md, No dead entries: each is listed only while the Downloads selection holds what it
+// acts on.
+describe('package.json Downloads palette entries', () => {
+  const DOWNLOADS_PALETTE = [
+    ['modbench.downloadedFile.open', 'modbench.downloadedFile.singleFile'],
+    ['modbench.downloadedFile.openMeta', 'modbench.downloadedFile.singleFileWithMeta'],
+    ['modbench.downloadedFile.delete', 'modbench.downloadedFile.holdsFile'],
+    ['modbench.downloadedFile.exclude', 'modbench.downloadedFile.holdsIncluded'],
+    ['modbench.downloadedFile.include', 'modbench.downloadedFile.holdsExcluded'],
+  ] as const;
+
+  it.each(DOWNLOADS_PALETTE)('%s is in the palette only while the Downloads view has focus and its selection holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.downloads && ${IN_AN_INSTANCE} && ${holds}`]);
   });
 });
 
@@ -969,6 +1062,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
     ['modbench.mod.createEmpty', undefined],
     ['modbench.mod.install', undefined],
+    ['modbench.mod.openFolder', 'modbench.mod.singleFolder'],
   ] as const;
 
   it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {
@@ -976,6 +1070,16 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       .filter((e) => e.command === command);
     const focused = `focusedView == modbench.modList && ${IN_AN_INSTANCE}`;
     expect(entries.map((e) => e.when)).toEqual([holds === undefined ? focused : `${focused} && ${holds}`]);
+  });
+
+  // commands.md, view on Nexus: Mods (mod has a Nexus id); Downloads (file has a Nexus id).
+  it('offers view on Nexus in the palette only on the focused view whose row the command opens', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.mod.viewOnNexus');
+    expect(entries.map((e) => e.when)).toEqual([
+      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.modList`
+      + ` || focusedView == modbench.downloads && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.downloads`,
+    ]);
   });
 
   it('the empty list\'s message names the overflow\'s own titles', () => {
@@ -1095,13 +1199,23 @@ function catalogBuiltCommandIds(markdown: string): Set<string> {
 const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
 
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
-// another ticket, and that ticket deletes the line.
-const LEGACY_GESTURES = [
-  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'] },
-  { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },
-  { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
-  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },
-] as const;
+// another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
+const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
+  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
+  {
+    gesture: 'record open', removedBy: '#963',
+    ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
+    outOfPalette: ['modbench.openHeader'],
+  },
+  {
+    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
+    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
+  },
+  {
+    gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
+    outOfPalette: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
+  },
+];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1120,6 +1234,11 @@ describe('package.json registers every command under its catalog Command ID', ()
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
         + 'source: register the gesture under the ID its row gives it.').join('\n'),
     ).toEqual([]);
+  });
+
+  it('takes out of the palette only a legacy line\'s own IDs', () => {
+    const strays = LEGACY_GESTURES.flatMap((g) => g.outOfPalette.filter((id) => !g.ids.includes(id)));
+    expect(strays).toEqual([]);
   });
 
   it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
@@ -1141,17 +1260,30 @@ const TITLES_SET_ELSEWHERE = new Set(['modbench.record.create', 'modbench.record
 
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
+function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, title: string): void {
+  const [, object = '', verb = ''] = present(
+    /^modbench\.(\w+)\.(\w+)$/.exec(catalogId) ?? undefined, `${catalogId} as modbench.<object>.<verb>`);
+  const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
+  const objectWords = wordsOf(object);
+  const noun = present(objectWords.pop(), `the noun of ${object}`);
+  expect(titleWords, `the title of ${registeredId} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
+  expect(titleWords, `the title of ${registeredId} names the object`).toEqual(expect.arrayContaining(objectWords));
+  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${registeredId} names the ${noun}`).toBe(true);
+}
+
 describe('package.json palette titles are the verb and the object', () => {
   const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command) && !TITLES_SET_ELSEWHERE.has(c.command));
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
-    const [, object = '', verb = ''] = present(
-      /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
-    const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
-    const objectWords = wordsOf(object);
-    const noun = present(objectWords.pop(), `the noun of ${object}`);
-    expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
-    expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
-    expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
+    expectTitleNamesVerbAndObject(id, id, title);
   });
+
+  const compile = present(LEGACY_GESTURES.find((g) => g.gesture === 'compile'), 'the compile legacy gesture');
+  const legacyCompile = pkg.contributes.commands.filter((c) => compile.ids.includes(c.command));
+
+  it.each(legacyCompile.map((c) => [c.command, c.title]))(
+    '%s, still under its legacy ID, is titled by the catalog\'s compile: "%s"', (id, title) => {
+      expectTitleNamesVerbAndObject('modbench.plugin.compile', id, title);
+      expect(title.toLowerCase().split(/\s+/)[0], `the title of ${id} leads with the verb`).toBe('compile');
+    });
 });

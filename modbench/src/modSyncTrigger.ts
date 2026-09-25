@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { Instance } from './instanceLoader/instance';
+import type { Instance, InstanceValue } from './instanceLoader/instance';
 import type { ModSyncResult } from './modlist/modlist';
 import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
 
@@ -10,14 +10,14 @@ export interface ModSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns
 // agrees with mods/, so the command writes nothing, which stops the loop.
 export function registerModSync(
   instance: Pick<Instance, 'subscribe'>,
-  sync: (profile: string, modFolders: readonly string[] | undefined) => Promise<ModSyncResult>,
+  sync: (value: InstanceValue) => Promise<ModSyncResult>,
   channel: { error(msg: string): void; info(msg: string): void },
 ): ModSyncTrigger {
   const failures = reportSyncFailures('mod sync', 'modlist.txt is not synced', (line) => channel.error(line));
   const runs = trackSyncRuns();
   const subscription = instance.subscribe((value) => {
     runs.begin((async () => {
-      const outcome = await failures.run(() => sync(value.activeProfile, value.modFolders));
+      const outcome = await failures.run(() => sync(value));
       if (outcome === undefined) return;
       if (outcome.added.length > 0) {
         channel.info(`[modmanager] mod sync added ${outcome.added.length} modlist.txt line(s) for folder(s) in mods/ with no line: ${outcome.added.join(', ')}`);

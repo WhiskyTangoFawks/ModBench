@@ -127,7 +127,7 @@ describe('PluginHeader', () => {
   // The copy commands live on the header's native right-click menu (ADR-0017), so there is
   // no rendered button to assert on — only the `data-vscode-context` payload they are gated on.
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
-    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data'));
+    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data', false));
     const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
     const root = container.firstElementChild;
     if (!root) throw new Error('expected PluginHeader to render a root element');
@@ -135,7 +135,7 @@ describe('PluginHeader', () => {
     if (contextAttr === null) throw new Error('expected the root element to carry a data-vscode-context attribute');
     expect(JSON.parse(contextAttr)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data',
-      preventDefaultContextMenuItems: true,
+      compilable: false, preventDefaultContextMenuItems: true,
     });
   });
 

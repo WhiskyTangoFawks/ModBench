@@ -81,7 +81,10 @@ export interface PluginsTreeProviderOptions {
   /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
    *  could not be reached — renders no implicit row rather than a guessed one. */
   implicitMasters?: ImplicitMasterSource;
+  /** Whether the mod holding this plugin is mid-rebase, as its repository says. Absent: none is. */
+  rebaseInProgress?: (plugin: string, origin: string) => boolean;
 }
+
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Overridden plugins are registered
@@ -159,6 +162,7 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
 // parallel collections: they arrive together, change together, and are keyed the same way.
 interface PluginFacts {
   readOnly?: boolean;
+  tracked?: boolean;
   masterIssues?: MasterIssue[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
@@ -278,12 +282,15 @@ export class PluginsTreeProvider
   private cache?: { rows: PluginListNode[] };
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
+  private readonly rebaseInProgress: (plugin: string, origin: string) => boolean;
+
   constructor(options: PluginsTreeProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
     this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
+    this.rebaseInProgress = options.rebaseInProgress ?? (() => false);
     this.instance = options.instance;
     this.records = options.records;
     this.client = options.client;
@@ -486,6 +493,38 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
+    row.contextValue = this.contextValueOf(file, joinedOrigin);
+  }
+
+  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, rebase on a tracked
+  // one's mod while none is in progress, compile on a tracked, editable one. None before mEdit answers.
+  private contextValueOf(file: string, joinedOrigin: string | undefined): string {
+    if (joinedOrigin === undefined || !this.inMod(joinedOrigin)) return 'plugin';
+    const facts = this.facts?.get(file, joinedOrigin);
+    if (facts?.tracked === undefined) return 'plugin';
+    if (!facts.tracked) return 'plugin untrackedInMod';
+    const flags = ['plugin'];
+    if (!this.rebaseInProgress(file, joinedOrigin)) flags.push('rebasable');
+    if (this.compilable(file, joinedOrigin)) flags.push('compilable');
+    return flags.join(' ');
+  }
+
+  // The instance value names each mod's folder, whatever the mod manager calls the others.
+  private inMod(origin: string): boolean {
+    const folded = origin.toLowerCase();
+    return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded);
+  }
+
+  /** Whether compile applies to any plugin, which compile's palette entry reads. */
+  anyCompilable(): boolean {
+    return this.someCompilable;
+  }
+
+  // Compile applies to a tracked plugin in a mod that is not read-only for editing.
+  private compilable(file: string, origin: string): boolean {
+    if (!this.inMod(origin)) return false;
+    const facts = this.facts?.get(file, origin);
+    return facts?.tracked === true && facts.readOnly !== true;
   }
 
   // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
@@ -506,6 +545,7 @@ export class PluginsTreeProvider
 
   private heldFiles?: Set<string>;
   private facts?: ByPluginAddress<PluginFacts>;
+  private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
   private diagnoses?: ByPluginAddress<string[]>;
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
@@ -613,11 +653,12 @@ export class PluginsTreeProvider
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
-        readOnly: p.isImmutable, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);
     }
     this.facts = facts;
+    this.someCompilable = plugins.some((p) => this.compilable(p.name, p.origin));
     this.matches = matches;
     this.recordFilterMatchesNothing = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }

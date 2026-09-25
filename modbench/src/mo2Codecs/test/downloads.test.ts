@@ -37,17 +37,17 @@ describe('parseDownloadMeta, through buildDownloadRows', () => {
     expect(rowFor('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });
 
-  it('is not hidden when removed is explicitly false', () => {
-    expect(rowFor('[General]\r\nremoved=false\r\n').hidden).toBe(false);
+  it('is not excluded when removed is explicitly false', () => {
+    expect(rowFor('[General]\r\nremoved=false\r\n').excluded).toBe(false);
   });
 
   // The load-bearing guard for the acceptance criterion: the Uninstalled Status
   // (uninstalled=true) and hidden (removed=true) are never conflated — they are
   // orthogonal axes derived from different keys.
-  it('never conflates the Uninstalled Status with hidden: both flags coexist', () => {
+  it('never conflates the Uninstalled Status with excluded: both flags coexist', () => {
     const row = rowFor('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
     expect(row.status).toBe('Uninstalled');
-    expect(row.hidden).toBe(true);
+    expect(row.excluded).toBe(true);
   });
 
   // A .meta hand-edited after open .meta (downloads.md, Menus and keys) can pad key=value spacing a writer never
@@ -188,7 +188,7 @@ describe('buildDownloadRows', () => {
         size: 123,
         mtimeMs: 100,
         hasMeta: false,
-        hidden: false,
+        excluded: false,
         modID: undefined,
       },
     ]);
@@ -219,10 +219,10 @@ describe('buildDownloadRows', () => {
     expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);
   });
 
-  it('carries the hidden flag through without filtering (filtering is a view concern)', () => {
+  it('carries the excluded flag through without filtering (filtering is a view concern)', () => {
     const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nremoved=true\r\n')]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: 'foo.zip', hidden: true });
+    expect(rows[0]).toMatchObject({ name: 'foo.zip', excluded: true });
   });
 
   it('uses the .meta name as displayName when present', () => {

@@ -110,11 +110,13 @@ type RecordLifecycleClient = Pick<MEditClient,
   | 'editRecord'>;
 
 /** ADR-0018: xEdit hosts Add and Remove in its tree's context menu, not the grid, and the titles
- *  match its captions exactly. No ambient fallback is worth a QuickPick, so both are palette-gated. */
+ *  match its captions exactly. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
   treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
+  // The palette hands no row, so both take the Plugins selection.
+  viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
   // A create or delete landed: the same re-derive every write in this file needs
@@ -125,7 +127,8 @@ export function registerRecordLifecycleCommands(
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
     // by editing its EditorID, matching xEdit's own gesture.
     vscode.commands.registerCommand('modbench.record.create', async (arg?: unknown) => {
-      const identity = recordTypeIdentity(arg);
+      const [only, ...rest] = viewSelection();
+      const identity = recordTypeIdentity(arg ?? (rest.length === 0 ? only : undefined));
       if (!identity) return;
       const origin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
       if (!origin) return;
@@ -142,7 +145,7 @@ export function registerRecordLifecycleCommands(
 
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
-      const identities = selectedRecords(clicked, selected);
+      const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
       if (identities.length === 0) return;
       if (await askToDelete(identities, ask) !== 'Delete') return;
 

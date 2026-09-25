@@ -7,6 +7,7 @@ import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import type { EditGate, EditsInFlight, FollowedPanel } from './followRecord';
+import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
@@ -26,10 +27,12 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
   // that tab along: its column names the plugin the edit landed on (ADR-0012).
   editInFlight: EditGate;
+  // The panel's own focused cell, which a field gesture from the palette acts on.
+  focusCell: (context: FocusedCellContext | undefined) => void;
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight' | 'focusCell'>;
 
 /** The router's bundle for one panel's messages: the picker replies to it, and its edits are
  *  held in flight for it. */
@@ -37,11 +40,13 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
   edits: EditsInFlight<Panel>,
+  focusedCells: FocusedCells<Panel>,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
     editInFlight: edits.gate(panel),
+    focusCell: (context) => { focusedCells.setCell(panel, context); },
   };
 }
 
@@ -76,6 +81,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
+  [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined); },
 };
 
 // Each case below narrows `m` to its own variant, so calling its HANDLERS entry needs no
@@ -87,6 +93,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
     case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
     default: {
       const unreachable: never = m;
       return unreachable;

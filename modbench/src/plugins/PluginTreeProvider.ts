@@ -321,11 +321,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
-  // A Quest/DialogTopic row's own children, keyed the same
-  // `${originKey(plugin, origin)}::${formKey}` shape refCache already uses for a cell's own
-  // references — two same-filename plugins' rows never share an entry.
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
-  // Last load-more failure per parent, keyed by originKey alone — interior cells are the only
+  // Last load-more failure per parent, keyed by pluginAddressKey alone — interior cells are the only
   // surface that pages. Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
@@ -388,7 +385,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private findCachedRecordLocation(
     plugin: string, origin: string | undefined, formKey: string,
   ): { key: string; page: RecordPage; index: number; item: RecordSummary } | undefined {
-    const prefix = `${this.originKey(plugin, origin)}::`;
+    const prefix = `${pluginAddressKey(plugin, origin)}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
       const index = page.items.findIndex(r => r.formKey === formKey);
@@ -459,7 +456,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // getChildren call (see fetchRecords).
   async loadMore(node: InteriorLoadMoreNode): Promise<void> {
     const parent = node.parentNode;
-    const cacheKey = this.originKey(parent.plugin, parent.origin);
+    const cacheKey = pluginAddressKey(parent.plugin, parent.origin);
     const cached = this.interiorCache.get(cacheKey) ?? { items: [], total: 0 };
     try {
       const result = await this.repository.getInteriorCells(parent.plugin, cached.items.length, PAGE_SIZE, parent.origin);
@@ -473,15 +470,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(parent);
   }
 
-  // The origin is part of every cache key, not decoration: two plugins that share a filename have
-  // their own pages, and serving one plugin's page under the other's node is a "right target,
-  // wrong content" failure.
-  private originKey(plugin: string, origin?: string): string {
-    return `${plugin}|${origin ?? ''}`;
-  }
-
   private cacheKey(node: RecordTypeNode): string {
-    return `${this.originKey(node.plugin, node.origin)}::${node.recordType}`;
+    return `${pluginAddressKey(node.plugin, node.origin)}::${node.recordType}`;
   }
 
   private err(e: unknown): string {
@@ -552,7 +542,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
-      const cacheKey = `${this.originKey(node.plugin, node.origin)}::${node.cell.formKey}`;
+      const cacheKey = `${pluginAddressKey(node.plugin, node.origin)}::${node.cell.formKey}`;
       const refs = await this.getOrLoad(this.refCache, cacheKey,
         () => this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin));
       const groups: PlacedGroupNode[] = [];
@@ -565,7 +555,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // A returned "dial" child is itself expandable to its Responses; every other type is a leaf.
   private fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
-      const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
+      const cacheKey = `${pluginAddressKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
       return children.map(c => new RecordNode(
@@ -576,7 +566,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
-      const cacheKey = this.originKey(node.plugin, node.origin);
+      const cacheKey = pluginAddressKey(node.plugin, node.origin);
       const cached = await this.getOrLoad(this.interiorCache, cacheKey,
         () => this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin));
       const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin));

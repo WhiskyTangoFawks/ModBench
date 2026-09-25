@@ -21,7 +21,7 @@ export type MasterIssue = Schemas['MasterIssue'];
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
-/** Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
+/** Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
  *  successful (HTTP 200) answer (`succeeded: false` with a `refusalReason`), never an HTTP error. */
 export type CompileResult = Schemas['CompileResult'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];

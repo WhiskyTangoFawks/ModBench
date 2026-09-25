@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ModlistNode, ModNode, SeparatorNode } from './ModListProvider';
+import { OVERWRITE_NODE_KIND, type ModlistNode, type ModNode, type SeparatorNode } from './ModListProvider';
 
 /** The rows a Mods gesture's Argument is taken from. */
 export interface GestureEntry {
@@ -79,6 +79,8 @@ export interface ModsKeyContext {
   readonly selectionToggle?: 'enable' | 'disable';
   readonly selectionKind?: ArgumentKind;
   readonly singleRow: boolean;
+  /** One row, and it has a folder: a mod, or Overwrite. */
+  readonly singleFolder: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
 }
@@ -88,10 +90,12 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
   const [firstMod] = mods;
   const kinds = new Set(selection.filter(isOf(['mod', 'separator'])).map((row) => row.kind));
   const [onlyKind] = kinds;
+  const [onlyRow] = selection.length === 1 ? selection : [];
   return {
     selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
-    singleRow: selection.length === 1,
+    singleRow: onlyRow !== undefined,
+    singleFolder: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
   };

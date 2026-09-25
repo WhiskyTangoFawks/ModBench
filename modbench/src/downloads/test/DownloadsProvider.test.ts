@@ -36,7 +36,7 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
     size: 100,
     mtimeMs: 1700000000000,
     hasMeta: false,
-    hidden: false,
+    excluded: false,
     ...extra,
   };
   return {
@@ -193,8 +193,8 @@ describe('DownloadNode', () => {
   });
 
   it('contextValue is the row\'s downloadContextValue', () => {
-    const node = new DownloadNode(row({ hasMeta: true, modID: '1', hidden: true }));
-    expect(node.contextValue).toBe('download hasModID hasMeta hidden');
+    const node = new DownloadNode(row({ hasMeta: true, modID: '1', excluded: true }));
+    expect(node.contextValue).toBe('download hasModID hasMeta excluded');
   });
 
   it('resourceUri is the path the value carries for the row', () => {
@@ -261,8 +261,8 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     expect(rowNames(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
   });
 
-  it('excludes hidden rows by default (Show hidden off)', async () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+  it('excludes excluded rows by default (Show excluded off)', async () => {
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
@@ -307,18 +307,18 @@ describe('DownloadsProvider — only the files install can take are rows', () =>
   });
 });
 
-describe('setShowHidden', () => {
-  it('includes hidden rows alongside visible ones when turned on', async () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
-    provider.setShowHidden(true);
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['hidden.zip', 'visible.zip']);
+describe('setShowExcluded', () => {
+  it('includes excluded rows alongside visible ones when turned on', async () => {
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    provider.setShowExcluded(true);
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['excluded.zip', 'visible.zip']);
   });
 
-  it('excludes hidden rows again once turned back off', async () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
-    provider.setShowHidden(true);
+  it('excludes excluded rows again once turned back off', async () => {
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    provider.setShowExcluded(true);
     await provider.getChildren();
-    provider.setShowHidden(false);
+    provider.setShowExcluded(false);
     expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
@@ -327,7 +327,7 @@ describe('setShowHidden', () => {
     await provider.getChildren();
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
-    provider.setShowHidden(true);
+    provider.setShowExcluded(true);
     expect(fired).toBe(true);
   });
 });
@@ -385,23 +385,23 @@ describe('allExcluded', () => {
   });
 
   it('is false when at least one row is not excluded', () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     expect(provider.allExcluded()).toBe(false);
   });
 
   it('is true when every row is excluded and Show excluded is off', () => {
-    const provider = makeProvider([row({ name: 'a.zip', hidden: true }), row({ name: 'b.zip', hidden: true })]);
+    const provider = makeProvider([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
     expect(provider.allExcluded()).toBe(true);
   });
 
   it('is false once Show excluded is turned on, even with every row excluded', () => {
-    const provider = makeProvider([row({ name: 'a.zip', hidden: true }), row({ name: 'b.zip', hidden: true })]);
-    provider.setShowHidden(true);
+    const provider = makeProvider([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
+    provider.setShowExcluded(true);
     expect(provider.allExcluded()).toBe(false);
   });
 
   it('ignores a non-archive file when deciding whether every archive is excluded', () => {
-    const provider = makeProvider([row({ name: 'readme.txt', hidden: false })]);
+    const provider = makeProvider([row({ name: 'readme.txt', excluded: false })]);
     expect(provider.allExcluded()).toBe(false);
   });
 });
@@ -411,17 +411,17 @@ describe('excludedNames', () => {
     expect(makeProvider([]).excludedNames()).toEqual(new Set());
   });
 
-  it('is empty while Show hidden is off, even with excluded rows in the value', async () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true })]);
+  it('is empty while Show excluded is off, even with excluded rows in the value', async () => {
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true })]);
     await provider.getChildren();
     expect(provider.excludedNames()).toEqual(new Set());
   });
 
-  it('lists excluded row names once Show hidden is on and the tree has rendered', async () => {
-    const provider = makeProvider([row({ name: 'hidden.zip', hidden: true }), row({ name: 'visible.zip' })]);
-    provider.setShowHidden(true);
+  it('lists excluded row names once Show excluded is on and the tree has rendered', async () => {
+    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    provider.setShowExcluded(true);
     await provider.getChildren();
-    expect(provider.excludedNames()).toEqual(new Set(['hidden.zip']));
+    expect(provider.excludedNames()).toEqual(new Set(['excluded.zip']));
   });
 });
 

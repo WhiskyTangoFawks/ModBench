@@ -1,7 +1,7 @@
 import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
-import { handleUnanswered } from './externalChangeGestures';
+import { askOne, dispatchOne } from './externalChangeGestures';
 import { errorMessage } from '../ports/errorMessage';
 
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
@@ -28,6 +28,7 @@ export function subscribeQuestionOpen(
   deps: ExternalChangeCoordinatorDeps, notificationSubscriber: Pick<MEditClient, 'subscribe'>,
 ): () => void {
   const log = deps.log ?? (() => {});
+  const ask = oneDialogAtATime(deps, log);
   return notificationSubscriber.subscribe('question-open', (event) => {
     // Never both: a genuine external change and a repair offer are the two verdicts one
     // question-open notification carries, one or the other.
@@ -49,10 +50,33 @@ export function subscribeQuestionOpen(
       oldVersion: event.externalChangeOldVersion ?? null,
       newVersion: event.externalChangeNewVersion ?? null,
     };
-    // ADR-0019: a dialog/dispatch failure gets a log line, never a second toast on top of
-    // whatever the dialog or the mutate call already surfaced.
-    handleUnanswered(deps, [change]).catch((e: unknown) => {
-      log(`[externalChangeCoordinator] handling ${change.origin} failed: ${errorMessage(e)}`);
-    });
+    ask(change);
   });
+}
+
+// ADR-0003, invariant 3: either answer covers the whole mod, so it covers a question arriving while
+// its mod is asked or answered; mEdit asks again at the next settle that still finds a change.
+function oneDialogAtATime(deps: ExternalChangeCoordinatorDeps, log: (msg: string) => void): (change: UnansweredExternalChange) => void {
+  const waiting = new Map<string, UnansweredExternalChange>();
+  let answering: string | undefined;
+  const answerEach = async (): Promise<void> => {
+    for (let next = waiting.values().next(); !next.done; next = waiting.values().next()) {
+      const change = next.value;
+      waiting.delete(change.origin);
+      answering = change.origin;
+      try {
+        await dispatchOne(deps, change.origin, await askOne(deps, change));
+      } catch (e) {
+        // ADR-0019: a dialog/dispatch failure gets a log line, never a second toast on top of
+        // whatever the dialog or the mutate call already surfaced.
+        log(`[externalChangeCoordinator] handling ${change.origin} failed: ${errorMessage(e)}`);
+      }
+    }
+    answering = undefined;
+  };
+  return (change) => {
+    if (change.origin === answering) return;
+    waiting.set(change.origin, change);
+    if (answering === undefined) void answerEach();
+  };
 }

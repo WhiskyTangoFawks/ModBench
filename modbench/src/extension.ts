@@ -19,6 +19,7 @@ import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './ed
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
+import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
@@ -26,6 +27,7 @@ import { pluginFolder } from './instanceAdapter/layout';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
+  watchRepositoryStates, type MinimalRepository,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
@@ -71,7 +73,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-  // Save & Compile's diagnostics — one collection for every tracked mod's source files, kept
+  // Compile's diagnostics — one collection for every tracked mod's source files, kept
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
@@ -103,6 +105,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
+  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
+    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
+      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
+    }
+  });
+  context.subscriptions.push({ dispose: () => { session.pluginRepositoryStates?.dispose(); } });
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
@@ -110,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
   const notifyConflictsComputed = () => {
     announceConflictsComputed(recordPanels, editsInFlight);
     void registerHeldTrackedRepositories(
-      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
+      meditClient, outputChannel, (repos) => { holdPluginRepositories(session, repos); }, isTracked, pluginFolder);
   };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
@@ -131,7 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
+    session, client: meditClient, outputChannel, compileDiagnostics, treeProvider,
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -188,7 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
@@ -221,6 +229,8 @@ export function activate(context: vscode.ExtensionContext) {
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
+    // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
+    focusRecordCell: (cell: FocusedCellContext) => { focusedCells.setActiveCell(cell); },
   };
 }
 
@@ -228,7 +238,6 @@ export function activate(context: vscode.ExtensionContext) {
 interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
@@ -236,10 +245,19 @@ interface PluginRowCommandDeps {
   originFiles: OriginFilesOf;
 }
 
+// plugins.md, Menus and keys, story 6: the Plugins rows offer rebase edit branch only while no
+// rebase is in progress, so a repository's state change re-renders them.
+function holdPluginRepositories(session: ExtensionSession, repos: Map<string, MinimalRepository>): void {
+  session.pluginRepositoryStates?.dispose();
+  session.pluginRepositories = repos;
+  session.pluginRepositoryStates = watchRepositoryStates(repos, () => session.pluginsTree?.invalidate());
+  session.pluginsTree?.invalidate();
+}
+
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
@@ -247,19 +265,20 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(
-          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
+          client, outputChannel, (repos) => { holdPluginRepositories(session, repos); }, isTracked, pluginFolder);
         notifyConflictsComputed();
       },
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerSaveAndCompileCommand(
-      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFiles),
+      client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
+      compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),
     registerRebaseCommand(
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles),
+      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles,
+      () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
 }

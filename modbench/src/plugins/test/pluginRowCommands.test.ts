@@ -34,8 +34,10 @@ vi.mock('vscode', () => ({
 
 import {
   registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
-  registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerSaveAndCompileCommand, registerCompileAtRefCommand, rebaseInProgressIn, watchRepositoryStates,
+  type MinimalRepository,
 } from '../pluginRowCommands';
+import { pluginAddressKey } from '../trackedRepositories';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
@@ -176,14 +178,15 @@ describe('registerTrackCommand', () => {
 // ── registerRebaseCommand ──────────────────────────────────────────────────
 
 describe('registerRebaseCommand', () => {
-  function invokeRebase(client: InMemoryMEditClient) {
+  function invokeRebase(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const modA = { name: 'MyMod.esp', path: '/instance/mods/ModA/MyMod.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
     registerRebaseCommand(
-      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin));
+      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin),
+      () => viewSelection);
     return {
       handler: present(handlers.get('modbench.mod.rebaseEditBranch'), 'the rebase command registerRebaseCommand registers'),
       refresh, refreshMatchingPlugins, reporter,
@@ -202,6 +205,17 @@ describe('registerRebaseCommand', () => {
     expect(reporter.reports).toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
+  });
+
+  // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
+  it('rebases the one selected plugin\'s mod from the palette', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
+    const { handler } = invokeRebase(client, [pluginNode()]);
+
+    await handler();
+
+    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
   });
 
   it('reports an unresolvable origin at error and never asks the backend to rebase', async () => {
@@ -453,11 +467,11 @@ describe('publishCompileDiagnostics', () => {
 // ── registerSaveAndCompileCommand ─────────────────────────────────────────
 
 describe('registerSaveAndCompileCommand', () => {
-  function invokeSaveAndCompile(client: InMemoryMEditClient) {
+  function invokeSaveAndCompile(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
     const reporter = recordingReporter();
     registerSaveAndCompileCommand(
-      client, { current: () => undefined }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
-      new FakeDiagnosticCollection(), () => undefined);
+      client, new FakeLogOutputChannel(), reporter, scriptedDialog(),
+      new FakeDiagnosticCollection(), () => undefined, () => viewSelection);
     return {
       handler: present(handlers.get('modbench.saveAndCompile'), 'the save-and-compile command registerSaveAndCompileCommand registers'),
       reporter,
@@ -489,6 +503,69 @@ describe('registerSaveAndCompileCommand', () => {
       { severity: 'error', message: '"Orphan.esp" has no mod folder to compile into.', detail: undefined },
     ]);
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
+  // plugins.md, Compile, story 5: from the palette, a pick. An extension cannot tell whether the
+  // Plugins view has focus, so the selection is never compiled unasked; a selected compilable
+  // plugin leads the pick.
+  it('asks from the palette, leading the pick with the one selected compilable plugin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Other.esp', origin: 'ModB', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const selected = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
+    selected.contextValue = 'plugin rebasable compilable';
+    const { handler } = invokeSaveAndCompile(client, [selected]);
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [{ label: 'MyPatch.esp', description: 'ModA' }, { label: 'Other.esp', description: 'ModB' }],
+      { placeHolder: 'Compile which plugin?' });
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
+  it('asks, from the palette with no compilable plugin selected, which of the tracked, editable plugins to compile', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Editable.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'Untracked.esp', origin: 'ModB', isTracked: false, isImmutable: false }),
+      pluginMetadataFixture({ name: 'ReadOnly.esp', origin: 'ModC', isTracked: true, isImmutable: true }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const untracked = pluginNode('Untracked.esp');
+    untracked.contextValue = 'plugin untrackedInMod';
+    const { handler } = invokeSaveAndCompile(client, [untracked]);
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith([{ label: 'Editable.esp', description: 'ModA' }], { placeHolder: 'Compile which plugin?' });
+  });
+
+  // editor.md, Menus and keys: compile on a column header, whose context names the column's plugin.
+  it('compiles the plugin a record tab\'s column header names, at its own origin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', compileResultFixture());
+    const { handler } = invokeSaveAndCompile(client, [pluginNode('Selected.esp')]);
+
+    await handler({
+      webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Other.esp', origin: 'ModB',
+      compilable: true, preventDefaultContextMenuItems: true,
+    });
+
+    expect(client.calls.filter((c) => c.method === 'compile').map((c) => c.args.slice(0, 2))).toEqual([['Other.esp', 'ModB']]);
+  });
+
+  it('asks which plugin to compile in the catalog\'s own verb, when no row is in hand', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    showQuickPick.mockResolvedValue(undefined);
+    const { handler } = invokeSaveAndCompile(client);
+
+    await handler(undefined);
+
+    expect(showQuickPick).toHaveBeenCalledWith(expect.anything(), { placeHolder: 'Compile which plugin?' });
   });
 
   it('reports an unresolvable compile target at error and compiles nothing', async () => {
@@ -565,5 +642,50 @@ describe('registerCompileAtRefCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
+  });
+});
+
+// plugins.md, Menus and keys, story 6: rebase edit branch is offered only while no rebase is in
+// progress, which the mod's repository in vscode.git says, and says again as it changes.
+describe('a tracked mod\'s rebase in progress', () => {
+  function fakeRepository(rebasing: boolean) {
+    const listeners: (() => void)[] = [];
+    const repository: MinimalRepository = {
+      status: () => Promise.resolve(),
+      state: {
+        rebaseCommit: rebasing ? { hash: 'abc' } : undefined,
+        onDidChange: (listener: () => void) => {
+          listeners.push(listener);
+          return { dispose: () => { listeners.splice(listeners.indexOf(listener), 1); } };
+        },
+      },
+    };
+    return { repository, change: () => { for (const listener of [...listeners]) listener(); } };
+  }
+
+  it('is the plugin\'s own mod repository\'s answer, and none with no repository', () => {
+    const repos = new Map([
+      [pluginAddressKey('A.esp', 'ModA'), fakeRepository(true).repository],
+      [pluginAddressKey('B.esp', 'ModB'), fakeRepository(false).repository],
+    ]);
+
+    expect(rebaseInProgressIn(repos, 'a.ESP', 'moda')).toBe(true);
+    expect(rebaseInProgressIn(repos, 'B.esp', 'ModB')).toBe(false);
+    expect(rebaseInProgressIn(repos, 'C.esp', 'ModC')).toBe(false);
+    expect(rebaseInProgressIn(undefined, 'A.esp', 'ModA')).toBe(false);
+  });
+
+  it('hears each repository\'s state change until disposed', () => {
+    const a = fakeRepository(false);
+    const b = fakeRepository(false);
+    const heard = vi.fn();
+    const watch = watchRepositoryStates(new Map([['a', a.repository], ['b', b.repository]]), heard);
+
+    a.change();
+    b.change();
+    watch.dispose();
+    a.change();
+
+    expect(heard).toHaveBeenCalledTimes(2);
   });
 });

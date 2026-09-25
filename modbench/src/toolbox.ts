@@ -18,7 +18,7 @@ import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { loadOrderSnapshotOf, originFolder, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
+import { loadOrderSnapshotOf, originFolder } from './instanceLoader/loadOrderSnapshot';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -29,10 +29,10 @@ import { syncPlugins, reorderPlugins, type ImplicitMasterSource } from './plugin
 import { syncMods } from './modlist/modlist';
 import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
-import { registerPluginSync } from './pluginSyncTrigger';
+import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, registerDownloadsView } from './mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { collidingModName } from './mods/modNameCollision';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
@@ -47,6 +47,8 @@ import {
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
+import { pluginsKeyContext } from './plugins/gestureEntry';
+import { rebaseInProgressIn } from './plugins/pluginRowCommands';
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
@@ -221,6 +223,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
+    rebaseInProgress: (plugin, origin) => rebaseInProgressIn(session.pluginRepositories, plugin, origin),
     publishDiagnoses: (reports) => publishLoadDiagnoses(
       deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
   }));
@@ -235,6 +238,15 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
+  const showKeyContext = () => {
+    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection))) {
+      void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
+    }
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', pluginsTree.anyCompilable());
+  };
+  showKeyContext();
+  own(pluginListView.onDidChangeSelection(showKeyContext));
+  own(pluginsTree.onDidChangeTreeData(showKeyContext));
   session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
   // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
   // against the tree's own locked row URIs so it never drifts from what is rendered.
@@ -243,7 +255,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
     e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
-  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer')));
+  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
   ownAll(own, registerPluginEnableCommands(
     instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
   return pluginsTree;
@@ -487,18 +499,17 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginSync = (
-    profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
-    folder: string | undefined, gameName: string,
-  ) => syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName));
+  const runPluginSync = (value: InstanceValue) => {
+    const { profile, provided, inData, dataFolder, gameName } = pluginSyncArguments(value);
+    return syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
+  };
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });
-  const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
-    syncMods(instanceRoot, profile, modFolders);
+  const runModSync = (value: InstanceValue) => syncMods(instanceRoot, value.activeProfile, value.modFolders);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView } = createModListView(
     own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
@@ -542,15 +553,20 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     reporterFor('mod.move')));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, reporterFor('separator'), trash, () => modListView.selection));
   own(registerCreateEmptyModCommand(instanceRoot, instance, reporterFor('mod.createEmpty')));
-  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder')));
-  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus')));
+  own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, trash, {
-    nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
-    warnIfFomod,
-    log: (line) => outputChannel.warn(`[downloads] ${line}`),
+  const { downloadsProvider, downloadsView } = registerDownloadsView({
+    own, instanceRoot, instance, reporter: reporterFor('downloadList'), ask, trash,
+    install: {
+      nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
+      warnIfFomod,
+      log: (line) => outputChannel.warn(`[downloads] ${line}`),
+    },
   });
+  own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
+    { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
+  ])));
   own(registerRefreshCommand({
     refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
