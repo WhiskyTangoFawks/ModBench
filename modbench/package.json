@@ -988,12 +988,6 @@
     },
     "keybindings": [
       {
-        "command": "modbench.mod.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.modList && modbench.folder == instance"
-      },
-      {
         "command": "modbench.mod.enable",
         "key": "space",
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionToggle == enable"
@@ -1029,18 +1023,6 @@
         "args": {
           "view": "modbench.modList"
         }
-      },
-      {
-        "command": "modbench.plugin.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.pluginListTree && modbench.folder == instance"
-      },
-      {
-        "command": "modbench.downloadedFile.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
       },
       {
         "command": "modbench.downloadedFile.delete",
