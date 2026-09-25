@@ -49,13 +49,13 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [Fact]
     public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()
     {
-        _index.SetFilter("SELECT form_key FROM npc_ WHERE is_winner AND editor_id = 'SharedNpc' AND load_order_idx = 1");
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE is_winner AND editor_id = 'SharedNpc' AND load_order_idx = 1", "filter.sql");
 
         var winner = Assert.Single(Listing(), i => i.IsWinner);
         Assert.Equal(OverKey.Name, winner.Plugin);
         Assert.Equal(_npc, winner.FormKey);
 
-        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Base.esm' AND NOT is_winner AND load_order_idx = 0");
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Base.esm' AND NOT is_winner AND load_order_idx = 0", "filter.sql");
         Assert.Contains(Listing(), i => i.Plugin == BaseKey.Name);
     }
 
@@ -72,12 +72,12 @@ public sealed class SqlDoorSchemaTests : IDisposable
 
         if (exposesWinner)
         {
-            _index.SetFilter(sql);
+            _index.SetFilter(sql, "filter.sql");
             Assert.NotEmpty(Listing());
         }
         else
         {
-            Assert.ThrowsAny<Exception>(() => _index.SetFilter(sql));
+            Assert.ThrowsAny<Exception>(() => _index.SetFilter(sql, "filter.sql"));
         }
     }
 
@@ -89,7 +89,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [InlineData("form_lookup", true)]
     public void ARelation_ExposesLoadOrderIndex(string relation, bool holdsACleanCopysRows)
     {
-        _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1");
+        _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
 
         if (holdsACleanCopysRows) Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
         else Assert.Empty(Listing());
@@ -98,9 +98,9 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [Fact]
     public void AFilterNamingAnUnknownColumn_IsRefused_AndTheFilterInForceStands()
     {
-        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'");
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", "filter.sql");
 
-        Assert.ThrowsAny<Exception>(() => _index.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1"));
+        Assert.ThrowsAny<Exception>(() => _index.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql"));
 
         Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.FilterSql);
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);

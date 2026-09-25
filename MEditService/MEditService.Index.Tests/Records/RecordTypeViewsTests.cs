@@ -32,10 +32,10 @@ public sealed class RecordTypeViewsTests
         Assert.Equal("npc_", reads.Resolve(npc)?.RecordType);
         Assert.Contains(reads.GetRecordTypeCounts(Plugin), c => c.Type == "npc_" && c.Count == 1);
 
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'LazyNpc'");
+        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'LazyNpc'", "filter.sql");
 
         Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
-        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NobodyHere'");
+        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NobodyHere'", "filter.sql");
         Assert.Empty(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items);
     }
 }

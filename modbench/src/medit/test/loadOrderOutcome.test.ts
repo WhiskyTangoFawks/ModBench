@@ -128,41 +128,39 @@ describe('settleReconciled', () => {
   });
 });
 
-// applyFilterSyncResult is not exported: syncActiveFilter is its one caller, and every result
-// shape it can be handed — a sql string, null, or the refused object a caught read builds — is
-// reachable by what getActiveFilter resolves or rejects with below.
 describe('syncActiveFilter', () => {
   function makeSyncDeps() {
-    return { log: vi.fn(), warn: vi.fn(), setFilterActive: vi.fn() };
+    return { log: vi.fn(), warn: vi.fn(), showRecordFilter: vi.fn() };
   }
 
-  it('sets the filter active with what the read returned', async () => {
+  it('shows the filter mEdit holds, with its source', async () => {
     const deps = makeSyncDeps();
 
-    await syncActiveFilter(() => Promise.resolve('SELECT form_key FROM "npc_"'), deps);
+    await syncActiveFilter(() => Promise.resolve({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' }), deps);
 
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: 'SELECT form_key FROM "npc_"', source: 'npcs.sql' });
     expect(deps.log).not.toHaveBeenCalled();
   });
 
-  it('sets the filter inactive when nothing is active', async () => {
+  it('shows no filter when mEdit holds none', async () => {
     const deps = makeSyncDeps();
 
     await syncActiveFilter(() => Promise.resolve(null), deps);
 
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined, undefined);
+    expect(deps.showRecordFilter).toHaveBeenCalledWith(null);
     expect(deps.warn).not.toHaveBeenCalled();
   });
 
-  // ADR-0019: an unsurfaced read failure is a notify-and-log tier — both the toast and the
-  // channel line, never one without the other.
-  it('logs and warns a read failure, and sets the filter inactive', async () => {
+  // plugins.md, Order and view state, story 5: the filter clears only on purpose, so a read that
+  // failed says nothing about whether mEdit still filters.
+  it('logs and warns a read failure, and keeps showing the last known filter', async () => {
     const deps = makeSyncDeps();
 
     await syncActiveFilter(() => Promise.reject(new Error('boom')), deps);
 
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('boom'));
-    expect(deps.warn).toHaveBeenCalledWith('mEdit: Could not read the active filter — treating the filter as inactive. boom');
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+    expect(deps.warn).toHaveBeenCalledWith(
+      "mEdit: Could not read the record filter — the Plugins view shows it as it last was. boom");
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
   });
 });

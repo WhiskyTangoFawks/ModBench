@@ -170,10 +170,10 @@ public class RegistrationScopingTests
 
         // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either. The
         // shared NPC's FormKey sits in both copies, so a leaked Beta row would surface Alpha's copy.
-        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'");
+        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'", "filter.sql");
         Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
         Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
-        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'");
+        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
         Assert.Contains(AlphaKey, reads.GetPluginsWithMatchingRecords(["npc_"]));
         Assert.Contains(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
         fx.Index.ClearFilter();

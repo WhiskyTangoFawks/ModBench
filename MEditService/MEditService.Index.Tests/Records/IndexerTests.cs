@@ -176,7 +176,7 @@ public sealed class IndexerTests
         using var fx = TwoProviders("indexer-arriving-filter");
         using var indexer = MakeIndexer(holder);
         Reconcile(indexer, holder, Snapshot(fx, [fx.Plugins[0]]));
-        indexer.SetFilter("SELECT form_key FROM records");
+        indexer.SetFilter("SELECT form_key FROM records", "filter.sql");
 
         Reconcile(indexer, holder, Snapshot(fx));
 
@@ -199,7 +199,7 @@ public sealed class IndexerTests
         using var indexer = MakeIndexer(holder);
         var onlyA = fx.Plugins.Where(p => p.Name == "A.esm").ToList();
         Reconcile(indexer, holder, Snapshot(fx, onlyA));
-        indexer.SetFilter("SELECT form_key FROM npc_");
+        indexer.SetFilter("SELECT form_key FROM npc_", "filter.sql");
 
         Reconcile(indexer, holder, Snapshot(fx));
 
