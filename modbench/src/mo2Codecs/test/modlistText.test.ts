@@ -552,11 +552,18 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     expect(unlistedModNames(['overwrite'], [])).toEqual([]);
   });
 
-  it('excludes a separator marker folder even though it has no "mod" entry', () => {
+  it('excludes a separator folder its separator line already registers', () => {
     // "Unassigned (Modlist Development)" exists only as a separator entry, not a mod;
-    // its on-disk marker folder is "Unassigned (Modlist Development)_separator".
+    // its on-disk folder is "Unassigned (Modlist Development)_separator".
     const entries = parseModlist(defaultModlist());
     expect(unlistedModNames(['Unassigned (Modlist Development)_separator'], entries)).toEqual([]);
+  });
+
+  // update-load-order-file, mod sync: a line for each folder in mods/ that has none, as MO2 lists
+  // every folder. Rival: skipping every `_separator` folder, so an orphan one never gets a line.
+  it('includes a separator folder with no separator line', () => {
+    const entries = parseModlist(defaultModlist());
+    expect(unlistedModNames(['Orphan_separator'], entries)).toEqual(['Orphan_separator']);
   });
 
   it('still flags a real mods/ folder whose name collides with a separator\'s bare name', () => {
@@ -565,6 +572,12 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     // must not register that bare name as if a mod already claimed it.
     const entries: ModlistEntry[] = [{ kind: 'separator', name: 'Textures', enabled: true }];
     expect(unlistedModNames(['Textures'], entries)).toEqual(['Textures']);
+  });
+
+  // MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator).
+  it('treats a folder as listed when a line names it in another case', () => {
+    const entries = parseModlist('+harder vats\r\n-textures_separator\r\n');
+    expect(unlistedModNames(['Harder VATS', 'Textures_separator', 'OVERWRITE'], entries)).toEqual([]);
   });
 
   it('returns multiple new folders sorted', () => {
