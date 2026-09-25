@@ -152,17 +152,8 @@ export function remove(path: string): Promise<void> {
   return rm(path, { recursive: true, force: true });
 }
 
-/** Reads `path`, hands the text to `edit`, and always writes the result back once — the download
- *  sidecar's own contract (ADR-0014 invariant 4). Serialized per path. */
-export async function put(path: string, edit: (before: string) => string, opts: PutOptions = {}): Promise<void> {
-  await withLock(path, async () => {
-    const before = await readOr(path, opts.ifMissing);
-    await writeFile(path, edit(before));
-  });
-}
-
-/** Like {@link put}, but skips the write when `edit` changed nothing, so an unwritten file never
- *  fires its watcher. Answers whether it wrote. An `edit` that awaits holds the lock meanwhile. */
+/** Hands `edit` the text of `path`, serialized per path, and skips the write when `edit` changed
+ *  nothing, so an unwritten file never fires its watcher. An awaiting `edit` holds the lock. */
 export function putIfChanged(
   path: string, edit: (before: string) => string | Promise<string>, opts: PutOptions = {},
 ): Promise<{ wrote: boolean }> {

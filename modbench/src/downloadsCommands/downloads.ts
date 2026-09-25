@@ -3,7 +3,8 @@
 
 import { parseDownloadMeta, setHiddenInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';
-import { exists, putIfChanged } from '../instanceAdapter/files';
+import { exists } from '../instanceAdapter/files';
+import { spliceDownloadMeta } from '../instanceAdapter/downloadMeta';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -32,18 +33,17 @@ async function selectionOutcomeOf<T>(
   return { landed, refused };
 }
 
-// The transform returns `text` untouched when `excluded` already matches, so `putIfChanged` sees no
-// change and writes nothing — no `.meta` for a row already at rest. A missing archive is refused
-// first, so a stale row never writes a lone `.meta`.
+// The transform returns `text` untouched when `excluded` already matches, so the splice writes
+// nothing — no `.meta` for a row already at rest. A missing archive is refused first, so a stale
+// row never writes a lone `.meta`.
 async function spliceExcluded(downloadsDir: string, name: string, excluded: boolean): Promise<DownloadsCommandResult> {
   try {
     if (!(await exists(downloadFile(downloadsDir, name)))) {
       return { applied: false, refusal: `"${name}" is gone from disk.` };
     }
-    const { wrote } = await putIfChanged(
-      downloadSidecarFile(downloadsDir, name),
+    const { wrote } = await spliceDownloadMeta(
+      downloadsDir, name,
       (text) => (parseDownloadMeta(text).excluded === excluded ? text : setHiddenInText(text, excluded)),
-      { ifMissing: '' },
     );
     return { applied: true, wrote };
   } catch (err) {
