@@ -2093,18 +2093,17 @@ describe('Progressive load', () => {
     }
   });
 
-  // Master issues derive from the whole load order, so mid-load they would flag masters not
-  // opened yet. The backend suppresses them while loading; this asserts the suppression holds
-  // end to end and then lifts by itself.
-  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
+  // plugins.md, A row: "no blink" — a reload keeps the last statuses until the new answer
+  // lands, unchanged through the mid-load tick.
+  it('keeps a plugin\'s master-issue tooltip through a reload\'s mid-load tick, unchanged', async () => {
     const { launch } = await launchAndAwaitOpeningTick();
 
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
-      !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),
-      `master issues must not be decorated mid-load, got: ${describeTooltip(midLoad.tooltip)}`,
+      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm'),
+      `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
     releasePut();
@@ -2113,9 +2112,8 @@ describe('Progressive load', () => {
     const loaded = await itemFor('MissingMaster.esp');
     assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
-    // A progressive tick carries empty readOnly/masterIssues, so if a tick were ever the last
-    // setLoadOrder call both decorations would vanish from a fully loaded tree. Asserting one of each
-    // proves the completion hand-off runs after the last tick.
+    // A progressive tick never touches readOnly/masterIssues (plugins.md, A row: "no blink"), so
+    // this also holds after the reload completes, from the completion hand-off's own fresh read.
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${describeTooltip(immutable.tooltip)}`);
