@@ -142,6 +142,43 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal("2.0.0", TheQuestion().OldVersion);
     }
 
+    // Both plugins changed, and their baselines were taken at different versions: the old version is
+    // the newer baseline's, whichever order the load order lists them in.
+    [Theory]
+    [InlineData("First.esp", "Second.esp")]
+    [InlineData("Second.esp", "First.esp")]
+    public void ASettle_ShowsTheNewestChangedBaselinesVersion_AsTheOldVersion_InAnyLoadOrder(string earlier, string later)
+    {
+        var loadOrder = WithPlugins((earlier, "an external binary"u8.ToArray()), (later, "another external binary"u8.ToArray()));
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
+        SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.5.0\n");
+        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.True(TheQuestion().MetaChanged);
+        Assert.Equal("1.5.0", TheQuestion().OldVersion);
+        Assert.Equal("2.0.0", TheQuestion().NewVersion);
+    }
+
+    // Second's baseline is already at the new version, so the move the question shows is First's.
+    [Fact]
+    public void ASettle_ShowsTheVersionTheMetaMovedFrom_WhenTheNewestChangedBaselineIsAlreadyAtTheNewVersion()
+    {
+        var loadOrder = WithPlugins(("First.esp", "an external binary"u8.ToArray()), ("Second.esp", "another external binary"u8.ToArray()));
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
+        SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
+        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.True(TheQuestion().MetaChanged);
+        Assert.Equal("1.0.0", TheQuestion().OldVersion);
+    }
+
     // A meta.ini edit with no accompanying plugin or tracked-file change raises nothing at all —
     // the rule's "meta.ini is a tell, never a trigger" half.
     [Fact]

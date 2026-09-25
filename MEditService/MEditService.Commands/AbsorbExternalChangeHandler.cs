@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>Absorb's handler: re-serializes every plugin of the mod as Track does, commits each
-/// one's new baseline to main and then the mod's tracked-file change, then rebases the edit branch
-/// onto them at once.</summary>
+/// <summary>Absorb's handler: re-serializes each changed plugin as Track does, commits each one's
+/// new baseline to main and then the mod's tracked-file change, then rebases the edit branch onto
+/// them at once.</summary>
 public sealed class AbsorbExternalChangeHandler
 {
     private readonly IPluginAdapter _adapter;
@@ -43,10 +43,16 @@ public sealed class AbsorbExternalChangeHandler
     private static async Task<AbsorbResult> Run(
         IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
     {
+        // The classifier's own rule, recomputed from git: a plugin whose baseline landed on an earlier
+        // answer matches its parked ref, so answering again commits only what is left.
+        if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } observed)
+            return AbsorbResult.Refused($"A plugin in {Path.GetFileName(modFolder)} could not be read.");
+        var changed = ExternalChangeClassifier.ChangedPlugins(modFolder, observed).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var meta = SourceRepository.MetaFactsIn(modFolder);
         var baselines = new List<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)>();
 
-        foreach (var plugin in plugins)
+        foreach (var plugin in plugins.Where(p => changed.Contains(p.Name)))
         {
             // A fresh deep parse of the binary now on disk, never a cached load-order view — that stale
             // view is what this method reacts to. Absorb only runs against a tracked plugin, so the
@@ -74,7 +80,9 @@ public sealed class AbsorbExternalChangeHandler
 
         try
         {
-            SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges);
+            // The question stays open: the next classification finds exactly what did not land.
+            if (SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges) is { } failed)
+                return AbsorbResult.Refused($"'{failed.Subject}' could not be committed to main, and nothing after it was: {failed.Reason}");
         }
         catch (GitUnavailableException ex)
         {

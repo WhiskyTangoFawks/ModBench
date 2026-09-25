@@ -322,8 +322,7 @@ public static class PluginEndpoints
             });
     }
 
-    // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
-    // the baseline it commits covers the whole mod in one go.
+    // Absorb, origin-scoped: the question it answers covers the whole mod.
     internal static async Task<IResult> AbsorbExternalChange(
         ExternalChangeActionRequest req, AbsorbExternalChangeHandler handler, ILoggerFactory loggerFactory)
     {

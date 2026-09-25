@@ -106,10 +106,10 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
     }
 
-    /// <summary>Absorb's git mechanics: each plugin's new baseline on main, then every changed tracked
-    /// file in one commit. By plumbing, so the edit branch, its index and its working tree are
-    /// untouched.</summary>
-    public static void CommitPristineToMain(
+    /// <summary>Absorb's git mechanics, by plumbing so the edit branch is untouched: each plugin's
+    /// baseline on main, then the changed tracked files in one commit. Answers the subject of the
+    /// first failed commit, which stops the run.</summary>
+    public static (string Subject, string Reason)? CommitPristineToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
         IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
@@ -123,8 +123,13 @@ public sealed partial class SourceRepository
         {
             foreach (var (files, trailers) in baselines)
             {
-                PristineFileWriter.WriteAll(files, scratchDir);
-                CommitBaselineToMain(gitDir, scratchDir, UpdateSubject(trailers), trailers);
+                var subject = UpdateSubject(trailers);
+                var failure = FailureOf(() =>
+                {
+                    PristineFileWriter.WriteAll(files, scratchDir);
+                    CommitBaselineToMain(gitDir, scratchDir, subject, trailers);
+                });
+                if (failure is { } reason) return (subject, reason);
             }
         }
         finally
@@ -135,8 +140,24 @@ public sealed partial class SourceRepository
         // A deleted file is missing from the work tree, so `add -A` stages its removal.
         if (trackedFileChanges is { Count: > 0 } changes)
         {
-            CommitToMain(
-                gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], $"Update {ModNameIn(modFolder)}");
+            var subject = $"Update {ModNameIn(modFolder)}";
+            var failure = FailureOf(() => CommitToMain(gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
+            if (failure is { } reason) return (subject, reason);
+        }
+        return null;
+    }
+
+    // No rollback beyond git's: the commits before a failed one stand.
+    private static string? FailureOf(Action commit)
+    {
+        try
+        {
+            commit();
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return ex.Message;
         }
     }
 
@@ -194,20 +215,30 @@ public sealed partial class SourceRepository
     /// <summary>The trailers of the plugin's own latest baseline commit on refs/heads/main, never HEAD:
     /// the edit branch is what is checked out (ADR-0007). Null when untracked or when main holds no
     /// baseline of it.</summary>
-    public static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin)
+    public static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin) =>
+        LatestBaselineTrailersNewestFirst(modFolder, [plugin]) is [var latest] ? latest : null;
+
+    /// <summary>Each named plugin's own latest baseline on refs/heads/main, the newest commit first. A
+    /// plugin main holds no baseline of is left out.</summary>
+    public static IReadOnlyList<BaselineTrailers> LatestBaselineTrailersNewestFirst(string modFolder, IReadOnlyList<string> plugins)
     {
-        if (!IsTracked(modFolder)) return null;
+        if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         // git's own trailer parser, so a "Plugin: " line in a message's prose is never read as one.
         if (!GitCli.TryRun(gitDir, modFolder, out var blocks, "log", "-z", "--format=%(trailers:only,unfold)", "refs/heads/main"))
-            return null;
+            return [];
 
-        return blocks.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Where(block => string.Equals(ReadTrailer(block, "Plugin"), plugin, StringComparison.OrdinalIgnoreCase))
-            .Select(block => new BaselineTrailers(
-                plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256")))
-            .FirstOrDefault();
+        var latest = new List<BaselineTrailers>();
+        foreach (var block in blocks.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var named = ReadTrailer(block, "Plugin");
+            var plugin = plugins.FirstOrDefault(p => string.Equals(p, named, StringComparison.OrdinalIgnoreCase));
+            if (plugin is null || latest.Exists(baseline => baseline.Plugin == plugin)) continue;
+            latest.Add(new BaselineTrailers(
+                plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256")));
+        }
+        return latest;
     }
 
     // Last matching line wins — git's own rule for a repeated trailer key.
