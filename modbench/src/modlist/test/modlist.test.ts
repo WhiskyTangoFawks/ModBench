@@ -1031,6 +1031,15 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(await readFile(modlistPath(), 'utf8')).toContain('-Weapons/Armor_separator');
   });
 
+  it('adds a disabled separator line at the winning end for a separator folder with none', async () => {
+    await mkdir(join(dir, 'mods', 'Orphan_separator'));
+
+    const outcome = await sync([...MOD_FOLDERS, 'Orphan_separator']);
+
+    expect(outcome.applied && outcome.added).toEqual(['Orphan_separator']);
+    expect((await readModlist())[0]).toEqual({ kind: 'separator', name: 'Orphan', enabled: false });
+  });
+
   it('writes a batch of added lines ascending top-to-bottom, winning-most first', async () => {
     const outcome = await sync([...MOD_FOLDERS, 'Zeta Mod', 'Alpha Mod']);
 

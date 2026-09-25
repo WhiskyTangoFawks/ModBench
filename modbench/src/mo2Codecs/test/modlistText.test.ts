@@ -552,11 +552,18 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     expect(unlistedModNames(['overwrite'], [])).toEqual([]);
   });
 
-  it('excludes a separator marker folder even though it has no "mod" entry', () => {
+  it('excludes a separator folder its separator line already registers', () => {
     // "Unassigned (Modlist Development)" exists only as a separator entry, not a mod;
-    // its on-disk marker folder is "Unassigned (Modlist Development)_separator".
+    // its on-disk folder is "Unassigned (Modlist Development)_separator".
     const entries = parseModlist(defaultModlist());
     expect(unlistedModNames(['Unassigned (Modlist Development)_separator'], entries)).toEqual([]);
+  });
+
+  // update-load-order-file, mod sync: a line for each folder in mods/ that has none, as MO2 lists
+  // every folder. Rival: skipping every `_separator` folder, so an orphan one never gets a line.
+  it('includes a separator folder with no separator line', () => {
+    const entries = parseModlist(defaultModlist());
+    expect(unlistedModNames(['Orphan_separator'], entries)).toEqual(['Orphan_separator']);
   });
 
   it('still flags a real mods/ folder whose name collides with a separator\'s bare name', () => {
