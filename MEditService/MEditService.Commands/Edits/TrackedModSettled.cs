@@ -13,9 +13,9 @@ public enum TrackedModSettledOutcome
     CompileUnfinished,
 }
 
-/// <summary>The watcher's one verb (ADR-0015 invariant 2): plugins off the load order, classified
-/// from the Source repository's facts; a genuine external change opens the mod's one question and
-/// publishes it.</summary>
+/// <summary>What the watcher calls when a tracked mod settles (ADR-0015 invariant 2): plugins off
+/// the load order, classified from the Source repository's facts; a genuine external change opens
+/// the mod's one question and publishes it.</summary>
 public sealed class TrackedModSettled
 {
     private readonly INotificationPublisher _notifications;
@@ -57,7 +57,7 @@ public sealed class TrackedModSettled
             ? Warn(loadOrder, modFolder, unfinished)
             : TrackedModSettledOutcome.NoQuestion;
 
-    // Neither opens nor clears the external-change question (compile-plugin, Failure).
+    // compile-plugin, Failure: no question opens.
     private TrackedModSettledOutcome Warn(
         LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.CompileUnfinished unfinished)
     {
