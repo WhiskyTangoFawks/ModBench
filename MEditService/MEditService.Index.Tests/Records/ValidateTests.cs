@@ -1,6 +1,7 @@
 using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -51,6 +52,21 @@ public sealed class ValidateTests : IDisposable
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         Assert.Contains(_npc, report.ChangedKeys, StringComparer.Ordinal);
         Assert.True(_index.Sequence > before);
+    }
+
+    [Fact]
+    public void ABackupCopyDeclaringTheSameRecord_LeavesItsRowsAsTheyStand_AndNamesBothDocuments()
+    {
+        var document = _mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf()));
+        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
+        File.WriteAllText(backup, File.ReadAllText(document).Replace("\"FixtureNpc\"", "\"BackupNpc\"", StringComparison.Ordinal));
+
+        Assert.Throws<UnreadableSourceDocumentException>(() => _index.ValidateIndex(_mod.KeyOf()));
+
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        var failure = Assert.Single(_index.Status.Failures);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), document), failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), backup), failure.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

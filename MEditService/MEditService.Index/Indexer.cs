@@ -743,6 +743,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // deleted or replaced between the event and this line, and then there is no truth to read.
         if (SourceRepository.TrackedModFolderOf(_holder.Current, key) is not { } modFolder) return;
 
+        // ADR-0003: a copy whose last read failed is read whole again, which is what clears the
+        // failure once the tree is sound; a key alone cannot vouch for the rest of the tree.
+        if (_heldPlugins?.HasFailure(key) == true)
+        {
+            ReindexHeldCopy(key);
+            return;
+        }
+
         index.RefreshByKeys(key, modFolder, formKeys);
         ReapplyFilter();
     }
@@ -819,12 +827,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
                 _heldPlugins?.SetFailure(key,
                     $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still " +
                     "showing what was last read from it — the compiled binary is not used for a tracked plugin.");
+                PublishStatus();
                 throw;
             }
 
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        if (_heldPlugins?.ClearFailure(key) == true) PublishStatus();
         AnnouncePluginChanged(index, key);
     }
 

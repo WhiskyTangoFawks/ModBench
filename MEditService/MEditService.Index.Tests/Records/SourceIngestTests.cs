@@ -282,6 +282,22 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
+    public void ABackupCopyDeclaringTheSameRecord_DegradesToTheBinary_AndNamesBothDocuments()
+    {
+        string document;
+        using (var live = Opened()) document = NpcSourceFile(live);
+        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
+        File.WriteAllText(backup, File.ReadAllText(document).Replace(NpcEditorId, "BackupNpc", StringComparison.Ordinal));
+
+        using var reloaded = Opened();
+
+        Assert.Equal(NpcEditorId, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        var failure = Assert.Single(reloaded.Status.Failures);
+        Assert.Contains(Path.GetRelativePath(ModFolder, document), failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(ModFolder, backup), failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void APartialReconcileThenBinaryFallback_LeavesExactlyOneEntry_NotTwo()
     {
         var sourceRoot = Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -104,12 +106,30 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("EditedAfterTheRename", (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
+    [Fact]
+    public async Task ARecordABackupCopyAlsoHolds_RefusesAnEdit_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        OtherTool.CopiesASourceDocument(original, "Backup/{0}");
+
+        var response = await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedDespiteTheBackup");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("AmbiguousSourceUnit", problem.GetProperty("refusal").GetString());
+        var detail = problem.GetProperty("detail").GetString().Require();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
     // A tool that moves by copying and then deleting: the old path's delete settles in a batch the
     // new path is not in.
     [Theory]
     [InlineData("RenamedByHand.json")]
-    [InlineData("SortedByHand/{0}")]
-    [InlineData("SortedByHand/RenamedByHand.json")]
     [InlineData("Misnamed - 000900_Shared.esp.json")]
     public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord(string copiedTo)
     {
@@ -129,6 +149,39 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
+
+    // A copy into a new folder is read whole, and until the original goes the tree holds the record
+    // twice.
+    [Theory]
+    [InlineData("SortedByHand/{0}")]
+    [InlineData("SortedByHand/RenamedByHand.json")]
+    public async Task ACommittedDocumentCopiedIntoANewFolderThenDeletedByHand_IsDiagnosedUntilTheDelete_AndKeepsItsRecord(
+        string copiedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+
+        OtherTool.CopiesASourceDocument(original, copiedTo);
+
+        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
+        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        Assert.Contains(
+            Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), FailureOf(diagnosed), StringComparison.Ordinal);
+
+        OtherTool.DeletesTheFile(original);
+
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    private static string? FailureOf(JsonElement loadOrderStatus) =>
+        loadOrderStatus.GetProperty("loadOrderStatus").GetProperty("failures").EnumerateArray()
+            .Where(f => f.GetProperty("name").GetString() == Plugin)
+            .Select(f => f.GetProperty("reason").GetString())
+            .FirstOrDefault();
 
     // A tool that deletes first and writes the copy after: the record leaves with the delete, and the
     // document that declares it again brings it back wherever it landed.
@@ -162,17 +215,14 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, "cell");
         var placedRef = await Client.FirstFormKey(Plugin, "refr");
-        var quest = await Client.FirstFormKey(Plugin, "qust");
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
         using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
-        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
 
         OtherTool.DeletesTheDirectory(original);
 
-        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
-        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && (Names(f.Data, cell) || Names(f.Data, placedRef)));
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
         Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
         Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
     }

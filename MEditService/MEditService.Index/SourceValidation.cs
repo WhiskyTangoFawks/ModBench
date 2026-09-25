@@ -25,7 +25,9 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         if (!Directory.Exists(sourceRoot))
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
 
-        var onDisk = DocumentsOnDisk(sourceRoot, key.Name, failures, out var treeFullyRead);
+        var onDisk = DocumentsOnDisk(sourceRoot, key.Name, failures, out var treeFullyRead, out var declaredTwice);
+        // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
+        if (declaredTwice) return new ValidationReport(key, [], NeedsRebuild: true, failures);
         var held = HeldDocuments(key);
 
         // A document the index never saw moves which records the plugin has, which only a rebuild
@@ -125,9 +127,11 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     // Keyed by the FormKey the document declares, never by its path: a file name carries an EditorID
     // that may contain the separator, so a path is not a decidable identity.
     private static Dictionary<string, string> DocumentsOnDisk(
-        string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead)
+        string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead, out bool declaredTwice)
     {
         fullyRead = true;
+        declaredTwice = false;
+        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
@@ -155,6 +159,11 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 continue;
             }
 
+            if (!filedAt.TryAdd(formKey, file))
+            {
+                failures.Add($"'{filedAt[formKey]}' and '{file}' both declare {formKey}.");
+                declaredTwice = true;
+            }
             documents[formKey] = text;
         }
 
