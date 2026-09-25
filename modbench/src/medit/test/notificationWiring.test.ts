@@ -34,7 +34,7 @@ function fakeActiveRecordTracker() {
 }
 
 // A gate holding no read: no edit is in flight in this suite.
-const holdsNothing = { holds: () => false, release: () => undefined };
+const holdsNothing = { holds: () => false, waitingFor: () => undefined, release: () => false };
 
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
