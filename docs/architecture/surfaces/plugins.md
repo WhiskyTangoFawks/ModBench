@@ -6,8 +6,8 @@ over two templates: its plugin rows follow MO2's plugin list
 them follow xEdit's navigator
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs,
 [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its
-gestures are in [commands.md](../commands.md) under Plugin and Record, with `rebase edit branch`
-under Mod; what each one writes is in its trace. What every view shares is in
+gestures are in [commands.md](../commands.md) under Plugin and Record; what
+each one writes is in its trace. What every view shares is in
 [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
@@ -165,7 +165,7 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track… · compile · compile from `main`… · rebase edit branch · copy value |
+| Plugin menu | reveal · enable or disable · create record… · track… · compile · compile from `main`… · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
@@ -184,9 +184,8 @@ As a user, I want:
    its header, which is a record. A click on a disabled plugin row only selects it. *catalog `open`*
 5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
-6. `track` to act on the plugin, and `rebase edit branch` on the plugin's mod, each offered only
-   where the catalog's condition holds: track on an untracked plugin in a mod, rebase on a tracked
-   plugin's mod while no rebase is in progress, and compile on a tracked, editable plugin. *catalog
+6. `track` and `compile`, each offered only where the catalog's condition holds: track on an
+   untracked plugin in a mod, and compile on a tracked, editable plugin. *catalog
    Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record and
    delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
@@ -283,11 +282,6 @@ As a user, I want:
    *decompile-plugin, The trigger*
 6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
    at Track. *ruling*
-
-### Rebase edit branch
-
-As a user, I want a clean rebase to say nothing, a refused one to name the paths, and a conflict to
-open the native merge editor. *decompile-plugin, rebase edit branch*
 
 ### Other dialogs
 
