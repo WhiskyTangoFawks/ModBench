@@ -5,7 +5,7 @@ Diagram: [load-instance.d2](load-instance.d2). Catalog row: `refresh` under Inst
 States, and [toolbox.md](../surfaces/toolbox.md), Refresh. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
-[ADR-0012](../../adr/0012-every-plugin-copy-is-indexed.md),
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 

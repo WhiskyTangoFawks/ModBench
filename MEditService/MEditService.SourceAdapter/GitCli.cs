@@ -53,10 +53,10 @@ internal static class GitCli
 
     // Only the subcommand is named: the full argument vector can carry scratch paths onto the wire via
     // Results.Problem(ex.Message), so it goes to the log instead.
-    private static InvalidOperationException Failed(string[] args, int exitCode, string stderr)
+    private static GitCommandFailedException Failed(string[] args, int exitCode, string stderr)
     {
         Log.Warning("git {Args} failed ({ExitCode}): {Stderr}", args, exitCode, stderr);
-        return new InvalidOperationException($"git {args[0]} failed ({exitCode}): {stderr}");
+        return new GitCommandFailedException($"git {args[0]} failed ({exitCode}): {stderr}");
     }
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string? indexFile, string[] args)
@@ -111,6 +111,23 @@ public sealed class GitUnavailableException : Exception
     }
 
     internal GitUnavailableException(Exception? inner) : base(DefaultMessage, inner)
+    {
+    }
+}
+
+/// <summary>git ran and refused: a state of the repository, never a broken invariant of Modbench's
+/// own.</summary>
+internal sealed class GitCommandFailedException : InvalidOperationException
+{
+    public GitCommandFailedException()
+    {
+    }
+
+    public GitCommandFailedException(string message) : base(message)
+    {
+    }
+
+    public GitCommandFailedException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

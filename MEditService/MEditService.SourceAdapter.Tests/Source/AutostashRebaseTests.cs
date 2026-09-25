@@ -41,7 +41,7 @@ public sealed class AutostashRebaseTests : IDisposable
         // Main gains a baseline value for the asset, committed by plumbing — the edit branch's own
         // history and working tree are untouched by this step.
         File.WriteAllBytes(Path.Combine(_modFolder, AssetRelativePath), "main-baseline-mesh"u8.ToArray());
-        SourceRepository.CommitPristineToMain(
+        PluginBaselines.CommitToMain(
             _modFolder, [],
             [new TrackedFileChange(AssetRelativePath, TrackedFileChangeKind.Modified, StagedAlready: false)]);
 

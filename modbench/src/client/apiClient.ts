@@ -55,11 +55,11 @@ export interface CrashRepairOffer {
   reason: CrashRepairReason;
 }
 
-/** Baseline / apply's shared result — a refusal (e.g. apply's same-record collision) is a typed,
- *  successful answer, the same posture {@link CompileResult} uses. */
+/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
+ *  same posture {@link CompileResult} uses. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
-/** The rebase's three outcomes, immediate after absorb or run by hand. `conflictedPaths` is the extension's cue to open each path
+/** The outcomes of `rebase edit branch`. `conflictedPaths` is the extension's cue to open each path
  *  in VS Code's native merge editor. */
 export type RebaseOutcome = Schemas['RebaseOutcome'];
 export type RebaseResult = Schemas['RebaseResponse'];

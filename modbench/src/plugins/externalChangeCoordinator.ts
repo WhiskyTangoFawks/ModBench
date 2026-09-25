@@ -1,10 +1,9 @@
 import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
+import type { Reporter } from '../ports/reporter';
 import { handleUnanswered } from './externalChangeGestures';
 import { errorMessage } from '../ports/errorMessage';
 
-/** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
- *  merge editor opens would race the very MarkAnswered call that caused this rebase. */
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {
@@ -12,8 +11,8 @@ export interface ExternalChangeCoordinatorDeps {
   client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
   showDialog: AskQuestion;
   openMergeEditor: OpenMergeEditor;
-  /** ADR-0019: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
-  showError: (message: string) => void;
+  /** ADR-0019: each gesture's refusal, and each plugin of Absorb's answer that did not land. */
+  reporter: Pick<Reporter, 'report' | 'selectionOutcome'>;
   /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0017). */
   refreshTree: () => void;
   refreshMatchingPlugins: () => void;
