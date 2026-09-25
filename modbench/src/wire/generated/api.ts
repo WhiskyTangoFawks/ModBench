@@ -554,6 +554,7 @@ export interface components {
             isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
             hasParseFailure: boolean;
+            parseDiagnosis?: string | null;
         };
         CellSummaryPagedResult: {
             items: components["schemas"]["CellSummary"][];
@@ -614,6 +615,7 @@ export interface components {
             hasContainerChildren: boolean;
             parseDiagnosis?: string | null;
             hasParseFailure: boolean;
+            fullName?: string | null;
         };
         CreatePluginRequest: {
             name: string;
@@ -762,6 +764,9 @@ export interface components {
             baseFormKey?: string | null;
             recordType: string;
             hasParseFailure: boolean;
+            fullName?: string | null;
+            baseEditorId?: string | null;
+            parseDiagnosis?: string | null;
         };
         PluginAddress: {
             name: string;
@@ -939,6 +944,7 @@ export interface components {
             hasContainerChildren: boolean;
             parseDiagnosis?: string | null;
             hasParseFailure: boolean;
+            fullName?: string | null;
         };
         RecordSummaryPagedResult: {
             items: components["schemas"]["RecordSummary"][];
@@ -1005,6 +1011,8 @@ export interface components {
             formKey: string;
             editorId?: string | null;
             hasParseFailure: boolean;
+            fullName?: string | null;
+            parseDiagnosis?: string | null;
         };
     };
     responses: never;

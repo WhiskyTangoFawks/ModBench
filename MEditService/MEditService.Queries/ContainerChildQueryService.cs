@@ -69,7 +69,7 @@ public sealed class ContainerChildQueryService(
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
                 record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotOrder[row.SlotName].RecordType,
-                record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure));
+                record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName));
         }
         return result;
     }

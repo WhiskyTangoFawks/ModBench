@@ -20,4 +20,5 @@ public record RecordSummary(
     // reference walk or the codec write — so Search can never omit one silently.
     string? ParseDiagnosis = null,
     // The same fact widened to this row's subtree, so the tree never walks children to aggregate.
-    bool HasParseFailure = false);
+    bool HasParseFailure = false,
+    string? FullName = null);

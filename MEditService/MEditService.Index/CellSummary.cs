@@ -5,4 +5,5 @@ namespace MEditService.Index;
 // unconditionally, so the tree provider needs both. Trailing so positional constructions compile.
 public record CellSummary(
     string FormKey, string? EditorId, int? CellX, int? CellY,
-    bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false);
+    bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false,
+    string? ParseDiagnosis = null);

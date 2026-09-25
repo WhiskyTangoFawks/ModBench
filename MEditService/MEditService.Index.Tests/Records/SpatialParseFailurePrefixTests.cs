@@ -32,6 +32,30 @@ public sealed class SpatialParseFailurePrefixTests
     }
 
     [Fact]
+    public void AnUnreadablePlacedReference_CarriesItsReason_AndItsCellCarriesNone()
+    {
+        using var world = new SpatialWorld();
+        world.MarkUnreadable(world.PlacedFormKey);
+
+        var placed = world.Reads.GetCellReferences(SpatialWorld.Plugin, world.CellFormKey);
+        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+
+        Assert.Equal("could not be read", placed.Persistent.Single().ParseDiagnosis);
+        Assert.Null(cells.Single().ParseDiagnosis);
+    }
+
+    [Fact]
+    public void AnUnreadableExteriorCell_CarriesItsReason()
+    {
+        using var world = new SpatialWorld();
+        world.MarkUnreadable(world.CellFormKey);
+
+        var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
+
+        Assert.Equal("could not be read", cells.Single().ParseDiagnosis);
+    }
+
+    [Fact]
     public void AReadableWorldspace_CarriesNoPrefixAnywhere()
     {
         using var world = new SpatialWorld();
@@ -68,7 +92,9 @@ public sealed class SpatialParseFailurePrefixTests
 
         var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin, 50, 0);
 
-        Assert.True(interiors.Items.Single(c => c.FormKey == world.InteriorCellFormKey).HasParseFailure);
+        var interior = interiors.Items.Single(c => c.FormKey == world.InteriorCellFormKey);
+        Assert.True(interior.HasParseFailure);
+        Assert.Equal("could not be read", interior.ParseDiagnosis);
     }
 
     private sealed class SpatialWorld : IDisposable
