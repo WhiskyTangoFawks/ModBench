@@ -8,6 +8,7 @@ import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromTe
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -28,17 +29,38 @@ async function modifyPlugins(
   }
 }
 
-/** Refuses a name with no entry line: there is no marker to toggle, and a silent no-op would
- *  leave the gesture looking applied. */
-export function setPluginEnabled(
-  instanceRoot: string, profile: string, pluginName: string, enabled: boolean,
-): Promise<PluginsCommandResult> {
-  return modifyPlugins(instanceRoot, profile, (text) => {
-    if (!parsePlugins(text).some((entry) => entry.name === pluginName)) {
-      throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
-    }
-    return setPluginEnabledInText(text, pluginName, enabled);
+/** A gesture over a selection, in one splice: each item landed or refused by name, or the whole
+ *  selection refused once when plugins.txt cannot be read or written. */
+export type PluginsSelectionResult =
+  | { applied: true; outcome: SelectionOutcome<string> }
+  | { applied: false; refusal: string };
+
+// Read inside the write lock, so a plugin gone since the view last rendered is refused by name
+// while the rest land in the same write.
+async function spliceSelection(
+  instanceRoot: string, profile: string, names: readonly string[],
+  transform: (text: string, found: readonly string[]) => string,
+): Promise<PluginsSelectionResult> {
+  let landed: string[] = [];
+  let refused: ItemRefusal<string>[] = [];
+  const outcome = await modifyPlugins(instanceRoot, profile, (text) => {
+    const known = new Set(parsePlugins(text).map((entry) => entry.name));
+    landed = names.filter((name) => known.has(name));
+    refused = names.filter((name) => !known.has(name))
+      .map((name) => ({ item: name, reason: `Plugin not found in plugins.txt: ${name}` }));
+    return transform(text, landed);
   });
+  return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
+}
+
+/** `modbench.plugin.enable` / `modbench.plugin.disable`, over the whole selection in one splice
+ *  (commands.md, "A selection is one gesture") — the menu, the key and the check box all reach
+ *  this same core. */
+export function setPluginsEnabled(
+  instanceRoot: string, profile: string, pluginNames: readonly string[], enabled: boolean,
+): Promise<PluginsSelectionResult> {
+  return spliceSelection(instanceRoot, profile, pluginNames, (text, found) =>
+    found.reduce((acc, name) => setPluginEnabledInText(acc, name, enabled), text));
 }
 
 /** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without

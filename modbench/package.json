@@ -387,6 +387,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.enable",
+        "title": "Enable Plugin",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.plugin.disable",
+        "title": "Disable Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.track",
         "title": "Track Plugin…",
         "category": "Modbench"
@@ -522,6 +532,14 @@
         {
           "command": "modbench.plugin.reveal",
           "when": "false"
+        },
+        {
+          "command": "modbench.plugin.enable",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.plugin.disable",
+          "when": "modbench.folder == instance"
         },
         {
           "command": "modbench.plugin.track",

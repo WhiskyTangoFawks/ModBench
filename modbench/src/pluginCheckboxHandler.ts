@@ -1,24 +1,24 @@
 import * as vscode from 'vscode';
-import type { PluginsTreeProvider, PluginsTreeNode } from './plugins/PluginsTreeProvider';
-import { makeReporter } from './reporter';
-import { errorMessage } from './ports/errorMessage';
+import type { PluginsTreeNode } from './plugins/PluginsTreeProvider';
+import { reportPluginsEnabled } from './plugins/pluginParticipationCommands';
+import { setPluginsEnabled } from './pluginsCommands/plugins';
+import type { Reporter } from './ports/reporter';
 
-/** ADR-0019: a failed toggle must surface and resync, never leave the checkbox disagreeing with
- *  plugins.txt. At the composition root because the event is the `TreeView`'s, not the
- *  provider's. */
+/** ADR-0019: a failed toggle must surface and resync, never leave a checkbox disagreeing with
+ *  plugins.txt. Several boxes toggled together are one entry to `setPluginsEnabled`'s core, one
+ *  splice per target state. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  pluginsTree: Pick<PluginsTreeProvider, 'setPluginEnabled' | 'invalidate'>,
-  outputChannel: vscode.LogOutputChannel,
+  instanceRoot: string, profile: () => string, reporter: Reporter, invalidate: () => void,
 ): Promise<void> {
+  const byState = new Map<boolean, string[]>();
   for (const [node, state] of e.items) {
     if (node.kind !== 'plugin') continue;
-    try {
-      await pluginsTree.setPluginEnabled(node.plugin.name, state === vscode.TreeItemCheckboxState.Checked);
-    } catch (err) {
-      makeReporter(outputChannel, 'pluginListTree.checkbox').report(
-        'error', `Failed to update "${node.plugin.name}".`, errorMessage(err));
-      pluginsTree.invalidate();
-    }
+    const enabled = state === vscode.TreeItemCheckboxState.Checked;
+    byState.set(enabled, [...(byState.get(enabled) ?? []), node.plugin.name]);
+  }
+  for (const [enabled, names] of byState) {
+    const result = await setPluginsEnabled(instanceRoot, profile(), names, enabled);
+    if (reportPluginsEnabled(result, names, enabled, reporter)) invalidate();
   }
 }

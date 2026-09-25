@@ -2,7 +2,7 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { appendPlugin, syncPlugins, reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
+import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled } from '../../pluginsCommands/plugins';
 import { switchProfile } from '../../instanceCommands/profile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
@@ -29,9 +29,9 @@ describe('plugins.txt + profile corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('setPluginEnabled(false) touches only the active profile\'s plugins.txt', async () => {
+  it('setPluginsEnabled(false) touches only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await setPluginEnabled(dir, PROFILE, 'Tracked Patch Mod.esp', false);
+    await setPluginsEnabled(dir, PROFILE, ['Tracked Patch Mod.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

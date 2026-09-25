@@ -256,6 +256,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
           client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);
         notifyConflictsComputed();
       },
+      () => session.pluginsTreeView?.selection ?? [],
     ),
     registerSaveAndCompileCommand(
       client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,

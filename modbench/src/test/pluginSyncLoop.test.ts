@@ -10,7 +10,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { registerPluginSync } from '../pluginSyncTrigger';
-import { syncPlugins, setPluginEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
+import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
@@ -190,10 +190,10 @@ describe('a gesture writes the profile the Instance last landed', () => {
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    // Exactly what the composition root binds into the tree's source.
-    const result = await setPluginEnabled(root, instance.value.activeProfile, 'Base.esp', false);
+    // Exactly what the composition root binds enable/disable to.
+    const result = await setPluginsEnabled(root, instance.value.activeProfile, ['Base.esp'], false);
 
-    expect(result).toEqual({ applied: true, wrote: true });
+    expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
     expect(await pluginsOf(PROFILE)).toBe('*Base.esp\r\n');
   });
