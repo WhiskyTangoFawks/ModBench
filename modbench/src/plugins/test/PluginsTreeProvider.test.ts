@@ -1800,6 +1800,29 @@ describe('PluginsTreeProvider — groups and records are named and described as 
       .toBe('Laser Rifle\nThis record could not be read into its document: bad flag');
   });
 
+  it('tips an unreadable worldspace, cell and placed reference with the reason it could not be read', async () => {
+    const unreadable = { hasParseFailure: true, parseDiagnosis: 'bad flag' };
+    const { h, groups } = await expandedRow(makeClient({
+      recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
+      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', ...unreadable }],
+      worldspaceBlocks: { topCells: [cell({ formKey: '000101:A.esp', editorId: 'TopCell', ...unreadable })], blocks: [] },
+      cellReferences: {
+        persistent: [{ formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
+        temporary: [],
+      },
+    }));
+    const [worldspace] = await h.tree.getChildren(groups[0]);
+    const [topCell] = await h.tree.getChildren(worldspace);
+    const [persistent] = await h.tree.getChildren(topCell);
+    const [placed] = await h.tree.getChildren(persistent);
+
+    expect([worldspace, topCell, placed].map((row) => present(row, 'an unreadable row').tooltip)).toEqual([
+      'Commonwealth Wasteland\nThis record could not be read into its document: bad flag',
+      'This record could not be read into its document: bad flag',
+      'This record could not be read into its document: bad flag',
+    ]);
+  });
+
   it('names a worldspace as it names a record', async () => {
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],

@@ -35,18 +35,15 @@ function markFailure(item: vscode.TreeItem, tooltip: string): void {
   item.tooltip = tooltip;
 }
 
-interface RecordRowFacts {
-  formKey: string;
-  fullName?: string | null;
-  hasParseFailure: boolean;
-}
+type RecordRowFacts = Pick<RecordSummary, 'formKey' | 'fullName' | 'hasParseFailure' | 'parseDiagnosis'>;
 
 // xEdit's navigator: the EditorID or FormKey as the label, the FormKey beside it, and the name
 // (FULL) in its third column, which a tree row has only as its tooltip.
-function describeRecordRow(item: vscode.TreeItem, record: RecordRowFacts, failure: string): void {
+function describeRecordRow(item: vscode.TreeItem, record: RecordRowFacts): void {
   item.description = record.formKey;
   if (record.hasParseFailure) item.iconPath = failurePrefixIcon();
-  const lines = [record.fullName, record.hasParseFailure ? failure : undefined].filter(line => !!line);
+  const failure = record.hasParseFailure ? failureNote('This record', record.parseDiagnosis) : undefined;
+  const lines = [record.fullName, failure].filter(line => !!line);
   item.tooltip = lines.length > 0 ? lines.join('\n') : undefined;
 }
 
@@ -124,7 +121,7 @@ export class RecordNode extends vscode.TreeItem {
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
-    describeRecordRow(this, record, failureNote('This record', record.parseDiagnosis));
+    describeRecordRow(this, record);
   }
 }
 
@@ -159,7 +156,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     this.editorId = worldspace.editorId ?? undefined;
     this.contextValue = conditionedContextValue('worldspace', conditions);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
-    describeRecordRow(this, worldspace, failureNote(label, null));
+    describeRecordRow(this, worldspace);
   }
 }
 
@@ -211,7 +208,7 @@ export class CellNode extends vscode.TreeItem {
     this.editorId = cell.editorId ?? undefined;
     this.contextValue = conditionedContextValue('cell', conditions);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
-    describeRecordRow(this, cell, failureNote(label, null));
+    describeRecordRow(this, cell);
   }
 }
 
@@ -250,7 +247,7 @@ export class PlacedNode extends vscode.TreeItem {
     this.editorId = placed.editorId ?? undefined;
     this.contextValue = conditionedContextValue('placed', conditions);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
-    describeRecordRow(this, placed, failureNote(label, null));
+    describeRecordRow(this, placed);
   }
 }
 
@@ -293,8 +290,6 @@ export type PluginTreeNode =
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
   | ErrorNode | IndexingNode;
 
-// The groups whose records are the spatial hierarchy rather than a flat list, keyed by raw
-// signature. They take their place among the other groups, in mEdit's order.
 const SPATIAL_GROUP_FACTORIES: Record<
   string,
   (pluginName: string, group: PluginRecordTypeCount, origin: string | undefined, conditions: PluginConditions) => PluginTreeNode
