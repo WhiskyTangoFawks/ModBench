@@ -739,10 +739,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // A record set that moved is a whole-plugin re-derivation, which is the Indexer's to run:
-            // it holds the mod and knows which truth this copy reads (ADR-0007 invariant 3). A copy
-            // whose last read failed is read whole again too, since that read is what lifts the
-            // failure once the tree is sound (ADR-0003).
+            // A moved record set is re-derived whole (ADR-0007 invariant 3), and so is a copy whose
+            // last read failed: that read is what lifts the failure once the tree is sound (ADR-0003).
             if (report.NeedsRebuild || _heldPlugins?.IsHeldWithAFailure(key) == true) ReindexHeldCopy(key);
             return report;
         }

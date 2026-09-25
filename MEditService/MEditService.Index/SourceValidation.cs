@@ -25,9 +25,18 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         if (!Directory.Exists(sourceRoot))
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
 
-        var onDisk = DocumentsOnDisk(sourceRoot, key.Name, failures, out var treeFullyRead, out var declaredTwice);
-        // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
-        if (declaredTwice) return new ValidationReport(key, [], NeedsRebuild: true, failures);
+        Dictionary<string, string> onDisk;
+        bool treeFullyRead;
+        try
+        {
+            onDisk = SourceRepository.DocumentsByDeclaredFormKey(modFolder, key.Name, failures, out treeFullyRead);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
+            failures.Add(ex.Message);
+            return new ValidationReport(key, [], NeedsRebuild: true, failures);
+        }
         var held = HeldDocuments(key);
 
         // A document the index never saw moves which records the plugin has, which only a rebuild
@@ -123,52 +132,6 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         DuckDbSql.ScalarString(connection,
             "SELECT body FROM records_head WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
-
-    // Keyed by the FormKey the document declares, never by its path: a file name carries an EditorID
-    // that may contain the separator, so a path is not a decidable identity.
-    private static Dictionary<string, string> DocumentsOnDisk(
-        string sourceRoot, string pluginFileName, List<string> failures, out bool fullyRead, out bool declaredTwice)
-    {
-        fullyRead = true;
-        declaredTwice = false;
-        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
-        var documents = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
-        {
-            if (SourceRepository.CarriesNoRecord(file)) continue;
-
-            string text;
-            try
-            {
-                text = Encoding.UTF8.GetString(SourceRepository.StripUtf8Bom(File.ReadAllBytes(file)));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Never exclusive owners of a file: it may vanish or lock between the listing and the
-                // read. A skip and a line, and the tree stops counting as evidence a record is gone.
-                failures.Add($"Could not read '{file}': {ex.Message}");
-                fullyRead = false;
-                continue;
-            }
-
-            if (SourceRepository.FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
-            {
-                failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
-                fullyRead = false;
-                continue;
-            }
-
-            if (!filedAt.TryAdd(formKey, file))
-            {
-                failures.Add($"'{filedAt[formKey]}' and '{file}' both declare {formKey}.");
-                declaredTwice = true;
-            }
-            documents[formKey] = text;
-        }
-
-        return documents;
-    }
 
     // One row per source document: every Effective record no other record's document embeds. The
     // parent tables are the repository's own, asked in bulk instead of a scan per record.

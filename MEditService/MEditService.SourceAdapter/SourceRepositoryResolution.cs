@@ -191,12 +191,9 @@ public sealed partial class SourceRepository
                 ScanOf(sourceRoot).DocumentsDeclaring(spelled), pluginFileName, formKey, spelled, schemas);
         }
 
-        return identified.Count switch
-        {
-            0 => null,
-            1 => identified[0].Identity,
-            _ => throw MoreThanOneDocumentHolds(spelled, identified.Select(i => i.Path)),
-        };
+        return OneDocumentPerFormKey.TheOne([.. identified.Select(i => i.Path)], spelled, _modFolder) is { } path
+            ? identified.Single(i => i.Path == path).Identity
+            : null;
     }
 
     private List<(string Path, RecordIdentity Identity)> IdentitiesIn(
@@ -259,24 +256,12 @@ public sealed partial class SourceRepository
             if (documents.Count == 1) _foundByText[(pluginFileName, formKey)] = documents[0];
         }
 
-        return documents.Count switch
-        {
-            0 => null,
-            1 => documents[0],
-            _ => throw MoreThanOneDocumentHolds(formKey, documents),
-        };
+        return OneDocumentPerFormKey.TheOne(documents, formKey, _modFolder);
     }
 
     private static bool IsUnder(string directory, string path) =>
         path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
-    // ADR-0006: a tree changed behind Modbench's back is diagnosed, never repaired, so neither copy
-    // is chosen.
-    private AmbiguousSourceUnitException MoreThanOneDocumentHolds(string formKey, IEnumerable<string> documents) =>
-        new($"More than one document in this plugin's source tree holds {formKey}: " +
-            $"{string.Join(", ", documents.Select(d => $"'{Path.GetRelativePath(_modFolder, d)}'"))}. A FormKey " +
-            "is unique within a plugin, so the tree is corrupt — most likely a copy or an interrupted " +
-            "rename. Remove the duplicate by hand.");
 
     /// <summary>True when another record's document in this plugin's tree carries
     /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
@@ -422,7 +407,7 @@ public sealed partial class SourceRepository
 
         private readonly string _sourceRoot;
         private readonly GameRelease _release;
-        private Dictionary<string, OwnerDocument> _byChild = new(StringComparer.Ordinal);
+        private Dictionary<string, List<OwnerDocument>> _byChild = new(StringComparer.Ordinal);
         private Dictionary<string, List<string>> _byRoot = new(StringComparer.Ordinal);
         private bool _rescanned;
 
@@ -448,11 +433,16 @@ public sealed partial class SourceRepository
             return Declaring(formKey);
         }
 
-        private OwnerDocument? Holding(string formKey) =>
-            _byChild.TryGetValue(formKey, out var owner)
-            && Carried(owner.FullPath, formKey, k => k.InAnEmbedSlot)
-                ? owner
+        private OwnerDocument? Holding(string formKey)
+        {
+            if (!_byChild.TryGetValue(formKey, out var owners)) return null;
+            var carrying = owners.Where(owner => Carried(owner.FullPath, formKey, k => k.InAnEmbedSlot)).ToList();
+            return OneDocumentPerFormKey.TheOne([.. carrying.Select(owner => owner.FullPath)], formKey, ModFolder) is { } path
+                ? carrying.Single(owner => owner.FullPath == path)
                 : null;
+        }
+
+        private string ModFolder => PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
 
         private List<string> Declaring(string formKey) =>
             _byRoot.TryGetValue(formKey, out var documents)
@@ -472,15 +462,12 @@ public sealed partial class SourceRepository
             DocumentBytes(documentPath) is { } bytes
             && FormKeysIn(bytes).Any(k => where(k) && k.FormKey.Equals(formKey, StringComparison.Ordinal));
 
-        // First document wins a child two of them claim: that tree is corrupt, and refusing to answer
-        // at all would take every unrelated record down with it.
         private void Scan()
         {
-            var byChild = new Dictionary<string, OwnerDocument>(StringComparer.Ordinal);
+            var byChild = new Dictionary<string, List<OwnerDocument>>(StringComparer.Ordinal);
             var byRoot = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             if (Directory.Exists(_sourceRoot))
             {
-                var modFolder = PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
                 foreach (var documentPath in Directory.EnumerateFiles(_sourceRoot, "*.json", SearchOption.AllDirectories))
                 {
                     if (CarriesNoRecord(documentPath)) continue;
@@ -494,12 +481,14 @@ public sealed partial class SourceRepository
 
                     // A null type is an answer, not a skip: a path-ambiguous group's documents name
                     // their own type, and dropping them leaves every child they carry unlocatable.
-                    var recordType = RecordTypeOf(Path.GetRelativePath(modFolder, documentPath), _release);
+                    var recordType = RecordTypeOf(Path.GetRelativePath(ModFolder, documentPath), _release);
 
                     var owner = new OwnerDocument(documentPath, root, recordType);
                     foreach (var (childFormKey, _, inAnEmbedSlot) in keys)
                     {
-                        if (inAnEmbedSlot) byChild.TryAdd(childFormKey, owner);
+                        if (!inAnEmbedSlot) continue;
+                        if (!byChild.TryGetValue(childFormKey, out var owners)) byChild[childFormKey] = owners = [];
+                        owners.Add(owner);
                     }
                 }
             }

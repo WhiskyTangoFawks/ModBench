@@ -59,6 +59,50 @@ public sealed partial class SourceRepository
             ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
             : null;
 
+    /// <summary>Every document in the working tree by the FormKey it declares. An unreadable file is a
+    /// failure line and clears <paramref name="fullyRead"/>; a FormKey two documents declare throws
+    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
+    public static Dictionary<string, string> DocumentsByDeclaredFormKey(
+        string modFolder, string pluginFileName, List<string> failures, out bool fullyRead)
+    {
+        fullyRead = true;
+        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
+        var documents = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Keyed by the FormKey the document declares, never by its path: a file name carries an
+        // EditorID that may contain the separator, so a path is not a decidable identity.
+        foreach (var file in Directory.EnumerateFiles(RootIn(modFolder, pluginFileName), $"*{JsonSuffix}", SearchOption.AllDirectories))
+        {
+            if (CarriesNoRecord(file)) continue;
+
+            string text;
+            try
+            {
+                text = Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(file)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Never exclusive owners of a file: it may vanish or lock between the listing and the
+                // read. A skip and a line, and the tree stops counting as evidence a record is gone.
+                failures.Add($"Could not read '{file}': {ex.Message}");
+                fullyRead = false;
+                continue;
+            }
+
+            if (FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
+            {
+                failures.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
+                fullyRead = false;
+                continue;
+            }
+
+            OneDocumentPerFormKey.Claim(filedAt, formKey, file, modFolder);
+            documents[formKey] = text;
+        }
+
+        return documents;
+    }
+
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
     public static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName) =>

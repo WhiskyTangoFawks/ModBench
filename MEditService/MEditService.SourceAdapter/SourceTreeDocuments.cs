@@ -152,16 +152,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
-        // ADR-0006: a tree changed behind Modbench's back is diagnosed, never repaired, so neither
-        // copy is read as the record.
-        if (!filedAt.TryAdd(formKey, file))
-        {
-            throw new UnreadableSourceDocumentException(
-                file, $"'{filedAt[formKey]}' declares the same FormKey {formKey}, which is unique within a plugin");
-        }
-
+        OneDocumentPerFormKey.Claim(filedAt, formKey, file, _modFolder);
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
-        foreach (var child in Embedded(recordType, formKey, text, file)) yield return child;
+        foreach (var child in Embedded(recordType, formKey, text, file))
+        {
+            OneDocumentPerFormKey.Claim(filedAt, child.FormKey, file, _modFolder);
+            yield return child;
+        }
     }
 
     // ADR-0005: what a cell's two placement groups hold. Read off its own document, since the tree

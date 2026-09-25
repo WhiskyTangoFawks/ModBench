@@ -175,6 +175,55 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
+    // The copy is a cell of its own, and the placed reference it carries is the original's.
+    private static string ACellCopiedUnderAKeyOfItsOwn(string modFolder, string cell)
+    {
+        var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
+        var copy = OtherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
+        OtherTool.CopiesASourceDirectory(original, Path.GetFileName(copy));
+        var document = Path.Combine(copy, "RecordData.json");
+        var text = File.ReadAllText(document);
+        var at = text.IndexOf(cell, StringComparison.Ordinal);
+        File.WriteAllText(document, text[..at] + "000950:Shared.esp" + text[(at + cell.Length)..]);
+        return document;
+    }
+
+    [Fact]
+    public async Task APlacedReferenceTwoCellsCarry_IsDiagnosed_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
+        using var stream = await Client.NotificationStream();
+
+        var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
+
+        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
+        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, copy), FailureOf(diagnosed), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APlacedReferenceTwoCellsCarry_RefusesAnEdit_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
+        var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
+
+        var response = await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("AmbiguousSourceUnit", problem.GetProperty("refusal").GetString());
+        var detail = problem.GetProperty("detail").GetString().Require();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, copy), detail, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("{0}")]
     [InlineData("copy.json")]
