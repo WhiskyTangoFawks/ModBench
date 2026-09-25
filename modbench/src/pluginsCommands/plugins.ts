@@ -8,6 +8,7 @@ import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromTe
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -28,17 +29,44 @@ async function modifyPlugins(
   }
 }
 
-/** Refuses a name with no entry line: there is no marker to toggle, and a silent no-op would
- *  leave the gesture looking applied. */
-export function setPluginEnabled(
-  instanceRoot: string, profile: string, pluginName: string, enabled: boolean,
-): Promise<PluginsCommandResult> {
-  return modifyPlugins(instanceRoot, profile, (text) => {
-    if (!parsePlugins(text).some((entry) => entry.name === pluginName)) {
-      throw new Error(`Plugin not found in plugins.txt: ${pluginName}`);
-    }
-    return setPluginEnabledInText(text, pluginName, enabled);
+/** A gesture over a selection, in one splice: each item landed or refused by name, or the whole
+ *  selection refused once when plugins.txt cannot be read or written. */
+export type PluginsSelectionResult =
+  | { applied: true; outcome: SelectionOutcome<string> }
+  | { applied: false; refusal: string };
+
+/** One plugin's target state — the check box's own shape, where several rows toggled at once can
+ *  each ask for a different state. */
+export interface PluginParticipation {
+  name: string;
+  enabled: boolean;
+}
+
+/** `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
+ *  selection in one splice (commands.md, "A selection is one gesture") — every entry lands or is
+ *  refused by name, whatever state each one asks for. */
+export async function setPluginsParticipation(
+  instanceRoot: string, profile: string, entries: readonly PluginParticipation[],
+): Promise<PluginsSelectionResult> {
+  let landed: string[] = [];
+  let refused: ItemRefusal<string>[] = [];
+  const outcome = await modifyPlugins(instanceRoot, profile, (text) => {
+    const known = new Set(parsePlugins(text).map((entry) => entry.name));
+    const found = entries.filter((entry) => known.has(entry.name));
+    landed = found.map((entry) => entry.name);
+    refused = entries.filter((entry) => !known.has(entry.name))
+      .map((entry) => ({ item: entry.name, reason: `Plugin not found in plugins.txt: ${entry.name}` }));
+    return found.reduce((acc, entry) => setPluginEnabledInText(acc, entry.name, entry.enabled), text);
   });
+  return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
+}
+
+/** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
+ *  shape, which never mixes directions in one gesture. */
+export function setPluginsEnabled(
+  instanceRoot: string, profile: string, pluginNames: readonly string[], enabled: boolean,
+): Promise<PluginsSelectionResult> {
+  return setPluginsParticipation(instanceRoot, profile, pluginNames.map((name) => ({ name, enabled })));
 }
 
 /** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without

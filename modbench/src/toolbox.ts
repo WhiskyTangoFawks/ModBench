@@ -25,7 +25,7 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { syncPlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource } from './pluginsCommands/plugins';
+import { syncPlugins, reorderPlugins, type ImplicitMasterSource } from './pluginsCommands/plugins';
 import { syncMods } from './modlist/modlist';
 import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
@@ -46,6 +46,7 @@ import {
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
@@ -182,8 +183,6 @@ export function registerCopyValueCommand(
 // notify-and-log path is written against.
 function pluginListSource(instanceRoot: string, instance: Instance): PluginListSource {
   return {
-    setPluginEnabled: async (name, enabled) =>
-      applyOrThrow(await setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
     reorderPlugins: async (names, drop) =>
       applyOrThrow(await reorderPlugins(instanceRoot, instance.value.activeProfile, names, drop)),
   };
@@ -244,8 +243,11 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   own(vscode.window.registerFileDecorationProvider(
     new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
-  own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
+  own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
+    e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer')));
+  ownAll(own, registerPluginEnableCommands(
+    instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
   return pluginsTree;
 }
 

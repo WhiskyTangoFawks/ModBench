@@ -63,13 +63,16 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
 // ── registerTrackCommand ──────────────────────────────────────────────────
 
 describe('registerTrackCommand', () => {
-  function invokeTrack(client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined)) {
+  function invokeTrack(
+    client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined),
+    viewSelection: () => readonly PluginNode[] = () => [],
+  ) {
     const said: (string | undefined)[] = [];
     const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
     const reporter = recordingReporter();
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
-    registerTrackCommand(progress, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
+    registerTrackCommand(progress, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked, viewSelection);
     return {
       handler: present(handlers.get('modbench.plugin.track'), 'the track command registerTrackCommand registers'),
       onTracked, reporter, refresh, said,
@@ -151,6 +154,21 @@ describe('registerTrackCommand', () => {
     expect(reporter.selectionOutcomeCalls.map((call) => call.outcome.refused.map((r) => r.item))).toEqual([[{ name: 'MyMod.esp' }]]);
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
+  });
+
+  // The palette hands the command no row: it falls back to the view's own selection, the same
+  // as every other plural gesture the entry builds.
+  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    const plugin = { name: 'MyMod.esp', origin: 'ModA' };
+    client.setCommandResult('track', { landed: [plugin], refused: [] });
+    showQuickPick.mockResolvedValue({ label: 'Edits' });
+    const { handler, reporter } = invokeTrack(client, undefined, () => [pluginNode()]);
+
+    await handler();
+
+    expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
+    expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
   });
 });
 

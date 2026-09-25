@@ -34,7 +34,6 @@ import { InMemoryMEditClient, type PluginMetadata } from '../client';
 import { syncMessageDouble } from './syncMessageDouble';
 
 class FakeSource implements PluginListSource {
-  setPluginEnabled(): Promise<void> { return Promise.resolve(); }
   reorderPlugins(): Promise<void> { return Promise.resolve(); }
 }
 
