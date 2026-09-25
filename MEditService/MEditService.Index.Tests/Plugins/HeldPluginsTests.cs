@@ -30,10 +30,10 @@ public sealed class HeldPluginsTests
             .WithPlugin("Fallout4.esm", listed: false)
             .WithPlugin(UserPlugin)
             .Build();
-        RegisteredCopy[] forced = [RegisteredCopy.Forced(data.DataFolder, "Fallout4.esm", slot: 0)];
+        RegisteredPlugin[] forced = [RegisteredPlugin.Forced(data.DataFolder, "Fallout4.esm", slot: 0)];
         var snapshot = new LoadOrderSnapshot(
             data.DataFolder, instanceRoot: null, GameRelease.Fallout4,
-            [.. forced, .. data.Plugins.Select(e => RegisteredCopy.Of(e, slotOffset: forced.Length))]);
+            [.. forced, .. data.Plugins.Select(e => RegisteredPlugin.Of(e, slotOffset: forced.Length))]);
         var holder = new LoadOrderHolder();
         var version = holder.Apply(snapshot);
         using var held = Indexes.Open(holder);

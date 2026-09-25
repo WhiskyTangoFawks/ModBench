@@ -3,9 +3,9 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Watcher;
 
-/// <summary>A tracked mod the snapshot holds, with every copy it holds there: what the load-time
+/// <summary>A tracked mod the snapshot holds, with every plugin it holds there: what the load-time
 /// settle reads and classifies.</summary>
-internal sealed record TrackedMod(string ModFolder, IReadOnlyList<RegisteredCopy> Copies);
+internal sealed record TrackedMod(string ModFolder, IReadOnlyList<RegisteredPlugin> Plugins);
 
 /// <summary>Arming from the snapshot: one watch per folder the load order names, tracked or not,
 /// and none for a folder outside it. Re-armed whole on every change (ADR-0013 invariant 1).</summary>
@@ -83,10 +83,10 @@ internal sealed class WatchSet : IDisposable
 
     // The game's own Data folder is never a tracked mod (Track does not apply there), and never
     // recursive: it can hold thousands of files and has no source tree or refs to answer for.
-    private static Dictionary<string, (bool Trackable, List<RegisteredCopy> Copies)> FoldersOf(LoadOrderSnapshot order)
+    private static Dictionary<string, (bool Trackable, List<RegisteredPlugin> Copies)> FoldersOf(LoadOrderSnapshot order)
     {
-        var folders = new Dictionary<string, (bool Trackable, List<RegisteredCopy> Copies)>(StringComparer.Ordinal);
-        foreach (var copy in order.Copies)
+        var folders = new Dictionary<string, (bool Trackable, List<RegisteredPlugin> Copies)>(StringComparer.Ordinal);
+        foreach (var copy in order.Plugins)
         {
             var modFolder = LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path);
             var folder = modFolder ?? Path.GetDirectoryName(copy.Path)

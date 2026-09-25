@@ -72,7 +72,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
                 new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),

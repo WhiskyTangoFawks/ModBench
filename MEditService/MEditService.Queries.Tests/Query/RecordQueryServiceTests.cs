@@ -54,7 +54,7 @@ public sealed class RecordQueryServiceTests
         var plugins = _svc.GetPlugins();
 
         Assert.Single(plugins);
-        Assert.Equal(PluginName, plugins[0].Copy.Name);
+        Assert.Equal(PluginName, plugins[0].Plugin.Name);
         Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
@@ -77,8 +77,8 @@ public sealed class RecordQueryServiceTests
 
         var plugins = svc.GetPlugins();
 
-        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).HasParseFailure);
-        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).HasParseFailure);
+        Assert.True(plugins.Single(p => p.Plugin.Name == PluginName).HasParseFailure);
+        Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).HasParseFailure);
     }
 
     // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
@@ -98,8 +98,8 @@ public sealed class RecordQueryServiceTests
 
         var plugins = svc.GetPlugins();
 
-        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).IsTracked);
-        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).IsTracked);
+        Assert.True(plugins.Single(p => p.Plugin.Name == PluginName).IsTracked);
+        Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).IsTracked);
     }
 
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
@@ -115,7 +115,7 @@ public sealed class RecordQueryServiceTests
 
         var plugins = svc.GetPlugins();
 
-        var patch = Assert.Single(plugins, p => p.Copy.Name == "Patch.esp");
+        var patch = Assert.Single(plugins, p => p.Plugin.Name == "Patch.esp");
         var issue = Assert.Single(patch.MasterIssues);
         Assert.Equal("Ghost.esm", issue.MasterName);
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
@@ -769,12 +769,12 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
-        var copy = Assert.Single(_svc.GetPlugins(), p => p.Copy.Name == PluginName).Copy.Key;
+        var copy = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
         _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { copy };
 
         var plugins = _svc.GetPlugins();
-        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        var plugin = Assert.Single(plugins, p => p.Plugin.Name == PluginName);
         Assert.True(plugin.HasMatchingRecords);
     }
 
@@ -787,7 +787,7 @@ public sealed class RecordQueryServiceTests
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         var plugins = _svc.GetPlugins();
-        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        var plugin = Assert.Single(plugins, p => p.Plugin.Name == PluginName);
         Assert.False(plugin.HasMatchingRecords);
     }
 
@@ -799,7 +799,7 @@ public sealed class RecordQueryServiceTests
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
-        Assert.Equal(PluginName, plugin.Copy.Name);
+        Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
 }

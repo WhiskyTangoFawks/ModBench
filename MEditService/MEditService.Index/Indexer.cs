@@ -271,7 +271,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Reconciling load order. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
-                    snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Copies.Count, snapshot.GameRelease);
+                    snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Plugins.Count, snapshot.GameRelease);
             }
 
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
@@ -395,7 +395,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private void ReconcileProgressively(
         HeldPlugins held, IRecordIndex index, LoadOrderSnapshot snapshot, CancellationToken token)
     {
-        var resolved = snapshot.Copies;
+        var resolved = snapshot.Plugins;
         var wanted = resolved.ToDictionary(r => r.Key, PluginAddress.Comparer);
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 
@@ -514,7 +514,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // A copy whose folder was tracked or untracked since it was indexed. Nothing here has compared
     // the two truths, so the copy is re-derived whole from the one its folder now offers.
     private void ReDeriveMovedTruths(
-        HeldPlugins held, IRecordIndex index, IReadOnlyList<RegisteredCopy> copies, CancellationToken token)
+        HeldPlugins held, IRecordIndex index, IReadOnlyList<RegisteredPlugin> copies, CancellationToken token)
     {
         foreach (var plugin in copies)
         {
@@ -561,7 +561,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     // While the bytes are unchanged the error state stands, and the parse is not paid again.
-    private bool StillFailing(RegisteredCopy plugin)
+    private bool StillFailing(RegisteredPlugin plugin)
     {
         string? failedAt;
         lock (_lock)
@@ -799,7 +799,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // ADR-0013 invariant 3: the sweep is handed who competes, read from the kernel's load order —
     // the rule is Registration.Participates and runs there. Read whole, not per plugin.
-    private IReadOnlyList<RegisteredCopy> Participating() => _holder.Current.Participating;
+    private IReadOnlyList<RegisteredPlugin> Participating() => _holder.Current.Participating;
 
     // Which truth it reads is the plugin's: an untracked copy from its binary, a tracked copy from
     // its source tree (ADR-0007 invariant 3), because reading a tracked copy's binary would discard
@@ -972,7 +972,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             (held, index) = (h, i);
         }
 
-        if (_holder.Current.Copy(key) is not { } copy) return false;
+        if (_holder.Current.Plugin(key) is not { } copy) return false;
 
         if (held.Open(copy) is not { } metadata)
         {

@@ -92,7 +92,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotPlugins.Of(inputs));
         }
 
         public async Task<TrackResult> TrackAsync() =>

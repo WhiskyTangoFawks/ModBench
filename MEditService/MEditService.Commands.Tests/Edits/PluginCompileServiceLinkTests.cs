@@ -59,7 +59,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));

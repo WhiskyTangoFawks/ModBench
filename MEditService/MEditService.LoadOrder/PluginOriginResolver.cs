@@ -13,7 +13,7 @@ namespace MEditService.LoadOrder;
 public static class PluginOriginResolver
 {
     public static string Resolve(LoadOrderSnapshot loadOrder, PluginName plugin) =>
-        loadOrder.Copies
+        loadOrder.Plugins
             .FirstOrDefault(c =>
                 c.Registration.InLoadOrder && c.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
             ?.Origin

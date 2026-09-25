@@ -7,10 +7,10 @@ namespace MEditService.LoadOrder.Tests.Plugins;
 // filename mean?" has two candidates and one right answer.
 public sealed class PluginOriginResolverTests
 {
-    private static LoadOrderSnapshot LoadOrderWith(params RegisteredCopy[] copies) =>
+    private static LoadOrderSnapshot LoadOrderWith(params RegisteredPlugin[] copies) =>
         new(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, copies);
 
-    private static RegisteredCopy Copy(string name, string origin, bool inLoadOrder) =>
+    private static RegisteredPlugin Copy(string name, string origin, bool inLoadOrder) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: inLoadOrder);
 
     [Fact]

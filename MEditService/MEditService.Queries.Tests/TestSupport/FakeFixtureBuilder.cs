@@ -14,7 +14,7 @@ namespace MEditService.Queries.Tests.TestSupport;
 /// would have opened, and the documents each copy holds.</summary>
 internal sealed record FakeFixtureData(
     GameRelease Release,
-    IReadOnlyList<RegisteredCopy> Copies, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
+    IReadOnlyList<RegisteredPlugin> Copies, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedCopies, IReadOnlyList<FakeRow> Rows);
 
 // Build takes the column names a test reads, never every column a schema has: a scratch round
 // trip runs Mutagen's own master computation, then the real codec serializes each record once.
@@ -44,7 +44,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         try
         {
             var builtMods = new List<Fallout4Mod>();
-            var copies = new List<RegisteredCopy>();
+            var copies = new List<RegisteredPlugin>();
             var opened = new Dictionary<PluginAddress, PluginContent>();
             var perPlugin = new List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)>();
 
@@ -72,7 +72,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 
                 opened[key] = new PluginContent(
                     written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, masters, records.Count);
-                if (listed) copies.Add(new RegisteredCopy(name, origin, name, slot, enabled, Winning: true));
+                if (listed) copies.Add(new RegisteredPlugin(name, origin, name, slot, enabled, Winning: true));
                 perPlugin.Add((key, slot, records));
             }
 
@@ -102,7 +102,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
     // FormKey is the highest-slot copy whose plugin participates.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
-        List<RegisteredCopy> copies, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
+        List<RegisteredPlugin> copies, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
     {
         var participates = copies.Where(c => c.Registration.Participates).Select(c => new PluginAddress(c.Name, c.Origin)).ToHashSet();
         var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);

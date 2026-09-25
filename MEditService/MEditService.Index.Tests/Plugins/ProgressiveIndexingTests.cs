@@ -284,7 +284,7 @@ public sealed class ProgressiveIndexingTests
         // The five-copy snapshot reaches the holder before the gate opens, so the second reconcile
         // is genuinely mid-flight rather than a sequential third act the release let through.
         Assert.True(
-            await Waits.Until(() => holder.Current.Copies.Count == 5),
+            await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
         // Caught in flight: the holder already names five copies while the parked Index still
         // answers for four, which is the instant this test exists to cover.

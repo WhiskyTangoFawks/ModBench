@@ -66,7 +66,7 @@ internal sealed class HeldPlugins
     /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
     /// earlier failure for the same copy.</summary>
-    public PluginMetadata? Open(RegisteredCopy plugin)
+    public PluginMetadata? Open(RegisteredPlugin plugin)
     {
         if (!File.Exists(plugin.Path))
         {
@@ -227,7 +227,7 @@ internal sealed class HeldPlugins
         }
     }
 
-    private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredCopy plugin) =>
+    private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredPlugin plugin) =>
         new(
             Name: plugin.Name,
             Path: plugin.Path,

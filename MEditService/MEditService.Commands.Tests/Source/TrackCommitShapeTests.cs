@@ -277,7 +277,7 @@ public sealed class TrackCommitShapeTests : IDisposable
             .Order(StringComparer.Ordinal)
             .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
             .ToList();
-        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotCopies.Of(copies));
+        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(copies));
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
             .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits);
     }

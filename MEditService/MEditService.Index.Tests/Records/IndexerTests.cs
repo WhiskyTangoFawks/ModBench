@@ -35,7 +35,7 @@ public sealed class IndexerTests
             .BuildScattered();
 
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
+        new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins ?? fx.Plugins));
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
     private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
@@ -90,9 +90,9 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Copies, copy => Assert.True(indexer.Registers(copy.Key)));
+        Assert.All(snapshot.Plugins, copy => Assert.True(indexer.Registers(copy.Key)));
         Assert.Equal(
-            snapshot.Copies.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
+            snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
             indexer.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
         Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
@@ -110,11 +110,11 @@ public sealed class IndexerTests
         Reconcile(indexer, holder, snapshot);
 
         var opened = indexer.RequireReads().OpenedCopies;
-        var patch = opened[snapshot.Copies.Single(c => c.Name == "B.esp").Key];
+        var patch = opened[snapshot.Plugins.Single(c => c.Name == "B.esp").Key];
         Assert.Equal(["A.esm"], patch.Masters);
         Assert.Equal(1, patch.RecordCount);
         Assert.False(patch.IsMaster);
-        Assert.True(opened[snapshot.Copies.Single(c => c.Name == "A.esm").Key].IsMaster);
+        Assert.True(opened[snapshot.Plugins.Single(c => c.Name == "A.esm").Key].IsMaster);
     }
 
     // A copy the Index could not open has no content to report, and the plugin listing is built by
@@ -132,7 +132,7 @@ public sealed class IndexerTests
 
         var opened = indexer.RequireReads().OpenedCopies;
         Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
-        Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
+        Assert.Contains(snapshot.Plugins.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
 
     [Fact]

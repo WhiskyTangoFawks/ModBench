@@ -135,7 +135,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)

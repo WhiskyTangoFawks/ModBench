@@ -82,7 +82,7 @@ public sealed class InjectedChildTests : IDisposable
             (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
         _loadOrder = new LoadOrderSnapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of(
+            SnapshotPlugins.Of(
             [
                 new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),

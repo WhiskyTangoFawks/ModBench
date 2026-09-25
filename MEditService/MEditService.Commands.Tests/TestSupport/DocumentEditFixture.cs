@@ -34,7 +34,7 @@ internal sealed class DocumentEditFixture : IDisposable
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var entries = new[] { new LoadOrderEntry(PluginName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true) };
-        var loadOrder = new LoadOrderSnapshot(_gameDirectory, _modFolder, GameRelease.Fallout4, SnapshotCopies.Of(entries));
+        var loadOrder = new LoadOrderSnapshot(_gameDirectory, _modFolder, GameRelease.Fallout4, SnapshotPlugins.Of(entries));
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         EditHandler = TestEditService.EditHandler(holder);

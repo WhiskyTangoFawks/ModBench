@@ -64,7 +64,7 @@ public sealed class AbsorbExternalChangeHandler
 
     // Static because none of it reads this handler's state beyond the port it is handed.
     private static async Task<AbsorbResult> Run(
-        IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
+        IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredPlugin> plugins, LoadOrderSnapshot loadOrder)
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
         foreach (var copy in ExternalChangeClassifier.CopiesIn(loadOrder, modFolder))

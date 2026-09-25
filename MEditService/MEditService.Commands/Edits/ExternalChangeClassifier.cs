@@ -79,8 +79,8 @@ internal static class ExternalChangeClassifier
     }
 
     /// <summary>Every copy the load order holds in <paramref name="modFolder"/>.</summary>
-    public static IEnumerable<RegisteredCopy> CopiesIn(LoadOrderSnapshot loadOrder, string modFolder) =>
-        loadOrder.Copies.Where(copy =>
+    public static IEnumerable<RegisteredPlugin> CopiesIn(LoadOrderSnapshot loadOrder, string modFolder) =>
+        loadOrder.Plugins.Where(copy =>
             string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal));
 }
 

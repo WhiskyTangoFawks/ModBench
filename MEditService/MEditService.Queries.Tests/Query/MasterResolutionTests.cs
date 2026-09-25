@@ -21,7 +21,7 @@ public class MasterResolutionTests
     {
         var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer);
         var copies = plugins
-            .Select((p, slot) => new RegisteredCopy(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
+            .Select((p, slot) => new RegisteredPlugin(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
             .ToList();
         var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. copies]);
         var status = new LoadOrderStatus(state, plugins.Length, [], ConflictsComputed: state == LoadOrderState.Ready, failures);
@@ -35,7 +35,7 @@ public class MasterResolutionTests
         (PluginAddress Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
         GetPlugins(plugins, LoadOrderState.Ready, failures)
             .Where(row => row.MasterIssues.Count > 0)
-            .ToDictionary(row => row.Copy.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(row => row.Plugin.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()
@@ -58,8 +58,8 @@ public class MasterResolutionTests
 
         var rows = GetPlugins([missingAMaster, complete]);
 
-        Assert.Equal("Ghost.esm", Assert.Single(rows.Single(r => r.Copy.Origin == "WinningMod").MasterIssues).MasterName);
-        Assert.Empty(rows.Single(r => r.Copy.Origin == "LosingMod").MasterIssues);
+        Assert.Equal("Ghost.esm", Assert.Single(rows.Single(r => r.Plugin.Origin == "WinningMod").MasterIssues).MasterName);
+        Assert.Empty(rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class MasterResolutionTests
     {
         var midLoad = GetPlugins([Plugin("A.esp", "Later.esm")], LoadOrderState.Reconciling);
 
-        var a = Assert.Single(midLoad, p => p.Copy.Name == "A.esp");
+        var a = Assert.Single(midLoad, p => p.Plugin.Name == "A.esp");
         Assert.Empty(a.MasterIssues);
     }
 }

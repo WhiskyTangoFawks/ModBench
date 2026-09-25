@@ -272,7 +272,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
     /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
     /// both refs on a 48,000-record, 60-plugin fixture.</summary>
-    public void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
+    public void UpdateWinners(IReadOnlyList<RegisteredPlugin> participating)
     {
         using var tx = Connection.BeginTransaction();
         ReplaceParticipating(participating);
@@ -293,7 +293,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // ADR-0013: replaced whole, never diffed. The rule that decided membership ran in the load order
     // value (Registration.Participates); nothing here re-asks it.
-    private void ReplaceParticipating(IReadOnlyList<RegisteredCopy> participating)
+    private void ReplaceParticipating(IReadOnlyList<RegisteredPlugin> participating)
     {
         Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
         foreach (var copy in participating)

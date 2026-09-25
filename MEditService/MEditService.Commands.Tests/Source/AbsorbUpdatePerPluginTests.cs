@@ -36,8 +36,8 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
         [
-            new RegisteredCopy(First, Origin, Path.Combine(_modFolder, First), 0, Enabled: true, Winning: true),
-            new RegisteredCopy(Second, Origin, Path.Combine(_modFolder, Second), 1, Enabled: true, Winning: true),
+            new RegisteredPlugin(First, Origin, Path.Combine(_modFolder, First), 0, Enabled: true, Winning: true),
+            new RegisteredPlugin(Second, Origin, Path.Combine(_modFolder, Second), 1, Enabled: true, Winning: true),
         ]);
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Everything)

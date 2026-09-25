@@ -72,7 +72,7 @@ public sealed class SourceEditFixture : IDisposable
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         Entries = [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         // Track through the real service, from the load order value: what an edit does to a git
         // working tree is the thing under test, and no mock can answer that.

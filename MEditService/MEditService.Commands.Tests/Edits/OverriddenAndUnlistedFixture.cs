@@ -107,7 +107,7 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
             new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 2, Enabled: true, Winning: true),
             new LoadOrderEntry(UnlistedPluginName, unlistedPath, UnlistedOrigin, Slot: null, Enabled: true, Winning: true),
         ];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         Track(WinningOrigin);
         Track(OverriddenOrigin);

@@ -11,17 +11,17 @@ namespace MEditService.PluginAdapter;
 public static class PluginAdapters
 {
     public static IPluginRecordLookup OpenRecordLookup(
-        this IPluginAdapter adapter, RegisteredCopy copy, GameRelease release,
+        this IPluginAdapter adapter, RegisteredPlugin copy, GameRelease release,
         IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         adapter.OpenRecordLookup(new ModPath(copy.Path), release, schemas);
 
-    public static bool CanRead(this IPluginAdapter adapter, RegisteredCopy copy) =>
+    public static bool CanRead(this IPluginAdapter adapter, RegisteredPlugin copy) =>
         adapter.CanRead(new ModPath(ModKey.FromFileName(copy.Name), copy.Path));
 
     /// <summary>The files the game loads, one winning copy per filename in slot order, with
     /// <paramref name="compiled"/> among them however it is registered (ADR-0013).</summary>
     public static LinkAnswers LinkTargets(
-        this IPluginAdapter adapter, LoadOrderSnapshot loadOrder, RegisteredCopy compiled,
+        this IPluginAdapter adapter, LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys)
     {
         // One mod per filename, because that is what a link cache can hold: the copy being compiled
@@ -39,7 +39,7 @@ public static class PluginAdapters
     /// Building the mod path is building a Mutagen value, and this is the box that owns those
     /// (ADR-0005 rule 2).</summary>
     public static Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
-        this IPluginAdapter adapter, RegisteredCopy copy, GameRelease gameRelease, PluginStrings strings,
+        this IPluginAdapter adapter, RegisteredPlugin copy, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
         adapter.ReadSourceAsync(
             new ModPath(ModKey.FromFileName(copy.Name), copy.Path), copy.Name, gameRelease, strings, cancel);
@@ -53,6 +53,6 @@ public static class PluginAdapters
             new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease,
             strings);
 
-    private static bool SameFile(RegisteredCopy copy, RegisteredCopy other) =>
+    private static bool SameFile(RegisteredPlugin copy, RegisteredPlugin other) =>
         copy.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
 }

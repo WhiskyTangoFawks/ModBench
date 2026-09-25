@@ -16,7 +16,7 @@ public sealed class FileOverrideCompareColumnTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private static RecordQueryService Service(IReadOnlyList<RegisteredCopy> copies, IReadOnlyList<FakeRow> rows)
+    private static RecordQueryService Service(IReadOnlyList<RegisteredPlugin> copies, IReadOnlyList<FakeRow> rows)
     {
         var opened = copies.ToDictionary(
             c => new PluginAddress(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, Masters: [], RecordCount: 1));
@@ -39,8 +39,8 @@ public sealed class FileOverrideCompareColumnTests
         // its own NextFormID sequence from the same ModKey, so this is a same-identity comparison.
         var copies = new[]
         {
-            new RegisteredCopy("Shared.esp", "ModA", "Shared.esp", 0, Enabled: true, Winning: true),
-            new RegisteredCopy("Shared.esp", "ModB", "Shared.esp", 0, Enabled: true, Winning: false),
+            new RegisteredPlugin("Shared.esp", "ModA", "Shared.esp", 0, Enabled: true, Winning: true),
+            new RegisteredPlugin("Shared.esp", "ModB", "Shared.esp", 0, Enabled: true, Winning: false),
         };
         var rows = new[]
         {
@@ -67,7 +67,7 @@ public sealed class FileOverrideCompareColumnTests
         // The deliberately-untouched axis: a disabled line is not a file-level loser, since its file
         // is the one the name resolves to and the user merely switched it off. Only Winning filters,
         // so the exclusion never widens to Participates.
-        var copies = new[] { new RegisteredCopy("Solo.esp", "ModA", "Solo.esp", 0, Enabled: false, Winning: true) };
+        var copies = new[] { new RegisteredPlugin("Solo.esp", "ModA", "Solo.esp", 0, Enabled: false, Winning: true) };
         var rows = new[] { Row("Solo.esp", "ModA", 0, isWinner: true, "FromSolo") };
         var svc = Service(copies, rows);
 

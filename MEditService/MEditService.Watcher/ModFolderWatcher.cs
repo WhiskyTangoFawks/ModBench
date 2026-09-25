@@ -106,7 +106,7 @@ public sealed class ModFolderWatcher : IDisposable
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
         var unreadable = new List<string>();
-        foreach (var copy in mod.Copies)
+        foreach (var copy in mod.Plugins)
         {
             try
             {

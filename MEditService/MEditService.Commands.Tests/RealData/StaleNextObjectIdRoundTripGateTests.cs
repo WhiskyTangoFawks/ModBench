@@ -142,7 +142,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotPlugins.Of(inputs));
             Holder.Apply(_loadOrder);
         }
 

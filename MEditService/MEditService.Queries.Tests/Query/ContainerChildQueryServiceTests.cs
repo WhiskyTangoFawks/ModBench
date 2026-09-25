@@ -68,14 +68,14 @@ public class ContainerChildQueryServiceTests
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
     }
 
-    private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
+    private static LoadOrderHolder Holder(params RegisteredPlugin[] copies)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
         return holder;
     }
 
-    private static RegisteredCopy Copy(string name, string origin) =>
+    private static RegisteredPlugin Copy(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     // Mixed rows come back Topics, then Branches, then Scenes (xEdit's DIAL, DLBR, SCEN order), never

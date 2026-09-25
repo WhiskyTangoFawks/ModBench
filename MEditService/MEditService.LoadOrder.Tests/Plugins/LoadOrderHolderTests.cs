@@ -130,7 +130,7 @@ public sealed class LoadOrderHolderTests
         Assert.Equal((applied, version), holder.Held);
     }
 
-    private static RegisteredCopy Copy(string name, int slot) =>
+    private static RegisteredPlugin Copy(string name, int slot) =>
         new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", slot, Enabled: true, Winning: true);
 
     // A subscriber with nothing registered is Apply's ordinary case (every test elsewhere in this

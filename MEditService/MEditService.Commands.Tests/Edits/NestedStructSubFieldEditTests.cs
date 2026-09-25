@@ -133,7 +133,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();

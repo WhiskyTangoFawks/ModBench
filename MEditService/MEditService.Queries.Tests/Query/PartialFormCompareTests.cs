@@ -55,8 +55,8 @@ public sealed class PartialFormCompareTests
         };
         var copies = new[]
         {
-            new RegisteredCopy("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
-            new RegisteredCopy("Partial.esp", "Data", "Partial.esp", 1, Enabled: true, Winning: true),
+            new RegisteredPlugin("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
+            new RegisteredPlugin("Partial.esp", "Data", "Partial.esp", 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, copies);
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());

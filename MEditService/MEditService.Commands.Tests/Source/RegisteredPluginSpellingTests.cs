@@ -69,7 +69,7 @@ public sealed class RegisteredPluginSpellingTests
 
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _instanceRoot, Release,
-                SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         }
 
         internal string GitDirectory => Path.Combine(ModFolder, ".git");

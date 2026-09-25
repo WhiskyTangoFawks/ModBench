@@ -24,9 +24,9 @@ public sealed class PluginCompileService(
     public async Task<CompileResult> CompileAsync(PluginAddress plugin, CompileSource source)
     {
         var loadOrder = loadOrderHolder.Current;
-        if (loadOrder.Copies.Count == 0)
+        if (loadOrder.Plugins.Count == 0)
             return CompileResult.Refused("No load order has been received.");
-        if (loadOrder.Copy(plugin) is not { } copy)
+        if (loadOrder.Plugin(plugin) is not { } copy)
             return CompileResult.Refused($"{plugin.Name} is not in the load order.");
         if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is not { } modFolder)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
@@ -101,7 +101,7 @@ public sealed class PluginCompileService(
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
-        var loadOrderNames = loadOrder.Copies
+        var loadOrderNames = loadOrder.Plugins
             .Where(c => c.Registration.InLoadOrder)
             .OrderBy(c => c.Slot
                 ?? throw new InvalidOperationException($"Expected copy '{c.Name}' from '{c.Origin}' in load order to carry a slot."))
@@ -148,7 +148,7 @@ public sealed class PluginCompileService(
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     private List<CompileDiagnostic> Reported(
-        Content content, PluginAddress plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginAddress plugin, RegisteredPlugin copy, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         try
@@ -210,7 +210,7 @@ public sealed class PluginCompileService(
     // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
     // it afterwards, answered by the files the game loads with the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
-        Content content, PluginAddress plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginAddress plugin, RegisteredPlugin copy, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         var answers = adapter.LinkTargets(
@@ -286,7 +286,7 @@ public sealed class PluginCompileService(
         if (masters.Count == 0) return [];
 
         var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var copy in loadOrder.Copies)
+        foreach (var copy in loadOrder.Plugins)
         {
             if (copy.Slot is not { } slot) continue;
             if (!slots.TryGetValue(copy.Name, out var held) || slot < held) slots[copy.Name] = slot;

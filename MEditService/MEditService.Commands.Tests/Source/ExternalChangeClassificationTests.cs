@@ -41,14 +41,14 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         var path = Path.Combine(ModFolder, PluginName);
         File.WriteAllBytes(path, bytes);
         return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredCopy(PluginName, Origin, path, 0, Enabled: true, Winning: true)]);
+            [new RegisteredPlugin(PluginName, Origin, path, 0, Enabled: true, Winning: true)]);
     }
 
     private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
     {
         foreach (var (name, bytes) in plugins) File.WriteAllBytes(Path.Combine(ModFolder, name), bytes);
         return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [.. plugins.Select((plugin, slot) => new RegisteredCopy(
+            [.. plugins.Select((plugin, slot) => new RegisteredPlugin(
                 plugin.Name, Origin, Path.Combine(ModFolder, plugin.Name), slot, Enabled: true, Winning: true))]);
     }
 

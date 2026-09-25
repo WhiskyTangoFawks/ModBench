@@ -13,7 +13,7 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
     public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
     {
         var reads = index.RequireReads();
-        var copies = loadOrder.Require().Copies;
+        var copies = loadOrder.Require().Plugins;
         // Derived from the whole plugin set, so a partial projection answers nothing: a copy it has
         // not reached holds no rows yet and would read clean.
         if (index.Status.State != LoadOrderState.Ready) return [];
@@ -27,7 +27,7 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
         ];
     }
 
-    private static PluginDiagnosisReport Report(RegisteredCopy copy, PluginDiagnosis diagnosis) =>
+    private static PluginDiagnosisReport Report(RegisteredPlugin copy, PluginDiagnosis diagnosis) =>
         new(copy.Name, copy.Origin, diagnosis.Anchor, diagnosis.DefectClass, diagnosis.Tail,
             diagnosis.Message, diagnosis.Describe());
 }

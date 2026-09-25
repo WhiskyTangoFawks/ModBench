@@ -163,7 +163,7 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            var copy = result.Copy;
+            var copy = result.Plugin;
             return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, result.Version));
         }
         catch (NoLoadOrderException ex)

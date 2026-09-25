@@ -26,7 +26,7 @@ public sealed class TrackService(
     // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a copy whose file
     // cannot be read has no bytes to deep-parse, so Track refuses that plugin and goes on with the
     // rest.
-    private bool Readable(RegisteredCopy copy) => adapter.CanRead(copy);
+    private bool Readable(RegisteredPlugin copy) => adapter.CanRead(copy);
 
     /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
     /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
@@ -136,7 +136,7 @@ public sealed class TrackService(
     {
         Verification Refuse(TrackRefusal refusal, string message) => new(null, new TrackRefused(key, refusal, message));
 
-        if (loadOrder.Copy(key) is not { } plugin)
+        if (loadOrder.Plugin(key) is not { } plugin)
         {
             return Refuse(TrackRefusal.PluginNotLoaded,
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");

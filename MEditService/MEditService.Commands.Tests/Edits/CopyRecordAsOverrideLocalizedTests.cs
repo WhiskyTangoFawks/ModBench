@@ -45,7 +45,7 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
 
         var loadOrder = new LoadOrderSnapshot(
             _gameDir, _gameDir, GameRelease.Fallout4,
-            SnapshotCopies.Of(
+            SnapshotPlugins.Of(
             [
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),

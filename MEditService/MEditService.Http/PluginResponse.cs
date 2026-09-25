@@ -41,7 +41,7 @@ public record PluginResponse(
     /// <summary>One row on the wire: the read side's answer, flattened.</summary>
     public static PluginResponse Of(PluginRow row)
     {
-        var copy = row.Copy;
+        var copy = row.Plugin;
         var registration = copy.Registration;
         return new(copy.Name, copy.Path, copy.Slot, row.Content.IsLight, row.Content.IsMaster,
             row.Content.Masters, row.Content.RecordCount, copy.IsImmutable, registration.Participates,

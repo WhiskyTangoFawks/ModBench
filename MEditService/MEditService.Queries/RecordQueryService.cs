@@ -23,7 +23,7 @@ public sealed class RecordQueryService(
         var opened = reads.OpenedCopies;
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A copy the Index has not opened has none of the latter and is not a row.
-        var rows = _loadOrder.Require().Copies.Where(c => opened.ContainsKey(c.Key)).ToList();
+        var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
         // ADR-0012: classified once per call, and only once the projection is complete: a partial
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
         // reports no issues rather than inventing a third state.
@@ -34,7 +34,7 @@ public sealed class RecordQueryService(
                 : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedCopies();
-        PluginRow ToRow(RegisteredCopy copy, bool hasMatchingRecords) =>
+        PluginRow ToRow(RegisteredPlugin copy, bool hasMatchingRecords) =>
             new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Key) ?? [], hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)), tracked.Contains(copy.Key));
 
@@ -90,7 +90,7 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var copies = _loadOrder.Require().Copies;
+        var copies = _loadOrder.Require().Plugins;
         // ADR-0012: the grid is the record's in-game resolution stack, so a file-level loser is
         // not a column. Winning alone, never Participates — a disabled copy still columns.
         // Fail-open on a copy the load order lacks.

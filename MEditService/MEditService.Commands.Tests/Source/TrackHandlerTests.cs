@@ -30,7 +30,7 @@ public sealed class TrackHandlerTests : IDisposable
         mod.WriteToBinary(pluginPath);
 
         Snapshot = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredCopy(PluginName, Origin, pluginPath, 0, Enabled: true, Winning: true)]);
+            [new RegisteredPlugin(PluginName, Origin, pluginPath, 0, Enabled: true, Winning: true)]);
     }
 
     private LoadOrderSnapshot Snapshot { get; }

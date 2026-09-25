@@ -137,7 +137,7 @@ public sealed class ContainerModFixture : IDisposable
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         if (track) Track();
 

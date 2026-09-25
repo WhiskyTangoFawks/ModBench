@@ -44,7 +44,7 @@ internal sealed class SourceModFixture : IDisposable
 
         LoadOrder = new LoadOrderSnapshot(
             GameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]));
 
         if (tracked)
         {

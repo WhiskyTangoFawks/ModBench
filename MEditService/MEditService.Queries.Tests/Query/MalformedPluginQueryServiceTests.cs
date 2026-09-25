@@ -22,13 +22,13 @@ public sealed class MalformedPluginQueryServiceTests
     private static readonly PluginDiagnosis Trailing = new(
         "NPC_ 00012345 (Sierra)", "trailing-bytes", "repairable (lossless)", "3 bytes past the last subrecord");
 
-    private static RegisteredCopy Copy(string name, string origin = "SomeMod", bool isForced = false, int? slot = 0) =>
+    private static RegisteredPlugin Copy(string name, string origin = "SomeMod", bool isForced = false, int? slot = 0) =>
         new(name, origin, $@"C:\mods\{origin}\{name}", slot, Enabled: true, Winning: true, IsForced: isForced);
 
-    private static PluginDiagnosisRow Row(RegisteredCopy copy, PluginDiagnosis diagnosis) => new(copy.Key, diagnosis);
+    private static PluginDiagnosisRow Row(RegisteredPlugin copy, PluginDiagnosis diagnosis) => new(copy.Key, diagnosis);
 
     private static PluginDiagnosisReport[] Diagnose(
-        IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredCopy[] copies) =>
+        IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredPlugin[] copies) =>
         [.. new MalformedPluginQueryService(
             new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = rows }),
             FakeLoadOrder.Of(GameRelease.Fallout4, copies))

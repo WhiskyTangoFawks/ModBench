@@ -7,7 +7,7 @@ namespace MEditService.Queries.Tests.TestSupport;
 /// half of a Queries test that needs no Index at all.</summary>
 internal static class FakeLoadOrder
 {
-    internal static LoadOrderHolder Of(GameRelease release, params RegisteredCopy[] copies)
+    internal static LoadOrderHolder Of(GameRelease release, params RegisteredPlugin[] copies)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, release, copies));

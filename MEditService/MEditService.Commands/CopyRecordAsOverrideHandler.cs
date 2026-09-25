@@ -158,7 +158,7 @@ public sealed class CopyRecordAsOverrideHandler
     // beaten at runtime. A plugin the load order does not place passes.
     private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
     {
-        var copies = _loadOrder.Current.Copies;
+        var copies = _loadOrder.Current.Plugins;
 
         // A FormKey carries only a filename, so with two same-named copies (ADR-0012) the winning one
         // is the origin.

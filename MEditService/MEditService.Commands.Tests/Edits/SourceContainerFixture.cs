@@ -58,7 +58,7 @@ public sealed class SourceContainerFixture : IDisposable
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)

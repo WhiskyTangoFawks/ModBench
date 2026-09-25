@@ -25,7 +25,7 @@ public sealed class CreatePluginHandler
     public async Task<PluginCreateResult> CreatePlugin(string name, string pluginPath, string origin)
     {
         var previous = _holder.Require();
-        var copy = new RegisteredCopy(name, origin, pluginPath, NextSlot(previous), Enabled: true, Winning: true);
+        var copy = new RegisteredPlugin(name, origin, pluginPath, NextSlot(previous), Enabled: true, Winning: true);
 
         // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary editable
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a
@@ -43,14 +43,14 @@ public sealed class CreatePluginHandler
         return new PluginCreateResult(copy, version, track);
     }
 
-    private async Task<TrackResult?> TrackDestination(LoadOrderSnapshot registered, RegisteredCopy copy)
+    private async Task<TrackResult?> TrackDestination(LoadOrderSnapshot registered, RegisteredPlugin copy)
     {
         var modFolder = LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path);
         if (modFolder is null) return null;
         if (!SourceRepository.IsTracked(modFolder))
         {
             var track = await _track.TrackAsync(
-                registered, [.. registered.CopiesOfOrigin(copy.Origin).Select(c => c.Key)], SourcePreset.Edits);
+                registered, [.. registered.PluginsOfOrigin(copy.Origin).Select(c => c.Key)], SourcePreset.Edits);
             return track.SelectionRefusal
                 ?? (track.Refused is [var refused, ..]
                     ? TrackResult.Refused(refused.Refusal, refused.Message)
@@ -65,5 +65,5 @@ public sealed class CreatePluginHandler
 
     // One past the highest slot, not the count: a reused slot would give two participants one index.
     private static int NextSlot(LoadOrderSnapshot loadOrder) =>
-        loadOrder.Copies.Count == 0 ? 0 : loadOrder.Copies.Max(copy => copy.Slot ?? 0) + 1;
+        loadOrder.Plugins.Count == 0 ? 0 : loadOrder.Plugins.Max(copy => copy.Slot ?? 0) + 1;
 }

@@ -61,7 +61,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 Target(enabled: true),
                 Referrer,
             ]));
@@ -119,7 +119,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     public async Task Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = new LoadOrderSnapshot(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([Target(enabled: false), Referrer]));
+            _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of([Target(enabled: false), Referrer]));
 
         var result = await CompileServices.Over(notLoaded).CompileAsync(_referrer, new CompileSource.WorkingTree());
 
@@ -136,7 +136,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     {
         var targets = TestAdapters.Mutagen().LinkTargets(
             _loadOrder,
-            _loadOrder.Copy(_referrer).Require(),
+            _loadOrder.Plugin(_referrer).Require(),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             [_embeddedTarget.ToString()]);
 

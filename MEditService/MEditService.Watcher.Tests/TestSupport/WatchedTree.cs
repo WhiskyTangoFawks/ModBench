@@ -51,7 +51,7 @@ internal sealed class WatchedTree : IDisposable
     // as a single rename.
     private readonly string _staging;
 
-    private readonly List<RegisteredCopy> _copies = [];
+    private readonly List<RegisteredPlugin> _copies = [];
 
     /// <summary>The watcher's verb as the composition root builds it, over the port this tree
     /// reads.</summary>
@@ -89,7 +89,7 @@ internal sealed class WatchedTree : IDisposable
     {
         var pluginPath = Path.Combine(modFolder, pluginName);
         File.WriteAllBytes(pluginPath, bytes ?? "a plugin binary"u8.ToArray());
-        _copies.Add(new RegisteredCopy(pluginName, origin, pluginPath, Slot: _copies.Count, Enabled: true, Winning: true));
+        _copies.Add(new RegisteredPlugin(pluginName, origin, pluginPath, Slot: _copies.Count, Enabled: true, Winning: true));
     }
 
     internal static string PluginPath(string modFolder, string pluginName) => Path.Combine(modFolder, pluginName);

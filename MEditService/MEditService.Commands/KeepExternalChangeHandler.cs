@@ -37,7 +37,7 @@ public sealed class KeepExternalChangeHandler
         return Keep(mod.ModFolder, mod.Plugins, loadOrder.GameRelease);
     }
 
-    private ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
+    private ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredPlugin> plugins, GameRelease gameRelease)
     {
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' holds no repository, which TrackedOrigin.Resolve rules out.");
@@ -88,10 +88,10 @@ public sealed class KeepExternalChangeHandler
         return ExternalChangeLandResult.Success(landed);
     }
 
-    // The mod's own name travels on RegisteredCopy.Origin already (ADR-0009): every copy in
+    // The mod's own name travels on RegisteredPlugin.Origin already (ADR-0009): every copy in
     // plugins shares it, so nothing here re-derives a name from the folder path.
     private static string CollisionMessage(
-        IReadOnlyList<RegisteredCopy> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
+        IReadOnlyList<RegisteredPlugin> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
     {
         var parts = new List<string>();
         if (colliding.Count > 0)

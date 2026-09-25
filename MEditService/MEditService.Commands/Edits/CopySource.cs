@@ -98,7 +98,7 @@ internal sealed class CopySource(
     {
         if (_opened) return _loaded;
         _opened = true;
-        if (loadOrder.Copy(plugin) is { } copy)
+        if (loadOrder.Plugin(plugin) is { } copy)
             _loaded = adapter.OpenRecordLookup(copy, _release, _schemas);
         return _loaded;
     }
