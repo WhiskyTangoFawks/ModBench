@@ -74,9 +74,9 @@ describe('PluginHeader', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
     expect(screen.getByText('(not loaded)')).toHaveAttribute(
       'title',
-      'This copy plays no part in what the game actually loads, so editing it here changes '
-      + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
-      + 'Plugins views.',
+      'This plugin plays no part in what the game actually loads, so editing it here changes '
+      + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
+      + 'decided in the Mods and Plugins views.',
     );
   });
 

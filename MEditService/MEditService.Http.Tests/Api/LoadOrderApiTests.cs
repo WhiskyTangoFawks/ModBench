@@ -111,14 +111,14 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             .WithPlugin("Shared.esp", origin: "ModB")
             .BuildScattered();
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
-        await System.IO.File.WriteAllTextAsync(loser.Path, "this is not a plugin");
+        var overridden = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        await System.IO.File.WriteAllTextAsync(overridden.Path, "this is not a plugin");
 
         var response = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = new[] { winner, loser }.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = new[] { winner, overridden }.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameRelease = "Fallout4",
         });
 

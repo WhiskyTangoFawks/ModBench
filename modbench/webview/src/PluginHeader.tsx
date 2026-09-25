@@ -50,9 +50,9 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   notInLoadOrder: {
     label: '(not loaded)',
     title:
-      'This copy plays no part in what the game actually loads, so editing it here changes '
-      + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
-      + 'Plugins views.',
+      'This plugin plays no part in what the game actually loads, so editing it here changes '
+      + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
+      + 'decided in the Mods and Plugins views.',
   },
   // The friction is deliberate (ADR-0007): editing someone else's plugin is the community's
   // anti-pattern. The label still says it is one command deep — a read-only column with no stated
