@@ -758,6 +758,24 @@ describe('package.json Downloads row menu order', () => {
   });
 });
 
+// common.md, A view, story 5: row keys wait for the tree itself, as the Explorer's do. Ctrl+F
+// opens the name filter "while the view has focus" (common.md, The name filter, story 1).
+describe('package.json row keys', () => {
+  const ON_THE_TREE = ['listFocus', '!inputFocus'];
+
+  it('binds every row key only while the tree itself has focus — never in a prompt, the tree\'s find box or the view\'s title bar', () => {
+    const rowKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith('focusedView == ') && k.key !== 'ctrl+f');
+    expect(rowKeys.length).toBeGreaterThan(0);
+    const firesOffTheTree = rowKeys.filter((k) => !ON_THE_TREE.every((term) => requires(k.when, term)));
+    expect(firesOffTheTree.map((k) => `${k.key} → ${k.command} (when: ${k.when})`)).toEqual([]);
+  });
+
+  it('binds no key outside a focused view', () => {
+    const unscoped = pkg.contributes.keybindings.filter((k) => !k.when.startsWith('focusedView == '));
+    expect(unscoped.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
+  });
+});
+
 // downloads.md, Menus and keys: "Keys | Delete: delete."
 describe('package.json Downloads delete key', () => {
   it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view', () => {
@@ -768,7 +786,7 @@ describe('package.json Downloads delete key', () => {
     );
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
-    expect(entry.when).toBe(`focusedView == modbench.downloads && ${IN_AN_INSTANCE}`);
+    expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
   });
 });
 

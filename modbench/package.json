@@ -1046,13 +1046,13 @@
         "command": "modbench.downloadedFile.delete",
         "key": "Delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
+        "when": "focusedView == modbench.downloads && listFocus && !inputFocus && modbench.folder == instance"
       },
       {
         "command": "modbench.record.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "focusedView == modbench.referencedByTree"
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus"
       }
     ]
   },
