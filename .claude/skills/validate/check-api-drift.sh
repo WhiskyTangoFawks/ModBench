@@ -1,42 +1,23 @@
 #!/usr/bin/env bash
-# Fails if modbench/src/wire/generated/api.ts has drifted from the live
-# OpenAPI spec. Boots a fresh backend, then uses openapi-typescript's own
-# --check flag (a pure read/compare — it never writes to the destination file,
-# verified empirically) against the committed api.ts in place. No temp file,
-# no diff/restore dance needed.
+# Fails if modbench/src/wire/generated/api.ts has drifted from the live OpenAPI spec of a
+# backend built from this checkout. openapi-typescript's --check is a pure read/compare against
+# the committed api.ts. `--write` regenerates api.ts from the same backend instead.
 
 set -u
 
+MODE=--check
+case ${1:-} in
+  "") ;;
+  --write) MODE=--write ;;
+  *) echo "usage: check-api-drift.sh [--write]" >&2; exit 2 ;;
+esac
+
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 API_TS="$ROOT/modbench/src/wire/generated/api.ts"
-BOOT_LOG="$(mktemp /tmp/api-drift-boot.XXXXXX.log)"
-STATUS=1
+PROJECT="$ROOT/MEditService/MEditService.Http"
+source "$ROOT/.claude/skills/validate/own-backend.sh"
 
-cleanup() {
-  pkill -f "MEditService.Http" 2>/dev/null
-  rm -f "$BOOT_LOG"
-}
-trap cleanup EXIT
-
-echo "=== Gate 7: API drift (api.ts vs live OpenAPI spec) ==="
-
-pkill -f "MEditService.Http" 2>/dev/null
-sleep 1
-
-(cd "$ROOT/MEditService/MEditService.Http" && exec dotnet run >"$BOOT_LOG" 2>&1) &
-
-BOOT_TIMEOUT_S=180
-elapsed=0
-until curl -sf http://localhost:5172/health >/dev/null 2>&1; do
-  sleep 2
-  elapsed=$((elapsed + 2))
-  if [ "$elapsed" -ge "$BOOT_TIMEOUT_S" ]; then
-    echo "--- API DRIFT GATE FAILED: backend did not boot within ${BOOT_TIMEOUT_S}s ---"
-    echo "--- last 50 lines of backend output ($BOOT_LOG) ---"
-    tail -50 "$BOOT_LOG"
-    exit 1
-  fi
-done
+[[ $MODE == --check ]] && echo "=== Gate 7: API drift (api.ts vs live OpenAPI spec) ==="
 
 # Never `npx openapi-typescript`: with no local match npx fetches a same-named package
 # from the registry — an unpinned version whose generator output can differ from the
@@ -51,12 +32,22 @@ if [[ ! -x "$OPENAPI_TS" ]]; then
   [[ -x "$OPENAPI_TS" ]] || { echo "ERROR: $OPENAPI_TS missing after npm ci." >&2; exit 1; }
 fi
 
-if "$OPENAPI_TS" http://localhost:5172/swagger/v1/swagger.json -o "$API_TS" --check; then
-  echo "=== api.ts is up-to-date with the live OpenAPI spec ==="
-  STATUS=0
-else
-  echo "--- API DRIFT GATE FAILED: api.ts is stale — run npm run generate-api (see /regenerate-api) and commit the result ---"
-  STATUS=1
-fi
+# The build runs outside the backend's process group: the MSBuild and compiler servers it
+# leaves behind are shared with every other build on the machine.
+dotnet build "$PROJECT" -nologo -v quiet \
+  || { echo "--- API DRIFT GATE FAILED: backend build failed ---"; exit 1; }
+BACKEND_DLL="$(dotnet msbuild "$PROJECT" -nologo -getProperty:TargetPath)"
 
-exit "$STATUS"
+start_own_backend dotnet "$BACKEND_DLL" \
+  || { echo "--- API DRIFT GATE FAILED: backend did not boot ---"; exit 1; }
+SPEC_URL="$OWN_BACKEND_URL/swagger/v1/swagger.json"
+
+if [[ $MODE == --write ]]; then
+  "$OPENAPI_TS" "$SPEC_URL" -o "$API_TS" || { echo "--- api.ts regeneration FAILED ---"; exit 1; }
+  echo "=== api.ts regenerated from $SPEC_URL ==="
+elif "$OPENAPI_TS" "$SPEC_URL" -o "$API_TS" --check; then
+  echo "=== api.ts is up-to-date with the live OpenAPI spec ==="
+else
+  echo "--- API DRIFT GATE FAILED: api.ts is stale — run check-api-drift.sh --write (see /regenerate-api) and commit the result ---"
+  exit 1
+fi
