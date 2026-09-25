@@ -89,8 +89,8 @@ internal static class PluginTrees
     }
 
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
-    /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification must
-    /// not drop a .bak beside the real plugin.</summary>
+    /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
+    /// replacement of the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, TreeDeserializer? deserialize = null,
         CancellationToken cancel = default)

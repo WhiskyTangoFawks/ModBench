@@ -1,6 +1,6 @@
 namespace MEditService.PluginAdapter;
 
-/// <summary>The folder a plugin, its strings file or its backup sits in, for a path this box already knows names a file.</summary>
+/// <summary>The folder a plugin, or its strings file sits in, for a path this box already knows names a file.</summary>
 internal static class PathShape
 {
     /// <summary>The parent directory of <paramref name="path"/>. Throws when it has none — the

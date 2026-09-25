@@ -62,8 +62,8 @@ public interface IPluginAdapter
         CancellationToken cancel = default);
 
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
-    /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification
-    /// must not drop a .bak beside the real plugin.</summary>
+    /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
+    /// replacement of the real plugin.</summary>
     Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default);
 

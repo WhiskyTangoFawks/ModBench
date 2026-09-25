@@ -148,9 +148,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         await WriteAsync(plugin, destinationPath);
     }
 
-    /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
-    /// <see cref="PluginWriter"/> adds to replace a plugin in place. Null takes Mutagen's
-    /// own master order (ADR-0008) and strings folder.</summary>
+    /// <summary>Bytes at <paramref name="destinationPath"/>, written in place: the temp file and rename
+    /// that replace a plugin are <see cref="PluginWriter"/>'s. Null takes Mutagen's own master order
+    /// (ADR-0008) and strings folder.</summary>
     internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,

@@ -13,7 +13,7 @@ public sealed class PreparedPluginSave(
     public void Commit()
     {
         _rollbackPath = finalPath + ".medit-rollback";
-        // overwrite:true so a stale backup left behind by a prior crash doesn't permanently
+        // overwrite:true so a stale rollback copy left behind by a prior crash doesn't permanently
         // block saves of this plugin
         File.Move(finalPath, _rollbackPath, overwrite: true);
         // finalPath is guaranteed gone at this point (the line above just moved it away, or
