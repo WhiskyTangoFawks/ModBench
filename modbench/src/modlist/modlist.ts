@@ -21,6 +21,7 @@ import {
 import { setUninstalledInText } from '../mo2Codecs/downloads';
 import {
   downloadFile, downloadSidecarFile, mo2FolderName, modDir, modlistFile, modsDir, separatorDir,
+  separatorFolderName,
 } from '../instanceAdapter/layout';
 import { ensureDir, exists, get, put, putIfChanged, rename } from '../instanceAdapter/files';
 import { present } from '../ports/present';
@@ -363,9 +364,14 @@ export type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
-/** `modbench.mod.sync`: a disabled winning-end line for each folder with none, and each mod line
- *  whose folder is gone dropped, in one write. `modFolders` is undefined when there is no `mods/`
- *  to list, and that is refused. */
+/** A mod's line or a separator's names a folder in `mods/`; a separator whose name MO2 never
+ *  gives a folder names none, so its line never goes. */
+const listedFolderOf = (entry: ModlistEntry): string | undefined =>
+  (entry.kind === 'mod' ? entry.name : separatorFolderName(entry.name));
+
+/** `modbench.mod.sync`: a disabled winning-end line for each folder with none, and each mod or
+ *  separator line whose folder is gone dropped, in one write. `dropped` names the folders gone.
+ *  `modFolders` is undefined when there is no `mods/` to list, and that is refused. */
 export async function syncMods(
   instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
 ): Promise<ModSyncResult> {
@@ -380,10 +386,16 @@ export async function syncMods(
     const entries = parseModlist(text);
     const folders = new Set(modFolders);
     added = unlistedModNames([...modFolders], entries);
-    dropped = entries.filter((e) => e.kind === 'mod' && !folders.has(e.name)).map((e) => e.name);
+    const gone = entries.flatMap((entry) => {
+      const folder = listedFolderOf(entry);
+      return folder !== undefined && !folders.has(folder) ? [{ entry, folder }] : [];
+    });
+    dropped = gone.map(({ folder }) => folder);
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so
     // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
-    const withoutGone = dropped.reduce((out, name) => removeModFromText(out, name), text);
+    const withoutGone = gone.reduce((out, { entry }) => (entry.kind === 'separator'
+      ? deleteSeparatorInText(out, entry.name)
+      : removeModFromText(out, entry.name)), text);
     return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);
   });
   return outcome.applied ? { applied: true, added, dropped } : outcome;

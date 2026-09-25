@@ -178,15 +178,18 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(entry?.enabled).toBe(false);
   });
 
-  // The fixture ships one unlisted folder and one folderless mod line. Rival: a sync that also
-  // writes into the folder it lists, or rewrites the entries it keeps.
+  // The fixture ships one unlisted folder, one folderless mod line and one folderless separator
+  // line. Rival: a sync that also writes into the folder it lists, or rewrites the entries it keeps.
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     const outcome = await syncMods(dir, PROFILE, await modFolderNames(dir));
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    expect(outcome).toEqual({ applied: true, added: ['DragIn Manual Extract'], dropped: ['[NODELETE] Radfall'] });
+    expect(outcome).toEqual({
+      applied: true, added: ['DragIn Manual Extract'],
+      dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator'],
+    });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
     expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');
   });

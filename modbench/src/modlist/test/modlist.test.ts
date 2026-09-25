@@ -522,6 +522,19 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
 
+    // update-load-order-file, Failure: the line a delete leaves after the trash names a folder that
+    // is gone. Rival: mod sync dropping only mod lines, so the deleted separator stays for good.
+    it('the line a delete leaves after the trash is dropped by the next mod sync', async () => {
+      vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
+      await deleteSeparators(dir, 'Default', [UNASSIGNED], trash);
+      expect(await order()).toContain(`separator:${UNASSIGNED}`);
+
+      const outcome = await syncMods(dir, 'Default', await readdir(join(dir, 'mods')));
+
+      expect(outcome.applied && outcome.dropped).toContain(`${UNASSIGNED}_separator`);
+      expect(await order()).not.toContain(`separator:${UNASSIGNED}`);
+    });
+
     it('writes nothing for a separator whose folder the trash refuses, and refuses it with the reason, while the others land', async () => {
       const before = await readFile(modlistPath(), 'utf8');
       const refusingTrash = async (path: string) => {
@@ -957,12 +970,16 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // The fixture lists "[NODELETE] Radfall", whose folder is not among MOD_FOLDERS.
+  // The fixture lists "[NODELETE] Radfall" and the "Radfall - All-In-One Survival Overhaul"
+  // separator, neither of whose folders is among MOD_FOLDERS.
   // Rival: two splices, one per direction, which writes the file twice.
-  it('adds a line for a folder with none and drops a line whose folder is gone, in one write', async () => {
+  it('adds a line for a folder with none and drops each line whose folder is gone, in one write', async () => {
     const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
 
-    expect(outcome).toEqual({ applied: true, added: ['Hand Extracted Mod'], dropped: ['[NODELETE] Radfall'] });
+    expect(outcome).toEqual({
+      applied: true, added: ['Hand Extracted Mod'],
+      dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator'],
+    });
     const names = (await readModlist()).map((e) => e.name);
     expect(names).toContain('Hand Extracted Mod');
     expect(names).not.toContain('[NODELETE] Radfall');
@@ -979,14 +996,26 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   });
 
   // The fixture's "Radfall - All-In-One Survival Overhaul" separator has no folder, and its
-  // `*DLC: Automatron` line names none. Rival: dropping every line with no folder, not only a mod's.
-  it('drops only mod lines: every other line stays, a separator and an unmanaged line included', async () => {
+  // `*DLC: Automatron` line names none. Rival: dropping every line with no folder in mods/, the
+  // game's own `*` lines included.
+  it('drops only the mod and separator lines whose folder is gone: every other line stays', async () => {
     const before = (await readFile(modlistPath(), 'utf8')).split('\r\n');
 
-    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['[NODELETE] Radfall'] });
+    await sync(MOD_FOLDERS);
 
     const after = (await readFile(modlistPath(), 'utf8')).split('\r\n');
-    expect(before.filter((line) => !after.includes(line))).toEqual(['+[NODELETE] Radfall']);
+    expect(before.filter((line) => !after.includes(line))).toEqual([
+      '+[NODELETE] Radfall', '-Radfall - All-In-One Survival Overhaul_separator',
+    ]);
+  });
+
+  // A name MO2 never gives a folder, as another tool may write one. Rival: reading its folder as
+  // the name plus `_separator`, which no folder in mods/ can ever be, so its line always goes.
+  it('keeps a separator whose name MO2 never gives a folder', async () => {
+    await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
+
+    expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: [] });
+    expect(await readFile(modlistPath(), 'utf8')).toContain('-Weapons/Armor_separator');
   });
 
   it('writes a batch of added lines ascending top-to-bottom, winning-most first', async () => {
