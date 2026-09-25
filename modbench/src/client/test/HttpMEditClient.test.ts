@@ -148,9 +148,11 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await client.copyRecordAsOverride('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'Other.esp', 'ModB');
 
-    expect(result).toEqual({ refused: true, message: 'Could not renumber 000800:MyPatch.esp — No load order has been received.' });
+    expect(result).toEqual({
+      refused: true, message: 'Could not copy 000800:MyPatch.esp into "Other.esp" — No load order has been received.',
+    });
   });
 });
 

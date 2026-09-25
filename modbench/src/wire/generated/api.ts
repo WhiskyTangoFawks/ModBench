@@ -284,22 +284,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/records/next-form-key": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PeekNextFreeFormKey"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/plugins/external-change/absorb": {
         parameters: {
             query?: never;
@@ -458,26 +442,6 @@ export interface paths {
          * @description Deletes each record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. Each record is deleted or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/records/{formKey}/renumber": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Renumber a native record's FormKey as a delete+create pair.
-         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one. Nothing else changes: the records that reference it are left as they are.
-         */
-        post: operations["RenumberRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -804,9 +768,6 @@ export interface components {
         };
         /** @enum {string} */
         MasterIssueKind: "DirectlyMissing" | "Unloadable";
-        NextFreeFormKeyResponse: {
-            formKey: string;
-        };
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -996,7 +957,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -1008,16 +969,7 @@ export interface components {
             applied: boolean;
             formKey: string;
             path: string;
-        };
-        RecordRenumberRequest: {
-            plugin: string;
-            origin: string;
             newFormKey?: string | null;
-        };
-        RecordRenumberResponse: {
-            applied: boolean;
-            oldFormKey: string;
-            newFormKey: string;
         };
         RecordSummary: {
             formKey: string;
@@ -1831,48 +1783,6 @@ export interface operations {
             };
         };
     };
-    PeekNextFreeFormKey: {
-        parameters: {
-            query: {
-                origin: string;
-            };
-            header?: never;
-            path: {
-                plugin: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NextFreeFormKeyResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     AbsorbExternalChange: {
         parameters: {
             query?: never;
@@ -2283,86 +2193,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    RenumberRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordRenumberRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordRenumberResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };

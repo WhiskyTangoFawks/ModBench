@@ -13,7 +13,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
-  type RecordFilter, type RecordRenumberResponse, type ReferenceResult, type PluginAddress, type TrackStatus,
+  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -345,21 +345,6 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** A delete+create pair that leaves every referencer as it was; an override is refused
-   *  server-side (native records only). `newFormKey` left undefined auto-allocates. */
-  async renumberRecord(
-    formKey: string, plugin: string, origin: string, newFormKey?: string,
-  ): Promise<RecordRenumberResponse | WriteRefused | undefined> {
-    return this.mutate<RecordRenumberResponse>({
-      op: `renumberRecord(${formKey})`,
-      failMsg: `Could not renumber ${formKey}`,
-      post: () => this.apiClient.POST('/records/{formKey}/renumber', {
-        params: { path: { formKey } },
-        body: { plugin, origin, newFormKey: newFormKey ?? null },
-      }),
-    });
-  }
-
   /** No confirmation — xEdit's own CopyInto asks nothing before an override copy. Success
    *  carries no new FormKey: an override echoes the caller's own. */
   async copyRecordAsOverride(
@@ -567,14 +552,6 @@ export class HttpMEditClient implements MEditClient {
     if (response.status === 404) return [];
     this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
     return (data?.overrides ?? []).map((o) => o.plugin);
-  }
-
-  async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
-    const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/next-form-key', {
-      params: { path: { plugin }, query: { origin } },
-    });
-    this.ensureOk(`peekNextFreeFormKey(${plugin})`, response, error);
-    return data?.formKey ?? '';
   }
 
   async getReferences(formKey: string): Promise<ReferenceResult[]> {

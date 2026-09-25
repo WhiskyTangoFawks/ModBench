@@ -121,18 +121,16 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // --- RenumberRecord (400/200 already pinned by MalformedFormKeyEndpointTests/RenumberApiTests) ---
+    // --- EditRecord, of the FormID (200 already pinned by FormIdEditApiTests) ---
 
     [Fact]
-    public async Task RenumberRecord_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
+    public async Task EditingTheFormId_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
     {
         using var fx = BuildOneModOnePlugin();
         await Load(fx); // deliberately not tracked
         var formKey = await FirstNpcFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/renumber",
-            new { plugin = Plugin, origin = Origin, newFormKey = (string?)null });
+        var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -140,7 +138,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     }
 
     [Fact]
-    public async Task RenumberRecord_WhenTheSourceCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task EditingTheFormId_WhenTheSourceCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
         using var fx = BuildOneModOnePlugin();
         await Load(fx);
@@ -151,9 +149,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
         try
         {
-            var response = await _client.PostAsJsonAsync(
-                $"/records/{Uri.EscapeDataString(formKey)}/renumber",
-                new { plugin = Plugin, origin = Origin, newFormKey = (string?)null });
+            var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
 
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
             var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -311,7 +307,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
     }
 
-    // --- CreateRecord (400 already pinned by MalformedFormKeyEndpointTests; 200 incidentally by RenumberApiTests) ---
+    // --- CreateRecord (400 already pinned by MalformedFormKeyEndpointTests; 200 incidentally by FormIdEditApiTests) ---
 
     [Fact]
     public async Task CreateRecord_OnAnUntrackedPlugin_IsRefusedWithATypedRefusal()
@@ -359,21 +355,5 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         {
             OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
-    }
-
-    // --- PeekNextFreeFormKey ---
-
-    [Fact]
-    public async Task PeekNextFreeFormKey_OnATrackedPlugin_Succeeds()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx);
-        await Track(Origin);
-
-        var response = await _client.GetAsync($"/plugins/{Plugin}/records/next-form-key?origin={Origin}");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("formKey").GetString()));
     }
 }

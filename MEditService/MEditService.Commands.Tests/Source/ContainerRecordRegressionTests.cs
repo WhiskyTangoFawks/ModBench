@@ -19,7 +19,7 @@ namespace MEditService.Commands.Tests.Source;
 
 /// <summary>Create refuses a container with a typed
 /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500; edit, delete
-/// and renumber write and read back through the Source repository.</summary>
+/// and a FormID edit write and read back through the Source repository.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -129,23 +129,20 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     }
 
     [Fact]
-    public void RenumberingACell_Succeeds()
+    public void EditingTheFormIdOfACell_Succeeds()
     {
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Cell.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
-        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected RenumberRecord to set NewFormKey on success.");
+        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected a FormID edit to answer the new FormKey.");
         Assert.NotNull(_fixture.Document(newFormKey));
     }
 
     [Fact]
-    public void RenumberingAPlainRecordReferencedByNothing_StillWorks_ContainerGuardIsScopedNotBlanket()
+    public void EditingTheFormIdOfAPlainRecord_InAPluginHoldingACell_Succeeds()
     {
-        // Positive control: the container guard must not blanket-refuse renumber for a plugin that
-        // merely *holds* a cell elsewhere — only the record actually being touched (target or
-        // referencer) is checked.
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Npc.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Npc.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
     }

@@ -149,10 +149,10 @@ public sealed class EditRecordTraceTests : HostedTests
     // A race that morphs into itself links itself, and the NPCs of three plugins link it: its own,
     // a tracked one and an untracked one.
     private static ScatteredFixtureData ARaceAndItsReferencers() =>
-        new PluginFixtureBuilder("trace-renumber-target-only")
+        new PluginFixtureBuilder("trace-formid-target-only")
             .WithPlugin(Plugin, mod =>
             {
-                var race = mod.Races.AddNew("RenumberedRace");
+                var race = mod.Races.AddNew("MovedRace");
                 race.MorphRace.SetTo(race);
                 mod.Npcs.AddNew("SamePluginNpc").Race.SetTo(race);
             }, origin: Origin)
@@ -166,7 +166,7 @@ public sealed class EditRecordTraceTests : HostedTests
     private const string UntrackedOrigin = "UntrackedMod";
 
     [Fact]
-    public async Task RenumberingARecord_ChangesOnlyItsFormKey_AndLeavesEveryReferencerAsItWas()
+    public async Task EditingTheFormId_ChangesOnlyItsFormKey_LeavesEveryReferencerAsItWas_AndIsReadAgainUnderTheNewOne()
     {
         using var fx = ARaceAndItsReferencers();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -181,13 +181,13 @@ public sealed class EditRecordTraceTests : HostedTests
         var samePluginBefore = File.ReadAllText(samePluginReferencer);
         var trackedBefore = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin));
         var untrackedBefore = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin));
+        var newFormKey = $"000F00:{Plugin}";
+        using var stream = await Client.NotificationStream();
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(oldFormKey)}/renumber",
-            new { plugin = Plugin, origin = Origin, newFormKey = (string?)null });
+        var response = await Edit(oldFormKey, "FormKey", newFormKey);
 
         response.EnsureSuccessStatusCode();
-        var newFormKey = DocumentNodes.StringValueOf((await Body(response)).GetProperty("newFormKey"));
+        Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await Body(response)).GetProperty("newFormKey")));
         Assert.Null(TrackedTree.Document(targetFolder, target, oldFormKey));
         var targetAfter = TrackedTree.Document(targetFolder, target, newFormKey).Require();
         var formKeyLine = $"\"FormKey\": \"{oldFormKey}\"";
@@ -198,6 +198,13 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(samePluginBefore, File.ReadAllText(samePluginReferencer));
         Assert.Equal(trackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin)));
         Assert.Equal(untrackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin)));
+        // A document the Index never saw moves which records the plugin has, so the plugin is read
+        // again whole and named, not its rows.
+        var changed = Assert.Single(await stream.EventsUntil(
+            "plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin));
+        Assert.Equal(Origin, changed.GetProperty("origin").GetString());
+        Assert.Equal("MovedRace", (await Client.Record(newFormKey)).GetProperty("editorId").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}")).StatusCode);
     }
 
     [Fact]
@@ -363,7 +370,7 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     // FormKey.Factory throws on malformed input, and the fix is the endpoint's own 400 rather than a
-    // new refusal case: three doors take a typed FormKey, and all three answer the same.
+    // new refusal case: both doors that take a typed FormKey as an Option answer the same.
     [Fact]
     public async Task CreatingARecordWithAMalformedFormKey_Is400()
     {
@@ -376,17 +383,19 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // A FormID is a field value, so one that is no FormKey is refused as the codec's rejection.
     [Fact]
-    public async Task RenumberingARecordToAMalformedFormKey_Is400()
+    public async Task EditingTheFormIdToAMalformedFormKey_IsRefusedAsTheCodecsRejection_NamingTheField()
     {
         using var fx = await Loaded(Origin);
         var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/renumber",
-            new { plugin = Plugin, origin = Origin, newFormKey = "not-a-formkey" });
+        var response = await Edit(formKey, "FormKey", "not-a-formkey");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(Refused, (int)response.StatusCode);
+        var problem = await Body(response);
+        Assert.Equal("CodecRejected", problem.GetProperty("refusal").GetString());
+        Assert.Equal("FormKey", problem.GetProperty("path").GetString());
     }
 
     [Fact]

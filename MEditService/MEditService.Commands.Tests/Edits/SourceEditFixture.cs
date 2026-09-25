@@ -32,11 +32,9 @@ public sealed class SourceEditFixture : IDisposable
     public PluginCopyKey Plugin { get; }
     public string ActualPluginName { get; }
     public LoadOrderSnapshot LoadOrder { get; }
-    public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
-    public PeekNextFreeFormKeyHandler PeekHandler { get; }
     public CompilePluginHandler CompileHandler { get; }
     public AbsorbExternalChangeHandler AbsorbHandler { get; }
     public KeepExternalChangeHandler KeepHandler { get; }
@@ -87,11 +85,9 @@ public sealed class SourceEditFixture : IDisposable
         }
 
         holder.Apply(LoadOrder);
-        RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
-        PeekHandler = TestEditService.PeekHandler(holder);
         CompileHandler = TestEditService.CompileHandler(holder);
         AbsorbHandler = TestEditService.AbsorbHandler(holder);
         KeepHandler = TestEditService.KeepHandler(holder);

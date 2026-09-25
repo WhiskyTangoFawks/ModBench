@@ -42,10 +42,10 @@ public record RecordEditRequest(
     IReadOnlyList<PathHop> Path,
     JsonElement? Value = null);
 
-/// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
-/// and path extensions instead, so an HTTP client's ordinary success check is also the correct
-/// check (ADR-0019).</summary>
-public record RecordEditResponse(bool Applied, string FormKey, string Path);
+/// <summary>The success shape for an applied edit, with <see cref="NewFormKey"/> the record's FormKey
+/// after an edit of its FormID. A refusal is ProblemDetails carrying refusal and path extensions
+/// instead, so an HTTP client's ordinary success check is also the correct check (ADR-0019).</summary>
+public record RecordEditResponse(bool Applied, string FormKey, string Path, string? NewFormKey = null);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
 // identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
@@ -70,15 +70,6 @@ public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 /// <summary>Applied or refusal, per record (ADR-0019 invariant 4): a refusal is an item of the
 /// answer, never the status of the call.</summary>
 public record RecordDeleteResponse(IReadOnlyList<RecordAddress> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
-
-/// <summary><see cref="NewFormKey"/> null means auto-allocate; non-null is xEdit's typed-FormID
-/// renumber path.</summary>
-public record RecordRenumberRequest(string Plugin, string Origin, string? NewFormKey);
-
-public record RecordRenumberResponse(bool Applied, string OldFormKey, string NewFormKey);
-
-/// <summary>The Renumber gesture's FormID input box's suggested default (<c>PeekNextFreeFormKeyHandler.PeekNextFreeFormKey</c>).</summary>
-public record NextFreeFormKeyResponse(string FormKey);
 
 // ADR-0007: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
 // names the record copied; both plugins travel as ADR-0012 compound identities.

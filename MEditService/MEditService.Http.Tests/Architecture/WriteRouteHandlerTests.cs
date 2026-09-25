@@ -21,7 +21,6 @@ public sealed class WriteRouteHandlerTests
     [
         ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
         ("POST", "/records/delete", typeof(DeleteRecordHandler)),
-        ("POST", "/records/{formKey}/renumber", typeof(RenumberRecordHandler)),
         ("POST", "/records/{formKey}/copy-as-override", typeof(CopyRecordAsOverrideHandler)),
         ("POST", "/records/{formKey}/copy-as-new-record", typeof(CopyRecordAsNewRecordHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),
@@ -33,9 +32,6 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/rebase", typeof(RebaseEditBranchHandler)),
         ("POST", "/plugins/rebase/continue", typeof(ContinueRebaseEditBranchHandler)),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
-        // A read, and still a gesture: what Create and Renumber would allocate, asked without
-        // allocating it (ruling 7).
-        ("GET", "/plugins/{plugin}/records/next-form-key", typeof(PeekNextFreeFormKeyHandler)),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

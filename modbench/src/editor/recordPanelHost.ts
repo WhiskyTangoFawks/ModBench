@@ -28,8 +28,8 @@ export interface EditorCommandDeps {
   treeSync: RecordTreeSync;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecords' | 'renumberRecord' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
-    | 'getPlugins' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences' | 'status'>;
+    | 'createRecord' | 'deleteRecords' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
+    | 'getPlugins' | 'getRecordOverridePlugins'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
@@ -82,7 +82,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerRecordPanelContextCommands({
       ...writeDeps, tempRoot: extendedFieldEditorTempRoot, log: (m: string) => outputChannel.debug(m),
     }),
-    // Editor owns the record gestures (create/delete/renumber/copy) — registered once, here,
+    // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins),

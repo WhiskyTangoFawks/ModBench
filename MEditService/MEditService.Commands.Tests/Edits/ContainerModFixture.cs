@@ -27,7 +27,6 @@ public sealed class ContainerModFixture : IDisposable
     /// <summary>The kernel's holder with <see cref="LoadOrder"/> applied, for a handler built over
     /// this fixture.</summary>
     public LoadOrderHolder Holder { get; }
-    public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
@@ -145,7 +144,6 @@ public sealed class ContainerModFixture : IDisposable
 
         holder.Apply(LoadOrder);
         Holder = holder;
-        RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);

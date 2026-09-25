@@ -101,21 +101,6 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // A read-only peek at what CreateRecord/RenumberRecord would allocate, feeding the Renumber
-        // gesture's FormID box a default. Refusals go through the same Refusal mapping its siblings
-        // use rather than a nullable-string contract that cannot distinguish them.
-        app.MapGet("/plugins/{plugin}/records/next-form-key", (
-            string plugin, string origin, PeekNextFreeFormKeyHandler edits) =>
-        {
-            var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginCopyKeyOf(plugin, origin));
-            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(WriteEndpointMapping.RequireNewFormKey(result))) : WriteEndpointMapping.Refusal(result);
-        })
-            .WithName("PeekNextFreeFormKey")
-            .WithTags(Tag)
-            .Produces<NextFreeFormKeyResponse>()
-            .ProducesProblem(404)
-            .ProducesProblem(422);
-
         // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin
         // in it. Rebases the edit branch onto the new baseline it commits.
         app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)

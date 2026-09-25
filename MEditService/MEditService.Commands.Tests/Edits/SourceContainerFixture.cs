@@ -25,7 +25,7 @@ public sealed class SourceContainerFixture : IDisposable
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public LoadOrderSnapshot LoadOrder { get; }
-    public RenumberRecordHandler RenumberHandler { get; }
+    public EditRecordHandler EditHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -65,7 +65,7 @@ public sealed class SourceContainerFixture : IDisposable
             .GetAwaiter().GetResult();
 
         holder.Apply(LoadOrder);
-        RenumberHandler = TestEditService.RenumberHandler(holder);
+        EditHandler = TestEditService.EditHandler(holder);
         _instanceRoot = instanceRoot;
     }
 

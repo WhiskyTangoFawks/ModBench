@@ -43,7 +43,7 @@ public enum RecordEditRefusal
     /// <summary>Held at either ref; checked server-side even for an allocator-suggested value, since a caller can type its own.</summary>
     FormKeyCollision,
 
-    /// <summary>Renumbering an override would mean renumbering it across every plugin in the stack; a typed target must be native for the same reason.</summary>
+    /// <summary>Changing an override's FormID would mean changing it across every plugin in the stack; a typed target must be native for the same reason.</summary>
     NotNativeRecord,
 
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>
@@ -95,7 +95,7 @@ public enum RecordEditRefusal
     /// <summary>Deleting the header would remove the root <c>RecordData.json</c> the whole-mod door needs;
     /// its FormKey is synthetic. Refused before <c>HoldingUnit.IsDirectoryPerRecord</c>, whose filename-only
     /// test would delete the whole source root.</summary>
-    HeaderDeleteOrRenumberNotSupported,
+    HeaderDeleteNotSupported,
 
     /// <summary>The envelope itself is malformed: an unknown operation, a hop naming nothing, a value
     /// missing where the operation needs one, or an operation aimed at a shape it cannot act on.</summary>

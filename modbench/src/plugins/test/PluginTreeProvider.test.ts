@@ -320,22 +320,17 @@ describe('RecordNode', () => {
     expect(firstCommandArgument(node.command).label).toBe(record.formKey);
   });
 
-  // The renumberable row — a master copy whose plugin is tracked — is the only one that
-  // spells `recordTracked`, which is the whole of package.json's Change FormID when-clause.
   it('contextValue is recordTracked for a master row in a tracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, true);
     expect(node.contextValue).toBe('recordTracked');
   });
 
-  // The same master row in an untracked plugin: the product refuses to renumber it, so the
-  // gesture must be absent rather than offered and then eaten.
   it('contextValue is recordUntracked for a master row in an untracked plugin', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false);
     expect(node.contextValue).toBe('recordUntracked');
   });
 
-  // An override doesn't own its FormID, so package.json's renumber when-clause hides Change FormID
-  // on a row whose plugin is not the FormKey's own origin; tracked-ness never rescues it.
+  // An override doesn't own its FormID; tracked-ness never rescues it.
   it('contextValue is recordOverride when the row\'s plugin is not the FormKey\'s origin', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
     expect(new RecordNode(record).contextValue).toBe('recordOverride');
@@ -448,7 +443,7 @@ describe('record rows carry their copy identity', () => {
   });
 
   // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
-  // is fully actionable — and still not renumberable, which is what `recordUntracked` says.
+  // is fully actionable, and still read-only until tracked, which is what `recordUntracked` says.
   it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);

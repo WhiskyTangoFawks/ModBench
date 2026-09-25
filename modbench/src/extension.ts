@@ -231,7 +231,7 @@ interface PluginRowCommandDeps {
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands (create/delete/renumber/copy — Editor's own registration).
+// editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFolder } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };

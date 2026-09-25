@@ -65,16 +65,6 @@ public static class CommandHandlers
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<ILogger<CopyRecordAsNewRecordHandler>>()));
 
-        services.AddSingleton(sp => new RenumberRecordHandler(
-            sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<RecordTextCodec>(),
-            sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ILogger<RenumberRecordHandler>>()));
-
-        services.AddSingleton(sp => new PeekNextFreeFormKeyHandler(
-            sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<LoadOrderHolder>()));
-
         services.AddSingleton(sp => new TrackHandler(
             sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));

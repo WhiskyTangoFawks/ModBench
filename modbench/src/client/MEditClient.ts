@@ -116,7 +116,6 @@ export type RecordCreateResponse = components['schemas']['RecordCreateResponse']
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
 export type RecordAddress = components['schemas']['RecordAddress'];
-export type RecordRenumberResponse = components['schemas']['RecordRenumberResponse'];
 export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];
 export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
@@ -142,9 +141,6 @@ export interface MEditClient {
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
-  renumberRecord(
-    formKey: string, plugin: string, origin: string, newFormKey?: string,
-  ): Promise<RecordRenumberResponse | WriteRefused | undefined>;
   copyRecordAsOverride(
     formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
   ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined>;
@@ -170,7 +166,6 @@ export interface MEditClient {
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
-  peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
