@@ -22,12 +22,15 @@ import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
+import { pluginFolder } from './instanceAdapter/layout';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
-import { originFolder, type OriginFolder } from './instanceLoader/loadOrderSnapshot';
-import { registerLoadMoreCommand, registerFilterCommands, makeShowRecordFilter } from './plugins/recordFilterCommands';
+import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import {
+  registerLoadMoreCommand, registerFilterCommands, makeShowRecordFilter, type FilterScripts,
+} from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 import { errorMessage } from './ports/errorMessage';
 
@@ -88,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-  const scriptsPath = setupScriptsFolder(meditConfig());
+  const filterScripts = setupScriptsFolder(meditConfig());
   const filterProvider = new FilterCodeLensProvider();
 
   // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
@@ -106,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
   const notifyConflictsComputed = () => {
     for (const panel of recordPanels) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
     void registerHeldTrackedRepositories(
-      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);
+      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
   };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
@@ -124,12 +127,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
   // ActiveRecordTracker.current()'s "initial state" contract true rather than aspirational.
   referencedByTreeProvider.showFor(activeRecordTracker.current());
-  // Its `originFolder` closes over the Toolbox built below and re-reads the value each call, so a
+  // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
     notifyConflictsComputed,
-    originFolder: (origin) => originFolder(toolbox.instance?.value.plugins ?? [], origin),
+    originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
   // Run once per completed reconcile, never a poller: a reconcile is the only moment either offer
   // reason can newly arise.
@@ -137,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
     offers,
     askQuestion,
     (offer, atRef) => compileAndReport(
-      meditClient, compileDiagnostics, pluginRowDeps.originFolder,
+      meditClient, compileDiagnostics, pluginRowDeps.originFiles,
       makeReporter(outputChannel, 'crashRepair'), askQuestion,
       { name: offer.plugin, origin: offer.origin }, atRef,
     ),
@@ -161,13 +164,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     toolbox,
     {
-      dispose: wireQuestionOpen(
-        meditClient, outputChannel, treeProvider,
-        () => { void refreshMatchingPlugins(session); },
+      dispose: wireQuestionOpen({
+        client: meditClient, outputChannel, treeProvider,
+        refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
         askQuestion,
-        showCrashRepairOffers,
-        makeReporter(outputChannel, 'externalChange'),
-      ),
+        presentCrashRepair: showCrashRepairOffers,
+        reporter: makeReporter(outputChannel, 'externalChange'),
+        originFiles: pluginRowDeps.originFiles,
+      }),
     },
     referencedByTreeView,
     activeRecordSubscription,
@@ -177,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     registerLoadMoreCommand(treeProvider),
     ...registerFilterCommands({
-      scriptsPath, client: meditClient, treeProvider,
+      scripts: filterScripts, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       showRecordFilter: (filter) => session.showRecordFilter?.(filter),
       reporter: makeReporter(outputChannel, 'recordFilter'),
@@ -227,13 +231,13 @@ interface PluginRowCommandDeps {
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
   notifyConflictsComputed: () => void;
-  originFolder: OriginFolder;
+  originFiles: OriginFilesOf;
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/renumber/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFolder } = deps;
+  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
@@ -241,19 +245,19 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(
-          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);
+          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);
         notifyConflictsComputed();
       },
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerSaveAndCompileCommand(
       client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFolder),
+      compileDiagnostics, originFiles),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
-      compileDiagnostics, originFolder),
+      compileDiagnostics, originFiles),
     registerRebaseCommand(
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor),
+      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor, originFiles),
     registerOpenHeaderCommand(),
   ];
 }
@@ -278,12 +282,16 @@ function backendOptions(port: number, channel: vscode.LogOutputChannel): Backend
   };
 }
 
-function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): string {
+function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): FilterScripts {
   const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
   const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
   fs.mkdirSync(scriptsPath, { recursive: true });
 
-  return scriptsPath;
+  return {
+    folder: scriptsPath,
+    sqlFiles: () => (fs.existsSync(scriptsPath) ? fs.readdirSync(scriptsPath).filter((f) => f.endsWith('.sql')) : []),
+    read: (name) => fs.readFileSync(path.join(scriptsPath, name), 'utf8'),
+  };
 }
 
 

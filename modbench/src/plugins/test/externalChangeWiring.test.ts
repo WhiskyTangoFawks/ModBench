@@ -32,7 +32,10 @@ function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockR
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
   const reporter = recordingReporter();
-  wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion, presentCrashRepair, reporter);
+  wireQuestionOpen({
+    client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, presentCrashRepair, reporter,
+    originFiles: () => undefined,
+  });
   return {
     outputChannel, reporter,
     deps: present(subscribeQuestionOpen.mock.calls[0], "wireQuestionOpen's call to the coordinator")[0],

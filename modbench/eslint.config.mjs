@@ -88,6 +88,18 @@ export default tseslint.config(
         },
     },
 
+    // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
+    {
+        files: ['src/plugins/**/*.ts'],
+        ignores: ['src/plugins/test/**'],
+        rules: {
+            'no-restricted-imports': ['error', { paths: ['node:path', 'path'].map((name) => ({
+                name,
+                message: 'The Plugins view never builds a path: take it from the instance value, or inject the Instance adapter\'s path function at the composition root.',
+            })) }],
+        },
+    },
+
     // Every backend call goes through the generated client, so the wire shape stays typed.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { posix } from 'node:path';
 
 // Not `file:`: a Data-origin diagnosis is published on the plugin file's own URI, and VS Code
 // badges any tree row whose resourceUri carries diagnostics — a badge plugins.md's locked row
@@ -27,11 +26,12 @@ export class ImplicitMasterDecorationProvider implements vscode.FileDecorationPr
     if (uri.scheme !== LOCKED_ROW_SCHEME) return undefined;
     const dataFolder = await this.dataFolder();
     if (!dataFolder) return undefined;
-    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). `dirname`
-    // never carries a trailing separator, so a Data folder setting that does needs stripping.
+    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). A URI path's
+    // parent never carries a trailing separator, so a Data folder setting that does needs stripping.
     const dataPath = vscode.Uri.file(dataFolder).path.replace(/\/+$/, '');
-    if (posix.dirname(uri.path) !== dataPath) return undefined;
-    if (!this.implicitMasterNames().has(posix.basename(uri.path).toLowerCase())) return undefined;
+    const lastSlash = uri.path.lastIndexOf('/');
+    if (uri.path.slice(0, lastSlash) !== dataPath) return undefined;
+    if (!this.implicitMasterNames().has(uri.path.slice(lastSlash + 1).toLowerCase())) return undefined;
     return { color: new vscode.ThemeColor('disabledForeground') };
   }
 }

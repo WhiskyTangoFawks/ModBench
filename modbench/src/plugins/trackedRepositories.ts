@@ -1,21 +1,19 @@
-import * as path from 'node:path';
 import type { PluginMetadata } from '../client';
 
 /** Whether a mod folder is tracked. Injected: the Instance adapter answers it, and this box holds
  *  no door onto the instance of its own (ADR-0007). */
 export type IsTracked = (modFolder: string) => Promise<boolean>;
 
-function modFolderOf(plugin: Pick<PluginMetadata, 'path'>): string {
-  return path.dirname(plugin.path);
-}
+/** The folder a plugin copy sits in. Injected: the Instance adapter owns every path function. */
+export type PluginFolder = (pluginFile: string) => string;
 
 /** Distinct, not one per plugin: a folder can hold several plugins, and each must register with
  *  `vscode.git` exactly once. */
 export async function trackedModFoldersOf(
-  plugins: readonly Pick<PluginMetadata, 'path'>[], isTracked: IsTracked,
+  plugins: readonly Pick<PluginMetadata, 'path'>[], isTracked: IsTracked, pluginFolder: PluginFolder,
 ): Promise<string[]> {
   const folders = new Set<string>();
-  for (const folder of new Set(plugins.map(modFolderOf))) {
+  for (const folder of new Set(plugins.map((p) => pluginFolder(p.path)))) {
     if (await isTracked(folder)) folders.add(folder);
   }
   return [...folders];
@@ -43,10 +41,11 @@ export async function registerTrackedRepositories<T>(
 export function pluginRepositoriesOf<T>(
   plugins: readonly Pick<PluginMetadata, 'name' | 'path'>[],
   folderRepositories: ReadonlyMap<string, T>,
+  pluginFolder: PluginFolder,
 ): Map<string, T> {
   const byPlugin = new Map<string, T>();
   for (const plugin of plugins) {
-    const repository = folderRepositories.get(modFolderOf(plugin));
+    const repository = folderRepositories.get(pluginFolder(plugin.path));
     if (repository) byPlugin.set(plugin.name, repository);
   }
   return byPlugin;

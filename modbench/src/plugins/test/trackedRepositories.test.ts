@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../trackedRepositories';
 import { isTracked } from '../../instanceAdapter/files';
+import { pluginFolder } from '../../instanceAdapter/layout';
 import type { PluginMetadata } from '../../client';
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
@@ -42,7 +43,7 @@ describe('trackedModFoldersOf', () => {
         makePlugin({ path: path.join(untrackedFolder, 'Untracked.esp'), origin: 'UntrackedMod' }),
       ];
 
-      const folders = await trackedModFoldersOf(plugins, isTracked);
+      const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
 
       expect(folders).toEqual([trackedFolder]);
     } finally {
@@ -60,7 +61,7 @@ describe('trackedModFoldersOf', () => {
         makePlugin({ path: path.join(modFolder, 'B.esp'), origin: 'SharedMod' }),
       ];
 
-      const folders = await trackedModFoldersOf(plugins, isTracked);
+      const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
 
       expect(folders).toEqual([modFolder]);
     } finally {
@@ -128,9 +129,18 @@ describe('pluginRepositoriesOf', () => {
     ];
     const folderRepositories = new Map([['/mods/ModA', repoA], ['/mods/ModB', repoB]]);
 
-    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories);
+    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
 
     expect(byPlugin).toEqual(new Map([['A.esp', repoA], ['B.esp', repoB]]));
+  });
+
+  it("takes each plugin's mod folder from the Instance adapter's answer", () => {
+    const repo = { name: 'repo' };
+    const plugins = [makePlugin({ path: '/mods/ModA/A.esp', origin: 'ModA' })];
+
+    const byPlugin = pluginRepositoriesOf(plugins, new Map([['/answered', repo]]), () => '/answered');
+
+    expect(byPlugin).toEqual(new Map([['A.esp', repo]]));
   });
 
   it('gives two plugins sharing one mod folder the same repository', () => {
@@ -141,7 +151,7 @@ describe('pluginRepositoriesOf', () => {
     ];
     const folderRepositories = new Map([['/mods/SharedMod', repo]]);
 
-    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories);
+    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
 
     expect(byPlugin).toEqual(new Map([['A.esp', repo], ['B.esp', repo]]));
   });
@@ -152,7 +162,7 @@ describe('pluginRepositoriesOf', () => {
     // would crash on.
     const plugins = [makePlugin({ path: '/mods/Untracked/U.esp', origin: 'Untracked' })];
 
-    const byPlugin = pluginRepositoriesOf(plugins, new Map());
+    const byPlugin = pluginRepositoriesOf(plugins, new Map(), pluginFolder);
 
     expect(byPlugin.size).toBe(0);
   });

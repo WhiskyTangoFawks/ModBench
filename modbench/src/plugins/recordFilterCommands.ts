@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { MEditClient, RecordFilter } from '../client';
 import type { Reporter } from '../ports/reporter';
 import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
@@ -11,8 +9,17 @@ export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscod
   return vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node));
 }
 
+/** The scripts folder the pick lists, read at the composition root: this view holds no door onto
+ *  the disk of its own. */
+export interface FilterScripts {
+  readonly folder: string;
+  /** The `.sql` file names in the folder, none when it does not exist. */
+  sqlFiles(): string[];
+  read(name: string): string;
+}
+
 export interface FilterCommandDeps {
-  scriptsPath: string;
+  scripts: FilterScripts;
   client: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
   treeProvider: Pick<PluginTreeProvider, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
@@ -49,7 +56,7 @@ const NEW_FILTER_LABEL = '$(add) New filter…';
 // The record filter scopes which records a plugin row's children show — a distinct concern from
 // the record-panel and reveal commands, so it is its own registration.
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
-  const { scriptsPath, client, treeProvider, refreshMatchingPlugins, showRecordFilter, reporter } = deps;
+  const { scripts, client, treeProvider, refreshMatchingPlugins, showRecordFilter, reporter } = deps;
 
   const show = (filter: RecordFilter | null): void => {
     showRecordFilter(filter);
@@ -69,15 +76,12 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   // catalog `filter`, Option "query source": a document the caller names, or the input box.
   const fromDocument = async (uri: vscode.Uri): Promise<void> => {
     const document = await vscode.workspace.openTextDocument(uri);
-    await apply({ sql: document.getText(), source: path.basename(document.fileName) });
+    await apply({ sql: document.getText(), source: document.uri.path.split('/').at(-1) ?? document.uri.path });
   };
 
   const fromPick = async (): Promise<void> => {
-    const files = fs.existsSync(scriptsPath)
-      ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
-      : [];
     const items: vscode.QuickPickItem[] = [
-      ...files.map(f => ({ label: f, description: scriptsPath })),
+      ...scripts.sqlFiles().map(f => ({ label: f, description: scripts.folder })),
       { label: NEW_FILTER_LABEL },
     ];
     const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select .sql filter file' });
@@ -86,7 +90,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({ language: 'sql' }));
       return;
     }
-    await apply({ sql: fs.readFileSync(path.join(scriptsPath, picked.label), 'utf8'), source: picked.label });
+    await apply({ sql: scripts.read(picked.label), source: picked.label });
   };
 
   return [
