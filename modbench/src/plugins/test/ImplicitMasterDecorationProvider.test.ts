@@ -1,8 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 
+// Real `Uri.file` forward-slashes a backslash path only on Windows; this always does, so a
+// Windows-style fixture below exercises that conversion on any host.
 vi.mock('vscode', () => ({
   ThemeColor: class { constructor(public id: string) {} },
+  Uri: {
+    file: (p: string) => {
+      const path = p.replaceAll('\\', '/');
+      return { fsPath: p, path, toString: () => `file://${path}` };
+    },
+  },
 }));
 
 import * as vscode from 'vscode';
@@ -64,5 +72,17 @@ describe('ImplicitMasterDecorationProvider', () => {
   it('degrades to undefined when the Data folder never resolved', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(undefined), () => new Set(['fallout4.esm']));
     expect(await provider.provideFileDecoration(dataUri('Fallout4.esm'))).toBeUndefined();
+  });
+
+  // Rival this rules out: comparing by `.fsPath` with a hardcoded `/` join, which never matches a
+  // real Windows `fsPath` (backslash-separated) against a POSIX-style literal.
+  it('grays an implicit master row given a Windows-style Data folder and file path', async () => {
+    const winDataFolder = String.raw`C:\Game\Data`;
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(winDataFolder), () => new Set(['fallout4.esm']));
+    const uri = vscode.Uri.file(String.raw`C:\Game\Data\Fallout4.esm`);
+
+    const decoration = present(await provider.provideFileDecoration(uri), 'the decoration for the Windows-style row');
+
+    expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
 });

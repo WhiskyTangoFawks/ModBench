@@ -1638,7 +1638,8 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 
     const item = tree.getTreeItem(row);
 
-    assert.strictEqual(item.tooltip, undefined);
+    // The base tooltip (file name, mod) is the row's own identity, not a backend fact.
+    assert.strictEqual(item.tooltip, 'TestMod.esp\nData');
   });
 
 });
@@ -1728,7 +1729,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     // The hand-off follows the index status on the stream, so the tree is read until it lands.
     await waitFor('a resolved master issue to clear the tooltip, not leave the stale decoration stacked on top of the fresh one',
-      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === undefined);
+      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === 'MissingMaster.esp\nData');
   });
 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
@@ -2017,7 +2018,7 @@ describe('Progressive load', () => {
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
-      return candidate.description === '✗ Failed to load' ? candidate : undefined;
+      return candidate.description === 'failed to load' ? candidate : undefined;
     });
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),

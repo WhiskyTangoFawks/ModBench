@@ -108,7 +108,9 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     super(name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
-    this.tooltip = [name, "This plugin can't be disabled or moved (enforced by the game)."].join('\n');
+    // plugins.md, A plugin the game loads with no line: MO2's one sentence alone — the label
+    // already shows the greyed file name, so the tooltip does not repeat it.
+    this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
     // Routed through the modbench.openHeader bridge command, as PluginNode's row click is.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
@@ -203,6 +205,49 @@ type RowDecoration = {
   description: vscode.TreeItem['description'];
   iconPath: vscode.TreeItem['iconPath'];
 };
+
+// plugins.md, A row: the four statuses, in the order that sets the icon. `words` is the
+// description's vocabulary; `tooltipLine` is that status's one tooltip line.
+interface PluginStatus {
+  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'malformed';
+  words: string;
+  tooltipLine: string;
+}
+
+// The Malformed status's icon (ADR-0019's warning tier): a malformed plugin still loads and
+// plays, unlike the other three, which are all `failurePrefixIcon()`'s error tier.
+function malformedIcon(): vscode.ThemeIcon {
+  return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+}
+
+// One function per status (plugins.md, A row), each answering `undefined` when this row does
+// not carry it — `statusesOf` just filters the four out.
+
+function failedToLoadStatus(failure: string | undefined): PluginStatus | undefined {
+  if (failure === undefined) return undefined;
+  return { kind: 'failedToLoad', words: 'failed to load', tooltipLine: `Failed to load: ${failure}` };
+}
+
+function masterIssuesStatus(issues: MasterIssue[]): PluginStatus | undefined {
+  if (issues.length === 0) return undefined;
+  const reasons = issues.map((i) =>
+    i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
+  const words = issues.length === 1 ? '1 master issue' : `${issues.length} master issues`;
+  return { kind: 'masterIssues', words, tooltipLine: `${words}: ${reasons.join('; ')}` };
+}
+
+function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undefined {
+  if (!hasParseFailure) return undefined;
+  return {
+    kind: 'unreadableRecords', words: 'unreadable records',
+    tooltipLine: 'This plugin holds a record that could not be read into its document.',
+  };
+}
+
+function malformedStatus(diagnosisTexts: string[]): PluginStatus | undefined {
+  if (diagnosisTexts.length === 0) return undefined;
+  return { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
+}
 
 /** The one Plugins tree (ADR-0017). Rows are plugins.txt's lines, read from the Instance; their
  *  children are the record browser's; every badge comes from facts pulled once per reconcile. */
@@ -420,12 +465,9 @@ export class PluginsTreeProvider
     element.description = base.description;
     element.iconPath = base.iconPath;
 
-    const file = pluginFileOf(element);
-    if (file !== undefined) {
-      const origin = this.joinOrigin(file, element);
-      this.applyReadOnlyNote(element, file, origin);
-      this.applyBackendDecoration(element, file, origin);
-    }
+    // ImplicitMasterNode and EmptyNode keep their constructor's decoration untouched: the locked
+    // row's tooltip is MO2's one sentence alone (plugins.md, A plugin the game loads with no line).
+    if (element.kind === 'plugin') this.decoratePlugin(element);
     return element;
   }
 
@@ -439,63 +481,35 @@ export class PluginsTreeProvider
     return captured;
   }
 
-  // ADR-0017: appended, never replacing, so a row's own badge survives. A MarkdownString base
-  // would be replaced rather than appended to, and no row carries one.
-  private applyReadOnlyNote(item: vscode.TreeItem, file: string, origin: string | undefined): void {
-    if (this.facts?.get(file, origin)?.readOnly !== true) return;
-    appendNote(item, `This plugin is read-only — its records can't be edited.`);
-  }
-
-  // First match wins: load failure, master issues, parse failure, then diagnoses. The lookups
-  // guard a plugin the last load order never mentioned, not the wire.
-  private applyBackendDecoration(row: PluginListNode, file: string, origin: string | undefined): void {
-    if (this.applyErrorDecoration(row, file, origin)) return;
-    // Warning tier, below the three error decorations — a Malformed plugin still loads and
-    // plays; the badge says "look", not "broken".
-    const texts = this.diagnoses?.get(file, origin) ?? [];
-    if (texts.length > 0) this.applyDiagnosisDecoration(row, texts);
-  }
-
-  // The three error tiers, in order; answers whether one of them claimed the row.
-  private applyErrorDecoration(row: PluginListNode, file: string, origin: string | undefined): boolean {
-    const failure = this.loadFailureOf(row);
-    if (failure !== undefined) {
-      row.iconPath = failurePrefixIcon();
-      row.description = '✗ Failed to load';
-      appendNote(row, `Failed to load: ${failure}`);
-      return true;
+  // plugins.md, A row: the tooltip always carries the file name and mod; description and icon
+  // stay unset when no status applies.
+  private decoratePlugin(row: PluginNode): void {
+    const file = row.plugin.name;
+    const joinedOrigin = this.joinOrigin(file, row);
+    const statuses = this.statusesOf(file, row.origin, joinedOrigin);
+    const [first] = statuses;
+    if (first !== undefined) {
+      // The first status in spec order sets the icon; only Malformed is warning tier.
+      row.iconPath = first.kind === 'malformed' ? malformedIcon() : failurePrefixIcon();
+      row.description = statuses.map((s) => s.words).join(', ');
     }
-    const facts = this.facts?.get(file, origin);
-    const issues = facts?.masterIssues ?? [];
-    if (issues.length > 0) {
-      this.applyMasterIssueDecoration(row, issues);
-      return true;
-    }
-    if (facts?.parseFailure !== true) return false;
-    // The same prefix the record and record-type nodes carry: the backend answers "holds an
-    // unreadable record" per plugin, so nothing here walks children.
-    row.iconPath = failurePrefixIcon();
-    row.description = '✗ Unreadable records';
-    appendNote(row, 'This plugin holds a record that could not be read into its document.');
-    return true;
+    const lines = [file, row.origin ?? ''];
+    if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
+    for (const status of statuses) lines.push(status.tooltipLine);
+    row.tooltip = lines.join('\n');
   }
 
-  // Text lines are `PluginDiagnosisReport.text` verbatim — the wording the Track refusal and the
-  // Problems panel also carry, one vocabulary.
-  private applyDiagnosisDecoration(item: vscode.TreeItem, texts: string[]): void {
-    item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
-    item.description = texts.length === 1 ? '⚠ Malformed plugin' : `⚠ ${texts.length} malformed-plugin diagnoses`;
-    appendNote(item, texts.join('\n'));
-  }
-
-  // The backend's own wording, which is the only master verdict there is: nothing here reads a
-  // plugin's declared masters (ADR-0016).
-  private applyMasterIssueDecoration(item: vscode.TreeItem, issues: MasterIssue[]): void {
-    const lines = issues.map((i) =>
-      i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
-    item.iconPath = failurePrefixIcon();
-    item.description = lines.length === 1 ? '✗ Master issue' : `✗ ${lines.length} master issues`;
-    appendNote(item, lines.join('\n'));
+  // plugins.md, A row: every status the plugin carries, spec order. `rawOrigin` joins load
+  // failures; `joinedOrigin` joins every other fact.
+  private statusesOf(file: string, rawOrigin: string | undefined, joinedOrigin: string | undefined): PluginStatus[] {
+    const facts = this.facts?.get(file, joinedOrigin);
+    const statuses = [
+      failedToLoadStatus(this.loadFailures.get(file, rawOrigin)),
+      masterIssuesStatus(facts?.masterIssues ?? []),
+      unreadableRecordsStatus(facts?.parseFailure === true),
+      malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
+    ];
+    return statuses.filter((s): s is PluginStatus => s !== undefined);
   }
 
   // ── the load order and its facts ──────────────────────────────────────────
@@ -509,16 +523,13 @@ export class PluginsTreeProvider
   // reconcile — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
 
-  /** A progressive reconcile's tick: a row's content resolves as its plugin lands. It carries no
-   *  facts — those are whole-load-order derivations a partial tick cannot answer, so they clear
-   *  here and return when `applyReconciled` lands. */
+  /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Statuses stay
+   *  as the last reconcile left them (plugins.md, A row: "no blink") until `applyReconciled`
+   *  lands; a tick's failures merge in rather than replace. */
   applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
-    this.loadFailures = indexLoadFailures(failures);
-    this.facts = undefined;
-    this.matches = undefined;
-    this.diagnoses = undefined;
+    for (const f of failures) this.loadFailures.set(f.name, f.origin, f.reason);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -682,10 +693,6 @@ export class PluginsTreeProvider
 // stand for a plugins.txt line.
 function isRow(element: PluginsTreeNode): element is PluginListNode {
   return element instanceof PluginNode || element instanceof ImplicitMasterNode || element instanceof EmptyNode;
-}
-
-function appendNote(item: vscode.TreeItem, note: string): void {
-  item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginCopy<string> {
