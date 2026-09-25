@@ -4,17 +4,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance } from '../../instanceLoader/instance';
-import { placeFolder } from '../pluginDestination';
-import { syncPlugins } from '../../pluginsCommands/plugins';
-import { pluginSyncArguments } from '../../pluginSyncTrigger';
-import { present } from '../../ports/present';
-import { resolvesNoDownloads } from '../../test/mo2/downloadsUnresolved';
-import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
+import { Instance } from '../instanceLoader/instance';
+import { placeFolder } from '../plugins/pluginDestination';
+import { syncPlugins } from '../pluginsCommands/plugins';
+import { pluginSyncArguments } from '../pluginSyncTrigger';
+import { present } from '../ports/present';
+import { resolvesNoDownloads } from './mo2/downloadsUnresolved';
+import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 
 const PROFILE = 'Default';
 
