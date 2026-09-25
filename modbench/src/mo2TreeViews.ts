@@ -45,11 +45,11 @@ export function createModListView(
     termPlacement: 'afterBase',
     viewMessage: () => messageLine(modListProvider.emptyListMessage(), modSync.message()),
     onRowsChanged: modListProvider.onDidChangeTreeData,
+    onViewMessageChanged: (listener) => modSync.onMessageChanged(listener),
   }));
   const showCount = () => modListFilter.setBaseDescription(modListProvider.description());
   showCount();
   modListFilter.refresh();
-  own(modSync.onMessageChanged(() => modListFilter.refresh()));
   own(modListProvider.onDidChangeTreeData(showCount));
   const showKeyContext = () => {
     const context = modsKeyContext(modListView.selection, (row) => modListProvider.isEnabled(row));

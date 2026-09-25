@@ -27,6 +27,8 @@ export interface NameFilterDeps {
    *  The no-match message takes the line while a filter matches nothing. */
   viewMessage?: () => string | undefined;
   onRowsChanged?: vscode.Event<unknown>;
+  /** What else `viewMessage` reads changed: a sync's failure began, changed or cleared. */
+  onViewMessageChanged?: (listener: () => void) => { dispose(): void };
 }
 
 /** One view's message line, said by several writers: each part present, in order. */
@@ -112,6 +114,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
     vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
     ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
+    ...(deps.onViewMessageChanged ? [deps.onViewMessageChanged(() => void renderMessage())] : []),
   ];
 
   return {

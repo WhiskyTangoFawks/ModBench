@@ -255,15 +255,14 @@ export function registerPluginsNameFilter(
   view: { description?: string; message?: string }, provider: PluginsTreeProvider,
   pluginSync: SyncMessage,
 ): NameFilter {
-  const filter = registerNameFilter({
+  return registerNameFilter({
     view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
     viewMessage: () => messageLine(provider.viewMessage(), pluginSync.message()),
     onRowsChanged: provider.onDidChangeTreeData,
+    onViewMessageChanged: (listener) => pluginSync.onMessageChanged(listener),
   });
-  const subscription = pluginSync.onMessageChanged(() => filter.refresh());
-  return { ...filter, dispose: () => { subscription.dispose(); filter.dispose(); } };
 }
 
 
