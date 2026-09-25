@@ -118,7 +118,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
             var loadOrder = new LoadOrderSnapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+                .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);
             CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);

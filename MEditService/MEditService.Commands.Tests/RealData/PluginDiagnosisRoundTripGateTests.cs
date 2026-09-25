@@ -95,9 +95,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
         }
 
-        public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(_loadOrder, Origin, SourcePreset.Edits);
+        public async Task<TrackResult> TrackAsync() =>
+            (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
+                .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)).Only();
 
         public void Dispose()
         {

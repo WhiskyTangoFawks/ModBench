@@ -77,7 +77,7 @@ public sealed class IndexedModFixture : IDisposable
         {
             beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(Holder.Current, ModFolderOrigin, preset)
+                .TrackModAsync(Holder.Current, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
     }

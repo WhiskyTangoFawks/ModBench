@@ -50,7 +50,7 @@ internal sealed class SourceModFixture : IDisposable
         if (tracked)
         {
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(LoadOrder, origin, SourcePreset.Edits)
+                .TrackModAsync(LoadOrder, origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 
