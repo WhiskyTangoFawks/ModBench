@@ -282,10 +282,9 @@ As a user, I want:
 
 1. One dialog for each tracked mod that changed outside Modbench, one mod at a time. *ADR-0003,
    invariant 3; ruling*
-2. The dialog to name the mod, list the changed plugins and the changed tracked files, and say how
-   the `meta.ini` version moved, or that it did not. *ruling*
-3. Two answers, `Commit to main as new baseline` and `Apply to working tree on <branch>`, the
-   default first. *ADR-0003, invariant 3*
+2. The dialog to name the mod, list the changed plugins and the changed tracked files. *ruling*
+3. Two answers, `Commit to main as new baseline` first, as the default, and
+   `Apply to working tree on <branch>`. *ADR-0003, invariant 3*
 4. Esc to change nothing, and the dialog to come back at the next check while the change is still
    there. *Esc changes nothing; decompile-plugin, The trigger*
 5. A write refused while a question is open to name the question and its two answers.

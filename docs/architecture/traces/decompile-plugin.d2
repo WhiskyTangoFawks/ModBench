@@ -28,9 +28,9 @@ indexer.label: Indexer
 the trigger: "the system trigger: which destination" {
   tools -> mo2: bytes, at any time {class: outside}
   mo2 -> watcher: changed paths {class: signal}
-  watcher."settle per mod, then classify: tracked plugins' bytes vs the parked ref · git status of tracked files · meta hash as the tell"
+  watcher."settle per mod, then classify: tracked plugins' bytes vs the parked ref · git status of tracked files"
   watcher -> commands: a tracked mod settled {class: signal}
-  commands -> port: "external change pending: mod, what changed, the default · untracked plugins" {class: push}
+  commands -> port: "external change pending: mod, what changed · untracked plugins" {class: push}
   port -> http: publish {class: push}
   http -> client: stream {class: push}
   client -> plugins: "external change pending · untracked plugins" {class: push}
