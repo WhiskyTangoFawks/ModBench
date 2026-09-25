@@ -20,6 +20,7 @@ import {
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { EditsInFlight } from '../followRecord';
+import { FocusedCells } from '../focusedCells';
 import type { RecordSummary } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
@@ -53,6 +54,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     editInFlight: async (address, write) => { await write(address.formKey); },
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
+    focusCell: vi.fn(),
     ...overrides,
   };
 }
@@ -276,7 +278,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
     const panel = present(tab, 'the tab');
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
 
     expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
   });
@@ -290,7 +292,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     const editedTab = present(edited, 'the edited tab');
     const otherTab = present(other, 'the other tab');
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedTab, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedTab, edits, new FocusedCells(() => {})));
 
     expect(tracker.formKeyOf(editedTab)).toBe('000900:Mod.esp');
     expect(tracker.formKeyOf(otherTab)).toBe('000800:Mod.esp');
@@ -303,10 +305,10 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
     const { tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
     const panel = present(tab, 'the tab');
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
     meditClient.setCommandResult('editRecord', { applied: true });
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
 
     expect(editRecordCalls().map(c => c.args[0])).toEqual(['000800:Mod.esp', '000900:Mod.esp']);
   });
@@ -315,7 +317,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
     const panel = present(tab, 'the tab');
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
 
     expect(tracker.formKeyOf(panel)).toBe('000800:Mod.esp');
   });
@@ -595,5 +597,17 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: REQUEST_ID, formKey: null });
     expect(qp.dispose).toHaveBeenCalled();
+  });
+});
+
+describe('routeRecordPanelMessage — the focused cell', () => {
+  it('hands the panel\'s focused cell to its own tracker, and null as no cell', async () => {
+    const focusCell = vi.fn();
+    const context = { webviewSection: 'stringValue', formKey: '000001:A.esp' };
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context }, makeDeps({ focusCell }));
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null }, makeDeps({ focusCell }));
+
+    expect(focusCell.mock.calls).toEqual([[context], [undefined]]);
   });
 });

@@ -68,3 +68,26 @@ export function copyToClipboard(value: string): void {
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell, which only this
+// panel knows. `context` is the one its right-click would hand the command; `null` is no cell.
+export function focusCell(context: Record<string, unknown> | null): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context });
+}
+
+/** The focused cell's `data-vscode-context`, merged over its ancestors' as VS Code merges them for
+ *  a right-click, the nearest winning. `null` while no cell is focused. */
+export function focusedCellContext(root: ParentNode): Record<string, unknown> | null {
+  const cell = root.querySelector('[data-focused-cell]');
+  if (!cell) return null;
+  const chain: Element[] = [];
+  for (let e: Element | null = cell; e; e = e.parentElement) chain.unshift(e);
+  const merged: Record<string, unknown> = {};
+  for (const e of chain) {
+    const raw = e.getAttribute('data-vscode-context');
+    if (!raw) continue;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null) Object.assign(merged, parsed);
+  }
+  return merged;
+}

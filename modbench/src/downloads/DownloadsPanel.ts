@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
 import { deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload } from '../downloadsCommands/downloads';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
-import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
+import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
+import { selectedFiles, singleSelectedFile } from './keyContext';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -188,25 +189,26 @@ async function includeSelection(
   return outcome;
 }
 
-/** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
- *  either, and batching the navigational actions is "open five browser tabs". VS Code's
- *  `(clickedItem, selectedItems[])` selection argument is unused here. */
+/** Clicked row only, as MO2 batches no Install and five opened tabs help no one. The palette
+ *  hands no row, so open and open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
+  viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
+  const rowOf = (node?: DownloadNode) => (node ?? singleSelectedFile(viewSelection()))?.row;
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
       if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
-      const row = node?.row;
+      const row = rowOf(node);
       if (!row) return;
       await runRowAction('Open File', row.name, reporter, async () => {
         await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.openMeta', async (node?: DownloadNode) => {
-      const row = node?.row;
+      const row = rowOf(node);
       if (!row) return;
       await runRowAction('Open Meta File', row.name, reporter, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
@@ -223,27 +225,26 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 }
 
 /** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
- *  All). `viewSelection` backs the Delete key, which gets no row argument. `instance` is read
- *  fresh per invocation, never captured once. */
+ *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
 export function registerDownloadsMultiRowCommands(
   instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  log: (line: string) => void, viewSelection: () => readonly DownloadNode[],
+  log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
-  const deleteNames = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+  const names = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
     const explicit = selectionNames(clicked, selected);
-    return explicit.length > 0 ? explicit : viewSelection().map((n) => n.row.name);
+    return explicit.length > 0 ? explicit : selectedFiles(viewSelection()).map((n) => n.row.name);
   };
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(instance.value.paths.downloadsDir, deleteNames(clicked, selected), reporter, ask, trash, log)),
+      deleteSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      excludeSelection(instance.value.paths.downloadsDir, selectionNames(clicked, selected), reporter)),
+      excludeSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      includeSelection(instance.value.paths.downloadsDir, selectionNames(clicked, selected), reporter)),
+      includeSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter)),
   ];
 }
 
-// Sorting and hidden-row filtering already happen inside DownloadsProvider's load(), so these
+// Sorting and excluded-row filtering already happen inside DownloadsProvider's load(), so these
 // take the provider rather than the instance root as the per-archive commands above do.
 
 // Filetime descending, last, is the default DownloadsProvider already starts at, so leaving it
@@ -300,16 +301,16 @@ export function registerDownloadsSortCommand(
 
 /** Two commands over one context key, as the Mods tree's sort-direction toggle does: state
  *  lives on the provider, the handler owns the key package.json's `when` clauses gate on. */
-export function registerDownloadsHiddenToggleCommands(
-  downloadsProvider: Pick<DownloadsProvider, 'setShowHidden'>,
+export function registerDownloadsExcludedToggleCommands(
+  downloadsProvider: Pick<DownloadsProvider, 'setShowExcluded'>,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.showExcluded', () => {
-      downloadsProvider.setShowHidden(true);
+      downloadsProvider.setShowExcluded(true);
       void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', true);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.hideExcluded', () => {
-      downloadsProvider.setShowHidden(false);
+      downloadsProvider.setShowExcluded(false);
       void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', false);
     }),
   ];

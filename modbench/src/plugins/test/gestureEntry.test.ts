@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 const { registerCommand } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -8,12 +8,16 @@ const { registerCommand } = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   commands: { registerCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  Uri: { from: uriFrom },
 }));
 
 import {
-  PLUGINS_KEY_ARGS, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument, type GestureEntry,
+  PLUGINS_KEY_ARGS, compilableSelected, pluginsKeyContext, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument,
+  type GestureEntry,
 } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { RecordNode, RecordTypeNode } from '../PluginTreeProvider';
+import { recordSummaryFixture } from '../../client/test/fixtures';
 
 const pluginRow = (name: string, origin?: string) => new PluginNode({ name, enabled: true }, origin);
 const lockedRow = (name: string) => new ImplicitMasterNode(name);
@@ -157,5 +161,54 @@ describe('a singular Plugins gesture\'s Argument', () => {
 
   it('is nothing with no right-clicked or focused row', () => {
     expect(singularArgument({ selection: [] }, 'plugin')).toBeUndefined();
+  });
+});
+
+// commands.md, Where: a palette entry is handed no row, so its `when` reads what the Plugins
+// selection holds, and the gesture is absent where it would have nothing to act on.
+describe('what the Plugins palette entries read off the selection', () => {
+  const alpha = pluginRow('Alpha.esp', 'ModA');
+  const beta = pluginRow('Beta.esp', 'ModB');
+  const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA');
+  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
+  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true);
+
+  it('reveal sees exactly one selected plugin', () => {
+    expect(pluginsKeyContext([alpha]).singlePlugin).toBe(true);
+    expect(pluginsKeyContext([alpha, beta]).singlePlugin).toBe(false);
+    expect(pluginsKeyContext([lockedRow('Fallout4.esm')]).singlePlugin).toBe(false);
+  });
+
+  it('track sees a selection of untracked plugins in mods, every one', () => {
+    const untracked = pluginRow('Gamma.esp', 'ModC');
+    untracked.contextValue = 'plugin untrackedInMod';
+
+    const alsoUntracked = pluginRow('Zeta.esp', 'ModZ');
+    alsoUntracked.contextValue = 'plugin untrackedInMod';
+    expect(pluginsKeyContext([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
+    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ allUntrackedInMod: false });
+    expect(pluginsKeyContext([])).toMatchObject({ allUntrackedInMod: false });
+  });
+
+  it('compile takes exactly one selected compilable plugin', () => {
+    const compilable = pluginRow('Eps.esp', 'ModE');
+    compilable.contextValue = 'plugin compilable';
+
+    expect(compilableSelected([compilable])).toBe(compilable);
+    expect(compilableSelected([alpha])).toBeUndefined();
+    expect(compilableSelected([compilable, alpha])).toBeUndefined();
+  });
+
+  it('create sees exactly one selected record type', () => {
+    expect(pluginsKeyContext([weapons]).singleRecordType).toBe(true);
+    expect(pluginsKeyContext([weapons, alpha]).singleRecordType).toBe(false);
+  });
+
+  // No item is sent that the gesture would refuse.
+  it('delete sees a selection of records their plugins all let it remove', () => {
+    expect(pluginsKeyContext([own]).allDeletableRecords).toBe(true);
+    expect(pluginsKeyContext([own, immutable]).allDeletableRecords).toBe(false);
+    expect(pluginsKeyContext([own, alpha]).allDeletableRecords).toBe(false);
+    expect(pluginsKeyContext([]).allDeletableRecords).toBe(false);
   });
 });

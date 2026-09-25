@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleUnanswered } from '../externalChangeGestures';
+import { askOne, dispatchOne } from '../externalChangeGestures';
+import type { ExternalChangeCoordinatorDeps } from '../externalChangeCoordinator';
 import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
 import type { MEditClient, UnansweredExternalChange } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -33,27 +34,21 @@ function makeDispatchDeps(client: AnswerClient, showDialogChoice: string | undef
   };
 }
 
-describe('handleUnanswered', () => {
+// One mod's question asked, then its answer done.
+async function answerOne(deps: ExternalChangeCoordinatorDeps, change: UnansweredExternalChange): Promise<void> {
+  await dispatchOne(deps, change.origin, await askOne(deps, change));
+}
+
+describe('asking one mod\'s question and doing its answer', () => {
   it('a landed Keep refreshes the tree and the matching-plugin set', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
-  });
-
-  // A safety net: two notifications sharing one origin must still dispatch exactly one call.
-  it('two notifications sharing one origin dispatch one call, not two', async () => {
-    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
-    const deps = makeDispatchDeps(client, APPLY_BUTTON);
-
-    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp'] }), unanswered({ plugins: ['B.esp'] })]);
-
-    expect(client.keepAsMyEdit).toHaveBeenCalledTimes(1);
-    expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');
   });
 
   // The rival: a refused Keep (a same-record collision) still refreshing would show the user a
@@ -62,7 +57,7 @@ describe('handleUnanswered', () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'collision' }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
@@ -71,7 +66,7 @@ describe('handleUnanswered', () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'Could not keep "ModA" as your own edit — boom' }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — boom', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -82,7 +77,7 @@ describe('handleUnanswered', () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'x' }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -92,7 +87,7 @@ describe('handleUnanswered', () => {
     const client = { absorbUpstreamUpdate: vi.fn().mockResolvedValue({ landed: [first], refused: [], trackedFilesRefusal: null }) };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.reporter.reports).toEqual([]);
@@ -105,7 +100,7 @@ describe('handleUnanswered', () => {
     };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not absorb the upstream update for "ModA" — could not be parsed', detail: undefined }]);
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -121,7 +116,7 @@ describe('handleUnanswered', () => {
     };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
-    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+    await answerOne(deps, unanswered({ plugins: ['A.esp', 'B.esp'] }));
 
     expect(deps.reporter.reports).toEqual([{
       severity: 'error',
@@ -139,7 +134,7 @@ describe('handleUnanswered', () => {
     };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
-    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+    await answerOne(deps, unanswered({ plugins: ['A.esp', 'B.esp'] }));
 
     expect(deps.reporter.reports).toEqual([{
       severity: 'error',
@@ -162,7 +157,7 @@ describe('handleUnanswered', () => {
     };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
-    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+    await answerOne(deps, unanswered({ plugins: ['A.esp', 'B.esp'] }));
 
     expect(deps.reporter.reports.map((r) => r.message)).toEqual(['Could not absorb 2 of 2 plugins of the upstream update for "ModA".']);
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -172,7 +167,7 @@ describe('handleUnanswered', () => {
     const client = { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn() };
     const deps = makeDispatchDeps(client, undefined);
 
-    await handleUnanswered(deps, [unanswered()]);
+    await answerOne(deps, unanswered());
 
     expect(client.keepAsMyEdit).not.toHaveBeenCalled();
     expect(client.absorbUpstreamUpdate).not.toHaveBeenCalled();

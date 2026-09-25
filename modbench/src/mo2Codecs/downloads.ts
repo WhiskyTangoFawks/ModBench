@@ -1,6 +1,6 @@
 // `.meta` is a QSettings::IniFormat file MO2 writes beside each download. Its
-// `removed=true` flag means HIDDEN and is a separate axis from Status, which
-// `uninstalled=true` carries.
+// `removed=true` flag is MO2's hidden, which Modbench calls excluded; it is a separate axis from
+// Status, which `uninstalled=true` carries.
 
 import { lineRanges } from './lineScan';
 
@@ -27,7 +27,7 @@ export interface DownloadRow {
   mtimeMs: number;
   hasMeta: boolean;
   /** `.meta` `removed=true` — a separate axis from Status. */
-  hidden: boolean;
+  excluded: boolean;
   /** Nexus mod id; MO2 writes `0` for none, which reads as absent here. */
   modID?: string;
   /** Nexus file id; MO2 writes `0` for none, which reads as absent here — the
@@ -44,7 +44,7 @@ export function parseDownloadMeta(
   text: string,
 ): {
   status: DownloadStatus;
-  hidden: boolean;
+  excluded: boolean;
   modID?: string;
   fileID?: string;
   name?: string;
@@ -64,11 +64,11 @@ export function parseDownloadMeta(
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
   const fileID = values.get('fileID');
-  // `removed` is HIDDEN — a separate key/axis from the `uninstalled` Status above.
-  const hidden = values.get('removed') === 'true';
+  // `removed` is MO2's hidden — a separate key/axis from the `uninstalled` Status above.
+  const excluded = values.get('removed') === 'true';
   return {
     status,
-    hidden,
+    excluded,
     modID: modID && modID !== '0' ? modID : undefined,
     fileID: fileID && fileID !== '0' ? fileID : undefined,
     name: values.get('name'),
@@ -135,7 +135,7 @@ export function modsByInstallationFile(
   return byFile;
 }
 
-/** Hidden rows are built and flagged, never filtered — filtering is a view concern. Sidecars do
+/** Excluded rows are built and flagged, never filtered — filtering is a view concern. Sidecars do
  *  not become rows of their own. `installedInto` is what makes a row Installed; unclaimed, the
  *  sidecar's own flag decides Downloaded vs. Uninstalled instead. */
 export function buildDownloadRows(
@@ -144,7 +144,7 @@ export function buildDownloadRows(
   const rows = entries
     .filter((e) => !e.name.endsWith(DOWNLOAD_SIDECAR_SUFFIX))
     .map((e) => {
-      const { status: sidecarStatus, hidden, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
+      const { status: sidecarStatus, excluded, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',
       );
       // Installed is the mods' own answer, never the sidecar's: a claimed install outlives the
@@ -163,7 +163,7 @@ export function buildDownloadRows(
         size: e.size,
         mtimeMs: e.mtimeMs,
         hasMeta: e.metaText !== undefined,
-        hidden,
+        excluded,
         modID,
         fileID,
         version,

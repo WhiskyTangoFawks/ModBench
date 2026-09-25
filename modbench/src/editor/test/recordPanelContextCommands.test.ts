@@ -41,6 +41,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     log: vi.fn(),
     // The right-clicked panel's gate, sending each write where it was addressed.
     editGateOf: () => async (address, write) => { await write(address.formKey); },
+    focusedCell: () => undefined,
     ...overrides,
   };
   return { deps, meditClient, onRecordEdited, report };
@@ -270,5 +271,41 @@ describe('the extended editor opens and saves from the host', () => {
     await openedWith().deps.onCommit('second save');
 
     expect(editRecordCalls(meditClient).map(c => envelopeValue(c.args))).toEqual(['first save', 'second save']);
+  });
+});
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
+// in focus, which the palette never hands it.
+describe('a field gesture from the palette', () => {
+  it('acts on the focused cell of the record tab in focus', async () => {
+    const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }];
+    const { deps, meditClient } = makeDeps({ focusedCell: () => elementContext(path) });
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
+
+    expect(editRecordCalls(meditClient).map(c => c.args[3])).toEqual([{ op: 'remove', path }]);
+  });
+
+  it('does nothing with no focused cell', async () => {
+    const { deps, meditClient } = makeDeps();
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
+
+    expect(editRecordCalls(meditClient)).toEqual([]);
+  });
+
+  // A string element of an array carries both sections, as its right-click does.
+  it('acts on a cell whose context carries its section beside another', async () => {
+    const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Names' }, { kind: 'index', index: 0 }];
+    const { deps, meditClient } = makeDeps({
+      focusedCell: () => ({ ...elementContext(path), webviewSection: 'arrayElement stringValue' }),
+    });
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
+
+    expect(editRecordCalls(meditClient).map(c => c.args[3])).toEqual([{ op: 'remove', path }]);
   });
 });

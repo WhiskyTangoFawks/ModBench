@@ -11,7 +11,7 @@ export const REPAIR_AT_MAIN_BUTTON = 'Compile at main';
 export function messageFor(offer: CrashRepairOffer): { message: string; detail: string } {
   const message = `${offer.plugin} (in ${offer.origin}) needs its binary rebuilt.`;
   const what = offer.reason === 'InterruptedCompile'
-    ? 'A previous Save & Compile looks like it was interrupted before it finished — the binary ' +
+    ? 'A previous compile looks like it was interrupted before it finished — the binary ' +
       'on disk does not match what Modbench last wrote.'
     : 'The compiled binary is missing or could not be read.';
   const detail = `${what} Compile now from your working tree, or restore the pristine version at ` +
@@ -20,7 +20,7 @@ export function messageFor(offer: CrashRepairOffer): { message: string; detail: 
 }
 
 /** Called only when the user accepted — `atRef` is `undefined` for "Compile from Working Tree"
- *  (the normal Save & Compile source) or `'main'` for "Compile at main", the same two values
+ *  (the normal compile source) or `'main'` for "Compile at main", the same two values
  *  `LoadOrderController.compile`'s own `atRef` parameter already takes. */
 export type AcceptCrashRepair = (offer: CrashRepairOffer, atRef: string | undefined) => Promise<void>;
 

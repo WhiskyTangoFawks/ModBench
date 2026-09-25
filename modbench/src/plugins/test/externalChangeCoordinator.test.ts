@@ -6,6 +6,7 @@ import {
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../ports/present';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
@@ -160,5 +161,107 @@ describe('subscribeQuestionOpen', () => {
     await flush();
 
     expect(deps.showDialog).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-0003, invariant 3: one dialog asks. A settle can split one release into two questions, and
+// a modal cannot be updated, so a dialog is never shown twice at once.
+describe('subscribeQuestionOpen — one dialog per mod', () => {
+  // Each dialog stays open until the test answers it.
+  function heldDialogs() {
+    const open: { detail: string; answer: (choice: string | undefined) => void }[] = [];
+    const showDialog = vi.fn((_message: string, options: { detail?: string }) =>
+      new Promise<string | undefined>((resolve) => { open.push({ detail: options.detail ?? '', answer: resolve }); }));
+    const answerOpen = async (index: number, choice: string | undefined) => {
+      present(open[index], `dialog ${index}`).answer(choice);
+      await flush();
+    };
+    return { open, showDialog, answerOpen };
+  }
+
+  // Either answer covers the whole mod, so a question the backend published before the answer
+  // landed is answered by it; mEdit publishes again at the next settle that still finds a change.
+  it('carries out the answer over a mod\'s question that arrived mid-dialog, and asks no second dialog', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds'] }));
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds', 'b.dds'] }));
+    await flush();
+    await answerOpen(0, APPLY_BUTTON);
+
+    expect(open).toHaveLength(1);
+    expect(client.calls.filter((c) => c.method === 'keepAsMyEdit')).toHaveLength(1);
+  });
+
+  it('asks nothing of a question that arrived while its mod\'s answer was being carried out, and asks the next one', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    let land: () => void = () => undefined;
+    const keepAsMyEdit = vi.fn(() => new Promise<{ succeeded: true; refusalReason: null }>((resolve) => {
+      land = () => { resolve({ succeeded: true, refusalReason: null }); };
+    }));
+    const { open, showDialog, answerOpen } = heldDialogs();
+    const heldClient = {
+      keepAsMyEdit, absorbUpstreamUpdate: vi.fn(),
+    };
+    subscribeQuestionOpen({ ...makeDeps(client, { showDialog }), client: heldClient }, client);
+
+    client.emit(pendingEvent());
+    await flush();
+    await answerOpen(0, APPLY_BUTTON);
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['b.dds'] }));
+    land();
+    await flush();
+    expect(open).toHaveLength(1);
+
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['c.dds'] }));
+    await flush();
+    expect(open).toHaveLength(2);
+  });
+
+  it('goes on to the next mod\'s question when one mod\'s dialog throws, and logs the mod that threw', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const log = vi.fn();
+    const shownFor: string[] = [];
+    const showDialog = vi.fn((message: string) => {
+      shownFor.push(message);
+      return message === 'ModA' ? Promise.reject(new Error('modal failed')) : Promise.resolve(undefined);
+    });
+    subscribeQuestionOpen(makeDeps(client, { showDialog, log }), client);
+
+    client.emit(pendingEvent({ origin: 'ModA' }));
+    client.emit(pendingEvent({ origin: 'ModB' }));
+    await flush();
+
+    expect(shownFor).toEqual(['ModA', 'ModB']);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('handling ModA failed'));
+  });
+
+  it('asks nothing more of a mod whose open dialog the user dismissed', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds'] }));
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds', 'b.dds'] }));
+    await flush();
+    await answerOpen(0, undefined);
+
+    expect(open).toHaveLength(1);
+  });
+
+  it('shows another mod\'s question only once the open dialog closes', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ origin: 'ModA' }));
+    client.emit(pendingEvent({ origin: 'ModB' }));
+    await flush();
+    expect(open).toHaveLength(1);
+
+    await answerOpen(0, undefined);
+    expect(open).toHaveLength(2);
   });
 });

@@ -59,8 +59,12 @@ function plugin(
 
 // Only `.plugins` is ever read for rows — the rest of InstanceValue is Mods-tree/Downloads
 // territory.
+// Every origin these fixtures name, but Data and Overwrite, is one of the instance's mods.
 function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue {
-  return instanceValueFixture({ plugins });
+  const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data' && origin !== 'overwrite');
+  return instanceValueFixture({
+    plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
+  });
 }
 
 // A hang must fail on an explicit assertion, not the test runner's own timeout.
@@ -1724,6 +1728,68 @@ function expectString(value: unknown): string {
   return value;
 }
 
+// plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and compile on a
+// tracked, editable plugin, each offered only there.
+describe('PluginsTreeProvider — the row states where track and compile apply', () => {
+  const flags = async (h: Harness): Promise<string[]> => String((await rowItem(h)).contextValue).split(' ');
+
+  it('offers track on an untracked plugin in a mod', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+
+    expect(await flags(h)).toEqual(['plugin', 'untrackedInMod']);
+  });
+
+  it('offers compile on a tracked, editable plugin in a mod, and not track', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+
+    expect(await flags(h)).toEqual(['plugin', 'compilable']);
+  });
+
+  // mEdit's `isImmutable`: read-only for editing, as an overridden or unlisted plugin is.
+  it('offers no compile on a tracked plugin that is read-only for editing', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
+
+    expect(await flags(h)).toEqual(['plugin']);
+  });
+
+  it('offers neither on a plugin in no mod: Data or Overwrite', async () => {
+    for (const origin of ['Data', 'overwrite']) {
+      const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin })]);
+      await reconcile(h, [held('A.esp', { origin })]);
+
+      expect(await flags(h)).toEqual(['plugin']);
+    }
+  });
+
+  // Generalize across mod managers: which origins are mods is the instance value's answer.
+  it('offers neither on a plugin whose origin the instance value names no mod folder for', async () => {
+    const h = makeTree([A_ROW()], { instance: new FakeInstance(instanceValueFixture({ plugins: [A_ROW()] })) });
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+
+    expect(await flags(h)).toEqual(['plugin']);
+  });
+
+  it('says whether any plugin compiles, which compile\'s palette entry reads', async () => {
+    const h = makeTree([A_ROW(), B_ROW()]);
+    expect(h.tree.anyCompilable()).toBe(false);
+
+    await reconcile(h, [held('A.esp'), held('B.esp', { isTracked: true, isImmutable: true })]);
+    expect(h.tree.anyCompilable()).toBe(false);
+
+    await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp')]);
+    expect(h.tree.anyCompilable()).toBe(true);
+  });
+
+  it('offers neither before mEdit says whether the plugin is tracked', async () => {
+    const h = makeTree([A_ROW()]);
+
+    expect(await flags(h)).toEqual(['plugin']);
+  });
+});
+
 // ADR-0017: read-only-for-editing is never an icon; it is the absent actions and this note.
 // plugins.md, A row: the tooltip always carries the file name and the mod, whatever else it says.
 describe('PluginsTreeProvider — read-only tooltip', () => {
@@ -2142,7 +2208,7 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
 });
 
 // A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0013),
-// so `contextValue: 'plugin'` is the only value a healthy row carries.
+// so a healthy row's contextValue says only its kind and where track and compile apply.
 describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
   it('renders every plugin row plainly, whatever the load order state', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
@@ -2151,7 +2217,7 @@ describe('PluginsTreeProvider applies no decoration of its own to a healthy plug
     const names = ['A.esp', 'B.esp'];
     for (const index of [0, 1]) {
       const item = await rowItem(h, index);
-      expect(item.contextValue).toBe('plugin');
+      expect(item.contextValue).toBe('plugin untrackedInMod');
       expect(item.description).toBeUndefined();
       expect(item.tooltip).toBe(`${names[index]}\nSomeMod`);
     }

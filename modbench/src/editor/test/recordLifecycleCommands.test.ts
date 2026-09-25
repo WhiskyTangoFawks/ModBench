@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
@@ -75,14 +75,45 @@ describe('recordTypeIdentity / recordIdentity — structural, not node-typed', (
 });
 
 describe('registerRecordLifecycleCommands', () => {
+  let viewSelection: readonly unknown[] = [];
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const treeSync = fakeTreeSync();
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordLifecycleCommands(client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
+    registerRecordLifecycleCommands(
+      client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins, () => viewSelection);
     return { treeSync, refreshMatchingPlugins, reporter, ask };
   }
+
+  // commands.md, Where: the palette hands the gesture no row, so it takes the Plugins selection.
+  describe('from the palette', () => {
+    afterEach(() => { viewSelection = []; });
+
+    it('create adds a record of the one selected record type', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('createRecord', { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
+      viewSelection = [RECORD_TYPE_NODE];
+      invoke(client);
+
+      await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")();
+
+      expect(client.calls.filter(c => c.method === 'createRecord').map(c => c.args[2])).toEqual(['npc_']);
+    });
+
+    it('delete removes the selected records, asking once', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [RECORD_IDENTITY], refused: [] });
+      viewSelection = [RECORD_NODE];
+      invoke(client, 'Delete');
+
+      await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")();
+
+      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
+        [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
+      ]);
+    });
+  });
 
   describe('modbench.record.create — a tree node and a plain identity record the same call', () => {
     it.each([['a RecordTypeNode row', RECORD_TYPE_NODE], ['a plain identity literal', RECORD_TYPE_IDENTITY]])(

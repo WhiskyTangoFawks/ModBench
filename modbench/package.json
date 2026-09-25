@@ -398,13 +398,12 @@
       },
       {
         "command": "modbench.saveAndCompile",
-        "title": "Save & Compile",
-        "icon": "$(check)",
+        "title": "Compile Plugin",
         "category": "Modbench"
       },
       {
         "command": "modbench.pluginListTree.compileAtMain",
-        "title": "Save & Compile from main…",
+        "title": "Compile Plugin from main…",
         "category": "Modbench"
       },
       {
@@ -436,23 +435,23 @@
         },
         {
           "command": "modbench.record.addElement",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
         },
         {
           "command": "modbench.record.removeElement",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
         },
         {
           "command": "modbench.record.moveElementUp",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
         },
         {
           "command": "modbench.record.moveElementDown",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
         },
         {
           "command": "modbench.record.openFieldValue",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
         },
         {
           "command": "modbench.downloads.install",
@@ -460,31 +459,31 @@
         },
         {
           "command": "modbench.mod.viewOnNexus",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.nexusRowIn == modbench.modList || focusedView == modbench.downloads && modbench.folder == instance && modbench.mod.nexusRowIn == modbench.downloads"
         },
         {
           "command": "modbench.downloadedFile.open",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.singleFile"
         },
         {
           "command": "modbench.downloadedFile.openMeta",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.singleFileWithMeta"
         },
         {
           "command": "modbench.downloadedFile.delete",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsFile"
         },
         {
           "command": "modbench.downloadedFile.exclude",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsIncluded"
         },
         {
           "command": "modbench.downloadedFile.include",
-          "when": "false"
+          "when": "focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.holdsExcluded"
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "false"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleFolder"
         },
         {
           "command": "modbench.mod.enable",
@@ -516,7 +515,7 @@
         },
         {
           "command": "modbench.plugin.reveal",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singlePlugin"
         },
         {
           "command": "modbench.plugin.enable",
@@ -528,19 +527,23 @@
         },
         {
           "command": "modbench.plugin.track",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
           "when": "false"
         },
         {
+          "command": "modbench.saveAndCompile",
+          "when": "modbench.folder == instance && modbench.plugin.anyCompilable"
+        },
+        {
           "command": "modbench.record.create",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRecordType"
         },
         {
           "command": "modbench.record.delete",
-          "when": "false"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allDeletableRecords"
         },
         {
           "command": "modbench.record.copyAsOverride",
@@ -731,13 +734,6 @@
           "group": "1_sort"
         }
       ],
-      "editor/title": [
-        {
-          "command": "modbench.saveAndCompile",
-          "when": "activeWebviewPanelId == 'modbench'",
-          "group": "navigation"
-        }
-      ],
       "view/item/context": [
         {
           "command": "modbench.profile.switch",
@@ -861,12 +857,12 @@
         },
         {
           "command": "modbench.downloadedFile.exclude",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bhidden\\b/)",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bexcluded\\b/)",
           "group": "downloadActions@5"
         },
         {
           "command": "modbench.downloadedFile.include",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhidden\\b/",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bexcluded\\b/",
           "group": "downloadActions@5"
         },
         {
@@ -876,22 +872,22 @@
         },
         {
           "command": "modbench.plugin.reveal",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
           "group": "pluginActions@1"
         },
         {
           "command": "modbench.plugin.track",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\buntrackedInMod\\b/",
           "group": "pluginActions@2"
         },
         {
           "command": "modbench.saveAndCompile",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
           "group": "pluginActions@3"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
           "group": "pluginActions@4"
         },
         {
@@ -940,6 +936,11 @@
           "command": "modbench.record.moveElementDown",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
           "group": "modbench@4"
+        },
+        {
+          "command": "modbench.saveAndCompile",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
+          "group": "modbench@10"
         },
         {
           "command": "modbench.record.copyAsOverride",

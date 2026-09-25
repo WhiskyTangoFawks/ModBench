@@ -2,14 +2,16 @@
 // composition root's, so they sit beside it rather than in the views they render.
 
 import * as vscode from 'vscode';
-import { ModListProvider, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
+import type { NexusModRow } from './mods/modManagementCommands';
 import { errorMessage } from './ports/errorMessage';
 import {
-  registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands,
+  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
-import { DownloadNode, DownloadsProvider } from './downloads/DownloadsProvider';
+import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
+import { downloadsKeyContext } from './downloads/keyContext';
 import type { InstanceView } from './instanceLoader/instance';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
@@ -83,17 +85,43 @@ async function expandFilteredSeparators(
   }
 }
 
+type SelectableView = Pick<vscode.TreeView<unknown>, 'selection' | 'onDidChangeSelection'>;
+
+/** No stable API names the focused view, so the palette's view on Nexus opens the row selected in
+ *  the view last selected in, and `modbench.mod.nexusRowIn` names that view while it has one. */
+export function nexusRowInLastSelectedView(
+  own: Own, views: readonly { id: string; view: SelectableView }[],
+): () => NexusModRow | undefined {
+  let last: SelectableView | undefined;
+  const nexusRow = (): NexusModRow | undefined => {
+    const [only, ...rest] = last?.selection ?? [];
+    const row = only instanceof ModNode || only instanceof DownloadNode ? only : undefined;
+    return rest.length === 0 && row?.nexusModId !== undefined ? row : undefined;
+  };
+  for (const { id, view } of views) {
+    own(view.onDidChangeSelection(() => {
+      last = view;
+      void vscode.commands.executeCommand('setContext', 'modbench.mod.nexusRowIn', nexusRow() && id);
+    }));
+  }
+  return nexusRow;
+}
+
+export interface DownloadsViewDeps {
+  own: Own;
+  instanceRoot: string;
+  instance: InstanceView;
+  reporter: Reporter;
+  ask: AskQuestion;
+  trash: MoveToTrash;
+  install: DownloadInstallDeps;
+}
+
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
-  own: Own,
-  instanceRoot: string,
-  instance: InstanceView,
-  reporter: Reporter,
-  ask: AskQuestion,
-  trash: MoveToTrash,
-  install: DownloadInstallDeps,
-): DownloadsProvider {
+  { own, instanceRoot, instance, reporter, ask, trash, install }: DownloadsViewDeps,
+): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode> } {
   const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -117,14 +145,19 @@ export function registerDownloadsView(
     void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.allExcluded', downloadsProvider.allExcluded());
   updateAllExcludedContext();
   own(downloadsProvider.onDidChangeTreeData(updateAllExcludedContext));
+  const showKeyContext = () => {
+    for (const [name, value] of Object.entries(downloadsKeyContext(downloadsView.selection))) {
+      void vscode.commands.executeCommand('setContext', `modbench.downloadedFile.${name}`, value);
+    }
+  };
+  showKeyContext();
+  own(downloadsView.onDidChangeSelection(showKeyContext));
+  own(downloadsProvider.onDidChangeTreeData(showKeyContext));
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
-    ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
-    ...registerDownloadsMultiRowCommands(
-      instance, reporter, ask, trash, install.log,
-      () => downloadsView.selection.filter((row): row is DownloadNode => row.kind === 'download'),
-    ),
+    ...registerDownloadsExcludedToggleCommands(downloadsProvider),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install, () => downloadsView.selection),
+    ...registerDownloadsMultiRowCommands(instance, reporter, ask, trash, install.log, () => downloadsView.selection),
   ]) own(disposable);
-  return downloadsProvider;
+  return { downloadsProvider, downloadsView };
 }

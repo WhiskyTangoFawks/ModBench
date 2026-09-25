@@ -29,14 +29,14 @@ export function sortDownloadRows<T extends DownloadRow>(
   });
 }
 
-/** `showHidden` keeps the flags intact, so the dimming decoration can still tell hidden rows
+/** `showExcluded` keeps the flags intact, so the dimming decoration can still tell excluded rows
  *  apart. */
-export function filterHiddenRows<T extends DownloadRow>(rows: readonly T[], showHidden: boolean): T[] {
-  return showHidden ? [...rows] : rows.filter((r) => !r.hidden);
+export function filterExcludedRows<T extends DownloadRow>(rows: readonly T[], showExcluded: boolean): T[] {
+  return showExcluded ? [...rows] : rows.filter((r) => !r.excluded);
 }
 
 /** Only the files install can take are rows, by install's own extension list. Unconditional,
- *  unlike `filterHiddenRows`: no toggle brings a non-archive back. */
+ *  unlike `filterExcludedRows`: no toggle brings a non-archive back. */
 export function filterArchiveRows<T extends DownloadRow>(rows: readonly T[]): T[] {
   return rows.filter((r) => isArchiveName(r.name));
 }
@@ -48,7 +48,7 @@ export function downloadContextValue(row: DownloadRow): string {
   const flags = [
     row.modID !== undefined && 'hasModID',
     row.hasMeta && 'hasMeta',
-    row.hidden && 'hidden',
+    row.excluded && 'excluded',
   ].filter((f): f is string => f !== false);
   return ['download', ...flags].join(' ');
 }

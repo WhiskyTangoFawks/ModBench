@@ -324,11 +324,11 @@ describe('publishCompileDiagnostics', () => {
 // ── registerSaveAndCompileCommand ─────────────────────────────────────────
 
 describe('registerSaveAndCompileCommand', () => {
-  function invokeSaveAndCompile(client: InMemoryMEditClient) {
+  function invokeSaveAndCompile(client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = []) {
     const reporter = recordingReporter();
     registerSaveAndCompileCommand(
-      client, { current: () => undefined }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
-      new FakeDiagnosticCollection(), () => undefined);
+      client, new FakeLogOutputChannel(), reporter, scriptedDialog(),
+      new FakeDiagnosticCollection(), () => undefined, () => viewSelection);
     return {
       handler: present(handlers.get('modbench.saveAndCompile'), 'the save-and-compile command registerSaveAndCompileCommand registers'),
       reporter,
@@ -360,6 +360,69 @@ describe('registerSaveAndCompileCommand', () => {
       { severity: 'error', message: '"Orphan.esp" has no mod folder to compile into.', detail: undefined },
     ]);
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
+  // plugins.md, Compile, story 5: from the palette, a pick. An extension cannot tell whether the
+  // Plugins view has focus, so the selection is never compiled unasked; a selected compilable
+  // plugin leads the pick.
+  it('asks from the palette, leading the pick with the one selected compilable plugin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Other.esp', origin: 'ModB', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const selected = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
+    selected.contextValue = 'plugin compilable';
+    const { handler } = invokeSaveAndCompile(client, [selected]);
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [{ label: 'MyPatch.esp', description: 'ModA' }, { label: 'Other.esp', description: 'ModB' }],
+      { placeHolder: 'Compile which plugin?' });
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
+  it('asks, from the palette with no compilable plugin selected, which of the tracked, editable plugins to compile', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Editable.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'Untracked.esp', origin: 'ModB', isTracked: false, isImmutable: false }),
+      pluginMetadataFixture({ name: 'ReadOnly.esp', origin: 'ModC', isTracked: true, isImmutable: true }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const untracked = pluginNode('Untracked.esp');
+    untracked.contextValue = 'plugin untrackedInMod';
+    const { handler } = invokeSaveAndCompile(client, [untracked]);
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith([{ label: 'Editable.esp', description: 'ModA' }], { placeHolder: 'Compile which plugin?' });
+  });
+
+  // editor.md, Menus and keys: compile on a column header, whose context names the column's plugin.
+  it('compiles the plugin a record tab\'s column header names, at its own origin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', compileResultFixture());
+    const { handler } = invokeSaveAndCompile(client, [pluginNode('Selected.esp')]);
+
+    await handler({
+      webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Other.esp', origin: 'ModB',
+      compilable: true, preventDefaultContextMenuItems: true,
+    });
+
+    expect(client.calls.filter((c) => c.method === 'compile').map((c) => c.args.slice(0, 2))).toEqual([['Other.esp', 'ModB']]);
+  });
+
+  it('asks which plugin to compile in the catalog\'s own verb, when no row is in hand', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    showQuickPick.mockResolvedValue(undefined);
+    const { handler } = invokeSaveAndCompile(client);
+
+    await handler(undefined);
+
+    expect(showQuickPick).toHaveBeenCalledWith(expect.anything(), { placeHolder: 'Compile which plugin?' });
   });
 
   it('reports an unresolvable compile target at error and compiles nothing', async () => {

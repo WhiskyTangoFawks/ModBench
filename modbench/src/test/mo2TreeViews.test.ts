@@ -12,7 +12,7 @@ import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
 } from './nameFilterViewHarness';
 
-// A mod or a download landing on disk is a row change with no keystroke; Show hidden changes
+// A mod or a download landing on disk is a row change with no keystroke; Show excluded changes
 // rows with no new Instance value either. Real Instance and provider over the corpus fixture.
 
 // `../mo2TreeViews` reaches `vscode` before this file's own top-level code runs, so the state
@@ -76,7 +76,9 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, registerDownloadsView } from '../mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps } from '../mo2TreeViews';
+import { DownloadNode } from '../downloads/DownloadsProvider';
+import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
@@ -85,6 +87,12 @@ import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirector
 import { syncMessageDouble } from './syncMessageDouble';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
+
+const downloadsViewDeps = (instanceRoot: string, instance: Instance): DownloadsViewDeps => ({
+  own, instanceRoot, instance, reporter: recordingReporter(),
+  ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
+  install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ } },
+});
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
@@ -319,9 +327,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
     await command('modbench.downloadedFile.filter')();
@@ -343,29 +349,27 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 });
 
 describe('the Downloads filter follows a toggle with no new instance value', () => {
-  it('recomputes the no-match message off Show hidden, in both directions', async () => {
+  it('recomputes the no-match message off Show excluded, in both directions', async () => {
     const root = await cloneCorpusFixture();
     const archivePath = join(root, 'downloads', 'zzznomatch.7z');
     await writeFile(archivePath, '');
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
     await command('modbench.downloadedFile.filter')();
     currentBox().type('zzznomatch');
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the hidden download excluded');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the excluded download left out');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
     await command('modbench.downloadedFile.showExcluded')();
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the hidden download counts');
+    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the excluded download counts');
     expect(downloadsView.message).toBeUndefined();
 
     await command('modbench.downloadedFile.hideExcluded')();
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once hidden rows are excluded again');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once excluded rows are left out again');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
   });
 });
@@ -382,9 +386,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
 
     await vi.waitFor(() => expect(contextValue()).toBe(true));
 
@@ -399,9 +401,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
 
     await vi.waitFor(() => expect(h.trees.get('modbench.downloads')).toBeDefined());
     expect(contextValue()).not.toBe(true);
@@ -415,9 +415,7 @@ describe('the Downloads decoration provider follows a rows change', () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
 
-    registerDownloadsView(own, root, instance, recordingReporter(), () => Promise.resolve(undefined), () => Promise.resolve(), {
-      nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ },
-    });
+    registerDownloadsView(downloadsViewDeps(root, instance));
     const [provider] = h.decorationProviders;
     const fired = vi.fn();
     present(provider, 'the registered decoration provider').onDidChangeFileDecorations?.(fired);
@@ -426,5 +424,81 @@ describe('the Downloads decoration provider follows a rows change', () => {
     await instance.refresh();
 
     await vi.waitFor(() => expect(fired).toHaveBeenCalled());
+  });
+});
+
+// commands.md, view on Nexus: the palette hands the command no row, so the Downloads view says
+// whether its selection is one the gesture takes.
+describe('the Downloads view tells its palette entries what the selection holds', () => {
+  const KEYS = ['singleFile', 'singleFileWithMeta', 'holdsFile', 'holdsIncluded', 'holdsExcluded']
+    .map((name) => `modbench.downloadedFile.${name}`);
+  const keys = () => Object.fromEntries(KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
+  const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
+    view.selection = rows;
+    for (const listener of h.selectionListeners) listener({ selection: rows });
+  };
+
+  it('sets each key off the selection as it changes', async () => {
+    const root = await cloneCorpusFixture();
+    const instance = await makeInstance(root);
+    const { downloadsView } = registerDownloadsView(downloadsViewDeps(root, instance));
+
+    select(downloadsView, [new DownloadNode(downloadRowFixture('a.7z', { hasMeta: true }))]);
+    expect(keys()).toEqual({
+      'modbench.downloadedFile.singleFile': true, 'modbench.downloadedFile.singleFileWithMeta': true,
+      'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': true,
+      'modbench.downloadedFile.holdsExcluded': false,
+    });
+
+    select(downloadsView, [
+      new DownloadNode(downloadRowFixture('b.7z', { excluded: true })), new DownloadNode(downloadRowFixture('c.7z', { excluded: true })),
+    ]);
+    expect(keys()).toEqual({
+      'modbench.downloadedFile.singleFile': false, 'modbench.downloadedFile.singleFileWithMeta': false,
+      'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': false,
+      'modbench.downloadedFile.holdsExcluded': true,
+    });
+  });
+});
+
+// commands.md, Where: a gesture is absent, not refused, where its condition is false, so the
+// palette offers view on Nexus exactly on the view whose row it opens.
+describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
+  const KEY = 'modbench.mod.nexusRowIn';
+  type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
+  function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
+    const listeners: ((e: SelectionChange) => void)[] = [];
+    const view = {
+      selection: [] as readonly unknown[],
+      select(rows: readonly unknown[]) {
+        view.selection = rows;
+        for (const listener of listeners) listener({ selection: rows });
+      },
+      onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
+        listeners.push(listener);
+        return { dispose() { /* no-op */ } };
+      },
+    };
+    return view;
+  }
+
+  it('offers it on the view whose one selected row it opens, and nowhere while that row has no Nexus id', () => {
+    const mods = fakeView();
+    const downloads = fakeView();
+    const nexusRow = nexusRowInLastSelectedView(own, [
+      { id: 'modbench.modList', view: mods }, { id: 'modbench.downloads', view: downloads },
+    ]);
+    const nexusMod = new ModNode({ kind: 'mod', name: 'On Nexus', enabled: true, nexusId: '42' });
+    const nexusFile = new DownloadNode(downloadRowFixture('a.7z', { modID: '7' }));
+
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
+    mods.select([nexusMod]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.modList', nexusMod]);
+    downloads.select([new DownloadNode(downloadRowFixture('b.7z'))]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
+    downloads.select([nexusFile]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.downloads', nexusFile]);
+    mods.select([nexusMod, new ModNode({ kind: 'mod', name: 'Also', enabled: true, nexusId: '43' })]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
   });
 });

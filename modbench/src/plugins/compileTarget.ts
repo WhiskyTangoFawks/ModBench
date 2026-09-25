@@ -6,14 +6,12 @@ export interface CompileTarget {
 
 export interface ResolveCompileTargetDeps {
   resolveOrigin: (pluginName: string) => Promise<string | undefined>;
-  getRecordOwner: (formKey: string) => Promise<{ plugin: string; origin: string } | undefined>;
   pickPlugin: () => Promise<CompileTarget | undefined>;
   onError: (message: string) => void;
 }
 
 export async function resolveCompileTarget(
   nodePluginName: string | undefined,
-  activeFormKey: string | undefined,
   deps: ResolveCompileTargetDeps,
 ): Promise<CompileTarget | undefined> {
   if (nodePluginName !== undefined) {
@@ -24,14 +22,6 @@ export async function resolveCompileTarget(
       return undefined;
     }
     return { name: nodePluginName, origin };
-  }
-
-  if (activeFormKey !== undefined) {
-    // The record's own winning plugin, so the title-bar icon compiles what is open rather than
-    // whatever the picker below defaults to. This tier never speaks: a rejection falls through
-    // exactly as an unknown FormKey does.
-    const owner = await deps.getRecordOwner(activeFormKey).catch(() => undefined);
-    if (owner) return { name: owner.plugin, origin: owner.origin };
   }
 
   // Nothing catches below this last tier, so a rejection out of the picker is reported here

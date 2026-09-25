@@ -19,6 +19,7 @@ import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './ed
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
+import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
@@ -71,7 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-  // Save & Compile's diagnostics — one collection for every tracked mod's source files, kept
+  // Compile's diagnostics — one collection for every tracked mod's source files, kept
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
@@ -103,6 +104,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
+  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
+    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
+      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
+    }
+  });
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
@@ -131,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
+    session, client: meditClient, outputChannel, compileDiagnostics, treeProvider,
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -187,7 +193,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
@@ -220,6 +226,8 @@ export function activate(context: vscode.ExtensionContext) {
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
+    // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.
+    focusRecordCell: (cell: FocusedCellContext) => { focusedCells.setActiveCell(cell); },
   };
 }
 
@@ -227,7 +235,6 @@ export function activate(context: vscode.ExtensionContext) {
 interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
@@ -238,7 +245,7 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
@@ -251,8 +258,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerSaveAndCompileCommand(
-      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFiles),
+      client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
+      compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),

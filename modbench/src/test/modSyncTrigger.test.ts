@@ -77,9 +77,9 @@ async function wiredInstance(): Promise<{
   const syncs: Promise<ModSyncResult>[] = [];
   // What the trigger handed the command, so a test can hold it against the value's own field.
   const handed: (readonly string[] | undefined)[] = [];
-  const trigger = registerModSync(instance, (profile, modFolders) => {
-    handed.push(modFolders);
-    const run = syncMods(root, profile, modFolders);
+  const trigger = registerModSync(instance, (value) => {
+    handed.push(value.modFolders);
+    const run = syncMods(root, value.activeProfile, value.modFolders);
     syncs.push(run);
     return run;
   }, channel);

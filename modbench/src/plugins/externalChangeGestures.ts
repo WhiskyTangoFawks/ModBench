@@ -3,18 +3,13 @@ import { runExternalChangeDialogs } from './externalChangeDialog';
 import { isRefused, type UnansweredExternalChange } from '../client';
 import type { ExternalChangeCoordinatorDeps } from './externalChangeCoordinator';
 
-// The coordinator decides *when* to call this; this decides what each dialog answer does — Absorb
-// or Keep, origin-scoped (ADR-0003), so several plugins in one group share one call.
-export async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unanswered: UnansweredExternalChange[]): Promise<void> {
-  const outcomes = await runExternalChangeDialogs(unanswered, deps.showDialog);
-  const dispatched = new Set<string>();
-  for (const { change: item, answer } of outcomes) {
-    if (dispatched.has(item.origin)) continue;
-    dispatched.add(item.origin);
-    // Sequential, deliberately: two dispatches for one repository (two plugins in the same folder
-    // can both be queued) must not overlap.
-    await dispatchOne(deps, item.origin, answer);
-  }
+// The coordinator decides *when* to ask; this asks one mod's question and says what the answer
+// was, and `dispatchOne` does what it asks — Absorb or Keep, origin-scoped (ADR-0003).
+export async function askOne(
+  deps: Pick<ExternalChangeCoordinatorDeps, 'showDialog'>, change: UnansweredExternalChange,
+): Promise<ExternalChangeDialogAnswer> {
+  const [outcome] = await runExternalChangeDialogs([change], deps.showDialog);
+  return outcome?.answer ?? 'defer';
 }
 
 function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTree' | 'refreshMatchingPlugins'>): void {
@@ -62,7 +57,7 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: strin
   if (result.landed.length > 0 || answered) refreshAfterWrite(deps);
 }
 
-async function dispatchOne(
+export async function dispatchOne(
   deps: ExternalChangeCoordinatorDeps, origin: string, answer: ExternalChangeDialogAnswer,
 ): Promise<void> {
   // 'defer' (Esc/dismiss) writes nothing and calls nothing: the backend's queue still holds the

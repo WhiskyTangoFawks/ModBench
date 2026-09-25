@@ -317,9 +317,12 @@ export function registerCreateEmptyModCommand(
 }
 
 /** A mod row opens the mod's folder, and the Overwrite row the overwrite folder. */
-export function registerOpenFolderCommand(instance: Pick<Instance, 'value'>, reporter: Reporter): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.openFolder', async (node: ModNode | OverwriteNode | undefined) => {
-    const target = node && folderOf(instance, node);
+export function registerOpenFolderCommand(
+  instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
+): vscode.Disposable {
+  return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
+    const anchor = entry.clicked ?? entry.focused;
+    const target = (anchor instanceof ModNode || anchor instanceof OverwriteNode) ? folderOf(instance, anchor) : undefined;
     if (!target) return;
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       await vscode.commands.executeCommand('revealInExplorer', target.folder);
@@ -351,9 +354,12 @@ export interface NexusModRow {
   readonly nexusModId?: string;
 }
 
-export function registerViewOnNexusCommand(instance: Pick<Instance, 'value'>, reporter: Reporter): vscode.Disposable {
+/** `selectedRow` is the palette's Argument, which hands the command no row. */
+export function registerViewOnNexusCommand(
+  instance: Pick<Instance, 'value'>, reporter: Reporter, selectedRow: () => NexusModRow | undefined,
+): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.viewOnNexus', async (row: NexusModRow | undefined) => {
-    const nexusModId = row?.nexusModId;
+    const nexusModId = (row ?? selectedRow())?.nexusModId;
     if (!nexusModId) return;
     await reportFailure(reporter, `Failed to open the Nexus page of mod ${nexusModId}.`, async () => {
       await vscode.env.openExternal(

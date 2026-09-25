@@ -14,7 +14,7 @@ export function downloadRowFixture(
     size: 100,
     mtimeMs: 1700000000000,
     hasMeta: false,
-    hidden: false,
+    excluded: false,
     ...overrides,
     path: join(instanceRoot, 'downloads', name),
     sidecarPath: join(instanceRoot, 'downloads', name + '.meta'),
