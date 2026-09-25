@@ -100,7 +100,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var result = await handler.CreatePlugin("Refused.esp", Path.Combine(modFolder, "Refused.esp"), "RefusedMod");
 
         Assert.False(result.Applied);
-        Assert.Equal(TrackRefusal.NoPluginWithOrigin, result.Track.Require().Refusal);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Track.Require().Refusal);
         Assert.Same(before, _holder.Current);
         Assert.Null(_holder.Current.Copy(result.Copy.Key));
     }

@@ -28,7 +28,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     {
         var fx = OneTrackableMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         return fx;
     }
 

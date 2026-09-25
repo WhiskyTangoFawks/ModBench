@@ -146,11 +146,11 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             Holder.Apply(_loadOrder);
         }
 
-        public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
-            new TrackService(
+        public async Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
+            (await new TrackService(
                     NullLogger<TrackService>.Instance,
                     deserialize is { } forged ? new ForgedTreeWriteAdapter(Plugin.Name, forged) : TestAdapters.Mutagen())
-                .TrackAsync(_loadOrder, Plugin.Origin, SourcePreset.Edits);
+                .TrackModAsync(_loadOrder, Plugin.Origin, SourcePreset.Edits)).Only();
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);

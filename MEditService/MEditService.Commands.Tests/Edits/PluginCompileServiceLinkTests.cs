@@ -65,8 +65,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-        trackService.TrackAsync(_loadOrder, HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+        trackService.TrackModAsync(_loadOrder, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+        trackService.TrackModAsync(_loadOrder, HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
     public void Dispose()

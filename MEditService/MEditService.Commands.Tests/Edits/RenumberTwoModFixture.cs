@@ -84,7 +84,7 @@ public sealed class RenumberTwoModFixture : IDisposable
 
     private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     public string ModFolderOf(PluginCopyKey plugin) =>
         plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;

@@ -30,7 +30,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         Holder.Apply(loadOrder);
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, Plugin.Origin, SourcePreset.Edits)
+            .TrackModAsync(loadOrder, Plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);

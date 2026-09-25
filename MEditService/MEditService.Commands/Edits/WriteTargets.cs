@@ -131,8 +131,8 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
-    // INVARIANT: every write gesture — the six record gestures and compile — enters here first, and
-    // this is the only place the deferral refusal is raised. A write that bypasses it is not refused
+    // INVARIANT: the six record gestures and compile enter here first, Track asks BlockingQuestion
+    // below, and nowhere else raises the deferral refusal. A write that bypasses both is not refused
     // while a question is unanswered.
     internal RecordEditResult? RefuseIfBlocked(PluginCopyKey plugin, out string modFolder, out SourceRepository? repository)
     {
@@ -144,21 +144,28 @@ internal sealed class WriteTargets(
 
         (modFolder, repository) = (folder, opened);
 
-        // Checked before anything else, so the source file is never reached. The marker caches the
-        // classifier's last verdict (ADR-0003): present means classify again, and a verdict
-        // of nothing drops it and lets the write through.
-        if (SourceRepository.UnansweredExternalChange(folder) is not { } question) return null;
+        // Checked before anything else, so the source file is never reached.
+        return BlockingQuestion(loadOrder.Current, folder) is { } question
+            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
+            : null;
+    }
+
+    /// <summary>The mod's unanswered question while its change still stands, or null, for every write
+    /// to the mod, Track's included. The marker caches the last verdict (ADR-0003): present means
+    /// classify again.</summary>
+    internal static string? BlockingQuestion(LoadOrderSnapshot loadOrder, string modFolder)
+    {
+        if (SourceRepository.UnansweredExternalChange(modFolder) is not { } question) return null;
 
         // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
-        if (ExternalChangeClassifier.PluginBytesIn(loadOrder.Current, folder) is not { } plugins)
-            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
+        if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } plugins) return question;
 
-        switch (ExternalChangeClassifier.ClassifyMod(folder, plugins))
+        switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
         {
             case ExternalChangeClassification.ExternalChange:
-                return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
+                return question;
             case null:
-                SourceRepository.ClearExternalChangeQuestion(folder);
+                SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return null;
             default:
                 // An interrupted compile is the repair offer's state, not this question's; the marker

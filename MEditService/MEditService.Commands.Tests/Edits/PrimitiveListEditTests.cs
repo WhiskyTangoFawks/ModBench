@@ -318,7 +318,7 @@ public sealed class PrimitiveListEditTests : IDisposable
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(LoadOrder, Origin, SourcePreset.Edits)
+                .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 
             holder.Apply(LoadOrder);

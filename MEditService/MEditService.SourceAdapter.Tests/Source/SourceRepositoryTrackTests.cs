@@ -69,8 +69,29 @@ public sealed class SourceRepositoryTrackTests : IDisposable
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
+    [Fact]
+    public void Track_IntoAModThatAlreadyHasARepository_AddsOneBaselineCommit_AndLeavesTheEditBranchWhereItWas()
+    {
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("A.esp"));
+        var mainBefore = Git("rev-parse", "refs/heads/main");
+        var editBefore = Git("rev-parse", "refs/heads/edit");
+
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("B.esp"));
+
+        Assert.Equal(["Track SomeMod", "Track A.esp", "Track B.esp"], SubjectsOnMain());
+        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main~1"));
+        Assert.Equal(["source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", SourceRepository.LastCompileRef("B.esp")));
+        Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
+        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal(string.Empty, Git("status", "--porcelain"));
+    }
+
     private static List<TreeFile> SourceOf(string plugin) =>
         [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
+
+    private string[] SubjectsOnMain() =>
+        Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     private string[] PathsIn(string revision) =>
         Git("show", "--name-only", "--format=", revision).Split('\n', StringSplitOptions.RemoveEmptyEntries);

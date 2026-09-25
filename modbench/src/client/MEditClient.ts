@@ -110,7 +110,8 @@ export type CellPage = components['schemas']['CellSummaryPagedResult'];
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
-export type TrackResponse = components['schemas']['TrackResponse'];
+/** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
+export type PluginAddress = components['schemas']['PluginAddress'];
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
@@ -129,8 +130,8 @@ export interface MEditClient {
   createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
-    origin: string, preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
-  ): Promise<TrackResponse | WriteRefused>;
+    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
+  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   createRecord(
     plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
     onEslContradiction?: (message: string) => Promise<boolean>,

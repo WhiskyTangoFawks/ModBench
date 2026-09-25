@@ -28,9 +28,9 @@ public sealed class RegisteredPluginSpellingTests
         using var scratch = new ModFolderScratch();
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
+            .TrackModAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
 
-        Assert.True(result.Applied, result.Message);
+        Assert.Empty(result.Refused);
         // git's index is case-sensitive on every platform, so the committed paths are the portable
         // statement of where a reader finds the tree.
         var committed = GitProbe.Run(scratch.GitDirectory, scratch.ModFolder, "ls-files").Split('\n');
