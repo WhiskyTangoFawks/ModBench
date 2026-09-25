@@ -349,19 +349,22 @@ internal sealed class WriteTargets(
         return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
+    // Shared by create, copy as new and renumber (edit-record.md's refusal table): every branch
+    // names both remedies, even where one is moot for this plugin.
     internal static string FormKeySpaceExhaustedMessage(PluginCopyKey plugin, bool isLight, bool eslContradiction = false)
     {
+        const string remedies = "Clear the light flag in the header, or renumber.";
         if (eslContradiction)
         {
             return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
                 "already in use (a light-flagged plugin's addressable range) — but native space remains " +
-                "free above it. Remove the ESL flag to keep creating records there.";
+                $"free above it. {remedies}";
         }
         return isLight
             ? $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
-              "already in use (a light-flagged plugin's addressable range). Un-flag it as ESL to use " +
-              "the full 0xFFFFFF range."
-            : $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use.";
+              $"already in use (a light-flagged plugin's addressable range). {remedies}"
+            : $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is " +
+              $"already in use. {remedies}";
     }
 
     private static uint LocalId(string formKey) =>
