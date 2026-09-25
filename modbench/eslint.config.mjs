@@ -1,4 +1,5 @@
 import eslint from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -27,7 +28,7 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
-export default tseslint.config(
+export default defineConfig(
     { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
@@ -183,14 +184,14 @@ export default tseslint.config(
         },
     },
 
-    // The lint rules sit in no tsconfig, so typed linting reads them through the project service's
-    // default project, under the base tsconfig's strict options.
+    // The lint config and its rules sit in no tsconfig, so typed linting reads them through the
+    // project service's default project, under the base tsconfig's strict options.
     {
-        files: ['eslint-rules/**'],
+        files: ['eslint-rules/**', 'eslint.config.mjs'],
         languageOptions: {
             parserOptions: {
                 projectService: {
-                    allowDefaultProject: ['eslint-rules/*.mjs', 'eslint-rules/*.d.mts'],
+                    allowDefaultProject: ['eslint-rules/*.mjs', 'eslint-rules/*.d.mts', 'eslint.config.mjs'],
                     defaultProject: './tsconfig.base.json',
                 },
                 tsconfigRootDir: import.meta.dirname,
