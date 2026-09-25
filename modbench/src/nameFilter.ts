@@ -27,14 +27,21 @@ export interface NameFilterDeps {
    *  The no-match message takes the line while a filter matches nothing. */
   viewMessage?: () => string | undefined;
   onRowsChanged?: vscode.Event<unknown>;
+  /** What else `viewMessage` reads changed: a sync's failure began, changed or cleared. */
+  onViewMessageChanged?: (listener: () => void) => { dispose(): void };
+}
+
+/** One view's message line, said by several writers: each part present, in order. */
+export function messageLine(...parts: (string | undefined)[]): string | undefined {
+  const said = parts.filter((part) => part !== undefined);
+  return said.length > 0 ? said.join(' ') : undefined;
 }
 
 export interface NameFilter extends vscode.Disposable {
   /** Whatever else this view says about itself. The filter owns `view.description` outright —
    *  two writers would race — and the term appears beside the base rather than replacing it. */
   setBaseDescription(text: string | undefined): void;
-  /** Restate the readout, for the one view where something else legitimately writes the same
-   *  message surface. */
+  /** Restate the readout, when something it reads besides the rows has changed. */
   refresh(): void;
 }
 
@@ -107,6 +114,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
     vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
     ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
+    ...(deps.onViewMessageChanged ? [deps.onViewMessageChanged(() => void renderMessage())] : []),
   ];
 
   return {
