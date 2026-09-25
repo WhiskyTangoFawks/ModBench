@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
   isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
@@ -22,7 +21,9 @@ import {
   type MovePlace,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
-import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install/install';
+import {
+  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder,
+} from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
@@ -81,7 +82,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     return { installed: succeeded };
   };
   const installFolder = async (folder: string): Promise<InstallOutcome> => {
-    const name = await promptModName(path.basename(folder), validateName);
+    const name = await promptModName(defaultModNameForFolder(folder), validateName);
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
     await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {

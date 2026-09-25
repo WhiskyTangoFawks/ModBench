@@ -988,12 +988,6 @@
     },
     "keybindings": [
       {
-        "command": "modbench.mod.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.modList && modbench.folder == instance"
-      },
-      {
         "command": "modbench.mod.enable",
         "key": "space",
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionToggle == enable"
@@ -1031,28 +1025,16 @@
         }
       },
       {
-        "command": "modbench.plugin.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.pluginListTree && modbench.folder == instance"
-      },
-      {
-        "command": "modbench.downloadedFile.filter",
-        "key": "ctrl+f",
-        "mac": "cmd+f",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
-      },
-      {
         "command": "modbench.downloadedFile.delete",
         "key": "Delete",
         "mac": "cmd+backspace",
-        "when": "focusedView == modbench.downloads && modbench.folder == instance"
+        "when": "focusedView == modbench.downloads && listFocus && !inputFocus && modbench.folder == instance"
       },
       {
         "command": "modbench.record.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "focusedView == modbench.referencedByTree"
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus"
       }
     ]
   },

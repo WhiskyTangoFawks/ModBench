@@ -37,7 +37,6 @@ public static class IndexEndpoints
             .WithName("ClearFilter")
             .WithTags(LoadOrderTag)
             .Produces(204)
-            .ProducesProblem(503)
             .ProducesProblem(500);
 
         app.MapGet("/load-order/filter", GetFilter)
@@ -151,11 +150,6 @@ public static class IndexEndpoints
         {
             index.ClearFilter();
             return Results.NoContent();
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogError(ex, "No load order when clearing filter");
-            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
