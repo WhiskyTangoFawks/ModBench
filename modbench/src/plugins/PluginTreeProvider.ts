@@ -321,9 +321,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
-  // A Quest/DialogTopic row's own children, keyed the same
-  // `${pluginAddressKey(plugin, origin)}::${formKey}` shape refCache already uses for a cell's own
-  // references — two same-filename plugins' rows never share an entry.
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
   // Last load-more failure per parent, keyed by pluginAddressKey alone — interior cells are the only
   // surface that pages. Cleared on a successful retry;
