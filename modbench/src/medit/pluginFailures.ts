@@ -1,4 +1,4 @@
-// A plugin copy the reconcile could not open or index is a row in an error state: its records are
+// A plugin the reconcile could not open or index is a row in an error state: its records are
 // missing from the load order, so ADR-0019's integrity tier forbids silence — warn and log every
 // reason.
 

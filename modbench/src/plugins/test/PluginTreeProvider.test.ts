@@ -421,7 +421,7 @@ describe('record rows carry their copy identity', () => {
     expect(expectInstanceOf(rec, RecordNode).origin).toBe('ModA');
   });
 
-  it('a shadowed copy\'s record rows are read-only: contextValue recordImmutable', async () => {
+  it('record rows of a plugin outside the load order are read-only: contextValue recordImmutable', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
@@ -514,7 +514,7 @@ describe('record rows carry their copy identity', () => {
     expect(row.contextValue).toBe('refrImmutable');
   });
 
-  it('placed rows of a shadowed copy are refrImmutable even when the plugin is not listed immutable', async () => {
+  it('placed rows of a plugin outside the load order are refrImmutable even when the plugin is not listed immutable', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
@@ -811,10 +811,10 @@ describe('headerFormKeyFor', () => {
 
 // ── spatial node chain carries origin (ADR-0012) ───────────────────────────────
 // Every node in the chain must carry the origin its row was built with, or a deep node silently
-// reverts to browsing the load-order winner instead of the copy the user opened.
+// reverts to browsing the load-order winner instead of the plugin the user opened.
 
 describe('PluginTreeProvider spatial origin threading', () => {
-  it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
+  it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the WorldspaceNodes it builds carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     const provider = new PluginTreeProvider(repo);
@@ -826,7 +826,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(wsNode.origin).toBe('ModB');
   });
 
-  it('fetchWorldspaceChildren: asks the repository for the node\'s own copy, and its TopCell/Block children carry that origin forward', async () => {
+  it('fetchWorldspaceChildren: asks the repository for the node\'s own plugin, and its TopCell/Block children carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false }],
@@ -848,7 +848,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(cellNode.origin).toBe('ModB');
   });
 
-  it('fetchCellGroups: asks the repository for the node\'s own copy, and its PlacedGroup/Placed children carry that origin forward', async () => {
+  it('fetchCellGroups: asks the repository for the node\'s own plugin, and its PlacedGroup/Placed children carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getCellReferences', {
       persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
@@ -865,7 +865,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(placedNode.origin).toBe('ModB');
   });
 
-  it('fetchInteriorCells: asks the repository for the node\'s own copy, and the CellNodes it builds carry that origin forward', async () => {
+  it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the CellNodes it builds carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getInteriorCells', {
       items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }],
@@ -881,8 +881,9 @@ describe('PluginTreeProvider spatial origin threading', () => {
   });
 
   // refCache/interiorCache must be keyed by (origin, plugin) like pageCache — a key on plugin
-  // alone serves one copy's pages under the other copy's node, invisible when only one copy loads.
-  it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
+  // alone serves one plugin's pages under the other plugin's node, invisible when only one plugin
+  // of that filename loads.
+  it('refCache: caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false };
@@ -895,7 +896,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getCellReferences')).toHaveLength(2);
   });
 
-  it('interiorCache: caches each copy\'s interior-cell page separately, so one copy\'s page is never served for the other', async () => {
+  it('interiorCache: caches each plugin\'s interior-cell page separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const fromA = new InteriorCellsNode('Shared.esp', 'ModA');
@@ -907,7 +908,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
-  it('loadMoreInterior: keeps asking the repository for the node\'s own copy on the next page', async () => {
+  it('loadMoreInterior: keeps asking the repository for the node\'s own plugin on the next page', async () => {
     const repo = makeClient();
     repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
     repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
@@ -924,10 +925,10 @@ describe('PluginTreeProvider spatial origin threading', () => {
   });
 });
 
-// ── browsing a specific copy of a filename (ADR-0012) ──────────────────────────
+// ── browsing a specific plugin of a filename (ADR-0012) ────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
-  it('asks the repository for the copy the row stands for', async () => {
+  it('asks the repository for the plugin the row stands for', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
@@ -936,7 +937,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Shared.esp', 'ModB'] });
   });
 
-  it('carries that copy through to its record pages', async () => {
+  it('carries that plugin through to its record pages', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
@@ -946,7 +947,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Shared.esp', 'WEAP', 0, expect.any(Number), 'ModB'] });
   });
 
-  it('caches each copy separately, so one copy\'s page is never served for the other', async () => {
+  it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
@@ -971,11 +972,11 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   });
 });
 
-describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy)', () => {
-  // The spatial routes take an explicit origin, so a copy the load order does not name
+describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific plugin)', () => {
+  // The spatial routes take an explicit origin, so a plugin the load order does not name
   // is not omitted from spatial browsing — it gets its
-  // own Worldspaces/Interior-cells nodes, carrying that copy's origin down the chain.
-  it('still builds the spatial group nodes for a copy the load order does not name, carrying that copy\'s origin', async () => {
+  // own Worldspaces/Interior-cells nodes, carrying that plugin's origin down the chain.
+  it('still builds the spatial group nodes for a plugin the load order does not name, carrying that plugin\'s origin', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }, { type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
@@ -1116,9 +1117,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(repo.calls.filter(c => c.method === 'getContainerChildren')).toHaveLength(1);
   });
 
-  // Two same-filename copies expanding the same Quest FormKey must hit their own cache entry: a
+  // Two same-filename plugins expanding the same Quest FormKey must hit their own cache entry: a
   // key built from formKey alone returns ModA's cached children for ModB's expansion.
-  it('origin-keyed caching: two copies of one plugin browse their own children independently', async () => {
+  it('origin-keyed caching: two plugins that share a filename browse their own children independently', async () => {
     const repo = makeClient();
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')]);
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);

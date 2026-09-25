@@ -39,7 +39,7 @@ describe('MO2 layout', () => {
     expect(defaultDownloadsDir(ROOT)).toBe(join(ROOT, 'downloads'));
   });
 
-  it('names the folder a plugin copy sits in', () => {
+  it('names the folder a plugin sits in', () => {
     expect(pluginFolder(join(ROOT, 'mods', 'SomeMod', 'Some.esp'))).toBe(join(ROOT, 'mods', 'SomeMod'));
   });
 

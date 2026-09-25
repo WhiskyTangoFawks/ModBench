@@ -331,7 +331,7 @@ describe('the load-order sender belongs to Editing alone', () => {
     expect(importsOf(read(SENDER))).toEqual(['./MEditClient']);
   });
 
-  // It may speak of a snapshot and its copies, but never of what a snapshot holds on Mod
+  // It may speak of a snapshot and its plugins, but never of what a snapshot holds on Mod
   // Management's side — importing `LoadOrderPlugin` would be that one-word change. Prose is exempt.
   it('carries none of Mod Management\'s vocabulary', () => {
     const code = read(SENDER)

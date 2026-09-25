@@ -16,7 +16,7 @@ export function publishLoadDiagnoses(
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
   for (const r of reports) {
-    // An origin whose copies vanished between scan and publish has no file to point at.
+    // An origin whose plugins vanished between scan and publish has no file to point at.
     const folder = originFolder(r.origin);
     if (folder === undefined) continue;
     const fsPath = path.join(folder, r.plugin);

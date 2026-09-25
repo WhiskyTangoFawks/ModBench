@@ -15,7 +15,7 @@ function sanitizeForPath(segment: string): string {
     .slice(0, 80) || '_';
 }
 
-/** Deterministic per record, field and plugin copy, so re-opening the same cell reveals the same
+/** Deterministic per record, field and plugin, so re-opening the same cell reveals the same
  *  tab. `origin` is its own directory segment: two columns can share a filename and would
  *  otherwise alias onto one temp file (ADR-0012). */
 export function extendedFieldFile(

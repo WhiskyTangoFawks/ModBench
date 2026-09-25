@@ -1578,7 +1578,7 @@ describe('Plugin load-order rows expand into records', () => {
   });
 
   // plugins.md, A row story 5: the game does not load a disabled plugin's records, so its row
-  // shows no expander — viewing it is deferred, as for a losing copy.
+  // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();
     const other = findRow(await tree.getChildren(), 'Other.esp'); // the prefix-less plugins.txt line
@@ -1928,7 +1928,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// load-instance, refresh: mEdit reads every copy again against the load order it holds, and the
+// load-instance, refresh: mEdit reads every plugin again against the load order it holds, and the
 // re-read of the instance that follows finds that load order unchanged.
 describe('Refresh rebuilds the index and sends nothing', () => {
   // Launched, so a re-read that changed the load order would put it.

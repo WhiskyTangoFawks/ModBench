@@ -38,7 +38,7 @@ export type WebviewToExtension =
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
       // ADR-0012: the compound plugin identity, never a bare filename — a filename alone is
-      // ambiguous the moment the instance holds two copies of one name.
+      // ambiguous the moment the instance holds two plugins that share a filename.
       plugin: string;
       origin: string;
       envelope: RecordEditEnvelope;

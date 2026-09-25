@@ -50,7 +50,8 @@ describe('PluginHeader', () => {
   });
 
   // A vanilla/DLC/CC master — immutable, still named by the load order — keeps the plain,
-  // familiar "(read-only)" label; its tooltip names the reason, distinct from a shadowed copy's.
+  // familiar "(read-only)" label; its tooltip names the reason, distinct from the one a plugin
+  // outside the load order gets.
   it('shows "(read-only)" for an immutable, in-load-order column (a vanilla master)', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={true} />);
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe('PluginHeader', () => {
     );
   });
 
-  // ADR-0012: "(not loaded)", not "(not in load order)" — a shadowed copy is a file conflict
+  // ADR-0012: "(not loaded)", not "(not in load order)" — an overridden plugin is a file conflict
   // decided by the Mod override order, not the Plugin load order the longer label would imply.
   it('shows a distinct label for an immutable column the load order does not name', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
@@ -110,7 +111,7 @@ describe('PluginHeader', () => {
     expect(screen.queryByText(/ModA/)).not.toBeInTheDocument();
   });
 
-  // ADR-0012: "origin appears inline only when two loaded copies share a filename."
+  // ADR-0012: "origin appears inline only when two loaded plugins share a filename."
   it('renders origin inline when showOriginInline is true', () => {
     render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={true} />);
     expect(screen.getByText('MyMod.esp (ModA)')).toBeInTheDocument();
@@ -296,7 +297,7 @@ describe('PluginHeader — parse failure', () => {
 
   it.each([
     ['a vanilla master', { isImmutable: true }, '(read-only)'],
-    ['a copy the load order does not name', { isImmutable: true, inLoadOrder: false }, '(not loaded)'],
+    ['a plugin the load order does not name', { isImmutable: true, inLoadOrder: false }, '(not loaded)'],
     ['an untracked column', { isTracked: false }, '(untracked)'],
     ['a tracked column', { isTracked: true }, '(tracked)'],
   ])('takes precedence over %s', (_case, props, displaced) => {

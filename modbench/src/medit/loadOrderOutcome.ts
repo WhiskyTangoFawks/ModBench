@@ -17,7 +17,7 @@ export function reportPutOutcome(
     return;
   }
   if (result.outcome !== 'applied' || result.status.refusal !== undefined) return;
-  // Participation is derived — enabled AND winning AND listed — and the snapshot is every copy,
+  // Participation is derived — enabled AND winning AND listed — and the snapshot is every plugin,
   // so a non-empty one can still have nothing that participates (ADR-0013).
   if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
     deps.warn(
@@ -46,7 +46,7 @@ export interface ReconciledDeps {
  *  views. Ready is only published after the winner sweep, so conflicts are computed. */
 export async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
-  deps.setStatusText(`$(check) mEdit: Ready (${status.totalPlugins} plugin copies)`);
+  deps.setStatusText(`$(check) mEdit: Ready (${status.totalPlugins} plugins)`);
   // A reconciled load order can move which records a row's page/interior/reference caches hold,
   // so the record browser re-reads them the same as any other write (ADR-0002).
   deps.refreshTree();

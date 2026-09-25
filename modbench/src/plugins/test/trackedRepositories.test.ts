@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginCopyKey } from '../trackedRepositories';
+import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey } from '../trackedRepositories';
 import { isTracked } from '../../instanceAdapter/files';
 import { pluginFolder } from '../../instanceAdapter/layout';
 import type { PluginMetadata } from '../../client';
@@ -120,7 +120,7 @@ describe('registerTrackedRepositories', () => {
 // ── pluginRepositoriesOf (extension.ts carries no business logic) ──────────────────────────────
 
 describe('pluginRepositoriesOf', () => {
-  it("maps each plugin copy to the repository resolved for its mod folder", () => {
+  it("maps each plugin to the repository resolved for its mod folder", () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
     const plugins = [
@@ -131,7 +131,7 @@ describe('pluginRepositoriesOf', () => {
 
     const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
 
-    expect(byPlugin).toEqual(new Map([[pluginCopyKey('A.esp', 'ModA'), repoA], [pluginCopyKey('B.esp', 'ModB'), repoB]]));
+    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'ModA'), repoA], [pluginAddressKey('B.esp', 'ModB'), repoB]]));
   });
 
   it("takes each plugin's mod folder from the Instance adapter's answer", () => {
@@ -140,7 +140,7 @@ describe('pluginRepositoriesOf', () => {
 
     const byPlugin = pluginRepositoriesOf(plugins, new Map([['/answered', repo]]), () => '/answered');
 
-    expect(byPlugin).toEqual(new Map([[pluginCopyKey('A.esp', 'ModA'), repo]]));
+    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'ModA'), repo]]));
   });
 
   it('gives two plugins sharing one mod folder the same repository', () => {
@@ -153,10 +153,10 @@ describe('pluginRepositoriesOf', () => {
 
     const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
 
-    expect(byPlugin).toEqual(new Map([[pluginCopyKey('A.esp', 'SharedMod'), repo], [pluginCopyKey('B.esp', 'SharedMod'), repo]]));
+    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'SharedMod'), repo], [pluginAddressKey('B.esp', 'SharedMod'), repo]]));
   });
 
-  // ADR-0012 invariant 1: two copies of one filename are two plugins, each with its own repository.
+  // ADR-0012 invariant 1: two plugins that share a filename each have their own repository.
   it('keeps two same-name plugins from different mods apart', () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
@@ -168,8 +168,8 @@ describe('pluginRepositoriesOf', () => {
 
     const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
 
-    expect(byPlugin.get(pluginCopyKey('Shared.esp', 'ModA'))).toBe(repoA);
-    expect(byPlugin.get(pluginCopyKey('Shared.esp', 'ModB'))).toBe(repoB);
+    expect(byPlugin.get(pluginAddressKey('Shared.esp', 'ModA'))).toBe(repoA);
+    expect(byPlugin.get(pluginAddressKey('Shared.esp', 'ModB'))).toBe(repoB);
   });
 
   it('omits a plugin whose own mod folder has no entry in folderRepositories', () => {

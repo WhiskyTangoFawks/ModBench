@@ -17,7 +17,7 @@ function entriesOf(collection: FakeDiagnosticCollection) {
   return [...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics] as const);
 }
 
-// Stands in for the Instance value's own answer: the folder each origin's copies sit in.
+// Stands in for the Instance value's own answer: the folder each origin's plugins sit in.
 const originFolderFrom = (folders: Record<string, string>): OriginFolder => (origin) => folders[origin];
 
 describe('publishLoadDiagnoses', () => {
@@ -36,9 +36,9 @@ describe('publishLoadDiagnoses', () => {
     expect(diagnostic.severity).toBe(1); // Warning — a Malformed plugin still loads and plays
   });
 
-  // Rival: `mods/<origin>`, which put an overwrite copy's Problems entry on a path that
+  // Rival: `mods/<origin>`, which put an overwrite plugin's Problems entry on a path that
   // does not exist.
-  it('targets the overwrite folder for an overwrite-origin copy', () => {
+  it('targets the overwrite folder for an overwrite-origin plugin', () => {
     const collection = new FakeDiagnosticCollection();
 
     publishLoadDiagnoses(collection, originFolderFrom({ overwrite: '/instance/overwrite' }), [

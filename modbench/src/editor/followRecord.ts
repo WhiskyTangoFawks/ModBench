@@ -8,7 +8,7 @@ interface FormKeyTracker<Panel> {
   setFormKey(panel: Panel, formKey: string): void;
 }
 
-/** Where an edit is addressed: the record, and the plugin copy whose column it was made in
+/** Where an edit is addressed: the record, and the plugin whose column it was made in
  *  (ADR-0012). */
 export interface EditAddress { formKey: string; plugin: string; origin: string }
 
@@ -17,7 +17,7 @@ export type EditGate = (address: EditAddress, write: (formKey: string) => Promis
 
 interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 
-// One plugin copy's record moved by an edit of its FormID. `readAt` is when the tab read `to`: an
+// One plugin's record moved by an edit of its FormID. `readAt` is when the tab read `to`: an
 // address taken after it names what it means.
 interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
 
@@ -95,7 +95,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     if (entry.writes === 0) this.settle(panel, entry);
   }
 
-  // An edit of the FormID moves its own plugin copy's record, and the tab goes with it (editor.md,
+  // An edit of the FormID moves its own plugin's record, and the tab goes with it (editor.md,
   // The FormID).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
     const moves = this.moves.get(panel) ?? [];
@@ -135,12 +135,13 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     }
   }
 
-  // The same copy's record, addressed before the tab read where it moved to, is where it moved to.
+  // The same plugin's record, addressed before the tab read where it moved to, is where it
+  // moved to.
   private targetOf(panel: Panel, address: EditAddress, addressedAt: number): string {
     let formKey = address.formKey;
     for (const move of this.moves.get(panel) ?? []) {
-      const sameCopy = move.plugin === address.plugin && move.origin === address.origin;
-      if (sameCopy && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
+      const samePlugin = move.plugin === address.plugin && move.origin === address.origin;
+      if (samePlugin && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
     }
     return formKey;
   }
