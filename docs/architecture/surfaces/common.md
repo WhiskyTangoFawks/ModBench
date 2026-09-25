@@ -66,6 +66,31 @@ As a user, I want:
    says so in its message line. One line in the Output. No notification; this is the background
    tier. Rows that do not need the game folder still show. A configuration that names no game is
    story 2; no configuration is story 4. *ADR-0019, invariant 2; ruling*
+6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing
+   the last good read:" and the reason, with one line in the Output. No notification. The next
+   good read clears it. *ADR-0015, invariant 7; ADR-0019, invariant 1*
+
+## Unconfirmed writes
+
+A gesture writes and forgets (ADR-0015, invariant 2); the view learns the result from the disk.
+Between the two, as a user, I want:
+
+1. A value I changed, a field, a check box or a name, to show my new value at once, and the thing
+   I changed to carry `$(sync~spin)`, its tooltip "Written; waiting for the disk to confirm".
+   Nothing else in the view changes. *ruling*
+2. A gesture that changes the shape of a list, a move, a create, a delete, an element added or
+   removed, to leave the shape as it is until the disk confirms it, and the thing it changed to
+   carry the same mark: the row I moved or deleted, or the row I created in. *ruling*
+3. The mark only after a short delay, so a write the disk confirms at once never flickers.
+   *ruling*
+4. The mark to go when the disk's next value covers what I changed, and the disk's value to show,
+   whatever it is. When it differs from what I wrote, one line in the Output naming the thing and
+   saying the disk now shows something else. No notification. *ADR-0003, invariant 4; ADR-0019,
+   invariant 2*
+5. While the disk cannot be read, the mark to stay (States, story 6). *ADR-0015, invariant 7*
+6. `refresh` to clear every mark, because it reloads from disk. A gesture that fails or is refused
+   is reported as any failed gesture is (Reporting), and its mark stays until the disk's next value
+   or a refresh: only the disk says what is true. *ADR-0015, invariant 2; ruling*
 
 ## The status bar
 
@@ -86,7 +111,8 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 
 | What happened | What I see |
 |---|---|
-| A read behind the view failed | the error row above, and a line in the Output |
+| The first read behind the view failed | the error row (States, story 2), and a line in the Output |
+| A later read behind the view failed | the rows stay, and the message line says so (States, story 6), and a line in the Output |
 | A gesture I started failed, or was refused | a notification saying why, and a line in the Output |
 | A gesture landed, but part of it failed, so a view would show something untrue | a notification naming the part that failed, and a line in the Output. The gesture is not reported as failed. |
 | A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |

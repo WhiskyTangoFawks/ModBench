@@ -57,7 +57,7 @@ This flow waits for no hand-off.
 
 | Outcome | What happens |
 |---|---|
-| A file fails to parse | The last value stays, with its sequence. One line goes to the Output. How a view says that it is behind the disk is #973. |
+| A file cannot be read or parsed | The last value stays, with its sequence, and the reason is published beside it until a read lands. One line goes to the Output. Each view keeps its rows and says so (common.md, States, story 6). |
 | The first read fails | No value lands. The views show the error row (common.md, States, story 2). |
 | The folder is not an instance | The views say so, and how to open one (common.md, States, story 4). |
 | The game folder cannot be found | The value lands without it. No snapshot is sent, so mEdit keeps the load order it holds (common.md, States, story 5). |

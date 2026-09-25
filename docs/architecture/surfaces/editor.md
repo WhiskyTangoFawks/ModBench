@@ -165,6 +165,8 @@ As a user, I want:
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
    scroll stay. *ADR-0015, invariant 3; edit-record, Shared, story 8*
+6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
+   the last good read:" and the reason. *common, States, story 6*
 
 ## Menus and keys
 
@@ -209,7 +211,6 @@ By [common.md](common.md#reporting). As a user, I want:
 | `hide no-conflict rows` | #250 |
 | Showing a record in the plugins the game does not load: an overridden plugin, or a disabled plugin | their design, as in Plugins |
 | `copy` as underride, and deep copy of a container | the catalog's planned Options |
-| Saying the panel is behind the disk | #973 |
 | The record tab as VS Code's own editor: preview and pinning, Go Back and Go Forward, a tooltip, and the deleted mark | #980 |
 | The record header's other rows, with the record flags, and Partial Form cleared there | mEdit's answer |
 | The fields in xEdit's order | mEdit's answer |

@@ -121,9 +121,10 @@ ticket names the fix).
   message.
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
   selection. Any other gesture does not ask. A contract names an exception.
-- **A write is forgotten.** A gesture that changes an MO2 file writes it and keeps no copy of the
-  new state. The watch reads the file back, and every view updates from the new instance value. A
-  view shows the old state until the disk says otherwise.
+- **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
+  reads the file back, and every view updates from the disk's next value. Until then, the thing the
+  gesture changed shows its result, marked unconfirmed, and nothing else in the view changes
+  (common.md, Unconfirmed writes). The disk's value always wins.
 - **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing
   and says nothing.
 - **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts,
@@ -206,7 +207,7 @@ Offered on Toolbox. Run entries are not an object yet; the run-list gestures nam
 | run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | planned | - |
 | select game | ? | Toolbox: ? | `modbench.instance.selectGame` | game | - | MO2 toolbar | Choose the game the instance is for. | ? | - |
 | open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | built | none |
-| refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | debt #967 | load-instance |
+| refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive, and it clears every unconfirmed mark (common.md, Unconfirmed writes). It is refused while another window holds the index. | debt #967 | load-instance |
 | add executable | writes | Toolbox: context menu | - | run entry | - | MO2 Executables dialog | Add an executable to the run list in `ModOrganizer.ini`, as a task. | planned | - |
 | remove executable | writes | Toolbox: context menu | - | run entries | - | MO2 Executables dialog | Remove an executable from the run list. | planned | - |
 | edit executable | writes | Toolbox: context menu | - | run entry | field | MO2 Executables dialog | Change the fields of a run-list entry. Reordering and resetting the list are open. | planned | - |
