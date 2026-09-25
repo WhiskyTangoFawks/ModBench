@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
-import * as os from 'node:os';
 import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import type { RecordWriteDeps } from './applyRecordEdit';
+import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
@@ -42,6 +41,8 @@ export interface EditorCommandDeps {
   // surfaces a failure and asks a question, and implements neither.
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
+  // Where an extended-editor tab is written, answered at the composition root.
+  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
 // ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
 // notification stream (ADR-0015 invariant 3), not a broadcast from here.
@@ -80,7 +81,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
-      ...writeDeps, tempRoot: extendedFieldEditorTempRoot, log: (m: string) => outputChannel.debug(m),
+      ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
     }),
     // Editor owns the record gestures (create/delete/renumber/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
@@ -118,10 +119,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 }
 
 export const RECORD_PANEL_KEY = '__record_view__';
-// The temp directory every extended-editor tab writes under —
-// load order-static (the same value every panel gets), so it lives at module scope rather than in
-// any per-panel bundle.
-export const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
 // Bundled as one trailing param since these travel together as one panel-wiring concern.
 // `recordPanels` is every open panel, main and Beside alike: broadcasts post to all and let each
 // self-filter rather than picking "the right one".
@@ -163,7 +160,7 @@ export function openRecordPanel(
 
   const panel = vscode.window.createWebviewPanel('modbench', title, viewColumn, {
     enableScripts: true,
-    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
+    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out', 'webview')],
   });
 
   if (singleton) {
@@ -195,7 +192,7 @@ export function openRecordPanel(
   });
 
   const scriptUri = panel.webview.asWebviewUri(
-    vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview', 'assets', 'main.js'))
+    vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', 'main.js')
   );
 
   panel.webview.html = buildWebviewHtml({

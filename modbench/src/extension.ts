@@ -15,6 +15,7 @@ import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
+import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
@@ -193,6 +194,7 @@ export function activate(context: vscode.ExtensionContext) {
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
+      fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
   );
 
