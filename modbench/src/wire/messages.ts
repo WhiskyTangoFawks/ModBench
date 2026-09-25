@@ -27,8 +27,7 @@ export const WEBVIEW_TO_EXTENSION = {
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
   // commands.md, Record: a field gesture from the palette acts on the focused cell, which only the
-  // panel knows. `context` is the cell's own `data-vscode-context`, merged as VS Code merges it for
-  // a right-click; `null` is no focused cell.
+  // panel knows. `context` is what its right-click hands a command; `null` is no focused cell.
   FOCUS_CELL: 'focusCell',
 } as const;
 

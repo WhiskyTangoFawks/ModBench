@@ -87,9 +87,8 @@ async function expandFilteredSeparators(
 
 type SelectableView = Pick<vscode.TreeView<unknown>, 'selection' | 'onDidChangeSelection'>;
 
-/** View on Nexus from the palette opens the one row selected in the view last selected in, since
- *  no stable API names the focused view. `modbench.mod.nexusRowIn` names that view while its row
- *  has a Nexus id, so the palette offers the gesture exactly where it acts. */
+/** No stable API names the focused view, so the palette's view on Nexus opens the row selected in
+ *  the view last selected in, and `modbench.mod.nexusRowIn` names that view while it has one. */
 export function nexusRowInLastSelectedView(
   own: Own, views: readonly { id: string; view: SelectableView }[],
 ): () => NexusModRow | undefined {

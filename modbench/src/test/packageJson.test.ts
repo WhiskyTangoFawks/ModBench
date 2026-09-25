@@ -1141,9 +1141,7 @@ function catalogBuiltCommandIds(markdown: string): Set<string> {
 const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
 
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
-// another ticket, and that ticket deletes the line.
-// `outOfPalette` names those of a line's IDs that need a tree or webview argument the palette never
-// supplies.
+// another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
   {

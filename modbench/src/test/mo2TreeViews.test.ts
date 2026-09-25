@@ -461,9 +461,8 @@ describe('the Downloads view tells its palette entries what the selection holds'
   });
 });
 
-// commands.md, Where: a gesture is absent, not refused, where its condition is false. From the
-// palette view on Nexus opens the one row selected in the view last selected in, so the key the
-// palette entry reads names that view only while that row has a Nexus id.
+// commands.md, Where: a gesture is absent, not refused, where its condition is false, so the
+// palette offers view on Nexus exactly on the view whose row it opens.
 describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
   const KEY = 'modbench.mod.nexusRowIn';
   type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;

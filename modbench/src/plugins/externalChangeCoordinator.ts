@@ -54,9 +54,8 @@ export function subscribeQuestionOpen(
   });
 }
 
-// ADR-0003, invariant 3: one dialog asks per mod, and a modal is never shown twice at once. A
-// settle can split one release into questions; one that arrives while its mod's dialog is open
-// waits, and an answer given over part of the release is asked again over the whole.
+// ADR-0003, invariant 3: one dialog asks. A settle can split a release into questions, and a
+// modal cannot be updated, so a later question waits and is asked over the whole release.
 function oneDialogAtATime(deps: ExternalChangeCoordinatorDeps, log: (msg: string) => void): (change: UnansweredExternalChange) => void {
   const waiting = new Map<string, UnansweredExternalChange>();
   let asking = false;

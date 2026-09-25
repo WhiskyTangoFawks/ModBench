@@ -189,10 +189,8 @@ async function includeSelection(
   return outcome;
 }
 
-/** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
- *  either, and batching the navigational actions is "open five browser tabs". VS Code's
- *  `(clickedItem, selectedItems[])` selection argument is unused here. The palette hands no row,
- *  so open and open .meta take the one selected row. */
+/** Clicked row only, as MO2 batches no Install and five opened tabs help no one. The palette
+ *  hands no row, so open and open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
   viewSelection: () => readonly DownloadsTreeNode[],
@@ -227,8 +225,7 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 }
 
 /** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
- *  All). `viewSelection` backs the Delete key and the palette, which get no row argument.
- *  `instance` is read fresh per invocation, never captured once. */
+ *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
 export function registerDownloadsMultiRowCommands(
   instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
