@@ -96,6 +96,9 @@ async function makeInstance(root: string): Promise<Instance> {
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });
+  // The first read binds the downloads watcher and schedules one more read; a refresh runs that
+  // read now, so no value lands later to re-render a test's rows behind its back.
+  await instance.refresh();
   await instance.refresh();
   return instance;
 }
