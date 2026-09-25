@@ -8,7 +8,8 @@ import { reportSyncFailures, type SyncMessage } from './syncFailureReport';
 // as the Plugins view's directory.
 type PluginSyncOutcome =
   | { applied: true; added: readonly string[]; dropped: readonly string[] }
-  | { applied: false; refusal: string };
+  | { applied: false; refusal: string }
+  | { applied: false; toldAsInstanceState: true };
 
 /** Its message is the Plugins view's, for a failed run until a run lands. */
 export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage {
