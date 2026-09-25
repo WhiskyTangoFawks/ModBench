@@ -65,11 +65,6 @@ export const uriFile = (p: string) => {
   return { fsPath: p, path, toString: () => `file://${path}` };
 };
 
-// PluginsTreeProvider.test.ts's resourceUri assertion (`toEqual({ fsPath })`) fails against the
-// richer `uriFile` above: `toEqual` does not ignore an extra defined `toString`. Real drift, so
-// both shapes stay.
-export const uriFilePlain = (p: string) => ({ fsPath: p });
-
 export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
   ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' });
 

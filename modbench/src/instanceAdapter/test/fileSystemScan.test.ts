@@ -1,5 +1,5 @@
 // target-architecture.d2: the Instance adapter is the one reader and writer of the instance. Every
-// other module asks it, and the three files below open the extension's own storage, never the
+// other module asks it, and the two files below open the extension's own storage, never the
 // instance.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -20,7 +20,6 @@ const QUEUE_NAMES = new Set(['createWriteQueue', 'WriteQueue']);
 // extension's storage path, and the temp file an external editor opens.
 const NOT_THE_INSTANCE = [
   join('extension.ts'),
-  join('plugins', 'recordFilterCommands.ts'),
   join('editor', 'extendedFieldEditor.ts'),
 ];
 
@@ -101,7 +100,7 @@ describe('no file outside the Instance adapter imports the file system to read t
     expect(scanned).toContain(join('plugins', 'PluginsTreeProvider.ts'));
   });
 
-  it('every production file outside the box names node:fs nowhere, bar the three listed', () => {
+  it('every production file outside the box names node:fs nowhere, bar the two listed', () => {
     expect(findOffenders(SRC, NOT_THE_INSTANCE)).toEqual({});
   });
 
@@ -120,9 +119,9 @@ describe('no file outside the Instance adapter imports the file system to read t
 
   // Rival: the allowlist growing silently. Each entry is one of the extension's own storage
   // paths, and each really does open a file.
-  it('the allowlist is exactly the three files that open storage of the extension’s own', () => {
+  it('the allowlist is exactly the two files that open storage of the extension’s own', () => {
     expect(NOT_THE_INSTANCE).toEqual([
-      'extension.ts', join('plugins', 'recordFilterCommands.ts'), join('editor', 'extendedFieldEditor.ts'),
+      'extension.ts', join('editor', 'extendedFieldEditor.ts'),
     ]);
     for (const rel of NOT_THE_INSTANCE) {
       expect(fsImportsIn(join(SRC, rel)).length).toBeGreaterThan(0);

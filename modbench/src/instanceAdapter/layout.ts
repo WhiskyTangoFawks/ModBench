@@ -2,7 +2,7 @@
 // built from them, and the Instance's watcher globs. Each file's own name is its codec's, and
 // `formatLiteralScan.test.ts` refuses a second speller.
 
-import { join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
 import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from '../mo2Codecs/modlistText';
@@ -70,6 +70,15 @@ export const downloadFile = (downloadsDir: string, name: string): string => join
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
+
+/** The folder a plugin copy sits in: its mod's folder, overwrite/, or Data/. */
+export const pluginFolder = (pluginFile: string): string => dirname(pluginFile);
+
+/** A file inside `folder`, by the relative path a source tree names it with. */
+export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
+
+/** Whether `file` sits anywhere beneath `folder`. */
+export const isInFolder = (folder: string, file: string): boolean => file.startsWith(folder + sep);
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const modGitDir = (modFolder: string): string => join(modFolder, '.git');

@@ -87,7 +87,7 @@ sits.
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: show excluded, or hide excluded while shown. Overflow: sort. |
 | Row menu | install · view on Nexus · open · open `.meta` · exclude or include · delete |
-| Keys | Delete: delete. Ctrl+F: filter. |
+| Keys | Delete: delete. |
 
 As a user, I want:
 

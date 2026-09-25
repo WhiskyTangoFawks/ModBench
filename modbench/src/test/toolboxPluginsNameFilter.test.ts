@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
+  uriFile, uriFrom, DataTransferItem, DataTransfer,
 } from './vscodeMock';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
@@ -22,7 +22,7 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFilePlain, from: uriFrom }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
   window: filterBoxWindowMock(h.state),
   commands: filterBoxCommandsMock(h.state),
 }));
