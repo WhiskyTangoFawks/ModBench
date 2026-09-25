@@ -173,16 +173,6 @@ public sealed class SchemaReflector
         }
     }
 
-    /// <summary>The known Mutagen defects with one effect, for the gesture that has to honour
-    /// them. Building the schema is what validates the rows.</summary>
-    public IReadOnlyList<KnownDefect> DefectsWith(GameRelease release, KnownDefectEffect effect)
-    {
-        var category = release.ToCategory();
-        var assembly = ResolveAssembly(release, category)
-            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
-        return GetCache(category, assembly).Game.Annotations.DefectsWith(effect);
-    }
-
     // RecordType stays bound to the discovery winner even though the columns are unioned: Mutagen's
     // EnumerateMajorRecords falls back to the abstract group base and returns every sibling's records
     // anyway, so pointing at the base would gain nothing.

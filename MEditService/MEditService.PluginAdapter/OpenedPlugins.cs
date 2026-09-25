@@ -45,22 +45,4 @@ internal static class OpenedPlugins
                 .Where(key => key.ModKey.FileName.String.Equals(pluginName, StringComparison.OrdinalIgnoreCase))
                 .Select(key => key.ToString())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase));
-
-    internal static bool LinksTo(IModGetter mod, string pluginName, FormKey target, FormKey? itself)
-    {
-        // A FormID indexes this copy's own master list, so a copy that does not master the target's
-        // plugin cannot express a link to it — the header answers before the walk starts.
-        var masters = mod.MasterReferences
-            .Select(reference => reference.Master.FileName.String)
-            .Append(pluginName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!masters.Contains(target.ModKey.FileName.String)) return false;
-
-        foreach (var record in mod.EnumerateMajorRecords())
-        {
-            if (itself is { } self && record.FormKey == self) continue;
-            if (record.EnumerateFormLinks().Any(link => link.FormKey == target)) return true;
-        }
-        return false;
-    }
 }

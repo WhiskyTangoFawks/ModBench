@@ -12,10 +12,6 @@ public enum KnownDefectEffect
     /// <summary>The schema names the member and carries the reason; the write path refuses any
     /// path reaching it.</summary>
     MemberReadOnly,
-
-    /// <summary>Mutagen's generated <c>RemapLinks</c> does not walk the member, so a renumber whose
-    /// links pass through it is refused rather than written half-remapped.</summary>
-    RenumberRemapIncomplete,
 }
 
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
@@ -193,9 +189,6 @@ internal sealed record SchemaAnnotations(
                 new("ISceneActionGetter", "Type", KnownDefectEffect.MemberReadOnly,
                     "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
                     + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
-                new("IScriptStructListPropertyGetter", "Structs", KnownDefectEffect.RenumberRemapIncomplete,
-                    "Mutagen's generated RemapLinks does not descend into ScriptStructListProperty.Structs, so a link "
-                    + "held there survives a renumber and would be left dangling"),
             ],
             SiblingsInUse: new()
             {
@@ -295,10 +288,6 @@ internal sealed record SchemaAnnotations(
     /// <summary>Why a defect keeps this member out of every write, or null.</summary>
     public string? ReadOnlyReasonFor(PropertyInfo prop) =>
         DefectFor(prop) is { Effect: KnownDefectEffect.MemberReadOnly } defect ? defect.Reason : null;
-
-    /// <summary>Every defect with one effect, for the gesture that has to honour it.</summary>
-    public IReadOnlyList<KnownDefect> DefectsWith(KnownDefectEffect effect) =>
-        [.. KnownDefects.Where(d => d.Effect == effect)];
 
     /// <summary>The bit a synthetic member's row spells in hex, for a backing member no enum names.</summary>
     internal static long ParseBit(string flag) =>

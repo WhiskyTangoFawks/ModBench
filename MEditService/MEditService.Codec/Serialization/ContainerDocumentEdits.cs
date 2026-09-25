@@ -49,19 +49,6 @@ public static class ContainerDocumentEdits
         return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
     }
 
-    /// <summary>The child <paramref name="formKey"/> names inside <paramref name="ownerText"/>, as
-    /// its own document under the schema table it belongs to. Null when the text carries no such
-    /// child.</summary>
-    public static (string RecordType, string Text)? EmbeddedChildIn(
-        RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
-        string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        var owner = codec.Deserialize(ownerText, release, ownerRecordType);
-        return ContainerChildFields.FindEmbeddedChild(owner, formKey) is { } found
-            ? (RecordTableName.Of(found.Child, schemas), codec.SerializeToText(found.Child, release))
-            : null;
-    }
-
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>
         owner.FormKey.ToString().Equals(containerFormKey, StringComparison.Ordinal)
             ? owner

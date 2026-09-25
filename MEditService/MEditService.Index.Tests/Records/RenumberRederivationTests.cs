@@ -11,7 +11,7 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A renumber writes trees and nothing else (ADR-0007 invariant 8): container_child, placement and
+/// <summary>A renumber writes trees and nothing else (ADR-0015 invariant 2): container_child, placement and
 /// cell_location rows are the Index's own re-derivation, driven here through RefreshKeys and
 /// ReindexPlugin, the write side's signals for it.</summary>
 public sealed class RenumberRederivationTests : IDisposable

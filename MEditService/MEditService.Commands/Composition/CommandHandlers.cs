@@ -67,8 +67,6 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new RenumberRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<RenumberRecordHandler>>()));

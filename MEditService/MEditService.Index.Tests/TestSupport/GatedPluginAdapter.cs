@@ -37,8 +37,6 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys) =>
         inner.LinkTargets(loadOrder, gameRelease, schemas, formKeys);
 
-    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself) =>
-        inner.LinksTo(modPath, gameRelease, target, itself);
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>

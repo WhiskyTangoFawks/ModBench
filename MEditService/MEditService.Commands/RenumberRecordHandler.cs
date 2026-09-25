@@ -1,9 +1,8 @@
-using System.Text.Json;
+using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -11,15 +10,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>The Renumber gesture's handler (ADR-0014 invariant 3): the record's FormKey moves, and
-/// every FormLink pointing at it moves with it (ADR-0007).</summary>
+/// <summary>The Renumber gesture's handler (ADR-0014 invariant 3): the record's FormKey changes and
+/// nothing else. The records that reference it are left as they are: updating them is a script.</summary>
 public sealed class RenumberRecordHandler
 {
     // The write side's shared concerns (ADR-0014): the renumber resolves its edit target behind the
     // pre-write gate and draws its new FormKey, both through this one module.
     private readonly WriteTargets _targets;
-    private readonly LoadOrderHolder _loadOrder;
-    private readonly IPluginAdapter _importer;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<RenumberRecordHandler> _logger;
@@ -28,28 +25,21 @@ public sealed class RenumberRecordHandler
     // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
     internal RenumberRecordHandler(
         WriteTargets targets,
-        LoadOrderHolder loadOrder,
-        IPluginAdapter importer,
         RecordTextCodec codec,
         SchemaReflector schemaReflector,
         ILogger<RenumberRecordHandler> logger)
     {
-        (_targets, _loadOrder, _importer, _codec, _schemaReflector, _logger) =
-            (targets, loadOrder, importer, codec, schemaReflector, logger);
+        (_targets, _codec, _schemaReflector, _logger) = (targets, codec, schemaReflector, logger);
     }
 
-    /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
-    /// untracked referencer refuses before any write. Written through a
-    /// <see cref="SourceRepository.SourceTransaction"/> that restores every tree on failure (ADR-0007).</summary>
+    /// <summary>A delete+create pair in source terms. Native records only. Written through a
+    /// <see cref="SourceRepository.SourceTransaction"/> that restores the tree on failure.</summary>
     public RecordEditResult RenumberRecord(PluginCopyKey plugin, string formKey, string? requestedFormKey = null)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (release, identity, unit, repository) = target;
         if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
-        // Canonicalised once: two ordinal comparisons below (the exclusion predicate and the
-        // remap-completeness guard) run against canonical text, and a differently-cased spelling
-        // would silently turn both into no-ops.
         var parsedFormKey = FormKey.Factory(formKey);
         formKey = parsedFormKey.ToString();
 
@@ -65,68 +55,50 @@ public sealed class RenumberRecordHandler
         if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var (referencers, untrackedReferencers) =
-            new ReferencerScan(_loadOrder.Current, _importer, _schemaReflector, _logger).Of(formKey, plugin);
-        if (untrackedReferencers.Count > 0)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.UntrackedReferencer,
-                $"{formKey} is referenced by untracked plugin(s) {string.Join(", ", untrackedReferencers)}, " +
-                "so the renumber cannot rewrite their FormLinks. Track them first, then try again.");
-        }
-
-        // Phase one: nothing below this point touches the filesystem. Any refusal it returns is
-        // returned with the tree exactly as this method found it.
-        if (ComputeReferencerRewrites(formKey, targetFormKey, release, referencers, out var rewrites)
-            is { } refusedReferencer) return refusedReferencer;
-        if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var computedTargetRewrite)
-            is { } refusedSelf) return refusedSelf;
-        var targetRewrite = computedTargetRewrite
-            ?? throw new InvalidOperationException("Expected ComputeTargetRewrite to compute a target when it does not refuse.");
-
-        // Phase two: one transaction, rolled back whatever fails (ADR-0007 invariant 8). A tree not
-        // as phase one found it is a refusal (ADR-0014 invariant 4); a filesystem fault is a write
-        // failure; anything else is a bug.
+        // A tree not as this gesture needs it is a refusal (ADR-0014 invariant 4); a filesystem fault is a
+        // write failure; anything else is a bug. Only the transaction writes.
         var transaction = new SourceRepository.SourceTransaction();
         try
         {
-            foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite);
-            WriteTargetRewrite(transaction, plugin, targetRewrite, targetFormKey);
+            if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
+                is { } refusedSelf) return refusedSelf;
+            WriteTargetRewrite(
+                transaction, plugin,
+                targetRewrite ?? throw new UnreachableException("ComputeTargetRewrite neither refused nor computed a target."),
+                targetFormKey);
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
         {
             return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex));
+                ex is AmbiguousSourceUnitException ? RecordEditRefusal.AmbiguousSourceUnit : RecordEditRefusal.SourceUnitNotFound,
+                RollBackFailedRenumber(transaction, repository, formKey, targetFormKey, ex));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new IOException(
-                RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex), ex);
+            throw new IOException(RollBackFailedRenumber(transaction, repository, formKey, targetFormKey, ex), ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            _logger.LogError(ex, "{Report}", RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex));
+            _logger.LogError(ex, "{Report}", RollBackFailedRenumber(transaction, repository, formKey, targetFormKey, ex));
             throw;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "Renumbered {OldFormKey} to {NewFormKey} in {Plugin} ({Origin}), rewriting {Count} referencing record(s)",
-                formKey, targetFormKey, plugin.Name, plugin.Origin, referencers.Count);
+                "Renumbered {OldFormKey} to {NewFormKey} in {Plugin} ({Origin})",
+                formKey, targetFormKey, plugin.Name, plugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // Only the trees are put back (ADR-0007); the Source watcher lands the restored files. Paths
-    // are relative to the mod folder, the form the Source Control panel lists.
+    // Only the tree is put back; the Source watcher lands the restored files. Paths are relative to
+    // the mod folder, the form the Source Control panel lists.
     private string RollBackFailedRenumber(
-        SourceRepository.SourceTransaction transaction, SourceRepository repository, IReadOnlyList<ComputedRewrite> rewrites,
+        SourceRepository.SourceTransaction transaction, SourceRepository repository,
         string oldFormKey, string newFormKey, Exception cause)
     {
-        var (unrestored, relativeError) =
-            transaction.Rollback(cause, rewrites.Select(r => r.Repository).Append(repository));
+        var (unrestored, relativeError) = transaction.Rollback(cause, repository);
         if (unrestored.Count > 0)
         {
             _logger.LogWarning(
@@ -165,139 +137,22 @@ public sealed class RenumberRecordHandler
         return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
     }
 
-    // Owner is the identity of the document this rewrite lands as: the referencer's own, or its
-    // container's when the referencer is embedded. Text is that whole document, remapped.
-    private sealed record ComputedRewrite(
-        PluginCopyKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text);
-
-    // One document at a time, which is what the scan answers with: a container holding several
-    // referencers is remapped once. The typed remap moves links and only links, and the
-    // remap-completeness guard below covers its one gap.
-    private RecordEditResult? ComputeReferencerRewrites(
-        string oldFormKey, string newFormKey, GameRelease release,
-        IReadOnlyList<ReferencerScan.Referencing> referencers,
-        out List<ComputedRewrite> rewrites)
-    {
-        rewrites = [];
-        var schemas = _schemaReflector.GetSchemas(release);
-
-        foreach (var (referencerPlugin, referencerRepository, document, schemaType, embeddedFormKeys) in referencers)
-        {
-            // Asked before the codec is: a document the scan could not run the collector over is one
-            // this pass cannot read either, and a guard that cannot run has cleared nothing.
-            if (schemaType is null)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.ReferenceRemapIncomplete,
-                    $"A document in {referencerPlugin.Name}'s tree naming {document.FormKey} could not be " +
-                    $"read, so whether it links {oldFormKey} cannot be answered. Nothing was written.");
-            }
-            if (!schemas.ContainsKey(schemaType))
-                return RefuseNoSchema(document.FormKey, schemaType, referencerPlugin);
-
-            var remapped = RecordDocumentEdits.WithLinksRemapped(
-                _codec, document.Body, release, document.RecordType, oldFormKey, newFormKey);
-            if (RefuseIfRemapIncomplete(remapped, document.FormKey, schemaType, oldFormKey, referencerPlugin, release)
-                is { } incomplete) return incomplete;
-
-            foreach (var embeddedFormKey in embeddedFormKeys)
-            {
-                // A remap never moves a record's own FormKey, so the child is still found under it.
-                if (ContainerDocumentEdits.EmbeddedChildIn(
-                        _codec, remapped, release, document.RecordType, embeddedFormKey, schemas) is not { } child)
-                {
-                    continue;
-                }
-
-                // The owner's own walk never reaches a child's VMAD — an embedded referencer's
-                // struct-list link is its own record's, and has to be asked of the child directly.
-                if (RefuseIfRemapIncomplete(
-                        child.Text, embeddedFormKey, child.RecordType, oldFormKey, referencerPlugin, release)
-                    is { } childIncomplete) return childIncomplete;
-            }
-
-            // Carried rather than recomputed at write time: the transaction names unrestored paths
-            // relative to this repository's folder.
-            rewrites.Add(new ComputedRewrite(
-                referencerPlugin, referencerRepository,
-                new RecordIdentity(document.FormKey, schemaType, document.EditorId), remapped));
-        }
-
-        return null;
-    }
-
-    // The guard's conservative direction: a guard that cannot run has cleared nothing, so a document
-    // whose type the schema does not name stops the gesture rather than being passed over.
-    private static RecordEditResult RefuseNoSchema(string formKey, string recordType, PluginCopyKey plugin) =>
-        RecordEditResult.Refused(
-            RecordEditRefusal.ReferenceRemapIncomplete,
-            $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
-            $"{formKey} in {plugin.Name} could not run. Nothing was written.");
-
-    // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
-    // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
-    // from an EditorID or string.
-    private RecordEditResult? RefuseIfRemapIncomplete(
-        string text, string formKey, string recordType, string oldFormKey, PluginCopyKey plugin, GameRelease release)
-    {
-        if (!_schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
-            return RefuseNoSchema(formKey, recordType, plugin);
-
-        List<FormReference> refs;
-        using (var document = JsonDocument.Parse(text))
-            refs = FormReferences.Collect(document.RootElement, schema);
-        if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ReferenceRemapIncomplete,
-                $"{formKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
-                $"typed link remap, so renumbering would leave that reference dangling. {WhyRemapIsIncomplete(stale, release)} " +
-                "Nothing was written.");
-        }
-
-        return null;
-    }
-
-    // A reference path is member names separated by dots, with an element index in brackets.
-    private static readonly char[] PathHopSeparators = ['.', '['];
-
-    // The row whose member the surviving link sits under, where one names it: the path is the
-    // document's own member names, so a row's member name is a hop of it.
-    private string WhyRemapIsIncomplete(FormReference stale, GameRelease release) =>
-        _schemaReflector.DefectsWith(release, KnownDefectEffect.RenumberRemapIncomplete)
-            .FirstOrDefault(d => stale.FieldPath.Split(PathHopSeparators).Contains(d.MemberName, StringComparer.Ordinal))
-            is { } defect
-                ? $"{defect.TypeName}.{defect.MemberName}: {defect.Reason}."
-                : "No known-defect row names a member Mutagen's generated remap skips, so the cause is unknown.";
-
-    // A referencer's remapped graph is its owning document's whole text, so the batch takes it as one
-    // put against that document's own identity.
-    private static void WriteComputedRewrite(SourceRepository.SourceTransaction transaction, ComputedRewrite rewrite)
-    {
-        transaction.Put(
-            rewrite.Repository, rewrite.Plugin,
-            new SourceDocument(
-                rewrite.Owner.FormKey, rewrite.Owner.RecordType, rewrite.Owner.EditorId, rewrite.Text));
-    }
-
     // Text is the target's own document renumbered — the owner's whole text when embedded — and
     // Written is that document's identity. Held is the target's own identity, as the tree has it.
     private sealed record ComputedTarget(
         SourceRepository Repository, HoldingUnit Unit, RecordIdentity Written, RecordIdentity Held,
         string Text);
 
-    // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
         PluginCopyKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
         string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget? target)
     {
         target = null;
-        var schemas = _schemaReflector.GetSchemas(release);
 
         if (unit.IsEmbedded)
         {
-            if (repository.IdentityOf(plugin, unit.OwnerFormKey, schemas) is not { } ownerIdentity
+            if (repository.IdentityOf(plugin, unit.OwnerFormKey, _schemaReflector.GetSchemas(release)) is not { } ownerIdentity
                 || repository.Get(plugin, ownerIdentity) is not { } ownerDocument)
             {
                 return RecordEditResult.Refused(
@@ -306,9 +161,9 @@ public sealed class RenumberRecordHandler
                     $"{unit.RelativePath} carries {oldFormKey} inside. Nothing was written.");
             }
 
-            if (RecordDocumentEdits.WithEmbeddedChildRenumbered(
+            if (RecordDocumentEdits.WithEmbeddedChildFormKey(
                     _codec, ownerDocument.Body, release, ownerDocument.RecordType, oldFormKey, newFormKey)
-                is not { } renumbered)
+                is not { } ownerText)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
@@ -316,16 +171,7 @@ public sealed class RenumberRecordHandler
                     "Nothing was written.");
             }
 
-            // The guard reads links, which the re-key does not move, so it answers the same either
-            // side of one; the old FormKey is passed in so a refusal names the record the user asked about.
-            if (RefuseIfRemapIncomplete(
-                    renumbered.Text, ownerIdentity.FormKey, ownerIdentity.RecordType, oldFormKey, plugin, release)
-                is { } ownerIncomplete) return ownerIncomplete;
-            if (RefuseIfRemapIncomplete(
-                    renumbered.ChildText, oldFormKey, identity.RecordType, oldFormKey, plugin, release)
-                is { } childIncomplete) return childIncomplete;
-
-            target = new ComputedTarget(repository, unit, ownerIdentity, identity, renumbered.Text);
+            target = new ComputedTarget(repository, unit, ownerIdentity, identity, ownerText);
             return null;
         }
 
@@ -336,15 +182,9 @@ public sealed class RenumberRecordHandler
                 $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
 
-        var renumberedRecord = RecordDocumentEdits.WithSelfRenumbered(
-            _codec, document.Body, release, document.RecordType, oldFormKey, newFormKey);
-
-        if (RefuseIfRemapIncomplete(renumberedRecord, oldFormKey, identity.RecordType, oldFormKey, plugin, release)
-            is { } recordIncomplete) return recordIncomplete;
-
         target = new ComputedTarget(
-            repository, unit, new RecordIdentity(newFormKey, identity.RecordType, identity.EditorId),
-            identity, renumberedRecord);
+            repository, unit, new RecordIdentity(newFormKey, identity.RecordType, identity.EditorId), identity,
+            RecordDocumentEdits.WithFormKey(_codec, document.Body, release, document.RecordType, newFormKey));
         return null;
     }
 

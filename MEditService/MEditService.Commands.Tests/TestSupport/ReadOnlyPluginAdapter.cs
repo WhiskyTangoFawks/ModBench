@@ -47,8 +47,6 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         IReadOnlyCollection<string> formKeys) =>
         Real.LinkTargets(loadOrder, gameRelease, schemas, formKeys);
 
-    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself) =>
-        Real.LinksTo(modPath, gameRelease, target, itself);
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
