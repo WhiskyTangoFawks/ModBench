@@ -6,12 +6,13 @@ import subprocess
 import unittest
 
 HOOK = pathlib.Path(__file__).resolve().parent / "wait-discipline.py"
-TOP = "/home/x/.claude/projects/p/abc.jsonl"
-SUB = "/home/x/.claude/projects/p/abc/subagents/agent-1.jsonl"
+TRANSCRIPT = "/home/x/.claude/projects/p/abc.jsonl"
+TOP = {}
+SUB = {"agent_id": "a60846e1b0b69da89", "agent_type": "general-purpose"}
 
 
-def hook(tool, transcript, **tool_input):
-    payload = {"tool_name": tool, "transcript_path": transcript, "tool_input": tool_input}
+def hook(tool, caller, **tool_input):
+    payload = {"tool_name": tool, "transcript_path": TRANSCRIPT, "tool_input": tool_input} | caller
     return subprocess.run(["python3", HOOK], input=json.dumps(payload), capture_output=True, text=True)
 
 
