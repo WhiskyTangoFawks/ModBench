@@ -152,8 +152,8 @@ internal sealed class WriteTargets(
         return RefuseIfLosingCopy(plugin);
     }
 
-    // Tracking is per mod folder and does not imply winning (ADR-0012 invariant 5). Winning
-    // alone, not InLoadOrder: an unlisted winning copy is out of this ticket's scope.
+    // Tracking is per mod folder and does not imply winning (ADR-0012 invariant 5). Refuses only
+    // a copy the override order does not resolve to.
     private RecordEditResult? RefuseIfLosingCopy(PluginCopyKey plugin)
     {
         if (loadOrder.Current.Registration(plugin) is not { Winning: false }) return null;
