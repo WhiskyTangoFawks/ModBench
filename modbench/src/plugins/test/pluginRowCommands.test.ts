@@ -505,17 +505,26 @@ describe('registerSaveAndCompileCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
-  // plugins.md, Compile: the palette compiles the one selected compilable plugin, or asks which.
-  it('compiles the one selected compilable plugin from the palette', async () => {
-    const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', compileResultFixture());
-    const selected = pluginNode('MyPatch.esp');
+  // plugins.md, Compile, story 5: from the palette, a pick. An extension cannot tell whether the
+  // Plugins view has focus, so the selection is never compiled unasked; a selected compilable
+  // plugin leads the pick.
+  it('asks from the palette, leading the pick with the one selected compilable plugin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'Other.esp', origin: 'ModB', isTracked: true, isImmutable: false }),
+      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', isTracked: true, isImmutable: false }),
+    ]);
+    showQuickPick.mockResolvedValue(undefined);
+    const selected = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
     selected.contextValue = 'plugin rebasable compilable';
     const { handler } = invokeSaveAndCompile(client, [selected]);
 
     await handler();
 
-    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [{ label: 'MyPatch.esp', description: 'ModA' }, { label: 'Other.esp', description: 'ModB' }],
+      { placeHolder: 'Compile which plugin?' });
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
   it('asks, from the palette with no compilable plugin selected, which of the tracked, editable plugins to compile', async () => {

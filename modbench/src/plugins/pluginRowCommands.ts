@@ -136,8 +136,8 @@ export function registerRebaseCommand(
   });
 }
 
-// A plugin row, or from the palette the one selected plugin; the QuickPick only when neither is in
-// hand.
+// A plugin row or a column header names its plugin. The palette names none, and an extension cannot
+// tell whether the Plugins view has focus, so it always asks, a selected compilable plugin first.
 export function registerSaveAndCompileCommand(
   client: CompileClient,
   outputChannel: vscode.LogOutputChannel,
@@ -152,12 +152,15 @@ export function registerSaveAndCompileCommand(
       await compileAndReport(client, diagnostics, originFiles, reporter, ask, header, undefined);
       return;
     }
-    const node = clicked ?? compilableSelected(viewSelection());
-    const target = await resolveCompileTarget(isPluginRow(node) ? node.plugin.name : undefined, {
+    const target = await resolveCompileTarget(isPluginRow(clicked) ? clicked.plugin.name : undefined, {
       ...compileTargetDeps(client, outputChannel, reporter),
       pickPlugin: async () => {
         // plugins.md, Compile: the pick lists the plugins compile applies to, tracked and editable.
-        const plugins = (await client.getPlugins()).filter((p) => p.isTracked && !p.isImmutable);
+        const selected = compilableSelected(viewSelection());
+        const isSelected = (p: { name: string; origin?: string | null }) =>
+          selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
+        const plugins = (await client.getPlugins()).filter((p) => p.isTracked && !p.isImmutable)
+          .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
         const choice = await vscode.window.showQuickPick(
           plugins.map((p) => ({ label: p.name, description: p.origin })),
           { placeHolder: 'Compile which plugin?' },
