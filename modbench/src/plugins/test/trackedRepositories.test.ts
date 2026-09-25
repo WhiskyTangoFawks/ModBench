@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
-import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey } from '../trackedRepositories';
-import { isTracked } from '../../instanceAdapter/files';
-import { pluginFolder } from '../../instanceAdapter/layout';
+import {
+  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
+  type IsTracked, type PluginFolder,
+} from '../trackedRepositories';
 import type { PluginMetadata } from '../../client';
+
+// The Instance adapter's two answers, doubled at the ports this box declares for them.
+const pluginFolder: PluginFolder = (pluginFile) => path.dirname(pluginFile);
+const trackedAmong = (tracked: readonly string[]): IsTracked => (modFolder) => Promise.resolve(tracked.includes(modFolder));
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
   return {
@@ -28,45 +31,28 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
 // ── trackedModFoldersOf ────────────────────────────────────────────────────
 
 describe('trackedModFoldersOf', () => {
-  // The Instance adapter answers "is this tracked", so the real answer is what this composes with.
-  it('finds a tracked mod folder — one whose folder contains .git — via a real filesystem check', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-tracked-'));
-    const trackedFolder = path.join(root, 'TrackedMod');
-    const untrackedFolder = path.join(root, 'UntrackedMod');
-    fs.mkdirSync(path.join(trackedFolder, '.git'), { recursive: true });
-    fs.mkdirSync(untrackedFolder, { recursive: true });
-    try {
-      const plugins = [
-        makePlugin({ path: path.join(trackedFolder, 'Tracked.esp'), origin: 'TrackedMod' }),
-        // Positive control, checked through the identical function call: the untracked sibling
-        // must be absent, proving the tracked one's presence means something.
-        makePlugin({ path: path.join(untrackedFolder, 'Untracked.esp'), origin: 'UntrackedMod' }),
-      ];
+  it('finds the mod folder the Instance adapter answers tracked, and not its untracked sibling', async () => {
+    const plugins = [
+      makePlugin({ path: '/mods/TrackedMod/Tracked.esp', origin: 'TrackedMod' }),
+      // Positive control, checked through the identical function call: the untracked sibling
+      // must be absent, proving the tracked one's presence means something.
+      makePlugin({ path: '/mods/UntrackedMod/Untracked.esp', origin: 'UntrackedMod' }),
+    ];
 
-      const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
+    const folders = await trackedModFoldersOf(plugins, trackedAmong(['/mods/TrackedMod']), pluginFolder);
 
-      expect(folders).toEqual([trackedFolder]);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    expect(folders).toEqual(['/mods/TrackedMod']);
   });
 
   it('deduplicates two plugins sharing one tracked mod folder', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-tracked-'));
-    const modFolder = path.join(root, 'SharedMod');
-    fs.mkdirSync(path.join(modFolder, '.git'), { recursive: true });
-    try {
-      const plugins = [
-        makePlugin({ path: path.join(modFolder, 'A.esp'), origin: 'SharedMod' }),
-        makePlugin({ path: path.join(modFolder, 'B.esp'), origin: 'SharedMod' }),
-      ];
+    const plugins = [
+      makePlugin({ path: '/mods/SharedMod/A.esp', origin: 'SharedMod' }),
+      makePlugin({ path: '/mods/SharedMod/B.esp', origin: 'SharedMod' }),
+    ];
 
-      const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
+    const folders = await trackedModFoldersOf(plugins, trackedAmong(['/mods/SharedMod']), pluginFolder);
 
-      expect(folders).toEqual([modFolder]);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    expect(folders).toEqual(['/mods/SharedMod']);
   });
 });
 

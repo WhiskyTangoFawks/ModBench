@@ -6,7 +6,6 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { present } from '../../ports/present';
 import { tsFiles } from '../../test/tsFiles';
 
 const KERNEL_FILES = ['modlistText.ts', 'pluginsText.ts', 'metaIni.ts', 'modOrganizerIni.ts', 'downloads.ts'];
@@ -230,8 +229,10 @@ function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
   for (const path of allFiles(roots)) {
     if (isTestFile(path)) continue;
-    const found = layoutLeaks(readFileSync(path, 'utf8'), path)
-      .filter((name) => !path.endsWith(present(LAYOUT_OWNERS[name], `an owner for "${name}"`)));
+    const leaked = new Set(layoutLeaks(readFileSync(path, 'utf8'), path));
+    const found = Object.entries(LAYOUT_OWNERS)
+      .filter(([name, owner]) => leaked.has(name) && !path.endsWith(owner))
+      .map(([name]) => name);
     if (found.length > 0) leaks[path] = found;
   }
   return leaks;

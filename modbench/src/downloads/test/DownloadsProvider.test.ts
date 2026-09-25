@@ -19,8 +19,7 @@ import { ErrorNode } from '../errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { DownloadRow } from '../../mo2Codecs/downloads';
-import type { DownloadFile, InstanceValue } from '../../instanceLoader/instance';
+import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 // The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
@@ -205,6 +204,12 @@ describe('DownloadNode', () => {
   it('exposes the source row for command handlers to act on', () => {
     const r = row();
     expect(new DownloadNode(r).row).toBe(r);
+  });
+
+  // View on Nexus takes a mod row and a downloaded file row alike, each carrying its Nexus mod id.
+  it('carries its sidecar\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
+    expect(new DownloadNode(row({ modID: '123' })).nexusModId).toBe('123');
+    expect(new DownloadNode(row()).nexusModId).toBeUndefined();
   });
 });
 

@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
+import { CORPUS_FIXTURE, cloneCorpusFixture, DEFAULT_MODLIST, readModlistEntries } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, DataTransferItem, DataTransfer,
@@ -23,33 +23,22 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, type ModlistNode, type SortDirection } from '../ModListProvider';
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
-import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-// The row a real tree, sorted the given way, hands a right click — not a hand-built fixture.
+// The row a real tree over the corpus's own modlist, sorted the given way, hands a right click —
+// not a hand-built fixture. Nothing but the tree is under test here, so no Instance reads a clone.
 async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
-  const root = await cloneCorpusFixture();
-  try {
-    const instance = new Instance({
-      instanceRoot: root, log: () => {}, logReadFailure: () => {},
-      resolveGameDirectory: resolvesNotFound,
-      resolveDownloadsDirectory: downloadsDirectoryResolver(),
-    });
-    await instance.refresh();
-    const provider = new ModListProvider({ instance, instanceRoot: root });
-    provider.setViewDirection(direction);
-    const row = (await provider.getChildren()).find(isRow);
-    instance.dispose();
-    if (!row) throw new Error('anchor row not found');
-    return row;
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
+  const provider = new ModListProvider({ instance, instanceRoot: CORPUS_FIXTURE });
+  provider.setViewDirection(direction);
+  const row = (await provider.getChildren()).find(isRow);
+  provider.dispose();
+  if (!row) throw new Error('anchor row not found');
+  return row;
 }
 
 async function writeWithAnchor(anchor: ModlistNode): Promise<string> {

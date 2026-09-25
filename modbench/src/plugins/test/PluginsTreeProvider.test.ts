@@ -3,7 +3,6 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderPlugins, type PluginsDrop } from '../../pluginsCommands/plugins';
-import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
@@ -37,6 +36,7 @@ import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { readPluginLines } from '../../test/mo2/corpusFixture';
 import { present } from '../../ports/present';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -734,7 +734,7 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
   let dir: string;
   let source: PluginListSource;
   const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
-  const orderOnDisk = async () => parsePlugins(await readFile(pluginsTxt(), 'utf8')).map((e) => e.name);
+  const orderOnDisk = async () => (await readPluginLines(dir)).map((e) => e.name);
   const node = (name: string) => new PluginNode({ name, enabled: true });
   const fixturePlugins = () => ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'].map((name, slot) => plugin({ name, slot }));
 
