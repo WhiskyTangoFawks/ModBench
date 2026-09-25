@@ -537,23 +537,13 @@ describe('package.json command titles and categories', () => {
     expect(offenders.map((c) => c.command)).toEqual([]);
   });
 
-  // Legacy IDs (LEGACY_GESTURES below) that stand in for a catalog gesture another ticket merges;
-  // each needs a tree or webview argument the palette never supplies.
-  const LEGACY_PALETTE_GATED = [
-    'modbench.openHeader',
-    'modbench.downloads.install',
-    'modbench.pluginListTree.compileAtMain',
-    'modbench.record.copyAsOverride',
-    'modbench.record.copyAsNewRecord',
-  ] as const;
-
-  const PALETTE_GATED: readonly string[] = LEGACY_PALETTE_GATED;
+  const paletteGated = (): readonly string[] => LEGACY_GESTURES.flatMap((g) => g.outOfPalette);
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
   it('gates exactly the listed commands out of the palette', () => {
-    const missingGate = PALETTE_GATED.filter((c) => !gatedFalse().has(c));
+    const missingGate = paletteGated().filter((c) => !gatedFalse().has(c));
     const unexpectedGate = [...gatedFalse()].filter(
-      (c) => !PALETTE_GATED.includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
+      (c) => !paletteGated().includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
     );
     expect(missingGate).toEqual([]);
     expect(unexpectedGate).toEqual([]);
@@ -1140,12 +1130,24 @@ const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
 
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line.
-const LEGACY_GESTURES = [
-  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'] },
-  { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },
-  { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
-  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },
-] as const;
+// `outOfPalette` names those of a line's IDs that need a tree or webview argument the palette never
+// supplies.
+const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
+  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
+  {
+    gesture: 'record open', removedBy: '#963',
+    ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
+    outOfPalette: ['modbench.openHeader'],
+  },
+  {
+    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
+    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
+  },
+  {
+    gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
+    outOfPalette: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
+  },
+];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1164,6 +1166,11 @@ describe('package.json registers every command under its catalog Command ID', ()
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
         + 'source: register the gesture under the ID its row gives it.').join('\n'),
     ).toEqual([]);
+  });
+
+  it('takes out of the palette only a legacy line\'s own IDs', () => {
+    const strays = LEGACY_GESTURES.flatMap((g) => g.outOfPalette.filter((id) => !g.ids.includes(id)));
+    expect(strays).toEqual([]);
   });
 
   it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
@@ -1204,7 +1211,7 @@ describe('package.json palette titles are the verb and the object', () => {
   });
 
   const compile = present(LEGACY_GESTURES.find((g) => g.gesture === 'compile'), 'the compile legacy gesture');
-  const legacyCompile = pkg.contributes.commands.filter((c) => (compile.ids as readonly string[]).includes(c.command));
+  const legacyCompile = pkg.contributes.commands.filter((c) => compile.ids.includes(c.command));
 
   it.each(legacyCompile.map((c) => [c.command, c.title]))(
     '%s, still under its legacy ID, is titled by the catalog\'s compile: "%s"', (id, title) => {
