@@ -49,8 +49,8 @@ As a user, I want:
 
 1. One column for each plugin the game loads that holds the record, in plugin order: the record's
    master on the left, the winning copy on the right. *xEdit; ADR-0013, invariant 3*
-2. A copy the game does not load not to be a column: a losing copy of a plugin, or a copy in a
-   disabled plugin. Showing them is deferred, as in Plugins. *ADR-0012, invariant 5; ruling*
+2. A plugin the game does not load not to be a column: an overridden plugin, or a disabled
+   plugin. Showing them is deferred, as in Plugins. *ADR-0012, invariant 5; ruling*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
    It stays collapsed while the tab is open. *ruling*
 4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
@@ -199,7 +199,7 @@ By [common.md](common.md#reporting). As a user, I want:
 |---|---|
 | Several records open as one comparison, with a column per record, and xEdit's grid items that work across them: remove from selected records, sort by this row, compare the records a row references | #23 |
 | `hide no-conflict rows` | #250 |
-| Showing the copies of a record the game does not load: a losing copy, or one in a disabled plugin | their design, as in Plugins |
+| Showing a record in the plugins the game does not load: an overridden plugin, or a disabled plugin | their design, as in Plugins |
 | `copy` as underride, and deep copy of a container | the catalog's planned Options |
 | Saying the panel is behind the disk | #973 |
 | The record tab as VS Code's own editor: preview and pinning, Go Back and Go Forward, a tooltip, and the deleted mark | #980 |
