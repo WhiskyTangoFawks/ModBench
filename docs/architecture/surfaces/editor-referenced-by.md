@@ -37,8 +37,8 @@ As a user, I want:
    reference: a referrer overridden in four plugins is one referrer, not four. *ruling*
 2. Beneath a referrer, one row for each plugin that holds the reference, in plugin order: each is
    one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xEdit*
-3. Only the copies the game loads to count: a reference held only in a disabled plugin, or in a
-   losing copy, lists nothing and counts toward nothing. *ADR-0013, invariant 3; ruling*
+3. Only the plugins the game loads to count: a reference held only in a disabled plugin, or in an
+   overridden plugin, lists nothing and counts toward nothing. *ADR-0013, invariant 3; ruling*
 4. A reference counted only where its field is in use: a condition parameter its function does not
    use is not a reference, whatever it holds. *xedit.md, divergence 15*
 5. A child record's references counted as its own: a quest and a dialog topic inside it each list

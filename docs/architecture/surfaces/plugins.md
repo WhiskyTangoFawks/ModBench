@@ -33,13 +33,13 @@ As a user, I want:
 2. The plugins the game loads with no line at the losing end, before every line, locked, once mEdit
    says which they are. Until it does, a line that names one is an ordinary row. *MO2; ADR-0016,
    invariant 1; ruling*
-3. A losing copy of a plugin, one the game does not load because another mod's copy of the same name
+3. An overridden plugin, one the game does not load because another mod's plugin of the same name
    wins, not to be a row. It stays indexed, and viewing it is deferred. *ADR-0012, invariant 5*
 4. Every enabled plugin row to expand at any time. Expanding decides what it shows: its records,
    "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
    invariant 1*
 5. A disabled plugin to show no expander, because the game does not load its records. Viewing them
-   is deferred, as for a losing copy. *ruling; ADR-0013, invariant 3*
+   is deferred, as for an overridden plugin. *ruling; ADR-0013, invariant 3*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
 7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a

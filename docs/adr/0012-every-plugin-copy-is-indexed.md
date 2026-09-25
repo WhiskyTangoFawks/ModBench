@@ -28,8 +28,8 @@ file re-read, which is what lets the editor follow a mod change as it happens
    resolve at all with a master missing. The Plugins tree keeps the checkbox as the user set it
    and flags the row, as MO2 does ([ADR-0017](0017-mo2-is-the-reference-for-mod-management.md)),
    so the conflict picture describes the load order the user actually has, crash and all.
-5. **A losing copy is read-only, browsable, and not a compare-grid column.** An edit to a file
-   the game does not load changes nothing observable; raising the mod's priority makes the copy
+5. **An overridden plugin is read-only, browsable, and not a compare-grid column.** An edit to a file
+   the game does not load changes nothing observable; raising the mod's priority makes the plugin
    the winner and editable in one gesture. The grid is the record's in-game resolution stack, and
    a file the game never loads is not in it.
 
