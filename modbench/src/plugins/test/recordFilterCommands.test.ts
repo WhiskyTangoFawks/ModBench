@@ -161,7 +161,7 @@ describe('modbench.record.filter, from a document', () => {
     await filter({ scheme: 'untitled', path: 'Untitled-1' });
 
     expect(deps.reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Filter failed — Filter SQL must return a form_key column', detail: undefined },
+      { severity: 'error', message: 'Filter failed — Filter SQL must return a form_key column', detail: undefined },
     ]);
     expect(deps.showRecordFilter).not.toHaveBeenCalled();
     expect(deps.treeProvider.refresh).not.toHaveBeenCalled();
@@ -194,7 +194,7 @@ describe('modbench.record.clearFilter', () => {
     await clearFilter();
 
     expect(deps.reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not clear the record filter — No load order has been received yet.', detail: undefined },
+      { severity: 'error', message: 'Could not clear the record filter — No load order has been received yet.', detail: undefined },
     ]);
     expect(deps.showRecordFilter).not.toHaveBeenCalled();
     expect(deps.treeProvider.refresh).not.toHaveBeenCalled();

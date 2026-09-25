@@ -117,14 +117,14 @@ describe('registerRecordLifecycleCommands', () => {
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a create', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createRecord', {
-      refused: true, message: 'mEdit: Could not create a new npc_ record in "MyPatch.esp" — boom',
+      refused: true, message: 'Could not create a new npc_ record in "MyPatch.esp" — boom',
     });
     const { treeSync, refreshMatchingPlugins, reporter } = invoke(client);
 
     await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not create a new npc_ record in "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not create a new npc_ record in "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(treeSync.refresh).not.toHaveBeenCalled();
@@ -283,13 +283,13 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('reports the ready-to-show message at error and refreshes nothing when the call itself fails', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { refused: true, message: 'mEdit: Could not delete 2 records — boom' });
+      client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 2 records — boom' });
       const { treeSync, reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'mEdit: Could not delete 2 records — boom', detail: undefined },
+        { severity: 'error', message: 'Could not delete 2 records — boom', detail: undefined },
       ]);
       expect(treeSync.refresh).not.toHaveBeenCalled();
     });
@@ -483,7 +483,7 @@ describe('registerRecordLifecycleCommands', () => {
       await renumber(RECORD_NODE);
 
       expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'mEdit: Could not renumber 000801:MyPatch.esp — no answer', detail: undefined },
+        { severity: 'error', message: 'Could not renumber 000801:MyPatch.esp — no answer', detail: undefined },
       ]);
       expect(treeSync.refresh).not.toHaveBeenCalled();
     });
@@ -504,7 +504,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a renumber', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('renumberRecord', { refused: true, message: 'mEdit: Could not renumber 000801:MyPatch.esp — boom' });
+      client.setCommandResult('renumberRecord', { refused: true, message: 'Could not renumber 000801:MyPatch.esp — boom' });
       client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
       client.setQueryAnswer('getReferences', []);
       const { treeSync, reporter } = invoke(client);
@@ -513,7 +513,7 @@ describe('registerRecordLifecycleCommands', () => {
       await renumber(RECORD_NODE);
 
       expect(reporter.reports).toEqual([
-        { severity: 'error', message: 'mEdit: Could not renumber 000801:MyPatch.esp — boom', detail: undefined },
+        { severity: 'error', message: 'Could not renumber 000801:MyPatch.esp — boom', detail: undefined },
       ]);
       expect(reporter.landings).toEqual([]);
       expect(treeSync.refresh).not.toHaveBeenCalled();
@@ -602,7 +602,7 @@ describe('registerRecordLifecycleCommands', () => {
       const client = attachedClient();
       client.setQueryAnswer('getReferences', []);
       client.setCommandHandler('renumberRecord', (formKey) => Promise.resolve(formKey === '000802:MyPatch.esp'
-        ? { refused: true as const, message: 'mEdit: Could not renumber 000802:MyPatch.esp — no free FormID' }
+        ? { refused: true as const, message: 'Could not renumber 000802:MyPatch.esp — no free FormID' }
         : applied(formKey, formKey === '000801:MyPatch.esp' ? '000900:MyPatch.esp' : '000901:MyPatch.esp')));
       const { reporter, treeSync } = invoke(client);
 
@@ -613,7 +613,7 @@ describe('registerRecordLifecycleCommands', () => {
         severity: 'error',
         message: 'Could not renumber 1 of 3 records.',
         detail: '"SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)" '
-          + '(mEdit: Could not renumber 000802:MyPatch.esp — no free FormID)',
+          + '(Could not renumber 000802:MyPatch.esp — no free FormID)',
       }]);
       expect(reporter.landings).toEqual([]);
       expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -681,10 +681,10 @@ describe('registerRecordLifecycleCommands', () => {
       client.setCommandHandler('renumberRecord', (formKey) => {
         if (formKey === '000801:MyPatch.esp') return Promise.resolve(applied(formKey, '000900:MyPatch.esp'));
         if (formKey === '000802:MyPatch.esp') {
-          return Promise.resolve({ refused: true as const, message: 'mEdit: Could not renumber 000802:MyPatch.esp — no free FormID' });
+          return Promise.resolve({ refused: true as const, message: 'Could not renumber 000802:MyPatch.esp — no free FormID' });
         }
         client.setStatus('disconnected');
-        return Promise.resolve({ refused: true as const, message: `mEdit: Could not renumber ${formKey} — fetch failed` });
+        return Promise.resolve({ refused: true as const, message: `Could not renumber ${formKey} — fetch failed` });
       });
       const { reporter, treeSync } = invoke(client);
 
@@ -697,8 +697,8 @@ describe('registerRecordLifecycleCommands', () => {
         severity: 'error',
         message: 'mEdit stopped answering after renumbering 1 of 5 records; the rest were not renumbered.',
         detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to), '
-          + '"SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)" (mEdit: Could not renumber 000802:MyPatch.esp — no free FormID), '
-          + '"000803:MyPatch.esp in MyPatch.esp (ModA)" (mEdit: Could not renumber 000803:MyPatch.esp — fetch failed), '
+          + '"SecondNpc [000802:MyPatch.esp] in MyPatch.esp (ModA)" (Could not renumber 000802:MyPatch.esp — no free FormID), '
+          + '"000803:MyPatch.esp in MyPatch.esp (ModA)" (Could not renumber 000803:MyPatch.esp — fetch failed), '
           + '"000804:MyPatch.esp in MyPatch.esp (ModA)" (not attempted: mEdit stopped answering)',
       }]);
       expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -786,7 +786,7 @@ describe('registerRecordCopyCommands', () => {
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a copy-as-override', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('copyRecordAsOverride', {
-      refused: true, message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
+      refused: true, message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
     });
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
@@ -794,7 +794,7 @@ describe('registerRecordCopyCommands', () => {
     await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(treeSync.refresh).not.toHaveBeenCalled();
@@ -856,7 +856,7 @@ describe('registerRecordCopyCommands', () => {
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a copy-as-new-record', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('copyRecordAsNewRecord', {
-      refused: true, message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
+      refused: true, message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
     });
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
@@ -864,7 +864,7 @@ describe('registerRecordCopyCommands', () => {
     await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(treeSync.refresh).not.toHaveBeenCalled();

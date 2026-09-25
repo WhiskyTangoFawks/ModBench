@@ -19,9 +19,9 @@ describe('reportPutOutcome', () => {
   it('shows a failed send\'s ready-to-show message verbatim, and nothing else', () => {
     const deps = putDeps();
 
-    reportPutOutcome([plugin()], { outcome: 'failed', message: 'mEdit: Failed to send the load order — bad dir' }, deps);
+    reportPutOutcome([plugin()], { outcome: 'failed', message: 'Failed to send the load order — bad dir' }, deps);
 
-    expect(deps.error).toHaveBeenCalledWith('mEdit: Failed to send the load order — bad dir');
+    expect(deps.error).toHaveBeenCalledWith('Failed to send the load order — bad dir');
     expect(deps.warn).not.toHaveBeenCalled();
   });
 
@@ -39,7 +39,10 @@ describe('reportPutOutcome', () => {
 
     reportPutOutcome([], applied, deps);
 
-    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
+    expect(deps.warn).toHaveBeenCalledWith(
+      'The active profile has no enabled plugins — only base-game masters are held. '
+        + 'Enable plugins in the mod list (or check the profile\'s plugins.txt).',
+    );
   });
 
   // ADR-0013: every copy is sent, so a non-empty snapshot does not mean the profile has anything
@@ -160,7 +163,7 @@ describe('syncActiveFilter', () => {
 
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('boom'));
     expect(deps.warn).toHaveBeenCalledWith(
-      "mEdit: Could not read the record filter — the Plugins view shows it as it last was. boom");
+      "Could not read the record filter — the Plugins view shows it as it last was. boom");
     expect(deps.showRecordFilter).not.toHaveBeenCalled();
   });
 });

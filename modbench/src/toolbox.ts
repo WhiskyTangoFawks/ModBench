@@ -357,7 +357,7 @@ async function applyLoadOrderToTree(
     outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
     reporter.report(
       'warning',
-      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
+      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records.',
     );
     return;
   }

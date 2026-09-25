@@ -77,7 +77,7 @@ describe('registerCreatePluginCommand', () => {
   // add a plugins.txt line for a file the backend never actually wrote.
   it('reports the ready-to-show message at error and never appends to the load order when the backend refuses', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { refused: true, message: 'mEdit: Failed to create plugin — Bad Request' });
+    client.setCommandResult('createPlugin', { refused: true, message: 'Failed to create plugin — Bad Request' });
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
@@ -86,7 +86,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Failed to create plugin — Bad Request', detail: undefined },
+      { severity: 'error', message: 'Failed to create plugin — Bad Request', detail: undefined },
     ]);
     expect(appendPlugin).not.toHaveBeenCalled();
     expect(reporter.landings).toEqual([]);
@@ -107,7 +107,7 @@ describe('registerCreatePluginCommand', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
-      message: 'Created "MyPatch.esp", but could not add it to the load order; add it manually in the Plugins tree.',
+      message: 'Created "MyPatch.esp", but could not add it to the load order.',
       detail: 'plugins.txt is read-only',
     }]);
     expect(reporter.landings).toEqual([]);
@@ -119,7 +119,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'New Plugin needs an open MO2 instance workspace.', detail: undefined },
+      { severity: 'error', message: 'Creating a plugin needs an open MO2 instance workspace.', detail: undefined },
     ]);
     expect(showInputBox).not.toHaveBeenCalled();
   });
@@ -142,13 +142,17 @@ describe('registerRevealInExplorerCommand', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('reports an unresolved file location at error rather than doing nothing', async () => {
+  it('reports an unresolved file location at error, naming why, rather than doing nothing', async () => {
     const { run, reporter } = invoke(() => Promise.resolve(undefined));
 
     await run({ kind: 'plugin', plugin: { name: 'MyMod.esp' } });
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not resolve a file location for "MyMod.esp".', detail: undefined },
+      {
+        severity: 'error',
+        message: 'Could not resolve a file location for "MyMod.esp" — it is not in the load order.',
+        detail: undefined,
+      },
     ]);
     expect(executeCommand).not.toHaveBeenCalled();
   });

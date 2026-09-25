@@ -126,14 +126,14 @@ describe('registerTrackCommand', () => {
   // landed when the backend refused the whole selection.
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the whole selection', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track 1 plugin — git was not found on PATH.' });
+    client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not track 1 plugin — git was not found on PATH.', detail: undefined },
+      { severity: 'error', message: 'Could not track 1 plugin — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(refresh).not.toHaveBeenCalled();
@@ -187,7 +187,9 @@ describe('registerRebaseCommand', () => {
     };
   }
 
-  it('lands the clean-rebase toast and refreshes on a landed rebase', async () => {
+  // plugins.md, Rebase edit branch: a clean rebase says nothing — there is nothing for the user
+  // to act on, so no toast and no Output line report it.
+  it('reports nothing on a clean rebase, but still refreshes', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
     const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
@@ -195,7 +197,7 @@ describe('registerRebaseCommand', () => {
     await handler(pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
-    expect(reporter.landings).toEqual(['Rebased "ModA" onto the updated baseline.']);
+    expect(reporter.landings).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
@@ -216,13 +218,13 @@ describe('registerRebaseCommand', () => {
 
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the rebase outright', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' });
+    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'Could not rebase "ModA" — boom' });
     const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not rebase "ModA" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not rebase "ModA" — boom', detail: undefined },
     ]);
     expect(refresh).not.toHaveBeenCalled();
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
@@ -239,19 +241,16 @@ describe('registerRebaseCommand', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('reports a conflicted rebase at warning, naming the gesture that resumes it', async () => {
+  // plugins.md, Rebase edit branch: a conflict opens the native merge editor — that is the whole
+  // story, so nothing more is reported here (runRebase already opened it).
+  it('reports nothing on a conflicted rebase, relying on the opened merge editor', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: [] });
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
-    expect(reporter.reports).toEqual([{
-      severity: 'warning',
-      message: 'Rebasing "ModA" hit conflicts — resolve them in the opened merge editor(s), '
-        + 'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
-      detail: undefined,
-    }]);
+    expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
 });
@@ -269,14 +268,14 @@ describe('compileAndReport', () => {
 
   it('reports the ready-to-show message at error on a transport-level refusal (WriteRefused), never the typed-refusal wording', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" — boom' });
 
     const { run, reporter } = compile(client, undefined);
     await run;
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
   });
@@ -406,14 +405,14 @@ describe('registerSaveAndCompileCommand', () => {
 
   it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" — boom' });
     const { handler, reporter } = invokeSaveAndCompile(client);
 
     await handler(pluginNode('MyPatch.esp'));
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" — boom', detail: undefined },
     ]);
   });
 
@@ -463,7 +462,7 @@ describe('registerCompileAtRefCommand', () => {
 
   it('drives a compile-at-main through the registered command once the dialog confirms, recording the compile call at "main" and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' });
+    client.setCommandResult('compile', { refused: true, message: 'Could not compile "MyPatch.esp" at "main" — boom' });
     const { handler, reporter, ask } = invokeCompileAtRef(client, 'Compile at main');
 
     await handler(pluginNode('MyPatch.esp'));
@@ -476,7 +475,7 @@ describe('registerCompileAtRefCommand', () => {
     }]);
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', 'main'] });
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom', detail: undefined },
+      { severity: 'error', message: 'Could not compile "MyPatch.esp" at "main" — boom', detail: undefined },
     ]);
   });
 

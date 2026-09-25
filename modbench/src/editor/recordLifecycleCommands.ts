@@ -194,7 +194,7 @@ function makeRenumber(
     if (!await confirmRenumber([identity])) return;
 
     const result = await client.renumberRecord(identity.formKey, identity.plugin, origin, input || suggested);
-    if (!result) { reporter.report('error', `mEdit: Could not renumber ${identity.formKey} — no answer`); return; }
+    if (!result) { reporter.report('error', `Could not renumber ${identity.formKey} — no answer`); return; }
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     onWritten();
     reporter.landed(`Renumbered to ${result.newFormKey}.`);

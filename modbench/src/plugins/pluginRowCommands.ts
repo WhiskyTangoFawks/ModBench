@@ -127,16 +127,11 @@ export function registerRebaseCommand(
     }, origin);
     if (!result) return; // transport failure or refusal already surfaced by runRebase
 
+    // plugins.md, Rebase edit branch: a clean rebase says nothing, a refused one names the paths
+    // (`result.refusalReason`), and a conflict's opened merge editor(s), above, are the whole
+    // story — neither gets a report of its own.
     if (result.outcome === 'Refused') {
       reporter.report('warning', result.refusalReason ?? 'Rebase refused.');
-    } else if (result.outcome === 'Clean') {
-      reporter.landed(`Rebased "${origin}" onto the updated baseline.`);
-    } else {
-      reporter.report(
-        'warning',
-        `Rebasing "${origin}" hit conflicts — resolve them in the opened merge editor(s), ` +
-          'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
-      );
     }
   });
 }

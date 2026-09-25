@@ -46,7 +46,7 @@ function putSnapshot(
   const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot;
   return client.putLoadOrder(plugins, gameDirectory, instanceRoot, gameRelease, { signal }).catch((e: unknown): LoadOrderOutcome => ({
     outcome: 'failed',
-    message: `mEdit: Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
+    message: `Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
   }));
 }
 

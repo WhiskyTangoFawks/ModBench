@@ -714,12 +714,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
   });
 
-  it('surfaces a write failure via the reporter and resyncs the tree (ADR-0019)', async () => {
+  it('surfaces a write failure via the reporter, naming why, and resyncs the tree (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
-    expect(reports).toHaveLength(1);
-    expect(present(reports[0], 'the sole reported failure').severity).toBe('error');
+    expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder plugins.', detail: 'disk full' }]);
     expect(fired).toBe(true); // refresh fired to resync the moved row
   });
 });
