@@ -269,10 +269,10 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
-    // One dialog per mod: a release-sized burst reaches the client as a question that names the
-    // whole release, not one question per file.
+    // Decompile-plugin, trigger 5: every question a release-sized burst opens is the mod's, and a
+    // question is asked again at each settle that still finds the change, until one names it all.
     [Fact]
-    public async Task AReleaseTouchingManyFiles_OpensOneQuestionNamingAllOfThem()
+    public async Task AReleaseTouchingManyFiles_AsksTheModsQuestionUntilOneNamesAllOfThem()
     {
         var assets = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
         var fx = Owned(await Watched("Everything", modFolder =>

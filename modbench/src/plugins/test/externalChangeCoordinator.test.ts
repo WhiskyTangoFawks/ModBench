@@ -6,6 +6,7 @@ import {
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../ports/present';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
@@ -193,5 +194,67 @@ describe('subscribeQuestionOpen', () => {
     await flush();
 
     expect(deps.showDialog).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-0003, invariant 3: one dialog asks. A settle can split one release into two questions, and
+// a modal cannot be updated, so a dialog is never shown twice at once.
+describe('subscribeQuestionOpen — one dialog per mod', () => {
+  // Each dialog stays open until the test answers it.
+  function heldDialogs() {
+    const open: { detail: string; answer: (choice: string | undefined) => void }[] = [];
+    const showDialog = vi.fn((_message: string, options: { detail?: string }) =>
+      new Promise<string | undefined>((resolve) => { open.push({ detail: options.detail ?? '', answer: resolve }); }));
+    const answerOpen = async (index: number, choice: string | undefined) => {
+      present(open[index], `dialog ${index}`).answer(choice);
+      await flush();
+    };
+    return { open, showDialog, answerOpen };
+  }
+
+  it('shows a mod\'s later question only once its open dialog closes, over the whole release, and dispatches that answer alone', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds'] }));
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds', 'b.dds'] }));
+    await flush();
+    expect(open).toHaveLength(1);
+
+    await answerOpen(0, APPLY_BUTTON);
+    expect(open).toHaveLength(2);
+    expect(present(open[1], 'the second dialog').detail).toContain('b.dds');
+    expect(client.calls.map((c) => c.method)).not.toContain('keepAsMyEdit');
+
+    await answerOpen(1, APPLY_BUTTON);
+    expect(client.calls.filter((c) => c.method === 'keepAsMyEdit')).toHaveLength(1);
+  });
+
+  it('asks nothing more of a mod whose open dialog the user dismissed', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds'] }));
+    client.emit(pendingEvent({ externalChangeTrackedFiles: ['a.dds', 'b.dds'] }));
+    await flush();
+    await answerOpen(0, undefined);
+
+    expect(open).toHaveLength(1);
+  });
+
+  it('shows another mod\'s question only once the open dialog closes', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const { open, showDialog, answerOpen } = heldDialogs();
+    subscribeQuestionOpen(makeDeps(client, { showDialog }), client);
+
+    client.emit(pendingEvent({ origin: 'ModA' }));
+    client.emit(pendingEvent({ origin: 'ModB' }));
+    await flush();
+    expect(open).toHaveLength(1);
+
+    await answerOpen(0, undefined);
+    expect(open).toHaveLength(2);
   });
 });
