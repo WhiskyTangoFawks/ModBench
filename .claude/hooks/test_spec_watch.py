@@ -3,13 +3,16 @@ protected spec file is reported to the user once, committed or not, and the hook
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 HOOK = pathlib.Path(__file__).resolve().parent / "spec-watch.py"
 FILES = {"docs/adr/0001-a.md": "adr\n", "docs/architecture/commands.md": "cmds\n", "CONTEXT.md": "ctx\n",
-         "CLAUDE.md": "root\n", "modbench/CLAUDE.md": "module\n", "modbench/src/a.ts": "code\n"}
+         "CLAUDE.md": "root\n", "modbench/CLAUDE.md": "module\n", "modbench/src/a.ts": "code\n",
+         ".claude/settings.json": "{}\n", ".claude/hooks/spec-guard.py": "guard\n"}
 
 
 class SpecWatch(unittest.TestCase):
@@ -39,9 +42,12 @@ class SpecWatch(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-qm", subject)
 
-    def hook(self, event, cwd=None):
+    def state(self, session="sess-1"):
+        return self.tmp / "claude-spec-watch" / f"{session}.json"
+
+    def hook(self, event, cwd=None, script=HOOK):
         payload = {"hook_event_name": event, "session_id": "sess-1", "cwd": str(cwd or self.repo)}
-        run = subprocess.run(["python3", HOOK], input=json.dumps(payload), capture_output=True, text=True,
+        run = subprocess.run(["python3", script],input=json.dumps(payload), capture_output=True, text=True,
                              env=os.environ | {"TMPDIR": str(self.tmp)})
         self.assertEqual(run.returncode, 0, run.stderr)
         self.last_stderr = run.stderr
@@ -64,6 +70,52 @@ class SpecWatch(unittest.TestCase):
         self.hook("SessionStart")
         self.write("modbench/src/a.ts", "changed\n")
         self.assertIsNone(self.hook("Stop"))
+
+    def test_a_reported_edit_is_not_reported_again_when_committed(self):
+        self.hook("SessionStart")
+        self.write("CONTEXT.md", "changed\n")
+        self.hook("Stop")
+        self.commit("context")
+        self.assertIsNone(self.hook("Stop"))
+
+    def test_a_dirty_file_from_before_the_session_is_reported_when_committed(self):
+        self.write("CONTEXT.md", "changed\n")
+        self.hook("SessionStart")
+        self.commit("context")
+        self.assertIn("CONTEXT.md: committed in", self.hook("Stop"))
+
+    def test_a_change_to_the_guard_settings_or_hooks_is_reported(self):
+        self.hook("SessionStart")
+        self.write(".claude/settings.json", '{"permissions": {}}\n')
+        self.write(".claude/hooks/spec-guard.py", "gone\n")
+        message = self.hook("Stop")
+        self.assertIn(".claude/settings.json", message)
+        self.assertIn(".claude/hooks/spec-guard.py", message)
+
+    def test_a_corrupt_state_file_starts_a_fresh_baseline(self):
+        self.hook("SessionStart")
+        self.state().write_text("{not json")
+        self.assertIsNone(self.hook("Stop"))
+        self.write("CONTEXT.md", "changed\n")
+        self.assertIn("CONTEXT.md", self.hook("Stop"))
+
+    def test_state_files_older_than_a_week_are_pruned(self):
+        self.state().parent.mkdir(parents=True)
+        old, recent = self.state("old-session"), self.state("recent-session")
+        old.write_text("{}")
+        recent.write_text("{}")
+        eight_days_ago = time.time() - 8 * 86400
+        os.utime(old, (eight_days_ago, eight_days_ago))
+        self.hook("SessionStart")
+        self.assertFalse(old.exists())
+        self.assertTrue(recent.exists())
+
+    def test_a_missing_spec_guard_is_silent_and_logged(self):
+        alone = self.tmp / "alone"
+        alone.mkdir()
+        shutil.copy(HOOK, alone / HOOK.name)
+        self.assertIsNone(self.hook("SessionStart", script=alone / HOOK.name))
+        self.assertIn("spec-watch", self.last_stderr)
 
     def test_a_plumbing_commit_that_leaves_the_working_tree_alone_is_reported_with_its_commit(self):
         self.hook("SessionStart")

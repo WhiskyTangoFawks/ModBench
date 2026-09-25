@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""SessionStart|Stop: tell the user about each protected spec file that changed since the last report,
-committed or in the working tree, so a write the spec guard cannot see is still seen once. An approved
+"""SessionStart|Stop: tell the user about each file the spec guard protects that changed since the last
+report, committed or in the working tree, so a write the guard cannot see is still seen once. An approved
 edit is reported too, as its receipt.
 
 Stop runs every turn and must never fail one: on any error the hook stays silent and logs to stderr."""
@@ -11,13 +11,20 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 HOOKS = os.path.dirname(os.path.abspath(__file__))
-PATHSPECS = ["docs/architecture", "docs/adr", "CONTEXT.md", ":(glob)**/CLAUDE.md"]
+PATHSPECS = ["docs/architecture", "docs/adr", "CONTEXT.md", ":(glob)**/CLAUDE.md", ".claude/hooks",
+             ":(glob).claude/settings*.json"]
+STATE_DIR = os.path.join(tempfile.gettempdir(), "claude-spec-watch")
+STATE_LIFETIME = 7 * 86400
 
-spec = importlib.util.spec_from_file_location("spec_guard", os.path.join(HOOKS, "spec-guard.py"))
-spec_guard = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(spec_guard)
+
+def load_guard():
+    spec = importlib.util.spec_from_file_location("spec_guard", os.path.join(HOOKS, "spec-guard.py"))
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    return guard
 
 
 def git(root, *args, stdin=None):
@@ -25,7 +32,7 @@ def git(root, *args, stdin=None):
                           check=True).stdout
 
 
-def head_files(root):
+def head_files(root, spec_guard):
     files = {}
     for entry in git(root, "ls-tree", "-r", "-z", "HEAD").split("\0"):
         if entry:
@@ -44,8 +51,8 @@ def tree_files(root, head):
     return files | dict(zip(present, blobs))
 
 
-def snapshot(root):
-    head = head_files(root)
+def snapshot(root, spec_guard):
+    head = head_files(root, spec_guard)
     return {"root": root, "head_sha": git(root, "rev-parse", "HEAD").strip(), "head": head,
             "tree": tree_files(root, head)}
 
@@ -59,43 +66,64 @@ def commit_of(root, old_sha, path):
 
 
 def report(old, new):
-    lines = []
+    lines, reported = [], dict(old["reported"])
     for path in sorted(old["head"].keys() | new["head"].keys() | old["tree"].keys() | new["tree"].keys()):
-        committed = old["head"].get(path) != new["head"].get(path)
-        edited = old["tree"].get(path) != new["tree"].get(path)
+        blob, committed_blob = new["tree"].get(path), new["head"].get(path)
+        committed = old["head"].get(path) != committed_blob and committed_blob != old["reported"].get(path)
+        edited = old["tree"].get(path) != blob and not (committed and blob == committed_blob)
         if committed:
             lines.append(f"  {path}: {commit_of(new['root'], old['head_sha'], path)}")
-        if edited and not (committed and new["tree"].get(path) == new["head"].get(path)):
+        if edited:
             lines.append(f"  {path}: changed in the working tree")
-    if not lines:
-        return None
-    return "Protected spec files changed since the last report:\n" + "\n".join(lines)
+            reported[path] = blob
+    return ("Protected files changed since the last report:\n" + "\n".join(lines) if lines else None), reported
 
 
-def state_path(session_id):
-    return os.path.join(tempfile.gettempdir(), "claude-spec-watch", re.sub(r"[^\w-]", "_", session_id) + ".json")
-
-
-def main(data):
-    path = state_path(data.get("session_id") or "unknown")
-    old = None
-    if os.path.exists(path):
+def read_state(path):
+    try:
         with open(path) as f:
-            old = json.load(f)
-    if old and data.get("hook_event_name") == "SessionStart":
-        return
+            state = json.load(f)
+        return state if {"root", "head_sha", "head", "tree", "reported"} <= state.keys() else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def write_state(path, state):
+    with tempfile.NamedTemporaryFile("w", dir=STATE_DIR, suffix=".tmp", delete=False) as f:
+        json.dump(state, f)
+    os.replace(f.name, path)
+
+
+def prune_states():
+    for name in os.listdir(STATE_DIR):
+        entry = os.path.join(STATE_DIR, name)
+        try:
+            if time.time() - os.path.getmtime(entry) > STATE_LIFETIME:
+                os.remove(entry)
+        except FileNotFoundError:
+            pass
+
+
+def main(data, spec_guard):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    path = os.path.join(STATE_DIR, re.sub(r"[^\w-]", "_", data.get("session_id") or "unknown") + ".json")
+    old = read_state(path)
+    if data.get("hook_event_name") == "SessionStart":
+        prune_states()
+        if old:
+            return
     root = old["root"] if old else git(data.get("cwd") or os.getcwd(), "rev-parse", "--show-toplevel").strip()
-    new = snapshot(root)
-    message = report(old, new) if old else None
+    new = snapshot(root, spec_guard) | {"reported": {}}
+    message = None
+    if old:
+        message, new["reported"] = report(old, new)
     if message:
         print(json.dumps({"systemMessage": message}))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(new, f)
+    write_state(path, new)
 
 
 if __name__ == "__main__":
     try:
-        main(json.load(sys.stdin))
+        main(json.load(sys.stdin), load_guard())
     except Exception as error:
         print(f"spec-watch: {error!r}", file=sys.stderr)

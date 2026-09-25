@@ -45,9 +45,19 @@ class SubagentFileTools(unittest.TestCase):
 
     def test_code_and_neighbouring_docs_pass(self):
         for rel in ("modbench/src/mods/index.ts", "docs/agents/issue-tracker.md", "docs/adrs.md",
-                    "docs/research/adr-notes.md", "NOT-CLAUDE.md", "CLAUDE.md.bak", ".claude/settings.json"):
+                    "docs/research/adr-notes.md", "NOT-CLAUDE.md", "CLAUDE.md.bak", ".claude/skills/validate/SKILL.md"):
             with self.subTest(path=rel):
                 self.assertIsNone(decision("Write", file_path=f"{MAIN}/{rel}", content="x"))
+
+
+    def test_the_guard_settings_and_hooks_are_denied_with_their_own_flow(self):
+        for root in (MAIN, f"{MAIN}/.claude/worktrees/agent-1", "/home/x/mEdit-fix-9"):
+            for rel in (".claude/settings.json", ".claude/settings.local.json", ".claude/hooks/spec-guard.py"):
+                with self.subTest(path=f"{root}/{rel}"):
+                    out = hook("Write", file_path=f"{root}/{rel}", content="x")
+                    self.assertEqual(out["permissionDecision"], "deny")
+                    self.assertIn("settings and hooks", out["permissionDecisionReason"])
+                    self.assertNotIn("you build from them", out["permissionDecisionReason"])
 
 
 class SubagentShellWrites(unittest.TestCase):
@@ -83,7 +93,21 @@ class SubagentShellWrites(unittest.TestCase):
         self.assert_denied("python3 -c \"open('docs/adr/0001.md', 'w').write('x')\"",
                            "python3 - <<'EOF'\nfrom pathlib import Path\nPath('CONTEXT.md').write_text('x')\nEOF",
                            "perl -pi -e 's/a/b/' CLAUDE.md",
-                           "perl -e 'open(my $f, \">\", \"docs/architecture/x.md\")'")
+                           "perl -e 'open(my $f, \">\", \"docs/architecture/x.md\")'",
+                           "perl -e 'unlink \"CLAUDE.md\"'",
+                           "python3 -c \"import shutil; shutil.copy('/tmp/y', 'docs/adr/0001.md')\"",
+                           "python3 -c \"import os; os.rename('CLAUDE.md', '/tmp/x')\"")
+
+    def test_a_trailing_comment_does_not_hide_a_write(self):
+        self.assert_denied("echo x > CLAUDE.md  # note", "rm CONTEXT.md # docs/adr")
+
+    def test_a_write_to_the_guard_settings_or_hooks_gets_their_flow(self):
+        for command in ("sed -i 's/ask/allow/' .claude/settings.json", "rm .claude/hooks/spec-guard.py",
+                        "echo '{}' > /home/x/mEdit/.claude/worktrees/agent-1/.claude/settings.local.json"):
+            with self.subTest(command=command):
+                out = hook("Bash", command=command)
+                self.assertEqual(out["permissionDecision"], "deny")
+                self.assertIn("settings and hooks", out["permissionDecisionReason"])
 
     def test_a_write_later_in_a_compound_command(self):
         self.assert_denied("cd /home/x/mEdit && git status && sed -i 's/a/b/' CLAUDE.md",
@@ -119,6 +143,30 @@ class SubagentShellReads(unittest.TestCase):
                         "git commit -F - <<'EOF'\nrm docs/adr/0001.md\nEOF", "echo 'x > CLAUDE.md'"):
             with self.subTest(command=command):
                 self.assertIsNone(decision("Bash", command=command))
+
+    def test_a_perl_read_passes(self):
+        for command in ("perl -ne 'print if /ORIGINAL/' docs/adr/0001.md",
+                        "perl -ne 'print if /rename|unlink/' docs/adr/0001.md"):
+            with self.subTest(command=command):
+                self.assertIsNone(decision("Bash", command=command))
+
+    def test_a_python_copy_out_of_a_protected_file_passes(self):
+        self.assertIsNone(decision("Bash", command="python3 -c \"import shutil; shutil.copy('docs/adr/0001.md', '/tmp/y')\""))
+
+    def test_a_protected_path_in_a_trailing_comment_is_data(self):
+        for command in ("mv /tmp/a /tmp/b  # not docs/adr", "rm -rf /tmp/x # CLAUDE.md",
+                        "git apply /tmp/p.patch # docs/adr/0001.md"):
+            with self.subTest(command=command):
+                self.assertIsNone(decision("Bash", command=command))
+
+    def test_a_write_word_outside_the_script_is_data(self):
+        for command in ("git log --grep rename -- CLAUDE.md && python3 -c \"print(1)\"",
+                        "echo unlink; python3 -c \"print(open('CLAUDE.md').read())\""):
+            with self.subTest(command=command):
+                self.assertIsNone(decision("Bash", command=command))
+
+    def test_reads_of_the_guard_settings_pass(self):
+        self.assertIsNone(decision("Bash", command="cat .claude/settings.json"))
 
     def test_writes_elsewhere_pass(self):
         for command in ("sed -i 's/a/b/' modbench/src/mods/index.ts", "echo x > /tmp/out.txt",
