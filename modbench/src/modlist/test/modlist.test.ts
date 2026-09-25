@@ -1084,9 +1084,8 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
-  // A line and its folder may differ in case, which MO2 matches (FileNameComparator) and a Linux
-  // disk does not. Rival: looking up the line's own spelling on disk, which misses the folder,
-  // drops the line, and loses its enabled state and its place.
+  // MO2 matches a line to its folder without case (FileNameComparator); a Linux disk does not.
+  // Rival: looking up the line's own spelling on disk, which drops the line, state and place.
   it('keeps a line whose folder differs only in case, when the handed list misses it', async () => {
     const before = (await readFile(modlistPath(), 'utf8')).replace('-Harder VATS', '+harder vats');
     await writeFile(modlistPath(), before);
