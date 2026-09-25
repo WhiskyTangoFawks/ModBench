@@ -151,8 +151,8 @@ public sealed partial class SourceRepository
         }
 
         /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every mod folder
-        /// this batch touched, and <paramref name="repository"/>'s, stripped out of it, so a caller's report
-        /// reads the same whichever tree the fault named.</summary>
+        /// this batch touched, and <paramref name="repository"/>'s, stripped out of it, so a report reads
+        /// the same whichever tree the fault named.</summary>
         public (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
             Exception cause, SourceRepository repository)
         {

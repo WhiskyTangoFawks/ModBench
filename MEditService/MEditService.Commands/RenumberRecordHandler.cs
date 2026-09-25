@@ -56,8 +56,7 @@ public sealed class RenumberRecordHandler
             is { } refusedTarget) return refusedTarget;
 
         // A tree not as this gesture needs it is a refusal (ADR-0014 invariant 4); a filesystem fault is a
-        // write failure; anything else is a bug. Nothing touches the filesystem before the transaction
-        // does, so a refusal from the computation leaves the tree exactly as this method found it.
+        // write failure; anything else is a bug. Only the transaction writes.
         var transaction = new SourceRepository.SourceTransaction();
         try
         {
