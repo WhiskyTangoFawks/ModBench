@@ -872,7 +872,7 @@ describe('registerRecordCopyCommands', () => {
   // xedit.md divergence 5.
   it('reports a no-free-FormID refusal as a plain error, and never asks the ESL-flag question', async () => {
     const client = new InMemoryMEditClient();
-    const refusalMessage = 'mEdit: Could not copy 000801:MyPatch.esp into "MyPatch.esp" — MyPatch.esp has ' +
+    const refusalMessage = 'Could not copy 000801:MyPatch.esp into "MyPatch.esp" — MyPatch.esp has ' +
       'exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use. Clear the light ' +
       'flag in the header, or renumber.';
     let capturedCallback: unknown;
