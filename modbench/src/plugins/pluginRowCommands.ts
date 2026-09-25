@@ -12,7 +12,8 @@ import {
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
-import { pluginFileOf, type PluginListNode, type PluginNode } from './PluginsTreeProvider';
+import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import { pluralArgument, registerPluginsGesture } from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -46,11 +47,12 @@ function rowName(row: TrackedRow): string {
 export function registerTrackCommand(
   progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
+  viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
   // that row is one of several selected, in one call and one pick.
-  return vscode.commands.registerCommand('modbench.plugin.track', async (clicked?: PluginListNode, selected?: readonly PluginListNode[]) => {
-    const nodes = (selected?.length ? selected : [clicked]).filter((node): node is PluginNode => node?.kind === 'plugin');
+  return registerPluginsGesture('modbench.plugin.track', viewSelection, async (entry) => {
+    const nodes = pluralArgument(entry, 'plugin');
     if (nodes.length === 0) return;
 
     const addressed: PluginAddress[] = [];
