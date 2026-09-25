@@ -544,6 +544,10 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRebasable"
         },
         {
+          "command": "modbench.saveAndCompile",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCompilable"
+        },
+        {
           "command": "modbench.record.create",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRecordType"
         },
@@ -895,12 +899,12 @@
         },
         {
           "command": "modbench.saveAndCompile",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
           "group": "pluginActions@3"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
           "group": "pluginActions@4"
         },
         {

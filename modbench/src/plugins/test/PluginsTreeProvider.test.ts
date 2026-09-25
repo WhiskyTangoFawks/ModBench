@@ -1728,7 +1728,7 @@ function expectString(value: unknown): string {
 
 // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and rebase edit
 // branch on a tracked plugin's mod while no rebase is in progress, each offered only there.
-describe('PluginsTreeProvider — the row states where track and rebase edit branch apply', () => {
+describe('PluginsTreeProvider — the row states where track, rebase edit branch and compile apply', () => {
   const flags = async (h: Harness): Promise<string[]> => String((await rowItem(h)).contextValue).split(' ');
 
   it('offers track on an untracked plugin in a mod, and not rebase', async () => {
@@ -1738,18 +1738,26 @@ describe('PluginsTreeProvider — the row states where track and rebase edit bra
     expect(await flags(h)).toEqual(['plugin', 'untrackedInMod']);
   });
 
-  it('offers rebase on a tracked plugin\'s mod, and not track', async () => {
+  it('offers rebase and compile on a tracked, editable plugin in a mod, and not track', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'rebasable']);
+    expect(await flags(h)).toEqual(['plugin', 'rebasable', 'compilable']);
   });
 
   it('offers no rebase while the mod\'s rebase is in progress', async () => {
     const h = makeTree([A_ROW()], { rebaseInProgress: (plugin, origin) => plugin === 'A.esp' && origin === 'SomeMod' });
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
-    expect(await flags(h)).toEqual(['plugin']);
+    expect(await flags(h)).toEqual(['plugin', 'compilable']);
+  });
+
+  // mEdit's `isImmutable`: read-only for editing, as an overridden or unlisted plugin is.
+  it('offers no compile on a tracked plugin that is read-only for editing', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
+
+    expect(await flags(h)).toEqual(['plugin', 'rebasable']);
   });
 
   it('offers neither on a plugin in no mod: Data or Overwrite', async () => {

@@ -467,11 +467,13 @@ describe('publishCompileDiagnostics', () => {
 // ── registerSaveAndCompileCommand ─────────────────────────────────────────
 
 describe('registerSaveAndCompileCommand', () => {
-  function invokeSaveAndCompile(client: InMemoryMEditClient) {
+  function invokeSaveAndCompile(
+    client: InMemoryMEditClient, viewSelection: readonly PluginNode[] = [], activeRecord?: string,
+  ) {
     const reporter = recordingReporter();
     registerSaveAndCompileCommand(
-      client, { current: () => undefined }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
-      new FakeDiagnosticCollection(), () => undefined);
+      client, { current: () => activeRecord }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
+      new FakeDiagnosticCollection(), () => undefined, () => viewSelection);
     return {
       handler: present(handlers.get('modbench.saveAndCompile'), 'the save-and-compile command registerSaveAndCompileCommand registers'),
       reporter,
@@ -503,6 +505,29 @@ describe('registerSaveAndCompileCommand', () => {
       { severity: 'error', message: '"Orphan.esp" has no mod folder to compile into.', detail: undefined },
     ]);
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
+  // commands.md, Where: the palette hands the gesture no argument, so it takes the one selected plugin.
+  it('compiles the one selected plugin from the palette', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    client.setCommandResult('compile', compileResultFixture());
+    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')], '000801:Other.esp');
+
+    await handler();
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+  });
+
+  // The record tab's title bar hands the command its editor, never a plugin row.
+  it('compiles the active record\'s plugin from the record tab\'s title bar, whatever the Plugins selection', async () => {
+    const client = clientWithOrigin('Other.esp', 'ModB');
+    client.setQueryAnswer('getRecordOwner', { plugin: 'Other.esp', origin: 'ModB' });
+    client.setCommandResult('compile', compileResultFixture());
+    const { handler } = invokeSaveAndCompile(client, [pluginNode('MyPatch.esp')], '000801:Other.esp');
+
+    await handler({ scheme: 'webview-panel' }, { groupId: 1 });
+
+    expect(client.calls.filter((c) => c.method === 'compile').map((c) => c.args[0])).toEqual(['Other.esp']);
   });
 
   it('asks which plugin to compile in the catalog\'s own verb, when no row is in hand', async () => {

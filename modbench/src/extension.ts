@@ -273,7 +273,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     ),
     registerSaveAndCompileCommand(
       client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFiles),
+      compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
     registerCompileAtRefCommand(
       client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
       compileDiagnostics, originFiles),

@@ -148,10 +148,15 @@ export function registerSaveAndCompileCommand(
   reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
   originFiles: OriginFilesOf,
+  viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.saveAndCompile', async (...args: unknown[]) => {
+    // The palette hands no argument at all, so it takes the Plugins selection; the record tab's
+    // title bar hands its editor, so it takes the active record.
+    const [clicked] = args;
+    const node = args.length === 0 ? onlySelected(viewSelection(), 'plugin') : clicked;
     const target = await resolveCompileTarget(
-      node?.kind === 'plugin' ? node.plugin.name : undefined,
+      isPluginRow(node) ? node.plugin.name : undefined,
       activeRecordTracker.current(),
       {
         resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
@@ -350,4 +355,8 @@ export function refreshSourceControlFor(
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);
   });
+}
+
+function isPluginRow(value: unknown): value is Extract<PluginListNode, { kind: 'plugin' }> {
+  return typeof value === 'object' && value !== null && Reflect.get(value, 'kind') === 'plugin';
 }

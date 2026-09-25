@@ -499,14 +499,17 @@ export class PluginsTreeProvider
     row.contextValue = this.contextValueOf(file, joinedOrigin);
   }
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and rebase edit
-  // branch on a tracked plugin's mod while no rebase is in progress. Neither until mEdit answers.
+  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, rebase on a tracked
+  // one's mod while none is in progress, compile on a tracked, editable one. None before mEdit answers.
   private contextValueOf(file: string, joinedOrigin: string | undefined): string {
     if (joinedOrigin === undefined || IN_NO_MOD.has(joinedOrigin)) return 'plugin';
-    const tracked = this.facts?.get(file, joinedOrigin)?.tracked;
-    if (tracked === undefined) return 'plugin';
-    if (!tracked) return 'plugin untrackedInMod';
-    return this.rebaseInProgress(file, joinedOrigin) ? 'plugin' : 'plugin rebasable';
+    const facts = this.facts?.get(file, joinedOrigin);
+    if (facts?.tracked === undefined) return 'plugin';
+    if (!facts.tracked) return 'plugin untrackedInMod';
+    const flags = ['plugin'];
+    if (!this.rebaseInProgress(file, joinedOrigin)) flags.push('rebasable');
+    if (facts.readOnly !== true) flags.push('compilable');
+    return flags.join(' ');
   }
 
   // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load

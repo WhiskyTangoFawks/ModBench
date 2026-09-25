@@ -620,7 +620,7 @@ describe('package.json plugin-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
   const forPluginRows = () => contextMenus().filter((e) => requires(e.when, 'view == modbench.pluginListTree')
-    && /viewItem =~ \/\\b(plugin|untrackedInMod|rebasable)\\b\//.test(e.when));
+    && /viewItem =~ \/\\b(plugin|untrackedInMod|rebasable|compilable)\\b\//.test(e.when));
 
   // Every command reachable from a plugin row, listed, with the row flag it needs. Open Header has
   // no entries: it opens via row click, not a menu entry.
@@ -629,14 +629,14 @@ describe('package.json plugin-row context menu', () => {
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
       ['modbench.plugin.reveal', String.raw`${ON}/\bplugin\b/`],
       ['modbench.plugin.track', String.raw`${ON}/\buntrackedInMod\b/`],
-      ['modbench.saveAndCompile', String.raw`${ON}/\bplugin\b/`],
-      ['modbench.pluginListTree.compileAtMain', String.raw`${ON}/\bplugin\b/`],
+      ['modbench.saveAndCompile', String.raw`${ON}/\bcompilable\b/`],
+      ['modbench.pluginListTree.compileAtMain', String.raw`${ON}/\bcompilable\b/`],
       ['modbench.mod.rebaseEditBranch', String.raw`${ON}/\brebasable\b/`],
     ]);
   });
 
   // plugins.md, Menus and keys, story 6: offered only where the catalog's condition holds.
-  it('offers track only on an untracked plugin in a mod, and rebase only on a rebasable one', () => {
+  it('offers track, rebase and compile only where the catalog\'s condition holds', () => {
     const offered = (command: string, contextValue: string) => {
       const entry = present(forPluginRows().find((e) => e.command === command), command);
       const pattern = present(/viewItem =~ \/(.*)\/$/.exec(entry.when)?.[1], `the viewItem pattern of ${command}`);
@@ -649,6 +649,11 @@ describe('package.json plugin-row context menu', () => {
     expect(offered('modbench.mod.rebaseEditBranch', 'plugin untrackedInMod')).toBe(false);
     expect(offered('modbench.mod.rebaseEditBranch', 'plugin')).toBe(false);
     expect(offered('modbench.plugin.reveal', 'pluginImplicit')).toBe(false);
+    for (const compile of ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain']) {
+      expect(offered(compile, 'plugin rebasable compilable')).toBe(true);
+      expect(offered(compile, 'plugin rebasable')).toBe(false);
+      expect(offered(compile, 'plugin untrackedInMod')).toBe(false);
+    }
   });
 });
 
@@ -794,6 +799,7 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
     ['modbench.plugin.track', 'modbench.plugin.holdsUntrackedInMod'],
     ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singleRebasable'],
+    ['modbench.saveAndCompile', 'modbench.plugin.singleCompilable'],
     ['modbench.record.create', 'modbench.plugin.singleRecordType'],
     ['modbench.record.delete', 'modbench.plugin.holdsDeletableRecord'],
   ] as const;

@@ -191,6 +191,15 @@ describe('what the Plugins palette entries read off the selection', () => {
     expect(pluginsKeyContext([rebasable, alpha]).singleRebasable).toBe(false);
   });
 
+  it('compile sees exactly one selected compilable plugin', () => {
+    const compilable = pluginRow('Eps.esp', 'ModE');
+    compilable.contextValue = 'plugin rebasable compilable';
+
+    expect(pluginsKeyContext([compilable]).singleCompilable).toBe(true);
+    expect(pluginsKeyContext([alpha]).singleCompilable).toBe(false);
+    expect(pluginsKeyContext([compilable, alpha]).singleCompilable).toBe(false);
+  });
+
   it('create sees exactly one selected record type', () => {
     expect(pluginsKeyContext([weapons]).singleRecordType).toBe(true);
     expect(pluginsKeyContext([weapons, alpha]).singleRecordType).toBe(false);
