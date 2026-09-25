@@ -17,9 +17,9 @@ internal static class ExternalChangeClassifier
     {
         if (!SourceRepository.IsTracked(modFolder)) return null;
 
-        // A marker means Modbench's own interrupted compile, routed to repair, never this dialog.
-        if (CompileJournal.UnfinishedBatch(modFolder) != null)
-            return new ExternalChangeClassification.CrashRecovery();
+        // A marker means Modbench's own interrupted compile: a warning, never this dialog.
+        if (CompileJournal.UnfinishedBatch(modFolder) is { } unfinished)
+            return new ExternalChangeClassification.CompileUnfinished(unfinished.Unlanded);
 
         var trackedPlugins = TrackedPlugins(modFolder, plugins);
         var changedPlugins = ChangedAmong(modFolder, trackedPlugins);
@@ -84,12 +84,12 @@ internal static class ExternalChangeClassifier
             string.Equals(LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path), modFolder, StringComparison.Ordinal));
 }
 
-/// <summary>What classification answers. Never both a crash and an external change for one
-/// settle.</summary>
+/// <summary>What classification answers. Never both an unfinished compile and an external change
+/// for one settle.</summary>
 internal abstract record ExternalChangeClassification
 {
-    /// <summary>An interrupted compile: routes to the repair offer, never this dialog.</summary>
-    public sealed record CrashRecovery : ExternalChangeClassification;
+    /// <summary>An interrupted compile, naming the plugins whose binaries it left bad.</summary>
+    public sealed record CompileUnfinished(IReadOnlyList<string> Plugins) : ExternalChangeClassification;
 
     /// <summary>A genuine external change. Plugins names every plugin whose bytes changed;
     /// TrackedFiles names every changed tracked path outside source/ — either, or both.</summary>

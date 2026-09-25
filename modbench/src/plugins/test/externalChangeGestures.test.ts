@@ -30,7 +30,6 @@ function makeDispatchDeps(client: AnswerClient, showDialogChoice: string | undef
     reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
-    presentCrashRepair: vi.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -41,21 +41,6 @@ export interface UnansweredExternalChange {
  *  registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
-/** The one list `CrashRepairReason` and `isCrashRepairReason` both derive from, since the enum
- *  left the wire with the load-order response's failures — nothing generates it for us. */
-export const CRASH_REPAIR_REASONS = ['InterruptedCompile', 'MissingOrUnreadableBinary'] as const;
-
-/** A transform of `question-open`'s own `crashRepairReason` string. */
-export type CrashRepairReason = typeof CRASH_REPAIR_REASONS[number];
-
-/** One `question-open` notification's crash-repair verdict, exploded to one offer per plugin it
- *  named — the shape the dialog presents one modal per. */
-export interface CrashRepairOffer {
-  plugin: string;
-  origin: string;
-  reason: CrashRepairReason;
-}
-
 /** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
  *  same posture {@link CompileResult} uses. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];

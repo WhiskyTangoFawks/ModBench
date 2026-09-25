@@ -106,7 +106,6 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Equal(fromRestart.MetaChanged, fromLiveChange.MetaChanged);
         Assert.Equal(fromRestart.OldVersion, fromLiveChange.OldVersion);
         Assert.Equal(fromRestart.NewVersion, fromLiveChange.NewVersion);
-        Assert.Equal(fromRestart.CrashRepairReason, fromLiveChange.CrashRepairReason);
     }
 
     [Fact]
@@ -135,7 +134,7 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Empty(Questions(tree));
     }
 
-    // An unreadable binary is a repair offer, and no verdict: the marker it would have cleared stands.
+    // An unreadable binary is no verdict: the marker it would have cleared stands.
     [Fact]
     public async Task ALoad_KeepsAStaleMarker_WhenTheTrackedPluginCannotBeRead()
     {
@@ -146,15 +145,13 @@ public sealed class LoadOrderChangeSettleTests
 
         await tree.ApplyLoadOrder();
 
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal("MissingOrUnreadableBinary", pending.CrashRepairReason);
         Assert.NotNull(SourceRepository.UnansweredExternalChange(modFolder));
     }
 
-    // A crash between the journal's marker write and its clear is offered for repair and never
-    // routed into the external-change queue: the two prompts must never both fire for one event.
+    // compile-plugin, test seam: given the mark from an interrupted compile, the warning and no
+    // question.
     [Fact]
-    public async Task ALoad_OffersRepair_AndOpensNoExternalChangeQuestion_WhenAJournalMarkerIsUnanswered()
+    public async Task ALoad_WarnsCompileUnfinished_AndOpensNoQuestion_WhenAJournalMarkerIsUnanswered()
     {
         var (tree, modFolder) = TrackedBeforeWatching();
         using var _ = tree;
@@ -165,17 +162,16 @@ public sealed class LoadOrderChangeSettleTests
 
         await tree.ApplyLoadOrder();
 
-        // Assert.Single is also "never both": the repair offer and the external-change dialog's
-        // own question must never fire together for one event.
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal(Origin, pending.Origin);
-        Assert.Equal([PluginName], pending.Keys);
-        Assert.Equal("InterruptedCompile", pending.CrashRepairReason);
+        var unfinished = Assert.Single(tree.Notifications.Published);
+        Assert.Equal("compile-unfinished", unfinished.Kind);
+        Assert.Equal(Origin, unfinished.Origin);
+        Assert.Equal(PluginName, unfinished.Plugin);
     }
 
-    // The repo and source survive, only the plugin's own binary is gone.
+    // The repo and source survive, only the plugin's own binary is gone: the reconcile's "failed to
+    // load" says so, and the settle asks nothing.
     [Fact]
-    public async Task ALoad_OffersRepair_WhenTheTrackedPluginsBinaryIsMissing()
+    public async Task ALoad_PublishesNothing_WhenTheTrackedPluginsBinaryIsMissing()
     {
         var (tree, _) = TrackedBeforeWatching();
         using var __ = tree;
@@ -183,16 +179,12 @@ public sealed class LoadOrderChangeSettleTests
 
         await tree.ApplyLoadOrder();
 
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal(Origin, pending.Origin);
-        Assert.Equal([PluginName], pending.Keys);
-        Assert.Equal("MissingOrUnreadableBinary", pending.CrashRepairReason);
+        Assert.Empty(tree.Notifications.Published);
     }
 
-    // An untracked plugin takes the indexed-binary route and never the settle, even in the
-    // repair-worthy state that offers repair for a tracked one.
+    // An untracked plugin takes the indexed-binary route and never the settle.
     [Fact]
-    public async Task ALoad_OffersNothing_ForAnUntrackedPlugin_EvenWithAMissingBinary()
+    public async Task ALoad_PublishesNothing_ForAnUntrackedPlugin_EvenWithAMissingBinary()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod("Untracked", PluginName);
