@@ -186,18 +186,65 @@ describe('EditsInFlight', () => {
     expect(targets).toEqual(['000800:Mod.esp']);
   });
 
-  // A report missed while the stream was down would leave the tab waiting for ever.
-  it('reads the new FormKey when the stream reconnects, and refreshes as usual afterwards', async () => {
+  // A report missed while the stream was down would leave the tab waiting for ever; a read before
+  // the Index holds the key would clear the grid for an error (editor.md, States 5).
+  describe('on the stream\'s reconnect, a tab waiting for its new FormKey', () => {
+    it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
+      const { client, panel, edits } = openOn('000800:Mod.esp');
+      client.setQueryAnswer('getRecordOwner', { plugin: 'Mod.esp', origin: 'ModA' });
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      client.reconnected();
+      await vi.waitFor(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
+      announceConflictsComputed(new Set([panel]), edits);
+
+      expect(loadsOf(panel)).toEqual([
+        { type: 'loadRecord', formKey: '000900:Mod.esp' },
+        { type: 'conflictsComputed' },
+      ]);
+    });
+
+    it('keeps what it shows while the Index does not hold it yet, and reads it on the report', async () => {
+      const { client, panel, edits } = openOn('000800:Mod.esp');
+      client.setQueryAnswer('getRecordOwner', undefined);
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      client.reconnected();
+      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
+      await Promise.resolve();
+      expect(loadsOf(panel)).toEqual([]);
+      client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+
+      expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
+    });
+
+    it('keeps what it shows when mEdit cannot say, and reads it on the report', async () => {
+      const { client, panel, edits } = openOn('000800:Mod.esp');
+      client.setQueryFailure('getRecordOwner', new Error('backend down'));
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      client.reconnected();
+      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
+      await Promise.resolve();
+      expect(loadsOf(panel)).toEqual([]);
+      client.emit(rowsChanged(['000900:Mod.esp']));
+
+      expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
+    });
+  });
+
+  // A FormID changed twice before the tab read either key: its read of the last one ends the
+  // whole chain, so a freed first key used again in the same copy is its own record.
+  it('ends every move of a chain when the tab reads the chain\'s last key', async () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
     await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+    await edits.gate(panel)(COPY, () => Promise.resolve('000A00:Mod.esp'));
+    client.emit(rowsChanged(['000900:Mod.esp', '000A00:Mod.esp']));
 
-    client.reconnected();
-    announceConflictsComputed(new Set([panel]), edits);
+    const targets: string[] = [];
+    await edits.gate(panel)(COPY, formKey => { targets.push(formKey); return Promise.resolve(undefined); });
 
-    expect(loadsOf(panel)).toEqual([
-      { type: 'loadRecord', formKey: '000900:Mod.esp' },
-      { type: 'conflictsComputed' },
-    ]);
+    expect(targets).toEqual(['000800:Mod.esp']);
   });
 
   it('retitles a tab titled with the old FormKey, and leaves one titled with the EditorID', async () => {
