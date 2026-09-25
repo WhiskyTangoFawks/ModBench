@@ -215,7 +215,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `exclude / include file` | #483: where a mod's files are shown |
 | `check for updates` and the update badge, `publish` | the Nexus API work |
 | move targets: top, bottom, priority N, first or last conflict; add separator above or inside | the catalog's planned Options |
-| install's position, installer choice and reinstall | the install workup, #959 |
+| install's position, installer choice and reinstall | the catalog's planned Options |
 | `open folder` in the native file tab, decorated by conflict status | #483 |
 
 ## Test seam
