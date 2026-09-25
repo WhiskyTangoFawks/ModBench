@@ -145,8 +145,8 @@ As a user, I want:
 
 A condition list is an array like any other. As a user, I want:
 
-1. A parameter the condition's function does not use to have no row, unless a column uses it, so a
-   losing copy's data is never hidden. *ruling; xedit.md, divergence 15; ADR-0005, invariant 7*
+1. A parameter the condition's function does not use to have no row, unless a column uses it, so an
+   overridden record's data is never hidden. *ruling; xedit.md, divergence 15; ADR-0005, invariant 7*
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value
    never reaches the plugin. *ADR-0005, invariant 7*
 3. The function chosen from the ordinary enum dropdown. *ruling*
