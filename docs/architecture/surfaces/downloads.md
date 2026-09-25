@@ -149,7 +149,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `download`, `pause / resume`, `cancel`, rows for unfinished downloads, the progress bar and a status-bar count | the Nexus download work |
 | `query info`, and MO2's "info incomplete" icon that offers it | the Nexus API work |
 | `reveal installed mod` | its design |
-| The install name prompt, a position, the installer choice, reinstall | the install workup, #959 |
+| A position, the installer choice, reinstall | the catalog's planned Options |
 
 ## Test seam
 
