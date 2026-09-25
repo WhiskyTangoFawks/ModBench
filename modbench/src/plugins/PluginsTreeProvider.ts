@@ -568,8 +568,8 @@ export class PluginsTreeProvider
     this.applyPluginFacts(plugins);
     // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
     // vanishing under `mods/` is a watcher event, and that is a reconcile.
-    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map((p) => p.name));
-    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map((p) => p.name));
+    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map(({ name, origin }) => ({ name, origin })));
+    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map(({ name, origin }) => ({ name, origin })));
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);

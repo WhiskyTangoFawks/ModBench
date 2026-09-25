@@ -1167,8 +1167,27 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
 
     await reconcile(h, [held('A.esp', { isImmutable: true }), held('B.esp', { isTracked: true })]);
 
-    expect(immutable).toHaveBeenCalledWith(['A.esp']);
-    expect(tracked).toHaveBeenCalledWith(['B.esp']);
+    expect(immutable).toHaveBeenCalledWith([{ name: 'A.esp', origin: 'SomeMod' }]);
+    expect(tracked).toHaveBeenCalledWith([{ name: 'B.esp', origin: 'SomeMod' }]);
+  });
+
+  // ADR-0012 invariant 1: two copies of one filename are two plugins.
+  it("never marks a copy's records read-only or tracked for another copy of the same name", async () => {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
+      records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
+    });
+    const h = makeTree([plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' })], { client });
+    await reconcile(h, [
+      held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }),
+      held('Shared.esp', { origin: 'ModB' }),
+    ]);
+
+    const [row] = await h.tree.getChildren();
+    const [group] = await h.tree.getChildren(present(row, 'the Shared.esp row'));
+    const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
+
+    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('recordUntracked');
   });
 });
 
