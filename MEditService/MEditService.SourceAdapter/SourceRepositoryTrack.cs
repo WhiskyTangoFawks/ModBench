@@ -106,9 +106,9 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", $"Track {ModNameIn(modFolder)}");
     }
 
-    /// <summary>Absorb's git mechanics, by plumbing so the edit branch is untouched: each plugin's
-    /// baseline on main, then the changed tracked files in one commit. The first failure stops the
-    /// run, answered by its baseline, null for the tracked files, and its subject.</summary>
+    /// <summary>Absorb's commits to main, by plumbing so the edit branch is untouched: each plugin's
+    /// baseline, then the changed tracked files. The first failure stops the run; a null baseline is
+    /// the tracked files'.</summary>
     public static (BaselineTrailers? Baseline, string Subject, string Reason)? CommitPristineToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,

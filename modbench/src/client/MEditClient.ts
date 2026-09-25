@@ -159,8 +159,7 @@ export interface MEditClient {
   ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined>;
   compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
   // Origin-scoped, like rebase: the mod, not one plugin in it, is the unit both answers cover.
-  // Each changed plugin lands or is refused on its own (ADR-0019 invariant 4). A WriteRefused is
-  // the whole answer refused, with nothing written.
+  // Absorb's WriteRefused is the whole answer refused, with nothing written.
   absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
   keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
   rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined>;

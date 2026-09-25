@@ -433,10 +433,9 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 // already stands keeps its own .gitignore.
 public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4): a refusal is an item of the
-/// answer, never the status of the call. Only Absorb sets <see cref="TrackedFilesRefusal"/>: its
-/// commit of the mod's changed tracked files is no plugin's, and can fail after every plugin
-/// landed.</summary>
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.
+/// Only Absorb sets <see cref="TrackedFilesRefusal"/>: its tracked-files commit is no plugin's,
+/// and can fail after every plugin landed.</summary>
 public record TrackResponse(
     IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
 
