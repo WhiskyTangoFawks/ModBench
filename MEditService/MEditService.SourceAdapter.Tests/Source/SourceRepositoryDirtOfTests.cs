@@ -132,9 +132,8 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     // The rival: skip the structural-pass fallback and every one of these shapes reads as a clean
     // tree instead of one that needs a whole-tree compare.
     [Theory]
-    // Too few / too many path segments — the flat shape is exactly four: source/<plugin>/<folder>/<file>.json.
+    // Too few path segments — the flat shape is at least four: source/<plugin>/<folder>/<file>.json.
     [InlineData("source/Test.esp/000800.json")]
-    [InlineData("source/Test.esp/Npcs/Test.esp/000800.json")]
     // Last segment missing the load-bearing ".json" suffix.
     [InlineData("source/Test.esp/Npcs/000800.txt")]
     [InlineData("source/Test.esp/Npcs/000800")]

@@ -132,9 +132,9 @@ internal sealed class WatcherSinks
         }
     }
 
-    // A file declaring nothing, deleted or unreadable, is named by HEAD's document at its path. Null
-    // when neither names a key, or another path in the batch declares the key HEAD named: a
-    // rename, which only a whole-copy validate keys right.
+    // A file declaring nothing is named by HEAD's document at its path. Null when neither names a
+    // key, or another path in the batch declares the key HEAD named: a rename, which only a
+    // whole-copy validate keys right.
     private static List<string>? FormKeysOf(SourceChangeEvent change)
     {
         var declared = new List<string>();
