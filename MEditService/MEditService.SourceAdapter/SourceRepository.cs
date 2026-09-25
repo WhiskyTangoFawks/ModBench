@@ -333,7 +333,7 @@ public sealed partial class SourceRepository
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
 
         var tree = atRef == null
-            ? WorkingTreeSnapshotTree(gitDir, modFolder, headSha)
+            ? WorkingTreeSnapshotTree(gitDir, modFolder)
             : GitCli.Run(gitDir, modFolder, "rev-parse", $"{atRef}^{{tree}}").Trim();
 
         // commit-tree is plumbing with no --trailer flag, so the trailer line is hand-written at the message
@@ -343,14 +343,21 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
 
-    // git stash create answers empty, not an error, when the working tree matches the index; HEAD's own
-    // tree is then the snapshot.
-    private static string WorkingTreeSnapshotTree(string gitDir, string workTree, string headSha)
+    // The index and every tracked file's working-tree bytes, built on a copy of the index: git stash
+    // create would take index.lock, which the user's own commit or rebase may be holding.
+    private static string WorkingTreeSnapshotTree(string gitDir, string workTree)
     {
-        if (!GitCli.TryRun(gitDir, workTree, out var stashSha, "stash", "create") || string.IsNullOrWhiteSpace(stashSha))
-            return GitCli.Run(gitDir, workTree, "rev-parse", $"{headSha}^{{tree}}").Trim();
-
-        return GitCli.Run(gitDir, workTree, "rev-parse", $"{stashSha.Trim()}^{{tree}}").Trim();
+        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-snapshot-index-{Guid.NewGuid():N}");
+        try
+        {
+            File.Copy(Path.Combine(gitDir, "index"), scratchIndex);
+            GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "add", "-u");
+            return GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
+        }
+        finally
+        {
+            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
+        }
     }
 
     /// <summary>Stages every changed tracked file on the real repo — index matches working tree —

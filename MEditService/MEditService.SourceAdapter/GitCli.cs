@@ -72,6 +72,9 @@ internal static class GitCli
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
         if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
+        // A read that refreshes the index takes index.lock, which fails the commit or rebase the
+        // user is running in the same repository at that moment (ADR-0003).
+        psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
