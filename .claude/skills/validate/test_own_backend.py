@@ -41,6 +41,14 @@ def alive(pid):
         return stat.read().split(") ")[1][0] != "Z"
 
 
+def started_by_fake_backend(pid, token):
+    try:
+        argv = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except FileNotFoundError:
+        return False
+    return token.encode() in argv or argv[:2] == [b"sleep", b"600"]
+
+
 def wait_gone(pid, seconds=5):
     deadline = time.monotonic() + seconds
     while alive(pid) and time.monotonic() < deadline:
@@ -63,8 +71,20 @@ class OwnBackend(unittest.TestCase):
     def run_with_backend(self, token, client, server=None):
         server = server or ["python3", str(self.fake), token, str(self.pid_file(token))]
         script = f'source "{HELPER}"; start_own_backend "$@" || exit 1; {client}'
-        return subprocess.Popen(["bash", "-c", script, "_", *server], start_new_session=True,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        run = subprocess.Popen(["bash", "-c", script, "_", *server], start_new_session=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        self.addCleanup(self.kill_leftovers, run, token)
+        return run
+
+    def kill_leftovers(self, run, token):
+        pids = self.pids(token) if self.pid_file(token).exists() else []
+        leftovers = [pid for pid in pids if started_by_fake_backend(pid, token)]
+        for kill, target in [(os.killpg, run.pid), *((os.kill, pid) for pid in leftovers)]:
+            try:
+                kill(target, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        run.communicate()
 
     def test_concurrent_callers_each_reach_the_backend_they_started(self):
         runs = {token: self.run_with_backend(token, 'curl -sf "$OWN_BACKEND_URL/token"; sleep 1')
@@ -81,13 +101,18 @@ class OwnBackend(unittest.TestCase):
         for pid in self.pids("fails"):
             self.assertTrue(wait_gone(pid), f"pid {pid} outlived the caller")
 
-    def test_stops_the_backend_when_the_caller_is_interrupted(self):
-        run = self.run_with_backend("interrupted", 'echo up; sleep 600')
-        self.assertEqual(run.stdout.readline().strip(), "up")
-        os.killpg(run.pid, signal.SIGINT)
+    def test_stops_the_backend_when_the_caller_is_terminated(self):
+        run = self.run_with_backend("terminated", 'sleep 600')
+        client_running = lambda: subprocess.run(["pgrep", "-g", str(run.pid), "-x", "sleep"],
+                                                capture_output=True).returncode == 0
+        deadline = time.monotonic() + 10
+        while not client_running() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        os.killpg(run.pid, signal.SIGTERM)
         run.communicate(timeout=10)
-        for pid in self.pids("interrupted"):
-            self.assertTrue(wait_gone(pid), f"pid {pid} outlived the interrupted caller")
+        self.assertEqual(run.returncode, 143)
+        for pid in self.pids("terminated"):
+            self.assertTrue(wait_gone(pid), f"pid {pid} outlived the terminated caller")
 
     def test_leaves_a_process_that_only_shares_the_backends_name_alive(self):
         decoy = subprocess.Popen(["MEditService.Http.Tests", "600"], executable="sleep")
