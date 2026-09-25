@@ -13,7 +13,7 @@ type PluginSyncOutcome =
 /** Its message is the Plugins view's, for a failed run until a run lands. */
 export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage {
   /** Runs on the current value: mEdit answers which plugins load with no line, and the first
-   *  value lands before it can. */
+   *  value lands before it can. Until the first call, no landed value runs plugin sync. */
   runOnConnect(): void;
 }
 
@@ -29,6 +29,9 @@ export function registerPluginSync(
   channel: { error(msg: string): void; info(msg: string): void },
 ): PluginSyncTrigger {
   const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line));
+  // update-load-order-file, Refusals: before mEdit first attaches, plugin sync waits, so a launch
+  // reports nothing.
+  let attachedOnce = false;
   const run = (value: InstanceValue): void => {
     void (async () => {
       const outcome = await failures.run(() => sync(
@@ -43,11 +46,16 @@ export function registerPluginSync(
       }
     })();
   };
-  const subscription = instance.subscribe(run);
+  const subscription = instance.subscribe((value) => {
+    if (attachedOnce) run(value);
+  });
   return {
     message: () => failures.message(),
     onMessageChanged: (listener) => failures.onMessageChanged(listener),
-    runOnConnect: () => run(instance.value),
+    runOnConnect: () => {
+      attachedOnce = true;
+      run(instance.value);
+    },
     dispose: () => { subscription.dispose(); },
   };
 }

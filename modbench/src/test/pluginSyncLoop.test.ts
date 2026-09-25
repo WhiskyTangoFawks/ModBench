@@ -90,12 +90,16 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
   const games: string[] = [];
-  registerPluginSync(instance, (profile, provided, inData, _dataFolder, gameName) => {
+  const trigger = registerPluginSync(instance, (profile, provided, inData, _dataFolder, gameName) => {
     games.push(gameName);
     const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
+  // mEdit attached on the first value, so every value after it runs plugin sync.
+  await instance.refresh();
+  trigger.runOnConnect();
+  await syncs[syncs.length - 1];
 
   const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
   return { root, instance, syncs, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
@@ -201,6 +205,10 @@ describe('a gesture writes the profile the Instance last landed', () => {
 
 // The Instance as the trigger reads it: a current value, and each landed value handed on.
 function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
+  return firedAnswering((_profile, call) => present(outcomes[call], 'an outcome for this run')());
+}
+
+function firedAnswering(answer: (profile: string, call: number) => Promise<PluginSyncResult>) {
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
   let seq = 0;
   const instance = {
@@ -216,7 +224,7 @@ function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
   const profiles: string[] = [];
   const trigger = registerPluginSync(instance, (profile) => {
     profiles.push(profile);
-    const run = present(outcomes[calls.length], 'an outcome for this run')();
+    const run = answer(profile, calls.length);
     calls.push(run);
     return run;
   }, channel);
@@ -238,12 +246,19 @@ function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
   return { instance, channel, messageChanged, trigger, profiles, land, connect };
 }
 
+// mEdit attached once, on a run that landed, so every value after it runs plugin sync.
+async function firedAttached(...outcomes: (() => Promise<PluginSyncResult>)[]) {
+  const harness = fired(landed, ...outcomes);
+  await harness.connect();
+  return harness;
+}
+
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
 describe('registerPluginSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
-    const { channel, land } = fired(() => Promise.resolve<PluginSyncResult>(
+    const { channel, land } = await firedAttached(() => Promise.resolve<PluginSyncResult>(
       { applied: true, wrote: true, added: ['New.esp'], dropped: ['Gone.esp'] }));
     await land();
 
@@ -253,7 +268,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 
   it('logs nothing when the file already agrees', async () => {
-    const { channel, land } = fired(landed);
+    const { channel, land } = await firedAttached(landed);
     await land();
 
     expect(channel.info).not.toHaveBeenCalled();
@@ -261,7 +276,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 
   it('says the command\'s own refusal in the Output and the Plugins view\'s message line', async () => {
-    const { channel, trigger, messageChanged, land } = fired(refused('the game folder is not found'));
+    const { channel, trigger, messageChanged, land } = await firedAttached(refused('the game folder is not found'));
     await land();
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('the game folder is not found'));
@@ -271,7 +286,7 @@ describe('registerPluginSync — outcome handling', () => {
 
   // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.
   it('says a thrown sync error the same way', async () => {
-    const { channel, trigger, land } = fired(() => Promise.reject(new Error('disk unplugged')));
+    const { channel, trigger, land } = await firedAttached(() => Promise.reject(new Error('disk unplugged')));
     await land();
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
@@ -281,7 +296,7 @@ describe('registerPluginSync — outcome handling', () => {
   // Rival: log every refused run, which fills the Output with one line per recompute.
   it('reports the same refusal once, and clears the message line when a run lands', async () => {
     const reason = 'mEdit cannot say which plugins the game loads with no line';
-    const { channel, trigger, land } = fired(refused(reason), refused(reason), landed);
+    const { channel, trigger, land } = await firedAttached(refused(reason), refused(reason), landed);
     await land();
     await land();
     expect(channel.error).toHaveBeenCalledTimes(1);
@@ -293,7 +308,7 @@ describe('registerPluginSync — outcome handling', () => {
   // Rival: report only the first refusal, so a folder found after mEdit went quiet keeps showing
   // the folder.
   it('reports again when the reason changes', async () => {
-    const { channel, trigger, messageChanged, land } = fired(
+    const { channel, trigger, messageChanged, land } = await firedAttached(
       refused('the game folder is not found'), refused('mEdit cannot say which plugins the game loads with no line'));
     await land();
     await land();
@@ -305,18 +320,47 @@ describe('registerPluginSync — outcome handling', () => {
   });
 });
 
-// update-load-order-file, The flow: mEdit answers which plugins load with no line, and the first
-// value lands before mEdit can, so a connect is a moment plugin sync runs again.
+// update-load-order-file, Refusals: before mEdit first attaches, plugin sync waits and runs on
+// attach, so a launch reports nothing.
+describe('registerPluginSync — before mEdit first attaches', () => {
+  // Rival: run on every landed value from the start, which tells every launch that mEdit cannot say.
+  it('a launch then an attach reports nothing, and the attach runs on the current value', async () => {
+    const { channel, trigger, messageChanged, profiles, land, connect } = firedAnswering((profile) =>
+      (profile === 'Current' ? landed() : refused('mEdit cannot say which plugins the game loads with no line')()));
+    await land(instanceValueFixture({ activeProfile: 'Launched' }));
+    await land(instanceValueFixture({ activeProfile: 'Current' }));
+
+    await connect();
+
+    expect(profiles).toEqual(['Current']);
+    expect(channel.error).not.toHaveBeenCalled();
+    expect(trigger.message()).toBeUndefined();
+    expect(messageChanged).not.toHaveBeenCalled();
+  });
+
+  // Rival: run only on connect, so a value landing between connects waits for the next one.
+  it('runs on every value that lands once mEdit has attached', async () => {
+    const { profiles, land, connect } = fired(landed, landed);
+    await connect();
+
+    await land(instanceValueFixture({ activeProfile: 'Landed' }));
+
+    expect(profiles).toEqual(['Before', 'Landed']);
+  });
+});
+
+// update-load-order-file, The flow: mEdit answers which plugins load with no line, so a connect
+// after it went away is a moment plugin sync runs again.
 describe('registerPluginSync — on connect', () => {
-  // Rival: no run on connect, so the refusal from before mEdit answered stands until a file changes.
+  // Rival: no run on connect, so the refusal from while mEdit was away stands until a file changes.
   it('runs again with the current value, and a run that lands clears the refusal before it', async () => {
-    const { instance, trigger, profiles, land, connect } = fired(refused('mEdit cannot say'), landed);
+    const { instance, trigger, profiles, land, connect } = await firedAttached(refused('mEdit cannot say'), landed);
     await land(instanceValueFixture({ activeProfile: 'Landed' }));
     instance.value = instanceValueFixture({ activeProfile: 'Current' });
 
     await connect();
 
-    expect(profiles).toEqual(['Landed', 'Current']);
+    expect(profiles).toEqual(['Before', 'Landed', 'Current']);
     expect(trigger.message()).toBeUndefined();
   });
 });

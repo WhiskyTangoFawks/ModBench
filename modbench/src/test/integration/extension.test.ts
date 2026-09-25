@@ -1350,8 +1350,8 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// update-load-order-file, Refusals: plugin sync's refusal reaches the Plugins view's message line,
-// and the first value lands before mEdit can answer, so a connect runs plugin sync again.
+// update-load-order-file, Refusals: once mEdit has attached, plugin sync's refusal reaches the
+// Plugins view's message line, and a connect runs plugin sync again.
 describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1365,6 +1365,9 @@ describe('Plugin sync says why it wrote nothing, and runs again on connect', () 
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
     await setGameDirectory(gameDir);
+    // Before mEdit first attaches, plugin sync waits; this suite's refusal comes after that.
+    await enterEditing();
+    await resetMockBackendDetached();
   });
 
   after(async () => {
