@@ -66,11 +66,12 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.NotNull(quest);
         Assert.True(quest.IsPartialForm());
 
-        // The new topic's own document carries both responses, fresh keys, source order preserved.
+        // The new topic's own document carries both responses, fresh keys, source order preserved,
+        // each under its own derived EditorID (the Creation Kit's shape).
         var responses = Responses(newTopicFormKey);
         Assert.Equal(2, responses.Count);
         Assert.Equal(
-            [ContainerCopyFixture.Response1EditorId, ContainerCopyFixture.Response2EditorId],
+            [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
             responses.Select(r => Member(r, "EditorID")).ToArray());
         Assert.All(responses, r =>
             Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, Member(r, "FormKey"), StringComparison.OrdinalIgnoreCase));
@@ -81,19 +82,43 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         // Compiled: the quest carries the new topic; the topic carries both responses under their
         // new keys in order; the copied Response2 still links the ORIGINAL Response1.
         // Both responses are inline in the new topic's one document.
-        var topicText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId));
+        var topicText = File.ReadAllText(
+            _fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001"));
         Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compiled = await ImportCompiled();
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         var compiledTopic = compiledQuest.DialogTopics.Single(t => t.FormKey.ToString() == newTopicFormKey);
-        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, compiledTopic.EditorID);
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001", compiledTopic.EditorID);
         Assert.Equal(
-            [ContainerCopyFixture.Response1EditorId, ContainerCopyFixture.Response2EditorId],
+            [ContainerCopyFixture.Response1EditorId + "DUPLICATE001", ContainerCopyFixture.Response2EditorId + "DUPLICATE001"],
             compiledTopic.Responses.Select(r => r.EditorID.Require()).ToArray());
-        var copiedResponse2 = compiledTopic.Responses.Single(r => r.EditorID == ContainerCopyFixture.Response2EditorId);
+        var copiedResponse2 = compiledTopic.Responses.Single(
+            r => r.EditorID == ContainerCopyFixture.Response2EditorId + "DUPLICATE001");
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
+    }
+
+    [Fact]
+    public void CopyAsNewRecord_OnADialogTopicWithResponses_CopiedTwice_EachRecordGetsItsOwnNextCounter()
+    {
+        var first = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
+        Assert.True(first.Applied, first.Message);
+
+        var second = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
+        Assert.True(second.Applied, second.Message);
+
+        var secondTopicFormKey = second.NewFormKey.Require();
+        var secondTopic = _fixture.Document(_fixture.DestinationPlugin, secondTopicFormKey);
+        Assert.NotNull(secondTopic);
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE002", secondTopic.EditorId);
+
+        var responses = Responses(secondTopicFormKey);
+        Assert.Equal(
+            [ContainerCopyFixture.Response1EditorId + "DUPLICATE002", ContainerCopyFixture.Response2EditorId + "DUPLICATE002"],
+            responses.Select(r => Member(r, "EditorID")).ToArray());
     }
 
     // An existing parent override keeps its own fields and flag: the new topic lands in its
@@ -157,15 +182,17 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "FormKey"));
 
-        // Inline in the minted topic's document, which is the only file the response is in.
-        Assert.Contains(newFormKey, File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId)), StringComparison.Ordinal);
+        // Inline in the minted topic's document, which is the only file the response is in, under
+        // its own derived EditorID (the Creation Kit's shape).
+        var responseFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId + "DUPLICATE001");
+        Assert.Contains(newFormKey, File.ReadAllText(responseFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compiledTopic = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic);
         var compiledResponse = Assert.Single(compiledTopic.Responses);
         Assert.Equal(newFormKey, compiledResponse.FormKey.ToString());
-        Assert.Equal(ContainerCopyFixture.Response1EditorId, compiledResponse.EditorID);
+        Assert.Equal(ContainerCopyFixture.Response1EditorId + "DUPLICATE001", compiledResponse.EditorID);
     }
 
     // A Quest copies as its own record only — its children never ride along with a plain Copy as
@@ -182,16 +209,17 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
 
         var document = _fixture.Document(_fixture.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, document.EditorId);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", document.EditorId);
 
         // Empty child lists in the document itself, not just in the binary.
-        var questText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));
+        var questText = File.ReadAllText(
+            _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId + "DUPLICATE001"));
         Assert.DoesNotContain(ContainerCopyFixture.DialogTopicEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);
 
         var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey.ToString() == newFormKey);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", compiledQuest.EditorID);
         Assert.Empty(compiledQuest.DialogTopics);
         Assert.Empty(compiledQuest.DialogBranches);
         Assert.Empty(compiledQuest.Scenes);
