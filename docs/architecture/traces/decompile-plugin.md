@@ -22,14 +22,13 @@ the working tree, as the user answers.
    tracked mod the same way (ADR-0003, invariant 3).
 2. The mod has changed when a tracked plugin's bytes differ from what Modbench last wrote, or when
    a file git tracks outside `source/` differs from the edit branch. `meta.ini` alone never
-   changes the mod. A moved `meta.ini` version makes `main` the default; otherwise the default is
-   the working tree.
+   changes the mod. The default is always `main`.
 3. An untracked plugin in the mod is not part of the question: it has no source to lose. Commands
    publishes it through Ports as an untracked plugin in a tracked mod, and Plugins warns. It opens no
    question and refuses nothing. Tracking it is the user's gesture.
 4. Commands records the open question in the mod's repository and publishes it through Ports: the
-   mod, the changed plugins, the changed tracked files, the version move and the default. The
-   HTTP endpoints stream it to the mEdit client, and Plugins asks first.
+   mod, the changed plugins and the changed tracked files. The HTTP endpoints stream it to the
+   mEdit client, and Plugins asks first.
 5. A later classification that finds nothing ends the question with no answer, so bytes restored
    by hand end it. An unanswered question is published again at each settle and load-time check
    that still finds the change.
@@ -69,8 +68,8 @@ serving the last state.
 9. Commands answers applied or the refusal, per plugin.
 
 A baseline commit's message follows git's convention: the subject, a blank line, then the trailers
-`Plugin`, `Upstream-Version`, `Meta-SHA256` and `Binary-SHA256` (ADR-0007, invariant 6). A version
-the mod manager does not record is left out of the subject and the trailers.
+`Plugin`, `Upstream-Version` and `Binary-SHA256` (ADR-0007, invariant 6). A version the mod
+manager does not record is left out of the subject and the trailers.
 
 | Preset | The repository tracks |
 |---|---|

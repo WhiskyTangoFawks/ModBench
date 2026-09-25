@@ -40,8 +40,7 @@ the binary is a build artifact that compile regenerates from it.
    one commit per plugin. Its message follows git's convention. The plugin's version is two facts:
    the upstream version the mod manager records, which is informational, and the hash of the
    plugin's binary, which identifies it. The subject names the plugin and the upstream version, and
-   the trailers carry both facts, read by humans and agents. A trailer may pre-select a dialog's
-   default and never acts on its own.
+   the trailers carry both facts, read by humans and agents.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
    trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
    generates the `.gitignore`, then the user owns it.
