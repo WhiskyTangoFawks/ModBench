@@ -112,6 +112,11 @@ export type CellPage = components['schemas']['CellSummaryPagedResult'];
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
+/** Absorb's answer: each changed plugin landed or refused, and beside them the commit of the mod's
+ *  changed tracked files, which is no plugin's and can fail after every plugin landed. */
+export interface AbsorbOutcome extends SelectionOutcome<PluginAddress> {
+  trackedFilesRefusal: string | null;
+}
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
@@ -154,7 +159,9 @@ export interface MEditClient {
   ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined>;
   compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
   // Origin-scoped, like rebase: the mod, not one plugin in it, is the unit both answers cover.
-  absorbUpstreamUpdate(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
+  // Each changed plugin lands or is refused on its own (ADR-0019 invariant 4). A WriteRefused is
+  // the whole answer refused, with nothing written.
+  absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
   keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
   rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
   continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined>;

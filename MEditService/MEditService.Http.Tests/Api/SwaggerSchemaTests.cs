@@ -221,6 +221,7 @@ public sealed class SwaggerSchemaTests
     [InlineData("CellSummary", "editorId")]        // string? EditorId
     [InlineData("RecordSummary", "editorId")]
     [InlineData("CompileResult", "refusalReason")] // string? RefusalReason
+    [InlineData("TrackResponse", "trackedFilesRefusal")]
     public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
     {
         var root = await GetSchemaAsync();

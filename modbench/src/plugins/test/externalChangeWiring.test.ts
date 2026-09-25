@@ -6,7 +6,7 @@ const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoist
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   subscribeQuestionOpen: vi.fn(
-    (_deps: { showError: (message: string) => void; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
+    (_deps: { showError: (message: string) => void; reporter: unknown; showDialog: unknown; presentCrashRepair: unknown }, _client: unknown) => () => {}),
 }));
 
 import { EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
@@ -52,6 +52,12 @@ describe('wireQuestionOpen', () => {
     const presentCrashRepair = vi.fn().mockResolvedValue(undefined);
 
     expect(wire(scriptedDialog(), presentCrashRepair).deps.presentCrashRepair).toBe(presentCrashRepair);
+  });
+
+  it("hands the coordinator the reporter it was given, for Absorb's partial answer", () => {
+    const { reporter, deps } = wire();
+
+    expect(deps.reporter).toBe(reporter);
   });
 
   // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is

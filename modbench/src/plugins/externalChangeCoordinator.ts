@@ -1,5 +1,6 @@
 import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
+import type { Reporter } from '../ports/reporter';
 import { handleUnanswered } from './externalChangeGestures';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -12,6 +13,8 @@ export interface ExternalChangeCoordinatorDeps {
   openMergeEditor: OpenMergeEditor;
   /** ADR-0019: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
   showError: (message: string) => void;
+  /** ADR-0019: Absorb's partial answer — each plugin that did not land, and the tracked files. */
+  reporter: Pick<Reporter, 'report' | 'selectionOutcome'>;
   /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0017). */
   refreshTree: () => void;
   refreshMatchingPlugins: () => void;

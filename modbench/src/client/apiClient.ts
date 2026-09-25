@@ -55,8 +55,8 @@ export interface CrashRepairOffer {
   reason: CrashRepairReason;
 }
 
-/** Baseline / apply's shared result — a refusal (e.g. apply's same-record collision) is a typed,
- *  successful answer, the same posture {@link CompileResult} uses. */
+/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
+ *  same posture {@link CompileResult} uses. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
 /** The outcomes of `rebase edit branch`. `conflictedPaths` is the extension's cue to open each path

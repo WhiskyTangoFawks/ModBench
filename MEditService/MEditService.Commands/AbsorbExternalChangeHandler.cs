@@ -32,8 +32,15 @@ public sealed class AbsorbExternalChangeHandler
 
         var result = await Run(_adapter, origin, mod.ModFolder, mod.Plugins, loadOrder);
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
-        if (!result.Applied)
-            _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", mod.ModFolder, result.RefusalReason);
+        if (result.AnswerRefusal is { } whole)
+            _logger.LogWarning("Refused to absorb {ModFolder}: {Refusal} — {Message}", mod.ModFolder, whole.Refusal, whole.Message);
+        foreach (var refused in result.Refused)
+        {
+            _logger.LogWarning("Refused to absorb {Plugin} ({Origin}): {Refusal} — {Message}",
+                refused.Plugin.Name, refused.Plugin.Origin, refused.Refusal, refused.Message);
+        }
+        if (result.TrackedFilesRefusal is { } trackedFiles)
+            _logger.LogWarning("Refused to absorb {ModFolder}'s tracked files: {Message}", mod.ModFolder, trackedFiles);
         return result;
     }
 
@@ -44,7 +51,7 @@ public sealed class AbsorbExternalChangeHandler
         // The classifier's own rule, recomputed from git: a plugin whose baseline landed on an earlier
         // answer matches its parked ref, so answering again commits only what is left.
         if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } observed)
-            return AbsorbResult.Refused($"A plugin in {origin} could not be read.");
+            return AbsorbResult.WholeAnswerRefused(TrackRefusal.RoundTripFailed, $"A plugin in {origin} could not be read.");
         var changed = ExternalChangeClassifier.ChangedPlugins(modFolder, observed).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var meta = SourceRepository.MetaFactsIn(modFolder);
@@ -69,22 +76,23 @@ public sealed class AbsorbExternalChangeHandler
             {
                 // A raw parse exception's Message carries no located identity; the diagnosis walks the
                 // tree for the innermost RecordException, as Track's own parse refusal does.
-                return AbsorbResult.Refused(
+                return AbsorbResult.WholeAnswerRefused(TrackRefusal.RoundTripFailed,
                     $"{plugin.Name} could not be parsed from its own binary: {PluginDiagnosis.FromParseException(ex).Describe()}");
             }
         }
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
+        var trailers = baselines.Select(b => b.Trailers).ToList();
 
         try
         {
             // The question stays open: the next classification finds exactly what did not land.
             if (SourceRepository.CommitPristineToMain(modFolder, baselines, trackedFileChanges) is { } failed)
-                return AbsorbResult.Refused($"'{failed.Subject}' {failed.Reason}. Nothing after it was committed.");
+                return StoppedAt(origin, trailers, failed);
         }
         catch (GitUnavailableException ex)
         {
-            return AbsorbResult.Refused(ex.Message);
+            return AbsorbResult.WholeAnswerRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
 
         // Index matches the working tree for every changed tracked file, so the same bytes cannot
@@ -94,6 +102,28 @@ public sealed class AbsorbExternalChangeHandler
         // The question this exit path answers is answered: every plugin the mod holds is unblocked
         // again.
         SourceRepository.ClearExternalChangeQuestion(modFolder);
-        return AbsorbResult.Success();
+        return AbsorbResult.PerPlugin([.. trailers.Select(b => Addressed(origin, b))], [], trackedFilesRefusal: null);
     }
+
+    // The baselines before the failed one landed; the failed one and every one after it did not. A
+    // null baseline is the tracked-files commit, which runs only once every plugin has landed.
+    private static AbsorbResult StoppedAt(
+        string origin, List<BaselineTrailers> baselines, (BaselineTrailers? Baseline, string Subject, string Reason) failed)
+    {
+        var failure = $"'{failed.Subject}' {failed.Reason}";
+        if (failed.Baseline is not { } stopped)
+            return AbsorbResult.PerPlugin([.. baselines.Select(b => Addressed(origin, b))], [], $"{failure}.");
+
+        var at = baselines.IndexOf(stopped);
+        var refused = new List<TrackRefused>
+        {
+            new(Addressed(origin, stopped), TrackRefusal.CommitFailed, $"{failure}. Nothing after it was committed."),
+        };
+        refused.AddRange(baselines.Skip(at + 1).Select(b => new TrackRefused(
+            Addressed(origin, b), TrackRefusal.StoppedByEarlierFailure,
+            $"{b.Plugin} was not committed: '{failed.Subject}' failed first and stopped the run. Answering again commits it.")));
+        return AbsorbResult.PerPlugin([.. baselines.Take(at).Select(b => Addressed(origin, b))], refused, trackedFilesRefusal: null);
+    }
+
+    private static PluginCopyKey Addressed(string origin, BaselineTrailers baseline) => new(baseline.Plugin, origin);
 }

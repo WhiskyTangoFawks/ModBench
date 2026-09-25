@@ -108,8 +108,8 @@ public sealed partial class SourceRepository
 
     /// <summary>Absorb's git mechanics, by plumbing so the edit branch is untouched: each plugin's
     /// baseline on main, then the changed tracked files in one commit. The first failure stops the
-    /// run, answered by its subject.</summary>
-    public static (string Subject, string Reason)? CommitPristineToMain(
+    /// run, answered by its baseline, null for the tracked files, and its subject.</summary>
+    public static (BaselineTrailers? Baseline, string Subject, string Reason)? CommitPristineToMain(
         string modFolder,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines,
         IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
@@ -131,10 +131,10 @@ public sealed partial class SourceRepository
                         commitSha = CommitToMain(
                             gitDir, scratchDir, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
                     }) is { } commitFailure)
-                    return (subject, $"could not be committed to main: {commitFailure}");
+                    return (trailers, subject, $"could not be committed to main: {commitFailure}");
                 if (FailureOf(() => GitCli.Run(gitDir, scratchDir, "update-ref", LastCompileRef(trailers.Plugin), commitSha))
                     is { } refFailure)
-                    return (subject, $"landed on main, but {LastCompileRef(trailers.Plugin)} could not be moved to it: {refFailure}");
+                    return (trailers, subject, $"landed on main, but {LastCompileRef(trailers.Plugin)} could not be moved to it: {refFailure}");
             }
         }
         finally
@@ -147,7 +147,7 @@ public sealed partial class SourceRepository
         {
             var subject = $"Update {ModNameIn(modFolder)}";
             var failure = FailureOf(() => CommitToMain(gitDir, modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
-            if (failure is { } reason) return (subject, $"could not be committed to main: {reason}");
+            if (failure is { } reason) return (null, subject, $"could not be committed to main: {reason}");
         }
         return null;
     }

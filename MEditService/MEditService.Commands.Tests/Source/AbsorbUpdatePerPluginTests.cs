@@ -65,7 +65,8 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.True(result.Applied, result.RefusalReason);
+        Assert.True(result.AllApplied);
+        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal([Asset], PathsIn("refs/heads/main"));
     }
@@ -79,7 +80,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal(firstParkedBefore, Git("rev-parse", SourceRepository.LastCompileRef(First)).Trim());
     }
@@ -92,15 +93,59 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         SourceRepository.RaiseExternalChangeQuestion(_modFolder, "unanswered");
         RefuseEveryMoveOfMainTo(Second);
 
-        var result = await Absorb();
+        await Absorb();
 
-        Assert.False(result.Applied);
-        Assert.Contains(Second, result.RefusalReason, StringComparison.Ordinal);
         Assert.Equal([$"Update {First}"], SubjectsOnMainSince(mainBefore));
         Assert.NotNull(SourceRepository.UnansweredExternalChange(_modFolder));
         var question = Settle();
         Assert.Equal([Second], question.Plugins);
         Assert.Equal([Asset], question.TrackedFiles);
+    }
+
+    [Fact]
+    public async Task Absorb_WhenTheSecondPluginsCommitFails_AnswersTheFirstApplied_AndTheSecondRefusedNamingItsCommit()
+    {
+        ChangeBothPluginsAndTheAsset();
+        RefuseEveryMoveOfMainTo(Second);
+
+        var result = await Absorb();
+
+        Assert.Equal([new PluginCopyKey(First, Origin)], result.Landed);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((new PluginCopyKey(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
+        Assert.Contains($"'Update {Second}' could not be committed to main", refused.Message, StringComparison.Ordinal);
+        Assert.Null(result.TrackedFilesRefusal);
+    }
+
+    [Fact]
+    public async Task Absorb_WhenTheFirstPluginsCommitFails_RefusesThePluginItNeverReached_NamingTheCommitThatStoppedIt()
+    {
+        ChangeBothPluginsAndTheAsset();
+        RefuseEveryMoveOfMainTo(First);
+
+        var result = await Absorb();
+
+        Assert.Empty(result.Landed);
+        Assert.Equal(
+            [(new PluginCopyKey(First, Origin), TrackRefusal.CommitFailed), (new PluginCopyKey(Second, Origin), TrackRefusal.StoppedByEarlierFailure)],
+            result.Refused.Select(r => (r.Plugin, r.Refusal)));
+        Assert.Contains($"'Update {First}'", result.Refused[1].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Absorb_WhenTheTrackedFilesCommitFails_AnswersEveryPluginApplied_AndTheTrackedFilesRefused()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        ChangeBothPluginsAndTheAsset();
+        RefuseEveryMoveOfMainTo(Origin);
+
+        var result = await Absorb();
+
+        Assert.Equal([new PluginCopyKey(First, Origin), new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Empty(result.Refused);
+        Assert.Contains($"'Update {Origin}' could not be committed to main", result.TrackedFilesRefusal, StringComparison.Ordinal);
+        Assert.False(result.AllApplied);
+        Assert.Equal([$"Update {First}", $"Update {Second}"], SubjectsOnMainSince(mainBefore));
     }
 
     [Fact]
@@ -114,13 +159,14 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.True(result.AllApplied);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));
     }
 
     [Fact]
-    public async Task Absorb_WhenOnlyTheParkedRefCannotMove_SaysTheBaselineLandedAndNamesTheRef()
+    public async Task Absorb_WhenOnlyTheParkedRefCannotMove_RefusesThePlugin_SayingTheBaselineLandedAndNamingTheRef()
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         WritePlugin(Second, heightMax: 2.0f);
@@ -128,10 +174,12 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.False(result.Applied);
+        Assert.Empty(result.Landed);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((new PluginCopyKey(Second, Origin), TrackRefusal.CommitFailed), (refused.Plugin, refused.Refusal));
         Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
-        Assert.Contains($"landed on main, but {SourceRepository.LastCompileRef(Second)} could not be moved", result.RefusalReason, StringComparison.Ordinal);
-        Assert.DoesNotContain("could not be committed", result.RefusalReason, StringComparison.Ordinal);
+        Assert.Contains($"landed on main, but {SourceRepository.LastCompileRef(Second)} could not be moved", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be committed", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -145,8 +193,9 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         {
             var result = await Absorb();
 
-            Assert.False(result.Applied);
-            Assert.Contains(Origin, result.RefusalReason, StringComparison.Ordinal);
+            var refusal = result.AnswerRefusal.Require();
+            Assert.Equal(TrackRefusal.RoundTripFailed, refusal.Refusal);
+            Assert.Contains(Origin, refusal.Message, StringComparison.Ordinal);
             Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main").Trim());
         }
         finally

@@ -43,14 +43,23 @@ async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string)
   refreshAfterWrite(deps);
 }
 
+// ADR-0019: a partial answer is a partial save, so what did not land is named even when the rest
+// did. The question stays open for it, and answering again finishes the update.
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.absorbUpstreamUpdate(origin);
-  if (result && isRefused(result)) { deps.showError(result.message); return; }
-  if (!result?.succeeded) {
-    if (result) reportTypedRefusal(deps, 'absorbUpstreamUpdate', origin, `Could not absorb the upstream update for "${origin}"`, result.refusalReason);
-    return;
+  if (isRefused(result)) { deps.showError(result.message); return; }
+  const total = result.landed.length + result.refused.length;
+  deps.reporter.selectionOutcome(
+    `Could not absorb ${result.refused.length} of ${total} plugins of the upstream update for "${origin}".`,
+    result, (plugin) => plugin.name,
+  );
+  if (result.trackedFilesRefusal !== null) {
+    deps.reporter.report(
+      'error', `Could not commit the rest of the upstream update for "${origin}": every plugin landed.`, result.trackedFilesRefusal,
+    );
   }
-  refreshAfterWrite(deps);
+  const answered = result.refused.length === 0 && result.trackedFilesRefusal === null;
+  if (result.landed.length > 0 || answered) refreshAfterWrite(deps);
 }
 
 async function dispatchOne(

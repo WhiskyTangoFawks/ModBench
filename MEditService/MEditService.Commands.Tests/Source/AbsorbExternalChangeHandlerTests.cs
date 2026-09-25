@@ -54,7 +54,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.True(result.Applied, result.RefusalReason);
+        Assert.True(result.AllApplied);
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var newBaseline = GitProbe.Run(gitDir, _mod.ModFolder, "show", $"main:{relativePath}");
@@ -71,7 +71,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.True(result.Applied, result.RefusalReason);
+        Assert.True(result.AllApplied);
         Assert.NotEqual(editBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
         Assert.Equal("edit", GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(editBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/edit").Trim());
@@ -120,8 +120,9 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
 
         var result = await Absorb();
 
-        Assert.False(result.Applied);
-        Assert.Contains(SourceEditFixture.PluginName, result.RefusalReason, StringComparison.Ordinal);
+        var refusal = result.AnswerRefusal.Require();
+        Assert.Equal(TrackRefusal.RoundTripFailed, refusal.Refusal);
+        Assert.Contains(SourceEditFixture.PluginName, refusal.Message, StringComparison.Ordinal);
         Assert.Equal(mainBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
     }
 

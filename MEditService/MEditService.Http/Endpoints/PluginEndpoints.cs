@@ -120,8 +120,11 @@ public static class PluginEndpoints
         app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
             .WithName("AbsorbExternalChange")
             .WithTags(Tag)
-            .Produces<ExternalChangeActionResponse>()
+            .Produces<TrackResponse>()
             .ProducesProblem(400)
+            // A plugin that cannot be read or parsed, or git missing, refuses the whole answer before
+            // anything is written; every other refusal is an item of the answer.
+            .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -331,7 +334,12 @@ public static class PluginEndpoints
         {
             if (await handler.AbsorbAsync(req.Origin) is not { } result)
                 return NotATrackedMod(req.Origin, logger);
-            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
+            if (result.AnswerRefusal is { } answerRefusal)
+                return WriteEndpointMapping.Refusal(answerRefusal);
+            return Results.Ok(new TrackResponse(
+                [.. result.Landed.Select(Addressed)],
+                [.. result.Refused.Select(r => new PluginAddressRefusal(Addressed(r.Plugin), r.Refusal, r.Message))],
+                result.TrackedFilesRefusal));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -426,8 +434,11 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4): a refusal is an item of the
-/// answer, never the status of the call.</summary>
-public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
+/// answer, never the status of the call. Only Absorb sets <see cref="TrackedFilesRefusal"/>: its
+/// commit of the mod's changed tracked files is no plugin's, and can fail after every plugin
+/// landed.</summary>
+public record TrackResponse(
+    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
 
 // Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.

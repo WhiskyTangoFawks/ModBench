@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { runRebase, handleUnanswered } from '../externalChangeGestures';
 import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
 import type { MEditClient, UnansweredExternalChange } from '../../client';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 type RebaseClient = Partial<Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>>;
 
@@ -74,12 +75,16 @@ function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExt
   };
 }
 
+const first = { name: 'A.esp', origin: 'ModA' };
+const second = { name: 'B.esp', origin: 'ModA' };
+
 function makeDispatchDeps(client: RebaseClient, showDialogChoice: string | undefined) {
   return {
     client: fullClient(client),
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
+    reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
     presentCrashRepair: vi.fn().mockResolvedValue(undefined),
@@ -142,28 +147,82 @@ describe('handleUnanswered', () => {
   });
 
   it('a landed Absorb refreshes silently', async () => {
-    const client = { absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
+    const client = { absorbUpstreamUpdate: vi.fn().mockResolvedValue({ landed: [first], refused: [], trackedFilesRefusal: null }) };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.reporter.reports).toEqual([]);
   });
 
-  // A typed refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — this is
-  // exactly the case `WriteRefused` never sees, so it must still be surfaced here.
-  it('a typed Absorb refusal shows its own message', async () => {
+  it('a WriteRefused Absorb shows the ready-to-show message and refreshes nothing', async () => {
     const client = {
-      absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'could not be parsed' }),
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({ refused: true, message: 'Could not absorb the upstream update for "ModA" — could not be parsed' }),
     };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith(
-      'Could not absorb the upstream update for "ModA" — could not be parsed',
-    );
+    expect(deps.showError).toHaveBeenCalledWith('Could not absorb the upstream update for "ModA" — could not be parsed');
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  // ADR-0019: a partial save is an integrity failure, so the plugins that did not land are named
+  // even though others did.
+  it('a partial Absorb names each refused plugin and why, and refreshes what landed', async () => {
+    const client = {
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        landed: [first], refused: [{ item: second, reason: "'Update B.esp' could not be committed to main." }], trackedFilesRefusal: null,
+      }),
+    };
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
+
+    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+
+    expect(deps.reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not absorb 1 of 2 plugins of the upstream update for "ModA".',
+      detail: `"B.esp" ('Update B.esp' could not be committed to main.)`,
+    }]);
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('an Absorb whose tracked-files commit failed after every plugin landed says so, and refreshes', async () => {
+    const client = {
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        landed: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
+      }),
+    };
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
+
+    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+
+    expect(deps.reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not commit the rest of the upstream update for "ModA": every plugin landed.',
+      detail: "'Update ModA' could not be committed to main.",
+    }]);
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('an Absorb that landed nothing refreshes nothing', async () => {
+    const client = {
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        landed: [],
+        refused: [
+          { item: first, reason: "'Update A.esp' could not be committed to main." },
+          { item: second, reason: "B.esp was not committed: 'Update A.esp' failed first and stopped the run." },
+        ],
+        trackedFilesRefusal: null,
+      }),
+    };
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
+
+    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp', 'B.esp'] })]);
+
+    expect(deps.reporter.reports.map((r) => r.message)).toEqual(['Could not absorb 2 of 2 plugins of the upstream update for "ModA".']);
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 

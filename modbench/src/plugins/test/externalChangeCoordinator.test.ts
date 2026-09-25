@@ -5,6 +5,7 @@ import {
 } from '../externalChangeCoordinator';
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
@@ -26,6 +27,7 @@ function makeDeps(
     showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
+    reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
     presentCrashRepair: vi.fn().mockResolvedValue(undefined),
@@ -36,7 +38,7 @@ function makeDeps(
 function clientScriptedForKeepAndAbsorb(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-  client.setCommandResult('absorbUpstreamUpdate', { succeeded: true, refusalReason: null });
+  client.setCommandResult('absorbUpstreamUpdate', { landed: [{ name: 'Fixture.esp', origin: 'ModA' }], refused: [], trackedFilesRefusal: null });
   return client;
 }
 
@@ -98,7 +100,7 @@ describe('subscribeQuestionOpen', () => {
 
   it('a failed Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', undefined); // transport failure
+    client.setCommandResult('absorbUpstreamUpdate', { refused: true, message: 'Could not absorb the upstream update for "ModA" — socket hang up' });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
 
@@ -110,7 +112,10 @@ describe('subscribeQuestionOpen', () => {
 
   it('a refused Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', { succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' });
+    client.setCommandResult('absorbUpstreamUpdate', {
+      landed: [], refused: [{ item: { name: 'Fixture.esp', origin: 'ModA' }, reason: "'Update Fixture.esp' could not be committed to main." }],
+      trackedFilesRefusal: null,
+    });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
 
