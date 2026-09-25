@@ -30,7 +30,7 @@ public sealed class AbsorbExternalChangeHandler
         var loadOrder = _loadOrder.Current;
         if (TrackedOrigin.Resolve(loadOrder, origin) is not { } mod) return null;
 
-        var result = await Run(_adapter, mod.ModFolder, mod.Plugins, loadOrder);
+        var result = await Run(_adapter, origin, mod.ModFolder, mod.Plugins, loadOrder);
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", mod.ModFolder, result.RefusalReason);
@@ -41,12 +41,12 @@ public sealed class AbsorbExternalChangeHandler
 
     // Static because none of it reads this handler's state beyond the port it is handed.
     private static async Task<AbsorbResult> Run(
-        IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
+        IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
     {
         // The classifier's own rule, recomputed from git: a plugin whose baseline landed on an earlier
         // answer matches its parked ref, so answering again commits only what is left.
         if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } observed)
-            return AbsorbResult.Refused($"A plugin in {Path.GetFileName(modFolder)} could not be read.");
+            return AbsorbResult.Refused($"A plugin in {origin} could not be read.");
         var changed = ExternalChangeClassifier.ChangedPlugins(modFolder, observed).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var meta = SourceRepository.MetaFactsIn(modFolder);

@@ -119,6 +119,27 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));
     }
 
+    [Fact]
+    public async Task Absorb_WithAPluginThatCannotBeRead_RefusesNamingTheMod_AndLeavesMainAlone()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        ChangeBothPluginsAndTheAsset();
+        var unreadable = Path.Combine(_modFolder, Second);
+        FileModes.Set(unreadable, "000");
+        try
+        {
+            var result = await Absorb();
+
+            Assert.False(result.Applied);
+            Assert.Contains(Origin, result.RefusalReason, StringComparison.Ordinal);
+            Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main").Trim());
+        }
+        finally
+        {
+            FileModes.Set(unreadable, "600");
+        }
+    }
+
     private void ChangeBothPluginsAndTheAsset()
     {
         WritePlugin(First, heightMax: 2.0f);
