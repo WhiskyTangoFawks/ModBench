@@ -48,7 +48,9 @@ function editRecordCalls() {
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
-    meditClient, onRecordEdited, editInFlight: undefined,
+    meditClient, onRecordEdited,
+    // No panel holds this suite's reads: the gate sends each write where it was addressed.
+    editInFlight: async (address, write) => { await write(address.formKey); },
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     ...overrides,
@@ -292,6 +294,20 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     expect(tracker.formKeyOf(editedCopy)).toBe('000900:Mod.esp');
     expect(tracker.formKeyOf(otherCopy)).toBe('000800:Mod.esp');
     expect(otherCopy.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  // Between the FormID's answer and the report that reads the new key, the webview still names
+  // the old one; the host knows the move, so a second edit lands on the record where it now is.
+  it('sends a second edit, posted under the old FormKey before the tab reads the new one, to the new FormKey', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const { tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
+    const panel = present(tab, 'the tab');
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+    meditClient.setCommandResult('editRecord', { applied: true });
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits));
+
+    expect(editRecordCalls().map(c => c.args[0])).toEqual(['000800:Mod.esp', '000900:Mod.esp']);
   });
 
   it('leaves the tab where it is after an edit that keeps the FormKey', async () => {

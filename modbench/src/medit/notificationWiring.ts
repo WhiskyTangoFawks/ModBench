@@ -12,21 +12,41 @@ export function subscribeTreeToNotifications(
   return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
 
-// One FormKey spans its whole override chain, so matching it alone is enough. A panel `heldReads`
-// holds reads once its own edit is answered. The tracker, the gate and `Panel` are structural.
+// One FormKey spans its whole override chain, so matching it alone is enough. `heldReads` holds a
+// panel's reads until its edit is answered, and on reconnect frees one waiting on a missed report.
 export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
-  client: Pick<MEditClient, 'subscribe'>,
+  client: Pick<MEditClient, 'subscribe' | 'onReconnected'>,
   recordPanels: Set<Panel>,
   activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
-  heldReads?: { holds(panel: Panel, keys: readonly string[]): boolean },
+  heldReads: { holds(panel: Panel, keys: readonly string[]): boolean; release(panel: Panel): string | undefined },
 ): () => void {
-  return client.subscribe('rows-changed', (event) => {
+  const read = (panel: Panel, formKey: string) => {
+    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
+  };
+  const unsubscribeRows = client.subscribe('rows-changed', (event) => {
     for (const panel of recordPanels) {
-      if (heldReads?.holds(panel, event.keys)) continue;
+      if (heldReads.holds(panel, event.keys)) continue;
       const formKey = activeRecordTracker.formKeyOf(panel);
-      if (formKey && event.keys.includes(formKey)) {
-        void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
-      }
+      if (formKey && event.keys.includes(formKey)) read(panel, formKey);
     }
   });
+  const unsubscribeReconnect = client.onReconnected(() => {
+    for (const panel of recordPanels) {
+      const formKey = heldReads.release(panel);
+      if (formKey) read(panel, formKey);
+    }
+  });
+  return () => { unsubscribeRows(); unsubscribeReconnect(); };
+}
+
+/** A completed reconcile or a landed Track: every record panel refreshes its comparison, except
+ *  one whose read `heldReads` holds, which refreshes when its hold ends. */
+export function announceConflictsComputed<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
+  recordPanels: Set<Panel>,
+  heldReads: { holdsRefresh(panel: Panel): boolean },
+): void {
+  for (const panel of recordPanels) {
+    if (heldReads.holdsRefresh(panel)) continue;
+    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } satisfies ExtensionToWebview);
+  }
 }
