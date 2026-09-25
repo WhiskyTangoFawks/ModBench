@@ -54,9 +54,9 @@ export function parsePlugins(text: string): PluginEntry[] {
 // Lands at the winning end but before any trailing comment/blank lines, matching
 // where `movePluginsInText` puts a block moved to the end. Caller has already
 // established the name has no entry line.
-function appendEntryLine(bomless: string, pluginName: string, enabled: boolean): string {
+function appendEntryLine(bomless: string, pluginName: string): string {
   const eol = detectEol(bomless);
-  const line = `${enabled ? '*' : ''}${pluginName}${eol}`;
+  const line = `${pluginName}${eol}`;
   if (bomless.length === 0) return line;
 
   const lines = splitLinesKeepEol(bomless);
@@ -89,9 +89,9 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
   });
 }
 
-/** Enabled for the New Plugin gesture, disabled for plugin sync. Throws if the
- *  name is already present. */
-export function appendPluginInText(text: string, pluginName: string, enabled = true): string {
+/** Disabled, as plugin sync adds a plugin it found on disk. Throws if the name is already
+ *  present. */
+export function appendPluginInText(text: string, pluginName: string): string {
   return withBomPreserved(text, (bomless) => {
     for (const { start, contentEnd } of lineRanges(bomless)) {
       const content = bomless.slice(start, contentEnd);
@@ -99,7 +99,7 @@ export function appendPluginInText(text: string, pluginName: string, enabled = t
         throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
       }
     }
-    return appendEntryLine(bomless, pluginName, enabled);
+    return appendEntryLine(bomless, pluginName);
   });
 }
 

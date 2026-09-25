@@ -1,13 +1,15 @@
-using MEditService.LoadOrder;
-
 namespace MEditService.Commands;
 
-/// <summary>What the create gesture landed: the plugin it wrote and registered, the version of the
-/// load order change registering it, and the Track it ran for an untracked destination — null
-/// when a repository was already there.</summary>
-public sealed record PluginCreateResult(RegisteredPlugin Plugin, long Version, TrackResult? Track)
+/// <summary>What the create gesture wrote, at <see cref="Path"/>, or why it wrote nothing.</summary>
+public sealed record PluginCreateResult(string Path, PluginCreateRefusal? Refusal = null, string? Message = null)
 {
-    /// <summary>The file is written before Track runs, so only Track can refuse: an already-tracked
-    /// destination has nothing left to land.</summary>
-    public bool Applied => Track?.Applied ?? true;
+    public bool Applied => Refusal is null;
+}
+
+/// <summary>Why a create wrote nothing, each found before any write (create-plugin, Refusals).</summary>
+public enum PluginCreateRefusal
+{
+    FolderGone,
+    FileExists,
+    LightPluginUnsupported,
 }

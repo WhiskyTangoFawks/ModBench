@@ -134,18 +134,39 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
-    public async Task CreateAndWriteAsync(
-        ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster)
+    public async Task<EmptyPluginWrite> CreateAndWriteAsync(
+        ModKey modKey, string destinationPath, GameRelease gameRelease)
     {
-        // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has written
-        // into yet — a brand-new mod, or overwrite/ before its first file.
-        Directory.CreateDirectory(PathShape.DirectoryOf(destinationPath));
-        if (File.Exists(destinationPath))
-            throw new IOException($"Plugin file already exists: {Path.GetFileName(destinationPath)}");
+        var folder = PathShape.DirectoryOf(destinationPath);
+        if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
+        if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 
         var plugin = CreateEmpty(modKey, gameRelease);
-        if (smallMaster) plugin.IsSmallMaster = true;
-        await WriteAsync(plugin, destinationPath);
+        plugin.IsMaster = modKey.Type == ModType.Master;
+        plugin.IsSmallMaster = modKey.Type == ModType.Light;
+
+        // Mutagen refuses a path whose file name is not the plugin's own, so the temp file is the
+        // plugin's name inside a temp folder beside it.
+        var tempFolder = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(tempFolder);
+        try
+        {
+            var tempPath = Path.Combine(tempFolder, Path.GetFileName(destinationPath));
+            await WriteAsync(plugin, tempPath);
+            File.Move(tempPath, destinationPath, overwrite: false);
+            return EmptyPluginWrite.Written;
+        }
+        catch (IOException) when (File.Exists(destinationPath))
+        {
+            return EmptyPluginWrite.FileExists;
+        }
+        finally
+        {
+            // Cleanup never outranks the exception it follows.
+            try { Directory.Delete(tempFolder, recursive: true); }
+            catch (IOException) { /* best-effort; another tool holds the temp folder */ }
+            catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); the temp folder remains */ }
+        }
     }
 
     /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what

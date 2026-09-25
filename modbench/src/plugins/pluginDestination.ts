@@ -1,32 +1,32 @@
-// Where a new plugin lands, read off the Instance's own value — no vscode import, no backend
-// call (Mod Management never calls it, CLAUDE.md), and no path joined here.
+// Where a new plugin can live, read off the Instance's own value: no vscode import, no backend
+// call, and no path joined here.
 
 import type { InstanceValue } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
-export type PluginDestinationChoice =
-  | { kind: 'overwrite' }
-  | { kind: 'existingMod'; modName: string };
-
-export interface PluginDestination {
-  path: string;
-  origin: string;
+export interface PluginPlace {
+  readonly label: string;
+  readonly origin: string;
 }
 
-/** `overwrite/` is first so `showQuickPick` pre-highlights it — it has no `activeItem`, and
- *  array order is the only way to set one. `choice`, not `kind`: `kind` is
- *  `QuickPickItem`'s own reserved separator-row property. */
-export const PLUGIN_DESTINATION_OPTIONS: readonly { label: string; description?: string; choice: PluginDestinationChoice['kind'] }[] = [
-  { label: OVERWRITE_ORIGIN + '/', description: "MO2's overwrite folder", choice: OVERWRITE_ORIGIN },
-  { label: 'Existing mod…', choice: 'existingMod' },
-];
+const enabledModNames = (value: Pick<InstanceValue, 'mods'>): string[] =>
+  value.mods.filter((entry) => entry.kind === 'mod' && entry.enabled).map((entry) => entry.name);
 
-/** `undefined` when the value names no folder for the chosen mod — a mod that left the modlist
- *  between the pick and the answer. */
-export function resolvePluginDestination(
-  value: Pick<InstanceValue, 'paths'>, choice: PluginDestinationChoice,
-): PluginDestination | undefined {
-  if (choice.kind === OVERWRITE_ORIGIN) return { path: value.paths.overwriteDir, origin: OVERWRITE_ORIGIN };
-  const path = value.paths.modDirs.get(choice.modName);
-  return path === undefined ? undefined : { path, origin: choice.modName };
+/** Overwrite first, then the enabled mods, each left out when it already holds a plugin named
+ *  `name`. The same name elsewhere in the load order is not checked. */
+export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, name: string): PluginPlace[] {
+  const folded = name.toLowerCase();
+  const holds = (origin: string): boolean =>
+    value.plugins.some((p) => p.path !== undefined && p.origin === origin && p.name.toLowerCase() === folded);
+  return [
+    { label: 'Overwrite', origin: OVERWRITE_ORIGIN },
+    ...enabledModNames(value).map((mod) => ({ label: mod, origin: mod })),
+  ].filter((place) => !holds(place.origin));
+}
+
+/** `undefined` for a mod the value does not list as enabled, or names no folder for: one that
+ *  vanished between the pick and the answer. */
+export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): string | undefined {
+  if (origin === OVERWRITE_ORIGIN) return value.paths.overwriteDir;
+  return enabledModNames(value).includes(origin) ? value.paths.modDirs.get(origin) : undefined;
 }

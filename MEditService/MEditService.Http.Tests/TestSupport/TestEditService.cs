@@ -54,7 +54,4 @@ internal static class TestEditService
     internal static KeepExternalChangeHandler KeepHandler(LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null) =>
         Over(holder, logging).GetRequiredService<KeepExternalChangeHandler>();
 
-    internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CreatePluginHandler>();
-
 }

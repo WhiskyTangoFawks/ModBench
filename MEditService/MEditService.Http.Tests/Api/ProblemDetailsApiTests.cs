@@ -77,23 +77,20 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     public async Task CreatePlugin_InvalidInput_ReturnsProblemDetails(string name, int expectedStatus)
     {
         var resp = await _client.PostAsJsonAsync(
-            "/plugins/create", new { name, path = Path.Combine(_fixture.DataFolder, "ProblemDetailsMod"), origin = "ProblemDetailsMod" });
+            "/plugins/create", new { origin = "ProblemDetailsMod", name, folder = Path.Combine(_fixture.DataFolder, "ProblemDetailsMod") });
 
         Assert.Equal((HttpStatusCode)expectedStatus, resp.StatusCode);
         AssertIsProblemDetails(resp, expectedStatus);
     }
 
-    // A name that collides with an already-created plugin at the same destination. The fixture's own
-    // listed plugin lives in the Data directory, so this creates the destination's first plugin,
-    // then collides.
     [Fact]
     public async Task CreatePlugin_DuplicateAtSameDestination_ReturnsProblemDetails409()
     {
-        var modFolder = Path.Combine(_fixture.DataFolder, "DuplicateDestMod");
-        var first = await _client.PostAsJsonAsync("/plugins/create", new { name = "Dup.esp", path = modFolder, origin = "DuplicateDestMod" });
+        var modFolder = Directory.CreateDirectory(Path.Combine(_fixture.DataFolder, "DuplicateDestMod")).FullName;
+        var first = await _client.PostAsJsonAsync("/plugins/create", new { origin = "DuplicateDestMod", name = "Dup.esp", folder = modFolder });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
-        var resp = await _client.PostAsJsonAsync("/plugins/create", new { name = "Dup.esp", path = modFolder, origin = "DuplicateDestMod" });
+        var resp = await _client.PostAsJsonAsync("/plugins/create", new { origin = "DuplicateDestMod", name = "Dup.esp", folder = modFolder });
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
         AssertIsProblemDetails(resp, 409);
@@ -119,7 +116,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         var resp = op switch
         {
             "createPlugin" => await client.PostAsJsonAsync(
-                "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
+                "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
             "getFilter" => await client.GetAsync("/load-order/filter"),
             "track" => await client.PostAsJsonAsync("/plugins/track", new
             {

@@ -95,8 +95,17 @@ public interface IPluginAdapter
     string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
-    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>, header and nothing else.
-    /// Creates a missing destination folder and refuses an existing file.
-    /// <paramref name="smallMaster"/> adds the removable ESL header flag.</summary>
-    Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster);
+    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>: a header whose flags the
+    /// extension alone sets, no records and no masters. Written whole or not at all, and never into
+    /// a folder it had to make or over a file already there.</summary>
+    Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease);
+}
+
+/// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> found at the path before it wrote
+/// anything, or that it wrote.</summary>
+public enum EmptyPluginWrite
+{
+    Written,
+    FolderGone,
+    FileExists,
 }

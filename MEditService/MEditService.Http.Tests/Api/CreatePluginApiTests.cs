@@ -2,13 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>The create gesture: the endpoint is the load order's second
-/// writer, so what it answers and what the next reader sees are one thing.</summary>
+/// <summary>The create gesture writes the file and nothing else: the load order it answers beside is
+/// the one it found, and the plugin reaches a reader only once a load order names it.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class CreatePluginApiTests : HostedTests
 {
@@ -28,172 +29,181 @@ public sealed class CreatePluginApiTests : HostedTests
         return fx;
     }
 
-    private Task<HttpResponseMessage> Create(string name, string path, string origin = Origin) =>
-        Client.PostAsJsonAsync("/plugins/create", new { name, path, origin });
+    private Task<HttpResponseMessage> Create(string name, string folder, string origin = Origin) =>
+        Client.PostAsJsonAsync("/plugins/create", new { origin, name, folder });
 
-    private async Task<JsonElement> CreateAndAwait(string name, string path, string origin = Origin)
+    private async Task<JsonElement> Created(string name, string folder, string origin = Origin)
     {
-        var created = await Create(name, path, origin);
+        var created = await Create(name, folder, origin);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        var body = await created.Content.ReadFromJsonAsync<JsonElement>();
-        await Client.AwaitTerminalLoadOrderStatus(body.GetProperty("version").GetInt64(), TimeSpan.FromSeconds(20));
-        return body;
+        return await created.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    // A record gesture resolves its target from the kernel alone, so an applied one is the plugin
-    // being registered and its file being there.
+    private static string NewModFolder(ScatteredFixtureData fx, string name) =>
+        Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
+
+    // A record gesture resolves its target from the held load order alone, so a refused one is the
+    // plugin not being registered there.
     private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
         Client.PostAsJsonAsync(
             $"/plugins/{Uri.EscapeDataString(plugin)}/records",
             new { origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null });
 
+    private async Task<long> HeldVersion() =>
+        (await Client.GetFromJsonAsync<JsonElement>("/load-order/status")).GetProperty("version").GetInt64();
+
     [Fact]
-    public async Task CreatingAPluginInAModOfItsOwn_AnswersWithThePluginItRegistered_AndItIsWritableAtOnce()
+    public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndRegistersNothing()
     {
         var fx = Owned(await Loaded());
-        var modFolder = Path.Combine(fx.Root, "mod-minted");
+        var modFolder = NewModFolder(fx, "mod-minted");
 
-        var created = await CreateAndAwait("Minted.esp", modFolder, "MintedMod");
+        var created = await Created("Minted.esp", modFolder, "MintedMod");
 
         Assert.Equal("Minted.esp", created.GetProperty("name").GetString());
         Assert.Equal("MintedMod", created.GetProperty("origin").GetString());
         Assert.Equal(Path.Combine(modFolder, "Minted.esp"), created.GetProperty("path").GetString());
-        (await CreateARecordIn("Minted.esp", "MintedMod")).EnsureSuccessStatusCode();
+        Assert.False((await CreateARecordIn("Minted.esp", "MintedMod")).IsSuccessStatusCode);
     }
 
-    // The plugin reaches the Index through the create's own snapshot change, so the file must be
-    // there when that change lands: a plugin the reconcile cannot open is not a row.
+    // The plugin reaches the Index through the load order Mod Management puts once plugin sync gave
+    // it a line, never through the create itself.
     [Fact]
-    public async Task CreatingAPlugin_ListsItOnTheNextPluginsRead()
+    public async Task CreatingAPlugin_LeavesThePluginsReadAsItWas_UntilALoadOrderNamesIt()
     {
         var fx = Owned(await Loaded());
+        var modFolder = NewModFolder(fx, "mod-listed");
+        var before = (await Client.Plugins()).Select(p => p.GetProperty("name").GetString()).ToList();
 
-        await CreateAndAwait("Listed.esp", Path.Combine(fx.Root, "mod-listed"), "ListedMod");
+        var created = await Created("Listed.esp", modFolder, "ListedMod");
 
+        Assert.Equal(before, (await Client.Plugins()).Select(p => p.GetProperty("name").GetString()));
+        var named = fx.Plugins.Append(new LoadOrderEntry(
+            "Listed.esp", created.GetProperty("path").GetString().Require(), "ListedMod",
+            fx.Plugins.Count, Enabled: false, Winning: true));
+        (await Client.PutLoadOrder(fx, named)).EnsureSuccessStatusCode();
         Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");
     }
 
-    // One past the highest slot the value carries; a reused one would give two participants a single
-    // index.
+    // The slot is plugin sync's to give, at the end of plugins.txt: the create answers none, and the
+    // held load order keeps the version it had.
     [Fact]
-    public async Task CreatingAPlugin_TakesTheSlotPastTheHighestRegisteredOne()
+    public async Task CreatingAPlugin_AnswersNoSlotOrVersion_AndLeavesTheHeldLoadOrderVersion()
     {
         var fx = Owned(await Loaded());
-        var highest = (await Client.Plugins())
-            .Max(p => p.GetProperty("loadOrderIndex").ValueKind == JsonValueKind.Null
-                ? 0
-                : p.GetProperty("loadOrderIndex").GetInt32());
+        var version = await HeldVersion();
 
-        var created = await CreateAndAwait("Slotted.esp", Path.Combine(fx.Root, "mod-slotted"), "SlottedMod");
+        var created = await Created("Slotted.esp", NewModFolder(fx, "mod-slotted"), "SlottedMod");
 
-        Assert.Equal(highest + 1, created.GetProperty("slot").GetInt32());
+        Assert.False(created.TryGetProperty("slot", out _));
+        Assert.False(created.TryGetProperty("version", out _));
+        Assert.Equal(version, await HeldVersion());
     }
 
     [Fact]
-    public async Task CreatingAPluginWithAnInvalidExtension_Is400_AndRegistersNothing()
+    public async Task CreatingAPluginWithAnInvalidExtension_Is400_AndWritesNothing()
     {
         var fx = Owned(await Loaded());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
-        var created = await Create("Mod.txt", OtherTool.ModFolderOf(fx, Origin));
+        var created = await Create("Mod.txt", modFolder);
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
         var problem = await created.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Contains("extension", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.False((await CreateARecordIn("Mod.txt")).IsSuccessStatusCode);
+        Assert.False(File.Exists(Path.Combine(modFolder, "Mod.txt")));
     }
 
     [Theory]
-    [InlineData("", "SomeMod")]
-    [InlineData("   ", "SomeMod")]
-    [InlineData("New.esp", "   ")]
-    public async Task CreatingAPluginWithAnEmptyArgument_Is400(string name, string origin)
+    [InlineData("", "SomeMod", "folder")]
+    [InlineData("   ", "SomeMod", "folder")]
+    [InlineData("New.esp", "   ", "folder")]
+    [InlineData("New.esp", "SomeMod", "   ")]
+    public async Task CreatingAPluginWithAnEmptyArgument_Is400(string name, string origin, string folder)
     {
         var fx = Owned(await Loaded());
 
-        var created = await Create(name, OtherTool.ModFolderOf(fx, Origin), origin);
+        var created = await Create(name, folder == "folder" ? OtherTool.ModFolderOf(fx, Origin) : folder, origin);
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
     }
 
     [Fact]
-    public async Task CreatingAPluginWithoutADestination_Is400()
+    public async Task CreatingAPluginWithoutAFolder_Is400()
     {
         Owned(await Loaded());
 
-        var created = await Client.PostAsJsonAsync("/plugins/create", new { name = "NoPath.esp" });
+        var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "NoPath.esp" });
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
     }
 
     [Fact]
-    public async Task CreatingAPluginWithAFilenameTheWriterRefuses_Is400_AndRegistersNothing()
-    {
-        var fx = Owned(await Loaded());
-
-        var created = await Create("Bad|Name.esp", OtherTool.ModFolderOf(fx, Origin));
-
-        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-        Assert.False((await CreateARecordIn("Bad|Name.esp")).IsSuccessStatusCode);
-    }
-
-    [Fact]
-    public async Task CreatingTheSameNameTwice_Is409_AndLeavesTheFirstRegistration()
+    public async Task CreatingAPluginWithAFilenameTheWriterRefuses_Is400_AndWritesNothing()
     {
         var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var first = await CreateAndAwait("Twice.esp", modFolder);
+
+        var created = await Create("Bad|Name.esp", modFolder);
+
+        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
+        Assert.False(File.Exists(Path.Combine(modFolder, "Bad|Name.esp")));
+    }
+
+    [Fact]
+    public async Task CreatingTheSameNameTwice_Is409_AndLeavesTheFirstFileAsItWas()
+    {
+        var fx = Owned(await Loaded());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var path = (await Created("Twice.esp", modFolder)).GetProperty("path").GetString().Require();
+        var first = await File.ReadAllBytesAsync(path);
 
         var second = await Create("Twice.esp", modFolder);
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
-        Assert.NotEqual(0, first.GetProperty("slot").GetInt32());
-        (await CreateARecordIn("Twice.esp")).EnsureSuccessStatusCode();
+        Assert.Equal("FileExists", (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
+        Assert.Equal(first, await File.ReadAllBytesAsync(path));
     }
 
-    // Creating into an untracked destination Tracks it inside the same gesture: a created plugin is
-    // editable at once, and editing requires tracking.
+    // Tracking is the user's own gesture (ADR-0007 invariant 2): the new plugin is untracked, and
+    // so is the mod it landed in.
     [Fact]
-    public async Task CreatingIntoAnUntrackedDestination_LeavesThePluginEditable()
-    {
-        var fx = Owned(await Loaded());
-        await CreateAndAwait("Editable.esp", OtherTool.ModFolderOf(fx, Origin));
-
-        var record = await CreateARecordIn("Editable.esp");
-
-        record.EnsureSuccessStatusCode();
-        Assert.True((await record.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
-    }
-
-    // The rival is Track's own refusal to re-track: a naive "always Track on create" would refuse the
-    // second plugin instead of reusing the repository the first one made.
-    [Fact]
-    public async Task CreatingASecondPluginIntoTheSameDestination_Succeeds_AndReusesTheRepository()
+    public async Task CreatingIntoAnUntrackedMod_TracksNothing()
     {
         var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        await CreateAndAwait("First.esp", modFolder);
-        var record = await CreateARecordIn("First.esp");
-        record.EnsureSuccessStatusCode();
-        var formKey = (await record.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("formKey").GetString().Require();
 
-        var second = await Create("Second.esp", modFolder);
+        await Created("Untracked.esp", modFolder);
 
-        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        // Tracking the destination again would write its tree from the binaries, losing a record only
-        // the source tree holds; this edit lands, so the first create's repository was reused.
-        (await Client.Edit(formKey, "First.esp", Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
+        Assert.False((await Client.Plugin(Held)).GetProperty("isTracked").GetBoolean());
     }
 
-    // The destination is Tracked inside the create gesture, so its watch is armed there too: the
-    // mod's own plugin answers from source with no load order put after the create.
+    // The rival is the retired create, which parked the new binary as a compile of its own and so
+    // moved a ref in the mod's repository.
     [Fact]
-    public async Task AfterCreate_AHandEditToTheDestinationsSource_ReachesTheNextQuery()
+    public async Task CreatingIntoATrackedMod_LeavesItsRepositoryAsItWas()
     {
         var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
+        var repository = TreeSnapshot.Of(Path.Combine(modFolder, ".git"));
+
+        await Created("Second.esp", modFolder);
+
+        Assert.Equal(repository, TreeSnapshot.Of(Path.Combine(modFolder, ".git")));
+    }
+
+    // Nothing the create writes stands between a tracked mod's own plugin and its source: a hand
+    // edit to that source still reaches the next query.
+    [Fact]
+    public async Task AfterCreateIntoATrackedMod_AHandEditToItsSource_ReachesTheNextQuery()
+    {
+        var fx = Owned(await Loaded());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
         var formKey = await Client.FirstFormKey(Held);
-        await CreateAndAwait("Minted.esp", modFolder);
+        await Created("Minted.esp", modFolder);
         var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(modFolder, Held, Npc, "RenamedByHand");

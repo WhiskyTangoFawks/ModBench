@@ -224,7 +224,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a new plugin at the given path/origin (ADR-0007), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer) is responsible for that. */
+        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no Track, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -618,9 +618,9 @@ export interface components {
             fullName?: string | null;
         };
         CreatePluginRequest: {
-            name: string;
-            path: string;
             origin: string;
+            name: string;
+            folder: string;
         };
         EnumMember: {
             value: string;
@@ -779,12 +779,8 @@ export interface components {
         };
         PluginCreatedResponse: {
             name: string;
-            path: string;
             origin: string;
-            /** Format: int32 */
-            slot?: number | null;
-            /** Format: int64 */
-            version: number;
+            path: string;
         };
         PluginDiagnosisReport: {
             plugin: string;

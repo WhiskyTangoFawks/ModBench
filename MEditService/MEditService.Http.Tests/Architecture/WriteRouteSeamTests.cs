@@ -41,7 +41,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Source plugin name and origin are required.", statusCode: 400)""",
         """Results.Problem("Destination plugin name and origin are required.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
-        """Results.Problem("Destination path and origin are required.", statusCode: 400)""",
+        """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem( $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
         """Results.Problem("At least one plugin is required.", statusCode: 400)""",

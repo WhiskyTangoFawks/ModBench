@@ -1,45 +1,56 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../pluginDestination';
+import { pluginPlaces, placeFolder } from '../pluginDestination';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { present } from '../../ports/present';
+import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
+
+const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
+  ({ name, origin, path, slot: null, enabled: false, winning: true });
 
 const value = instanceValueFixture({
+  mods: [
+    { kind: 'mod', name: 'Winning Mod', enabled: true },
+    { kind: 'separator', name: 'Patches', enabled: true },
+    { kind: 'mod', name: 'Disabled Mod', enabled: false },
+    { kind: 'mod', name: 'Losing Mod', enabled: true },
+  ],
+  plugins: [
+    plugin('Held.esp', 'Losing Mod', join('/instance', 'mods', 'Losing Mod', 'Held.esp')),
+    plugin('Other.esp', 'overwrite', join('/instance', 'overwrite', 'Other.esp')),
+  ],
   paths: {
     overwriteDir: join('/instance', 'overwrite'),
     downloadsDir: join('/instance', 'downloads'),
-    modDirs: new Map([['My Mod', join('/instance', 'mods', 'My Mod')]]),
+    modDirs: new Map([
+      ['Winning Mod', join('/instance', 'mods', 'Winning Mod')],
+      ['Disabled Mod', join('/instance', 'mods', 'Disabled Mod')],
+      ['Losing Mod', join('/instance', 'mods', 'Losing Mod')],
+    ]),
   },
 });
 
-describe('resolvePluginDestination', () => {
-  it('overwrite resolves to the value\'s overwrite/ folder with the reserved origin', () => {
-    expect(resolvePluginDestination(value, { kind: 'overwrite' })).toEqual({
-      path: join('/instance', 'overwrite'),
-      origin: 'overwrite',
-    });
+describe('pluginPlaces', () => {
+  it('lists Overwrite first, then the enabled mods, and no separator or disabled mod', () => {
+    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['overwrite', 'Winning Mod', 'Losing Mod']);
   });
 
-  it('existingMod resolves to the folder the value names for that mod, origin is the mod name', () => {
-    expect(resolvePluginDestination(value, { kind: 'existingMod', modName: 'My Mod' })).toEqual({
-      path: join('/instance', 'mods', 'My Mod'),
-      origin: 'My Mod',
-    });
-  });
-
-  // Rival: joining mods/<name> here, which answers a folder for a mod the value does not list —
-  // a plugin landing in a directory nothing owns.
-  it('answers nothing for a mod the value names no folder for', () => {
-    expect(resolvePluginDestination(value, { kind: 'existingMod', modName: 'Uninstalled' })).toBeUndefined();
+  // Rival: checking the name across the whole load order, which would leave out every place once
+  // any of them held it.
+  it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
+    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['overwrite', 'Winning Mod']);
+    expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
   });
 });
 
-describe('PLUGIN_DESTINATION_OPTIONS (New Plugin\'s destination QuickPick)', () => {
-  it('offers exactly two destinations: overwrite/ and Existing mod…', () => {
-    expect(PLUGIN_DESTINATION_OPTIONS.map((o) => o.label)).toEqual(['overwrite/', 'Existing mod…']);
+describe('placeFolder', () => {
+  it("answers Overwrite's folder and an enabled mod's folder as the value names them", () => {
+    expect(placeFolder(value, 'overwrite')).toBe(join('/instance', 'overwrite'));
+    expect(placeFolder(value, 'Winning Mod')).toBe(join('/instance', 'mods', 'Winning Mod'));
   });
 
-  it('lists overwrite/ first, so it is the pre-highlighted default', () => {
-    expect(present(PLUGIN_DESTINATION_OPTIONS[0], 'the first destination option').choice).toBe('overwrite');
+  // Rival: joining mods/<name> here, which answers a folder for a mod the value does not list.
+  it('answers nothing for a mod the value does not list, or does not enable', () => {
+    expect(placeFolder(value, 'Uninstalled')).toBeUndefined();
+    expect(placeFolder(value, 'Disabled Mod')).toBeUndefined();
   });
 });

@@ -1,6 +1,5 @@
-// New Plugin's two remaining destinations, composed the way pluginListCommands.ts's registered
-// command does: the Instance's value names the folder, the backend lands the bytes there
-// (simulated here), then appendPlugin adds the plugins.txt line.
+// create-plugin, Hand-off: the create writes only the file, in the folder the place names. The
+// next instance value carries it, and plugin sync gives it its line at the end, disabled.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,32 +9,38 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance } from '../../instanceLoader/instance';
-import { resolvePluginDestination, type PluginDestinationChoice } from '../pluginDestination';
-import { appendPlugin } from '../../pluginsCommands/plugins';
+import { placeFolder } from '../pluginDestination';
+import { syncPlugins } from '../../pluginsCommands/plugins';
+import { pluginSyncArguments } from '../../pluginSyncTrigger';
 import { present } from '../../ports/present';
-import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
 import { resolvesNoDownloads } from '../../test/mo2/downloadsUnresolved';
+import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
 
 const PROFILE = 'Default';
 
-describe('New Plugin lands the file and the plugins.txt line, for both remaining destinations', () => {
+describe('a created plugin reaches plugins.txt through plugin sync alone', () => {
   let dir: string;
   let instance: Instance;
+  const plugins = () => readFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), 'utf8');
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'new-plugin-destination-'));
     await mkdir(join(dir, 'overwrite'), { recursive: true });
     await mkdir(join(dir, 'mods', 'Existing Mod'), { recursive: true });
     await mkdir(join(dir, 'profiles', PROFILE), { recursive: true });
+    await mkdir(join(dir, 'Game', 'Data'), { recursive: true });
     await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n');
     await writeFile(join(dir, 'profiles', PROFILE, 'modlist.txt'), '+Existing Mod\r\n');
+    await writeFile(join(dir, 'mods', 'Existing Mod', 'Base.esp'), 'plugin');
     await writeFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
+    const resolveGameDirectory: GameDirectoryResolver = () =>
+      Promise.resolve({ kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') });
     instance = new Instance({
       instanceRoot: dir,
-      resolveGameDirectory: resolvesNotFound,
+      resolveGameDirectory,
       resolveDownloadsDirectory: resolvesNoDownloads,
       log: () => {},
-    logReadFailure: () => {},
+      logReadFailure: () => {},
     });
     await instance.refresh();
   });
@@ -45,25 +50,16 @@ describe('New Plugin lands the file and the plugins.txt line, for both remaining
     await rm(dir, { recursive: true, force: true });
   });
 
-  const landAt = async (choice: PluginDestinationChoice): Promise<void> => {
-    const destination = present(
-      resolvePluginDestination(instance.value, choice), 'the destination the value names');
-    await writeFile(join(destination.path, 'New.esp'), '');
-  };
+  it.each(['overwrite', 'Existing Mod'])('in %s: the line lands at the end, disabled', async (origin) => {
+    const folder = present(placeFolder(instance.value, origin), 'the folder the value names for the place');
+    await writeFile(join(folder, 'New.esp'), 'plugin');
+    expect(await plugins()).toBe('*Base.esp\r\n');
 
-  it('overwrite/: the file lands there and plugins.txt gains an enabled line', async () => {
-    await landAt({ kind: 'overwrite' });
+    await instance.refresh();
+    const { profile, provided, inData } = pluginSyncArguments(instance.value);
+    const synced = await syncPlugins(dir, profile, provided, inData, () => Promise.resolve([]));
 
-    expect(await appendPlugin(dir, PROFILE, 'New.esp')).toEqual({ applied: true, wrote: true });
-    await expect(readFile(join(dir, 'overwrite', 'New.esp'))).resolves.toBeDefined();
-    expect(await readFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), 'utf8')).toContain('*New.esp');
-  });
-
-  it('an existing mod: the file lands under mods/<name> and plugins.txt gains an enabled line', async () => {
-    await landAt({ kind: 'existingMod', modName: 'Existing Mod' });
-
-    expect(await appendPlugin(dir, PROFILE, 'New.esp')).toEqual({ applied: true, wrote: true });
-    await expect(readFile(join(dir, 'mods', 'Existing Mod', 'New.esp'))).resolves.toBeDefined();
-    expect(await readFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), 'utf8')).toContain('*New.esp');
+    expect(synced).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
+    expect(await plugins()).toBe('*Base.esp\r\nNew.esp\r\n');
   });
 });

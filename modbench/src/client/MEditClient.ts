@@ -126,7 +126,7 @@ export type RecordFilter = components['schemas']['FilterRequest'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
