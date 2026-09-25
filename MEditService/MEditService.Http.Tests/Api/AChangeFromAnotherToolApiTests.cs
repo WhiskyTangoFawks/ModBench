@@ -133,6 +133,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDocument(original, "Backup/{0}");
 
         var response = await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedDespiteTheBackup");
@@ -144,6 +145,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
     }
 
     // A tool that moves by copying and then deleting leaves the record in two documents until the
@@ -212,6 +214,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var cell = await Client.FirstFormKey(Plugin, "cell");
         var placedRef = await Client.FirstFormKey(Plugin, "refr");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
+        using var stream = await Client.NotificationStream();
         var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
 
         var response = await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5);
@@ -222,6 +225,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(modFolder, copy), detail, StringComparison.Ordinal);
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
     }
 
     [Theory]

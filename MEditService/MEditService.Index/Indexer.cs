@@ -744,7 +744,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             // last read failed: that read is what lifts the failure once the tree is sound (ADR-0003).
             var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
             if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)
-                index.RefreshByKeys(key, folder, report.ChangedKeys);
+                RefreshByKeysOrReadWhole(index, key, folder, report.ChangedKeys);
             else if (report.NeedsRebuild || failed) ReindexHeldCopy(key);
             return report;
         }
@@ -779,18 +779,23 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             return;
         }
 
+        RefreshByKeysOrReadWhole(index, key, modFolder, formKeys);
+        ReapplyFilter();
+    }
+
+    // A tree the keys cannot be read from is diagnosed on the copy by the whole read, as a first
+    // ingest would diagnose it.
+    private void RefreshByKeysOrReadWhole(
+        IRecordIndex index, PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys)
+    {
         try
         {
             index.RefreshByKeys(key, modFolder, formKeys);
         }
-        catch (AmbiguousSourceUnitException)
+        catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
         {
-            // Two documents hold one of these keys: the whole read is what diagnoses the tree on the
-            // copy, as a first ingest would.
             ReindexHeldCopy(key);
-            return;
         }
-        ReapplyFilter();
     }
 
     // ADR-0013 invariant 3: the sweep is handed who competes, read from the kernel's load order —
