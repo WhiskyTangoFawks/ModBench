@@ -189,6 +189,7 @@ public sealed partial class SourceRepository
         {
             identified = IdentitiesIn(
                 ScanOf(sourceRoot).DocumentsDeclaring(spelled), pluginFileName, formKey, spelled, schemas);
+            RememberFoundByText(pluginFileName, spelled, [.. identified.Select(i => i.Path)]);
         }
 
         return OneDocumentPerFormKey.TheOne([.. identified.Select(i => i.Path)], spelled, _modFolder) is { } path
@@ -246,18 +247,32 @@ public sealed partial class SourceRepository
             .SelectMany(root => DocumentsNaming(root, formKey))
             .Where(File.Exists)
             .ToList();
-        if (documents.Count == 0 && _foundByText.TryGetValue((pluginFileName, formKey), out var found) && File.Exists(found))
+        if (documents.Count == 0 && RememberedFoundByText(pluginFileName, formKey) is { } found)
             documents = [found];
         if (documents.Count == 0 && byText)
         {
             documents = [.. ScanOf(Path.Combine(_modFolder, RootFor(pluginFileName)))
                 .DocumentsDeclaring(formKey)
                 .Where(document => roots.Exists(root => IsUnder(root, document)))];
-            if (documents.Count == 1) _foundByText[(pluginFileName, formKey)] = documents[0];
+            RememberFoundByText(pluginFileName, formKey, documents);
         }
 
         return OneDocumentPerFormKey.TheOne(documents, formKey, _modFolder);
     }
+
+    // Every read that finds a document by its text remembers it, so no put later in this operation
+    // misses it by name and writes a second document beside it.
+    private List<string> RememberFoundByText(string pluginFileName, string formKey, List<string> documents)
+    {
+        if (documents.Count == 1) _foundByText[(pluginFileName, Canonical(formKey))] = documents[0];
+        return documents;
+    }
+
+    private string? RememberedFoundByText(string pluginFileName, string formKey) =>
+        _foundByText.TryGetValue((pluginFileName, Canonical(formKey)), out var found) && File.Exists(found) ? found : null;
+
+    private static string Canonical(string formKey) =>
+        FormKey.TryFactory(formKey, out var parsed) ? parsed.ToString() : formKey;
 
     private static bool IsUnder(string directory, string path) =>
         path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
@@ -291,7 +306,7 @@ public sealed partial class SourceRepository
 
         var spelled = parsed.ToString();
         return DocumentsNaming(sourceRoot, spelled).Any(document => Declares(document, parsed))
-               || ScanOf(sourceRoot).DocumentsDeclaring(spelled).Count > 0
+               || RememberFoundByText(plugin.Name, spelled, ScanOf(sourceRoot).DocumentsDeclaring(spelled)).Count > 0
                || CarriesEmbedded(plugin, spelled);
     }
 

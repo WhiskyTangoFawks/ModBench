@@ -127,6 +127,48 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ADialogResponseCopiedIntoAQuestWhoseDocumentWasRenamedByHand_LandsInThatDocument()
+    {
+        const string master = "DialogueMaster.esm";
+        const string masterOrigin = "DialogueMasterMod";
+        const string patch = "DialoguePatch.esp";
+        const string patchOrigin = "DialoguePatchMod";
+        var response = FormKey.Null;
+        using var fx = new PluginFixtureBuilder("trace-another-tool-dialogue")
+            .WithPlugin(master, mod =>
+            {
+                var quest = new Quest(mod) { EditorID = "SharedDialogueQuest" };
+                var topic = new DialogTopic(mod) { EditorID = "SharedDialogueTopic" };
+                var line = new DialogResponses(mod) { EditorID = "CopiedResponse" };
+                topic.Responses.Add(line);
+                quest.DialogTopics.Add(topic);
+                mod.Quests.Add(quest);
+                response = line.FormKey;
+            }, origin: masterOrigin)
+            .WithPlugin(patch, (mod, earlier) =>
+            {
+                var quest = earlier[0].Quests.Single().DeepCopy();
+                quest.DialogTopics.Single().Responses.Clear();
+                mod.Quests.Set(quest);
+            }, origin: patchOrigin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(patch, patchOrigin)).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(patch);
+        var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
+        OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
+        var renamed = OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\"");
+
+        var copied = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(response.ToString())}/copy-as-override",
+            new { sourcePlugin = master, sourceOrigin = masterOrigin, destinationPlugin = patch, destinationOrigin = patchOrigin });
+
+        copied.EnsureSuccessStatusCode();
+        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\""));
+        Assert.Contains("CopiedResponse", File.ReadAllText(renamed), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ARecordABackupCopyAlsoHolds_RefusesAnEdit_NamingBothDocuments()
     {
         using var fx = await ATrackedMod();
