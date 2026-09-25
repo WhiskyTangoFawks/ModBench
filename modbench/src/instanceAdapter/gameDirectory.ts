@@ -49,6 +49,12 @@ export function dataFolderOf(folder: GameFolder): string | undefined {
   return folder.kind === 'found' ? folder.dataFolder : undefined;
 }
 
+/** A file at the root of the Data folder of a game folder found, undefined when it was not. */
+export function dataFolderFile(folder: GameFolder, name: string): string | undefined {
+  const dataFolder = dataFolderOf(folder);
+  return dataFolder === undefined ? undefined : join(dataFolder, name);
+}
+
 /** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. */
 export type DetectWinePrefix = () => Promise<string | null>;
 

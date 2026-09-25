@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
 import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { resolveCompileTarget } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
-import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
+import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked,
+  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginCopyKey, type IsTracked, type PluginFolder,
 } from './trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
@@ -109,6 +108,7 @@ export function registerRebaseCommand(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
   outputChannel: vscode.LogOutputChannel, reporter: Reporter,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
+  originFiles: OriginFilesOf,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -120,7 +120,7 @@ export function registerRebaseCommand(
     }
 
     const result = await runRebase({
-      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel, reporter),
+      client, openMergeEditor: makeMergeEditorOpener(originFiles, outputChannel, reporter),
       reporter,
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
@@ -146,7 +146,7 @@ export function registerSaveAndCompileCommand(
   outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
-  originFolder: OriginFolder,
+  originFiles: OriginFilesOf,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
     const target = await resolveCompileTarget(
@@ -173,7 +173,7 @@ export function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, undefined);
+    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, undefined);
   });
 }
 
@@ -183,7 +183,7 @@ export function registerCompileAtRefCommand(
   client: CompileClient,
   outputChannel: vscode.LogOutputChannel, reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
-  originFolder: OriginFolder,
+  originFiles: OriginFilesOf,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -206,7 +206,7 @@ export function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, 'main');
+    await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, 'main');
   });
 }
 
@@ -225,7 +225,7 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
 /** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
  *  disk, which the index's own mirror watch re-reads. */
 export async function compileAndReport(
-  client: CompileClient, diagnostics: vscode.DiagnosticCollection, originFolder: OriginFolder,
+  client: CompileClient, diagnostics: vscode.DiagnosticCollection, originFiles: OriginFilesOf,
   reporter: Reporter, ask: AskQuestion,
   target: { name: string; origin: string }, atRef: string | undefined,
 ): Promise<void> {
@@ -233,13 +233,13 @@ export async function compileAndReport(
   if (!result) return;
   if (isRefused(result)) { reporter.report('error', result.message); return; }
 
-  publishCompileDiagnostics(diagnostics, originFolder(target.origin), result);
+  publishCompileDiagnostics(diagnostics, originFiles(target.origin), result);
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
     if (result.eslContradiction
         && await offerEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client, ask, reporter)) {
-      await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, atRef);
+      await compileAndReport(client, diagnostics, originFiles, reporter, ask, target, atRef);
       return;
     }
     reporter.report('error', `Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
@@ -253,22 +253,22 @@ export async function compileAndReport(
 }
 
 /** Replaces whatever this plugin's source files held from the last compile — never additive, or
- *  a fixed diagnostic would survive forever. `modFolder` is the Instance value's answer for the
+ *  a fixed diagnostic would survive forever. `files` is the Instance value's answer for the
  *  origin: `overwrite` and `Data` are not under `mods/` (ADR-0012). */
 export function publishCompileDiagnostics(
-  collection: vscode.DiagnosticCollection, modFolder: string | undefined, result: CompileResult,
+  collection: vscode.DiagnosticCollection, files: OriginFiles | undefined, result: CompileResult,
 ): void {
-  if (modFolder === undefined) return;
+  if (files === undefined) return;
 
   // Clear every URI this collection holds under this folder before republishing —
   // DiagnosticCollection has no "clear just this prefix" primitive, so this walks every entry it holds.
   for (const [uri] of collection) {
-    if (uri.fsPath.startsWith(modFolder + path.sep)) collection.delete(uri);
+    if (files.holds(uri.fsPath)) collection.delete(uri);
   }
 
   const byUri = new Map<string, vscode.Diagnostic[]>();
   for (const d of result.diagnostics) {
-    const fsPath = path.join(modFolder, d.sourceRelativePath);
+    const fsPath = files.file(d.sourceRelativePath);
     const list = byUri.get(fsPath) ?? [];
     list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
     byUri.set(fsPath, list);
@@ -298,7 +298,7 @@ interface GitExtensionExports {
 export async function registerHeldTrackedRepositories(
   client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
-  isTracked: IsTracked,
+  isTracked: IsTracked, pluginFolder: PluginFolder,
 ): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -310,10 +310,10 @@ export async function registerHeldTrackedRepositories(
     const gitApi = exports.getAPI(1);
 
     const plugins = await client.getPlugins();
-    const folders = await trackedModFoldersOf(plugins, isTracked);
+    const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
     const folderRepositories = await registerTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories));
+    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories, pluginFolder));
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
   }
@@ -323,9 +323,10 @@ export async function registerHeldTrackedRepositories(
  *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
  *  rejected `status()` is logged, never surfaced. */
 export function refreshSourceControlFor(
-  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, outputChannel: vscode.LogOutputChannel,
+  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, origin: string,
+  outputChannel: vscode.LogOutputChannel,
 ): void {
-  const repo = pluginRepositories?.get(plugin);
+  const repo = pluginRepositories?.get(pluginCopyKey(plugin, origin));
   if (!repo) return;
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);

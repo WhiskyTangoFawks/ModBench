@@ -439,7 +439,7 @@ describe('record rows carry their copy identity', () => {
   it('record rows of an immutable plugin get contextValue recordImmutable, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['fallout4.esm'])); // makeRecord's rows belong to Fallout4.esm
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -452,7 +452,7 @@ describe('record rows carry their copy identity', () => {
   it('mutable but untracked load-order rows get contextValue recordUntracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['SomethingElse.esm']));
+    provider.setImmutablePlugins([{ name: 'SomethingElse.esm', origin: 'Data' }]);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -466,7 +466,7 @@ describe('record rows carry their copy identity', () => {
   it('record rows of a tracked plugin get contextValue recordTracked, case-insensitively', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setTrackedPlugins(new Set(['fallout4.esm'])); // makeRecord's rows belong to Fallout4.esm
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -477,8 +477,8 @@ describe('record rows carry their copy identity', () => {
   it('an immutable plugin stays recordImmutable even when tracked', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    provider.setImmutablePlugins(new Set(['fallout4.esm']));
-    provider.setTrackedPlugins(new Set(['fallout4.esm']));
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
@@ -497,12 +497,12 @@ describe('record rows carry their copy identity', () => {
 
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
-    provider.setTrackedPlugins(new Set(['Fallout4.esm']));
+    provider.setTrackedPlugins([{ name: 'Fallout4.esm', origin: 'Data' }]);
 
     expect(changed).toHaveBeenCalled();
     expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordTracked');
     // And back again, for the untrack direction.
-    provider.setTrackedPlugins(new Set());
+    provider.setTrackedPlugins([]);
     expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('recordUntracked');
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
@@ -511,7 +511,7 @@ describe('record rows carry their copy identity', () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
-    provider.setImmutablePlugins(new Set(['Plugin0.esp']));
+    provider.setImmutablePlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
 
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
     const row = present(expectInstancesOf(await provider.getChildren(group), PlacedNode)[0], 'the sole PlacedNode');

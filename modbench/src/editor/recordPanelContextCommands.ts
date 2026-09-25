@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import { openExtendedFieldEditor } from './extendedFieldEditor';
+import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
-  // Load order-static: the same temp root and channel every panel's tabs would get.
-  tempRoot: string;
+  // Load order-static: the same field files and channel every panel's tabs would get.
+  fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   log: (msg: string) => void;
 }
 
@@ -60,7 +60,7 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
       plugin: ctx.plugin, origin: ctx.origin, readOnly: ctx.readOnly,
     },
     {
-      tempRoot: deps.tempRoot,
+      fieldFile: deps.fieldFile,
       log: deps.log,
       reporter: deps.reporter,
       onCommit: value => applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value }),

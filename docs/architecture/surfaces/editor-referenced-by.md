@@ -87,7 +87,7 @@ The row menus follow VS Code's groups: open, change, copy, then destroy.
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Collapse All last. |
 | Referrer menu | open to the side · copy value |
 | Where it is held | copy… · delete |
-| Keys | Enter: open, as a click does. Ctrl+C: copy value. Delete: delete, on a row beneath a referrer. Ctrl+F: filter. |
+| Keys | Enter: open, as a click does. Ctrl+C: copy value. Delete: delete, on a row beneath a referrer. |
 
 As a user, I want:
 

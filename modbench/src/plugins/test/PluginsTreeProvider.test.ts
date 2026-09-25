@@ -12,14 +12,14 @@ import {
 } from '../../client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFilePlain, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
+  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFilePlain, from: uriFrom }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
 import * as vscode from 'vscode';
@@ -164,7 +164,7 @@ function makeTree(
     instance: FakeInstance;
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
-    dataFolder: () => Promise<string | undefined>;
+    dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
@@ -178,7 +178,7 @@ function makeTree(
     instance, source, client, records,
     log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: extra.publishDiagnoses,
-    dataFolder: extra.dataFolder,
+    dataFolderFile: extra.dataFolderFile,
     implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
   });
@@ -220,9 +220,9 @@ describe('ImplicitMasterNode — leading slot', () => {
     expect(node.tooltip).toBe("This plugin can't be disabled or moved (enforced by the game).");
   });
 
-  it('sets resourceUri from the given path, for the label-graying decoration provider to key on', () => {
+  it('keys resourceUri on the given path, for the label-graying decoration provider', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', '/game/Data/Fallout4.esm');
-    expect(node.resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+    expect(node.resourceUri?.path).toBe('/game/Data/Fallout4.esm');
   });
 
   it('leaves resourceUri undefined when no path is given (test-construction convenience)', () => {
@@ -355,7 +355,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const { tree } = makeTree([
       plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: '/unresolved/Fallout4.esm' }),
       plugin({ name: 'Mod.esp', slot: 1, origin: 'SomeMod' }),
-    ], { dataFolder: () => Promise.resolve(undefined) });
+    ], { dataFolderFile: () => undefined });
 
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
@@ -808,15 +808,16 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 // Implicit masters render as forced-on rows ahead of plugins.txt lines. The backend names
 // them (ADR-0016); this tree only places them.
 describe('PluginsTreeProvider — implicit master rows', () => {
-  const DATA = '/game/Data';
+  // The Instance adapter's answer, which the tree takes rather than builds.
+  const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
   // `null` stands for the absence in both slots: a backend that could not answer, and an
   // unresolved Data folder. An explicit `undefined` would select the default instead.
   const treeFor = (
     plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
     implicit: readonly string[] | null = [],
-    folder: string | null = DATA,
+    dataFolderFile: ((name: string) => string | undefined) | null = ADAPTER_ANSWER,
   ) => makeTree(plugins, {
-    dataFolder: () => Promise.resolve(folder ?? undefined),
+    dataFolderFile: dataFolderFile ?? (() => undefined),
     implicitMasters: () => Promise.resolve(implicit ?? undefined),
   }).tree;
 
@@ -835,9 +836,9 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows[2]).toBeInstanceOf(PluginNode);
   });
 
-  it('resolves each implicit row file inside the Data folder, for the graying decoration to key on', async () => {
+  it('takes each implicit row file from the Instance adapter, for the graying decoration to key on', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri?.path).toBe('/adapter/Data/Fallout4.esm');
   });
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
@@ -856,10 +857,11 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
-  it('publishes the implicit names, lowercased, for the graying decoration provider', async () => {
+  it('publishes each locked row\'s URI, for the graying decoration provider', async () => {
     const tree = treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
-    await tree.getChildren();
-    expect([...tree.implicitMasterNames()]).toEqual(['fallout4.esm']);
+    const [locked] = await tree.getChildren();
+    const rowUri = present(expectInstanceOf(locked, ImplicitMasterNode).resourceUri, 'the locked row\'s URI');
+    expect([...tree.lockedRowUris()]).toEqual([rowUri.toString()]);
   });
 
   // The rival: treating an unreachable backend as "no implicit masters" here would be harmless,
@@ -870,7 +872,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
-    expect([...treeFor([], null).implicitMasterNames()]).toEqual([]);
+    expect([...treeFor([], null).lockedRowUris()]).toEqual([]);
   });
 
   it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
@@ -1167,8 +1169,27 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
 
     await reconcile(h, [held('A.esp', { isImmutable: true }), held('B.esp', { isTracked: true })]);
 
-    expect(immutable).toHaveBeenCalledWith(['A.esp']);
-    expect(tracked).toHaveBeenCalledWith(['B.esp']);
+    expect(immutable).toHaveBeenCalledWith([{ name: 'A.esp', origin: 'SomeMod' }]);
+    expect(tracked).toHaveBeenCalledWith([{ name: 'B.esp', origin: 'SomeMod' }]);
+  });
+
+  // ADR-0012 invariant 1: two copies of one filename are two plugins.
+  it("never marks a copy's records read-only or tracked for another copy of the same name", async () => {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
+      records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
+    });
+    const h = makeTree([plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' })], { client });
+    await reconcile(h, [
+      held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }),
+      held('Shared.esp', { origin: 'ModB' }),
+    ]);
+
+    const [row] = await h.tree.getChildren();
+    const [group] = await h.tree.getChildren(present(row, 'the Shared.esp row'));
+    const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
+
+    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('recordUntracked');
   });
 });
 
