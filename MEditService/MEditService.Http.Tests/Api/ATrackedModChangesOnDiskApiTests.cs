@@ -156,7 +156,6 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         answered.EnsureSuccessStatusCode();
         var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
-        Assert.Equal("Clean", outcome.GetProperty("rebase").GetProperty("outcome").GetString());
     }
 
     [Fact]
@@ -331,7 +330,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaselineAndRefusesTheRebaseNamingThePath()
+    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaseline_AndLeavesTheEditToTheUsersRebase()
     {
         var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
@@ -344,10 +343,10 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 
         answered.EnsureSuccessStatusCode();
         var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(
-            outcome.GetProperty("succeeded").GetBoolean(),
-            "the baseline commit lands even when the rebase that follows refuses");
-        var rebase = outcome.GetProperty("rebase");
+        Assert.True(outcome.GetProperty("succeeded").GetBoolean());
+        Assert.False(outcome.TryGetProperty("rebase", out _));
+        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
+        var rebase = await rebased.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Refused", rebase.GetProperty("outcome").GetString());
         Assert.Contains(".json", rebase.GetProperty("refusalReason").GetString().Require(), StringComparison.Ordinal);
     }

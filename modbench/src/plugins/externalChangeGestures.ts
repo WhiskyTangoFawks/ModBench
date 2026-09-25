@@ -43,18 +43,6 @@ async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string)
   refreshAfterWrite(deps);
 }
 
-// Absorb's own rebase, run server-side in the same call: clean is silent, a refusal shows the
-// ready-to-show reason (which names the dirty paths), a conflict opens the merge editor exactly
-// as the manual rebase command does.
-async function applyRebaseOutcome(
-  deps: Pick<ExternalChangeCoordinatorDeps, 'openMergeEditor' | 'showError'>, origin: string, rebase: RebaseResult,
-): Promise<void> {
-  if (rebase.outcome === 'Refused') { deps.showError(rebase.refusalReason ?? 'Rebase refused.'); return; }
-  if (rebase.outcome === 'Conflicted') {
-    for (const path of rebase.conflictedPaths) await deps.openMergeEditor(origin, path);
-  }
-}
-
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.absorbUpstreamUpdate(origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
@@ -62,7 +50,6 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: strin
     if (result) reportTypedRefusal(deps, 'absorbUpstreamUpdate', origin, `Could not absorb the upstream update for "${origin}"`, result.refusalReason);
     return;
   }
-  if (result.rebase) await applyRebaseOutcome(deps, origin, result.rebase);
   refreshAfterWrite(deps);
 }
 

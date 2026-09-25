@@ -61,23 +61,21 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         Assert.Contains("\"HeightMax\": 0.9", newBaseline, StringComparison.Ordinal);
     }
 
-    // Absorb rebases the edit branch onto its new baseline in the same call; over a clean branch
-    // that never diverged, the rebase is a fast-forward, so HEAD lands exactly on main's new tip.
+    // Only `rebase edit branch` moves the edit branch (ADR-0003 invariant 3).
     [Fact]
-    public async Task Absorb_FastForwardsTheCleanEditBranchOntoTheNewBaseline()
+    public async Task Absorb_LeavesTheEditBranchWhereItWas()
     {
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
+        var editBefore = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/edit").Trim();
         var dirtBefore = _mod.GitStatus();
         WriteExternalBinaryChange(0.9f);
 
         var result = await Absorb();
 
         Assert.True(result.Applied, result.RefusalReason);
-        Assert.Equal(RebaseOutcome.Clean, result.Rebase?.Outcome);
-        var mainSha = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        Assert.NotEqual(editBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
         Assert.Equal("edit", GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
-        Assert.Equal(mainSha, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
-        // Only the ignored plugin binary shows, same as before Absorb ran — nothing git tracks is dirty.
+        Assert.Equal(editBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/edit").Trim());
         Assert.Equal(dirtBefore, _mod.GitStatus());
     }
 

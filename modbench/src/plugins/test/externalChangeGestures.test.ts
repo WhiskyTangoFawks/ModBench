@@ -141,53 +141,14 @@ describe('handleUnanswered', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  it('a landed Absorb with a clean rebase refreshes silently', async () => {
-    const client = {
-      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
-        succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
-      }),
-    };
+  it('a landed Absorb refreshes silently', async () => {
+    const client = { absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.showError).not.toHaveBeenCalled();
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
-  });
-
-  // The rebase runs server-side inside Absorb; a refusal there (uncommitted dirt) is this
-  // ready-to-show reason, the same surface every other gesture's refusal shows through.
-  it('a landed Absorb with a refused rebase shows the reason naming the paths', async () => {
-    const client = {
-      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
-        succeeded: true, refusalReason: null,
-        rebase: { outcome: 'Refused', refusalReason: 'Cannot rebase: uncommitted changes in source/A.esp/x.json.', conflictedPaths: [] },
-      }),
-    };
-    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
-
-    await handleUnanswered(deps, [unanswered()]);
-
-    expect(deps.showError).toHaveBeenCalledWith('Cannot rebase: uncommitted changes in source/A.esp/x.json.');
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-  });
-
-  it('a landed Absorb with a conflicted rebase opens the merge editor on every conflicted path', async () => {
-    const client = {
-      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
-        succeeded: true, refusalReason: null,
-        rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] },
-      }),
-    };
-    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
-
-    await handleUnanswered(deps, [unanswered()]);
-
-    expect(deps.openMergeEditor).toHaveBeenCalledTimes(2);
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/x.json');
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/y.json');
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
   // A typed refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — this is

@@ -116,8 +116,7 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(422);
 
-        // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin
-        // in it. Rebases the edit branch onto the new baseline it commits.
+        // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin in it.
         app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
             .WithName("AbsorbExternalChange")
             .WithTags(Tag)
@@ -136,9 +135,7 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // The manual rebase (Modbench: Rebase onto Updated Baseline), for re-running after Absorb's
-        // own rebase refused or conflicted. Origin-scoped — the repo, not any one plugin, is the
-        // unit of baselines and rebase.
+        // Origin-scoped — the repo, not any one plugin, is the unit of baselines and rebase.
         app.MapPost("/plugins/rebase", Rebase)
             .WithName("RebaseEditBranch")
             .WithTags(Tag)
@@ -334,8 +331,7 @@ public static class PluginEndpoints
         {
             if (await handler.AbsorbAsync(req.Origin) is not { } result)
                 return NotATrackedMod(req.Origin, logger);
-            var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
-            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
+            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -441,9 +437,7 @@ public record CompileRequest(string Origin, string? Ref);
 // the unit of a baseline, matching RebaseRequest's own shape.
 public record ExternalChangeActionRequest(string Origin);
 
-// Rebase is set only by Absorb, which rebases the edit branch onto the new baseline it just
-// committed; Keep never rebases, so its response always carries a null Rebase.
-public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason, RebaseResponse? Rebase = null);
+public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);
 
 // Origin-scoped — the repo is the unit of baselines and rebase.
 public record RebaseRequest(string Origin);

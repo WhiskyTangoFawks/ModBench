@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands;
 
-/// <summary>Absorb's handler: re-serializes each changed plugin as Track does, commits each one's
-/// new baseline to main and then the mod's tracked-file change, then rebases the edit branch onto
-/// them at once.</summary>
+/// <summary>Absorb's handler: re-serializes each changed plugin as Track does, and commits each
+/// one's new baseline to main and then the mod's tracked-file change. The edit branch does not
+/// move (ADR-0003 invariant 3).</summary>
 public sealed class AbsorbExternalChangeHandler
 {
     private readonly IPluginAdapter _adapter;
@@ -34,8 +34,6 @@ public sealed class AbsorbExternalChangeHandler
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", mod.ModFolder, result.RefusalReason);
-        else if (result.Rebase is { Outcome: not RebaseOutcome.Clean } rebase)
-            _logger.LogWarning("Absorbed {ModFolder}; its rebase {Outcome}: {Reason}", mod.ModFolder, rebase.Outcome, rebase.RefusalReason);
         return result;
     }
 
@@ -96,7 +94,6 @@ public sealed class AbsorbExternalChangeHandler
         // The question this exit path answers is answered: every plugin the mod holds is unblocked
         // again.
         SourceRepository.ClearExternalChangeQuestion(modFolder);
-        // A refused or conflicted rebase still leaves this Absorb applied: main already moved.
-        return AbsorbResult.Success(SourceRepository.RebaseEditBranch(modFolder));
+        return AbsorbResult.Success();
     }
 }

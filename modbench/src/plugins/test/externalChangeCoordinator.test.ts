@@ -36,9 +36,7 @@ function makeDeps(
 function clientScriptedForKeepAndAbsorb(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-  client.setCommandResult('absorbUpstreamUpdate', {
-    succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
-  });
+  client.setCommandResult('absorbUpstreamUpdate', { succeeded: true, refusalReason: null });
   return client;
 }
 
@@ -69,7 +67,7 @@ describe('subscribeQuestionOpen', () => {
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
-  it('dispatches Absorb; a clean rebase is silent', async () => {
+  it('dispatches Absorb; a landed Absorb is silent', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
@@ -82,22 +80,21 @@ describe('subscribeQuestionOpen', () => {
     expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });
 
-  // Absorb's own rebase runs server-side; a conflict is the extension's cue to open the native
-  // merge editor, same as the manual rebase command.
-  it('dispatches Absorb; a conflicted rebase opens the merge editor on every path', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-    client.setCommandResult('absorbUpstreamUpdate', {
-      succeeded: true, refusalReason: null,
-      rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] },
-    });
+  // Only `rebase edit branch` moves the edit branch (ADR-0003 invariant 3), so a new baseline
+  // neither rebases nor opens a merge editor, whatever a rebase would find.
+  it('a landed Absorb neither rebases the edit branch nor opens the merge editor', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
 
-    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/Fixture.esp/x.json');
+    expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
+    expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
+    expect(deps.openMergeEditor).not.toHaveBeenCalled();
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
