@@ -120,6 +120,9 @@ export type RecordRenumberResponse = components['schemas']['RecordRenumberRespon
 export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];
 export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
+/** The record filter mEdit holds: its SQL and the name of the source it came from
+ *  (query-index contract, The record filter). */
+export type RecordFilter = components['schemas']['FilterRequest'];
 
 /** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"
  *  box), hiding whichever adapter is wired in and the process itself. Names nothing HTTP, no
@@ -175,9 +178,11 @@ export interface MEditClient {
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
-  setFilter(sql: string): Promise<string | null>;
-  clearFilter(): Promise<void>;
-  getActiveFilter(): Promise<string | null>;
+  /** Null when mEdit took the filter, or the reason it did not. */
+  setFilter(filter: RecordFilter): Promise<string | null>;
+  /** Null when mEdit dropped the filter, or the reason it did not. */
+  clearFilter(): Promise<string | null>;
+  getActiveFilter(): Promise<RecordFilter | null>;
 
   // Subscribe by kind (ADR-0014 invariant 2) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;

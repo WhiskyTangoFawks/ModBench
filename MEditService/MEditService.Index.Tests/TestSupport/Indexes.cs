@@ -61,7 +61,7 @@ internal static class Indexes
     /// shared.</summary>
     internal static int Matching(this Indexer index, string sql)
     {
-        index.SetFilter(sql);
+        index.SetFilter(sql, "filter.sql");
         try
         {
             return index.RequireReads().Search(new RecordQuery(Limit: 1)).Total;
@@ -76,7 +76,7 @@ internal static class Indexes
     /// door refuses SQL it cannot resolve.</summary>
     internal static bool Accepts(this Indexer index, string sql)
     {
-        if (Record.Exception(() => index.SetFilter(sql)) is not null) return false;
+        if (Record.Exception(() => index.SetFilter(sql, "filter.sql")) is not null) return false;
         index.ClearFilter();
         return true;
     }

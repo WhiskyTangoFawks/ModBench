@@ -6,8 +6,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Http;
 
-public record FilterRequest(string Sql);
-public record FilterResponse(string? Sql);
+public record FilterRequest(string Sql, string Source);
+public record FilterResponse(string? Sql, string? Source);
 
 /// <summary>ADR-0015 invariant 3: the answer to "did the projection reach at least N?" — Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited

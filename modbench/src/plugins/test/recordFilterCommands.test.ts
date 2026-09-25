@@ -1,109 +1,237 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  handlers, registerCommand, showQuickPick, activeTextEditor,
+  handlers, registerCommand, executeCommand, showQuickPick, showTextDocument, openTextDocument, files,
 } = vi.hoisted(() => {
-  const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
+  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
-    registerCommand: vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
+    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    showQuickPick: vi.fn(),
-    activeTextEditor: { value: undefined as { document: Record<string, unknown> } | undefined },
+    executeCommand: vi.fn(),
+    showQuickPick: vi.fn<(items: { label: string }[]) => Promise<{ label: string } | undefined>>(),
+    showTextDocument: vi.fn(),
+    openTextDocument: vi.fn(),
+    files: new Map<string, string>(),
   };
 });
 
 vi.mock('vscode', () => ({
-  commands: { registerCommand },
-  window: {
-    showQuickPick,
-    get activeTextEditor() { return activeTextEditor.value; },
-  },
-  workspace: { openTextDocument: vi.fn() },
+  commands: { registerCommand, executeCommand },
+  window: { showQuickPick, showTextDocument },
+  workspace: { openTextDocument },
 }));
 
-vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: vi.fn(), readFileSync: vi.fn() }));
+vi.mock('fs', () => ({
+  existsSync: (dir: string) => [...files.keys()].some((f) => f.startsWith(`${dir}/`)),
+  readdirSync: (dir: string) => [...files.keys()].filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1)),
+  readFileSync: (file: string) => files.get(file),
+}));
 
-import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
+import { makeShowRecordFilter, registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
+const ARMOR_SQL = 'SELECT form_key FROM "armo"';
+
 beforeEach(() => {
   handlers.clear();
+  files.clear();
   vi.clearAllMocks();
-  activeTextEditor.value = undefined;
 });
 
-function makeDeps(client: InMemoryMEditClient): FilterCommandDeps & {
-  treeProvider: { refresh: ReturnType<typeof vi.fn> }; reporter: RecordingReporter;
+function registered(client: InMemoryMEditClient): FilterCommandDeps & {
+  treeProvider: { refresh: ReturnType<typeof vi.fn> };
+  refreshMatchingPlugins: ReturnType<typeof vi.fn>;
+  showRecordFilter: ReturnType<typeof vi.fn>;
+  reporter: RecordingReporter;
 } {
-  return {
+  const deps = {
     scriptsPath: '/scripts',
     client,
     treeProvider: { refresh: vi.fn() },
     refreshMatchingPlugins: vi.fn(),
-    setFilterActive: vi.fn(),
+    showRecordFilter: vi.fn(),
     reporter: recordingReporter(),
   };
+  registerFilterCommands(deps);
+  return deps;
 }
 
-describe('setFilterFromDocument', () => {
-  function invoke(client: InMemoryMEditClient) {
-    const deps = makeDeps(client);
-    registerFilterCommands(deps);
-    return { handler: present(handlers.get('modbench.setFilterFromDocument'), 'the registered setFilterFromDocument handler'), deps };
-  }
+const filter = (...args: unknown[]) => present(handlers.get('modbench.record.filter'), 'the modbench.record.filter handler')(...args);
+const clearFilter = () => present(handlers.get('modbench.record.clearFilter'), 'the modbench.record.clearFilter handler')();
 
-  it('sets the filter active, refreshes the tree, and refreshes the matching-plugin set on success', async () => {
+function pickedLabels(): string[] {
+  const [items] = present(showQuickPick.mock.calls[0], 'the pick shown');
+  return items.map((i) => i.label);
+}
+
+describe('modbench.record.filter, from the input box', () => {
+  it('lists the scripts folder\'s .sql files, then New filter… last', async () => {
+    files.set('/scripts/armor.sql', ARMOR_SQL).set('/scripts/notes.py', '').set('/scripts/weapons.sql', '');
+    registered(new InMemoryMEditClient());
+
+    await filter();
+
+    expect(pickedLabels()).toEqual(['armor.sql', 'weapons.sql', '$(add) New filter…']);
+  });
+
+  it('applies nothing on Esc', async () => {
+    files.set('/scripts/armor.sql', ARMOR_SQL);
+    const client = new InMemoryMEditClient();
+    const deps = registered(client);
+    showQuickPick.mockResolvedValue(undefined);
+
+    await filter();
+
+    expect(client.calls.filter((c) => c.method === 'setFilter')).toEqual([]);
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
+    expect(deps.treeProvider.refresh).not.toHaveBeenCalled();
+  });
+
+  it('applies a picked file\'s SQL, named by the file', async () => {
+    files.set('/scripts/armor.sql', ARMOR_SQL);
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('setFilter', null);
-    activeTextEditor.value = { document: { getText: () => 'SELECT form_key FROM "npc_"', isUntitled: true } };
-    const { handler, deps } = invoke(client);
+    const deps = registered(client);
+    showQuickPick.mockImplementation((items: { label: string }[]) => Promise.resolve(items[0]));
 
-    await handler();
+    await filter();
 
-    expect(client.calls).toContainEqual({ method: 'setFilter', args: ['SELECT form_key FROM "npc_"'] });
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', 'document');
+    expect(client.calls).toContainEqual({ method: 'setFilter', args: [{ sql: ARMOR_SQL, source: 'armor.sql' }] });
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'armor.sql' });
     expect(deps.treeProvider.refresh).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // The rival: setting the filter active (or refreshing) on a failed setFilter too would leave
-  // the readout claiming a filter is applied that the backend never actually accepted.
-  it('reports the framed error and touches nothing else when setFilter fails', async () => {
+  it('opens an untitled SQL document for New filter…, and applies nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const deps = registered(client);
+    const untitled = { uri: 'untitled:Untitled-1' };
+    openTextDocument.mockResolvedValue(untitled);
+    showQuickPick.mockImplementation((items: { label: string }[]) => Promise.resolve(items.at(-1)));
+
+    await filter();
+
+    expect(openTextDocument).toHaveBeenCalledWith({ language: 'sql' });
+    expect(showTextDocument).toHaveBeenCalledWith(untitled);
+    expect(client.calls.filter((c) => c.method === 'setFilter')).toEqual([]);
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
+  });
+});
+
+describe('modbench.record.filter, from a document', () => {
+  it('applies the document\'s text, named by the document, without asking', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('setFilter', null);
+    const deps = registered(client);
+    const uri = { scheme: 'untitled', path: 'Untitled-1' };
+    openTextDocument.mockResolvedValue({ uri, fileName: 'Untitled-1', getText: () => ARMOR_SQL });
+
+    await filter(uri);
+
+    expect(openTextDocument).toHaveBeenCalledWith(uri);
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(client.calls).toContainEqual({ method: 'setFilter', args: [{ sql: ARMOR_SQL, source: 'Untitled-1' }] });
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'Untitled-1' });
+  });
+
+  it('names a saved document by its file name alone', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('setFilter', null);
+    const deps = registered(client);
+    openTextDocument.mockResolvedValue({ fileName: '/elsewhere/queries/armor.sql', getText: () => ARMOR_SQL });
+
+    await filter({ scheme: 'file', path: '/elsewhere/queries/armor.sql' });
+
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'armor.sql' });
+  });
+
+  // The rival: showing the filter (or refreshing) on a failed set would leave the view claiming a
+  // filter mEdit never took.
+  it('reports a refused set and touches nothing else', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('setFilter', 'Filter SQL must return a form_key column');
-    activeTextEditor.value = { document: { getText: () => 'SELECT editor_id FROM "npc_"', isUntitled: true } };
-    const { handler, deps } = invoke(client);
+    const deps = registered(client);
+    openTextDocument.mockResolvedValue({ fileName: 'Untitled-1', getText: () => 'SELECT editor_id FROM "npc_"' });
 
-    await handler();
+    await filter({ scheme: 'untitled', path: 'Untitled-1' });
 
     expect(deps.reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Filter failed — Filter SQL must return a form_key column', detail: undefined },
     ]);
-    expect(deps.setFilterActive).not.toHaveBeenCalled();
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
     expect(deps.treeProvider.refresh).not.toHaveBeenCalled();
     expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 });
 
-describe('clearFilter', () => {
-  // "Symmetric on purpose" (plugins.md): a clear refreshes exactly as a set does, or a stale
-  // no-match chevron survives the filter that produced it.
-  it('sets the filter inactive, refreshes the tree, and refreshes the matching-plugin set — same as a set', async () => {
+describe('modbench.record.clearFilter', () => {
+  // A clear refreshes exactly as a set does, or a stale no-match row survives the filter that
+  // hid it.
+  it('shows no filter and refreshes the tree and the matching plugins, as a set does', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('clearFilter', undefined);
-    const deps = makeDeps(client);
-    registerFilterCommands(deps);
+    client.setQueryAnswer('clearFilter', null);
+    const deps = registered(client);
 
-    await present(handlers.get('modbench.clearFilter'), 'the registered clearFilter handler')();
+    await clearFilter();
 
     expect(client.calls).toContainEqual({ method: 'clearFilter', args: [] });
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+    expect(deps.showRecordFilter).toHaveBeenCalledWith(null);
     expect(deps.treeProvider.refresh).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
+  });
+
+  // plugins.md, Order and view state, story 5: mEdit still filters, so the view keeps saying so.
+  it('reports a refused clear and keeps showing the filter', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('clearFilter', 'No load order has been received yet.');
+    const deps = registered(client);
+
+    await clearFilter();
+
+    expect(deps.reporter.reports).toEqual([
+      { severity: 'error', message: 'mEdit: Could not clear the record filter — No load order has been received yet.', detail: undefined },
+    ]);
+    expect(deps.showRecordFilter).not.toHaveBeenCalled();
+    expect(deps.treeProvider.refresh).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+  });
+});
+
+// The one writer of everything that says a record filter is in force.
+describe('makeShowRecordFilter', () => {
+  function shown() {
+    const lens = { setActiveSql: vi.fn() };
+    const views = {
+      pluginsNameFilter: { setBaseDescription: vi.fn() },
+      pluginsTree: { setRecordFilterSource: vi.fn() },
+    };
+    return { lens, views, show: makeShowRecordFilter(lens, views) };
+  }
+
+  it('names the source in the view\'s description and hands it to the message, never the SQL', () => {
+    const { lens, views, show } = shown();
+
+    show({ sql: ARMOR_SQL, source: 'armor.sql' });
+
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.record.filterActive', true);
+    expect(lens.setActiveSql).toHaveBeenCalledWith(ARMOR_SQL);
+    expect(views.pluginsNameFilter.setBaseDescription).toHaveBeenCalledWith('records: armor.sql');
+    expect(views.pluginsTree.setRecordFilterSource).toHaveBeenCalledWith('armor.sql');
+  });
+
+  it('says nothing of a filter once none is in force', () => {
+    const { lens, views, show } = shown();
+
+    show(null);
+
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.record.filterActive', false);
+    expect(lens.setActiveSql).toHaveBeenCalledWith(null);
+    expect(views.pluginsNameFilter.setBaseDescription).toHaveBeenCalledWith(undefined);
+    expect(views.pluginsTree.setRecordFilterSource).toHaveBeenCalledWith(undefined);
   });
 });

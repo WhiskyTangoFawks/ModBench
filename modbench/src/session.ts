@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import type { LoadOrderSender } from './client';
+import type { LoadOrderSender, RecordFilter } from './client';
 import type { NameFilter } from './nameFilter';
 import { say } from './editingTeardown';
 
@@ -26,9 +26,8 @@ export interface ExtensionSession {
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
-  /** The record filter's single writer: the context key its Clear action is gated on, the code
-   *  lens's active SQL, and the readout. */
-  setFilterActive?: (active: boolean, sql?: string, label?: string) => void;
+  /** The record filter's single writer: `makeShowRecordFilter`. */
+  showRecordFilter?: (filter: RecordFilter | null) => void;
   /** The malformed-plugin scan's Problems entries, replaced wholesale by each reconcile. */
   loadDiagnostics?: vscode.DiagnosticCollection;
 }

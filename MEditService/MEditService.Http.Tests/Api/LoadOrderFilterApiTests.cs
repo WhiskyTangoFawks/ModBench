@@ -18,7 +18,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     [Fact]
     public async Task PostFilter_ValidSql_Returns200WithSql()
     {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
@@ -27,7 +27,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     [Fact]
     public async Task PostFilter_SqlWithoutFormKeyColumn_Returns400()
     {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT editor_id FROM \"NPC_\"" });
+        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT editor_id FROM \"NPC_\"", source = "editor-ids.sql" });
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
@@ -44,21 +44,31 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task GetFilter_AfterPostFilter_ReturnsSql()
+    public async Task GetFilter_AfterPostFilter_ReturnsTheSqlAndItsSource()
     {
-        await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+        await _client.PostAsJsonAsync("/load-order/filter",
+            new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
 
         var resp = await _client.GetAsync("/load-order/filter");
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
+        Assert.Equal("npcs.sql", body.GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task PostFilter_WithoutASource_Returns400()
+    {
+        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
     // --- DELETE /load-order/filter ---
 
     [Fact]
-    public async Task DeleteFilter_Returns204AndClearsFilter()
+    public async Task DeleteFilter_Returns204AndClearsTheSqlAndItsSource()
     {
-        await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
+        await _client.PostAsJsonAsync("/load-order/filter",
+            new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
 
         var del = await _client.DeleteAsync("/load-order/filter");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
@@ -66,6 +76,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         var get = await _client.GetAsync("/load-order/filter");
         var body = await get.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(JsonValueKind.Null, body.GetProperty("sql").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("source").ValueKind);
     }
 
     // --- filter affects GET /records ---
@@ -79,7 +90,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
         // LIMIT 1 subquery — filters to exactly one record
         await _client.PostAsJsonAsync("/load-order/filter",
-            new { sql = "SELECT form_key FROM \"npc_\" LIMIT 1" });
+            new { sql = "SELECT form_key FROM \"npc_\" LIMIT 1", source = "one-npc.sql" });
 
         var filtered = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=100");
         var totalAfter = filtered.GetProperty("total").GetInt32();
@@ -98,7 +109,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         Assert.NotEmpty(pluginsBefore);
 
         await _client.PostAsJsonAsync("/load-order/filter",
-            new { sql = "SELECT 'NoMatch:000000' AS form_key" });
+            new { sql = "SELECT 'NoMatch:000000' AS form_key", source = "nothing.sql" });
 
         var pluginsAfter = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
         Assert.NotNull(pluginsAfter);
@@ -110,7 +121,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     public async Task DeleteFilter_ThenGetPlugins_RestoresAllPlugins()
     {
         await _client.PostAsJsonAsync("/load-order/filter",
-            new { sql = "SELECT 'NoMatch:000000' AS form_key" });
+            new { sql = "SELECT 'NoMatch:000000' AS form_key", source = "nothing.sql" });
         await _client.DeleteAsync("/load-order/filter");
 
         var plugins = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
