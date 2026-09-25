@@ -19,7 +19,7 @@ mo2 -> instanceloader: "watch: every file and folder, debounced" {class: signal}
 instanceloader -> instanceadapter: "get: ModOrganizer.ini first · modlist.txt · plugins.txt · meta.ini · the downloads' .meta · the game folder's plugins" {class: loadorder}
 instanceadapter -> instanceloader: "parsed: the game, the profile, the mods in order, the load order, each mod's meta, the downloaded files, the game folder's plugins" {class: loadorder}
 instanceloader."one immutable value, replaced whole; sequence +1; a read failure keeps the last"
-instanceloader -> views: value {class: loadorder}
+instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot as an argument, on change" {class: loadorder}
 instancecommands -> client: load order snapshot {class: loadorder}
 
