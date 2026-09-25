@@ -57,7 +57,7 @@ public sealed class LosingCopyRefusalApiTests : HostedTests
 
         var response = await Client.Edit(formKey, PluginName, LosingOrigin, "HeightMax", 0.75);
 
-        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
         Assert.Equal("LosingCopy", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
