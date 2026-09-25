@@ -35,8 +35,8 @@ export const noLeadingMEdit = {
                 if (typeof node.value === 'string') check(node, node.value);
             },
             TemplateLiteral(node) {
-                const [head] = node.quasis;
-                if (head !== undefined) check(node, head.value.raw);
+                const cooked = node.quasis[0]?.value.cooked;
+                if (typeof cooked === 'string') check(node, cooked);
             },
             // ESTree has no JSX, so ESLint's types carry no JSXText node.
             /** @param {{ value: string, loc: SourceLocation }} node */

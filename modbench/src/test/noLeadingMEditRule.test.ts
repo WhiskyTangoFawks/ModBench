@@ -31,6 +31,30 @@ describe('no-leading-medit', () => {
     expect(messages).toHaveLength(1);
   });
 
+  it('fails a template literal whose head spells "mEdit:" with an escape', () => {
+    const messages = lint('log(`\\u006dEdit: ${reason}`);\n');
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a JSX attribute that begins "mEdit:"', () => {
+    const messages = lint('const row = <span title="mEdit: unreachable" />;\n');
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a message whose "mEdit:" follows leading whitespace', () => {
+    const messages = lint("warn('  mEdit: Could not copy the record');\n");
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a lowercase "medit:"', () => {
+    const messages = lint("warn('medit: Could not copy the record');\n");
+
+    expect(messages).toHaveLength(1);
+  });
+
   it('fails a prefix split off to be concatenated', () => {
     const messages = lint("log('mEdit: ' + reason);\n");
 
