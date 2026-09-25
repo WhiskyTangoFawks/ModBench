@@ -6,7 +6,8 @@ namespace MEditService.Queries;
 
 // HasParseFailure on every node of this tree means the same thing it means on a record row:
 // this row, or something the tree shows under it, could not be read.
-public record WorldspaceSummary(string FormKey, string? EditorId, bool HasParseFailure = false, string? FullName = null);
+public record WorldspaceSummary(
+    string FormKey, string? EditorId, bool HasParseFailure = false, string? FullName = null, string? ParseDiagnosis = null);
 
 public record WorldspaceSubBlockDto(
     int X, int Y, IReadOnlyList<CellSummary> Cells, bool HasParseFailure = false);

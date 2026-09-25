@@ -39,7 +39,7 @@ public sealed class WorldspaceQueryService(
         var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginAddress(plugin, origin));
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
-                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName))];
+                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName, r.ParseDiagnosis))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
@@ -61,7 +61,7 @@ public sealed class WorldspaceQueryService(
         var topCells = topCellRows
             .Select((c, i) => new CellSummary(
                 c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0,
-                FullName: c.FullName, HasParseFailure: c.HasParseFailure))
+                FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis))
             .ToList();
 
         // A block and a sub-block are grouping nodes with no record of their own, so their failure
@@ -81,7 +81,7 @@ public sealed class WorldspaceQueryService(
                         subGroup.Key.X, subGroup.Key.Y,
                         [.. subGroup.Select(c => new CellSummary(
                             c.FormKey, c.EditorId, c.CellX, c.CellY,
-                            FullName: c.FullName, HasParseFailure: c.HasParseFailure))],
+                            FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis))],
                         subGroup.Any(c => c.HasParseFailure)))
                     .ToList();
                 return new WorldspaceBlockDto(

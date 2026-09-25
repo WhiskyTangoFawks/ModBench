@@ -993,7 +993,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
-                       {FullNameOf("c")},
+                       {FullNameOf("c")}, c.parse_diagnosis,
                        c.parse_diagnosis IS NOT NULL OR EXISTS (
                            SELECT 1 FROM placement p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
@@ -1020,8 +1020,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(5) ? null : reader.GetInt32(5),
                     reader.IsDBNull(6) ? null : reader.GetInt32(6),
                     reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                    reader.IsDBNull(8) ? null : reader.GetString(8),
-                    reader.GetBoolean(9)));
+                    FullName: reader.IsDBNull(8) ? null : reader.GetString(8),
+                    ParseDiagnosis: reader.IsDBNull(9) ? null : reader.GetString(9),
+                    HasParseFailure: reader.GetBoolean(10)));
             }
 
             return rows;
@@ -1041,7 +1042,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // a sufficient tiebreak.
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y, {FullNameOf("c")},
+                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y, {FullNameOf("c")}, c.parse_diagnosis,
                        c.parse_diagnosis IS NOT NULL OR EXISTS (
                            SELECT 1 FROM placement p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
@@ -1067,7 +1068,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(2) ? null : reader.GetInt32(2),
                     reader.IsDBNull(3) ? null : reader.GetInt32(3),
                     FullName: reader.IsDBNull(4) ? null : reader.GetString(4),
-                    HasParseFailure: reader.GetBoolean(5)));
+                    ParseDiagnosis: reader.IsDBNull(5) ? null : reader.GetString(5),
+                    HasParseFailure: reader.GetBoolean(6)));
             }
 
             return new PagedResult<CellSummary>(items, (int)total);
@@ -1091,10 +1093,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             cmd.CommandText = $"""
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
                        json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
-                       -- A base in a plugin the game does not load has no winning copy, so any copy names it.
+                       r.parse_diagnosis,
+                       -- ADR-0012: the reference's own plugin's copy of its base, else the winning copy.
                        (SELECT b.editor_id FROM {records} b
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
-                        ORDER BY b.is_winner DESC
+                        ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
                         LIMIT 1)
                 FROM placement p
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
@@ -1115,9 +1118,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
                     reader.GetString(1),
-                    reader.GetBoolean(5),
-                    reader.IsDBNull(6) ? null : reader.GetString(6),
-                    reader.IsDBNull(7) ? null : reader.GetString(7));
+                    HasParseFailure: reader.GetBoolean(5),
+                    FullName: reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ParseDiagnosis: reader.IsDBNull(7) ? null : reader.GetString(7),
+                    BaseEditorId: reader.IsDBNull(8) ? null : reader.GetString(8));
                 (group == "persistent" ? persistent : temporary).Add(summary);
             }
             return new CellReferences(persistent, temporary);
@@ -1163,19 +1167,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
                 ReadWorkingTreeState(reader), reader.GetBoolean(8),
                 reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10),
-                reader.IsDBNull(11) ? null : reader.GetString(11));
+                FullName: reader.IsDBNull(11) ? null : reader.GetString(11));
 
-        // The codec writes a FULL read in one language as '$.Name.Value', and one whose strings hold
-        // several as '$.Name.Values', each entry with its Language; the read's TargetLanguage picks the
-        // entry. An empty FULL names nothing.
-        private static string FullNameOf(string alias) => $"""
-            NULLIF(COALESCE(
-                json_extract_string({alias}.body, '$.Name.Value'),
-                json_extract_string(list_filter(
-                    CAST(json_extract({alias}.body, '$.Name.Values') AS JSON[]),
-                    lambda entry: json_extract_string(entry, '$.Language')
-                        = json_extract_string({alias}.body, '$.Name.TargetLanguage'))[1], '$.String')), '')
-            """;
+        private static string FullNameOf(string alias) =>
+            $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.

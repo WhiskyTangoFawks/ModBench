@@ -5,6 +5,7 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
@@ -29,12 +30,14 @@ public sealed class QueryIndexTraceTests : HostedTests
             lever.Name = "Lever";
 
             var quest = new Quest(mod) { EditorID = "QueriedQuest" };
-            quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "QueriedTopic", Name = "Greeting" });
+            var topic = new DialogTopic(mod) { EditorID = "QueriedTopic", Name = "Greeting" };
+            topic.Responses.Add(new DialogResponses(mod) { EditorID = "QueriedResponse" });
+            quest.DialogTopics.Add(topic);
             mod.Quests.Add(quest);
 
             var world = mod.Worldspaces.AddNew("QueriedWorld");
             world.Name = "Queried World";
-            var exterior = new Cell(mod) { Grid = new CellGrid { Point = new P2Int(3, -2) } };
+            var exterior = new Cell(mod) { Name = "Queried Clearing", Grid = new CellGrid { Point = new P2Int(3, -2) } };
             var unnamedRef = new PlacedObject(mod);
             unnamedRef.Base.SetTo(lever);
             exterior.Temporary.Add(unnamedRef);
@@ -104,7 +107,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
 
         Assert.Equal(
-            ["Activator", "Cell", "Dialog Topic", "Keyword", "Non-Player Character", "Placed Object", "Quest", "Worldspace"],
+            ["Activator", "Cell", "Dialog response", "Dialog Topic", "Keyword", "Non-Player Character", "Placed Object", "Quest", "Worldspace"],
             types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString()));
     }
 
@@ -119,10 +122,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(JsonValueKind.Null, keywords.GetProperty("items")[0].GetProperty("fullName").ValueKind);
     }
 
-    // A localized plugin whose strings hold more than one language is written with every language
-    // beside its target, the way a game install with several languages' strings reads.
-    [Fact]
-    public async Task ALocalizedPluginsRecords_CarryTheirNameInTheTargetLanguage()
+    private async Task LoadedLocalized()
     {
         var localized = Owned(new PluginFixtureBuilder("trace-query-localized")
             .WithPlugin("Localized.esp", mod =>
@@ -135,10 +135,28 @@ public sealed class QueryIndexTraceTests : HostedTests
             }, origin: "LocalizedMod")
             .BuildScattered());
         (await Client.PutLoadOrder(localized)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task ALocalizedPluginsRecords_CarryTheirNameInTheTargetLanguage()
+    {
+        await LoadedLocalized();
 
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
 
         Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
+    }
+
+    [Fact]
+    public async Task ALocalizedName_ReadsTheSameThroughTheSqlDoor()
+    {
+        await LoadedLocalized();
+
+        (await Client.PostAsJsonAsync("/load-order/filter",
+            new { sql = "SELECT form_key FROM \"acti\" WHERE \"Name\" = 'Lever'", source = "lever.sql" })).EnsureSuccessStatusCode();
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
+
+        Assert.Equal(1, activators.GetProperty("total").GetInt32());
     }
 
     [Fact]
@@ -160,7 +178,13 @@ public sealed class QueryIndexTraceTests : HostedTests
         var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces");
         var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?limit=50&offset=0");
 
+        var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks");
+
         Assert.Equal("Queried World", worldspaces[0].GetProperty("fullName").GetString());
+        Assert.Equal(
+            "Queried Clearing",
+            blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("fullName").GetString());
         Assert.Equal("Queried Room", interiors.GetProperty("items")[0].GetProperty("fullName").GetString());
     }
 
@@ -179,6 +203,63 @@ public sealed class QueryIndexTraceTests : HostedTests
         var placed = references.GetProperty("temporary")[0];
         Assert.Equal(JsonValueKind.Null, placed.GetProperty("editorId").ValueKind);
         Assert.Equal("QueriedLever", placed.GetProperty("baseEditorId").GetString());
+    }
+
+    private async Task<JsonElement> PlacedReferencesIn(string plugin)
+    {
+        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/interior-cells?limit=50&offset=0");
+        var cellFk = Uri.EscapeDataString(interiors.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/cells/{cellFk}/references");
+        return references.GetProperty("temporary")[0];
+    }
+
+    private static void PlaceInARoom(Fallout4Mod mod, IFormLinkGetter<IPlaceableObjectGetter> baseRecord)
+    {
+        var placed = new PlacedObject(mod);
+        placed.Base.SetTo(baseRecord);
+        var room = new Cell(mod) { EditorID = $"{mod.ModKey.Name}Room" };
+        room.Temporary.Add(placed);
+        var subBlock = new CellSubBlock { BlockNumber = 0 };
+        subBlock.Cells.Add(room);
+        var block = new CellBlock { BlockNumber = 0 };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+    }
+
+    private async Task LoadedWithTwoCopiesOfABase()
+    {
+        var fixture = Owned(new PluginFixtureBuilder("trace-query-base-copies")
+            .WithPlugin("Master.esm", mod =>
+            {
+                var lever = mod.Activators.AddNew("MasterLever");
+                PlaceInARoom(mod, lever.ToLink());
+            }, origin: "MasterMod")
+            .WithPlugin("Patch.esp", (mod, masters) =>
+                mod.Activators.GetOrAddAsOverride(masters[0].Activators.First()).EditorID = "PatchLever", origin: "PatchMod")
+            .WithPlugin("Other.esp", (mod, masters) =>
+                PlaceInARoom(mod, masters[0].Activators.First().ToLink()), origin: "OtherMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task APlacedReference_NamesItsBaseAsItsOwnPluginHoldsIt()
+    {
+        await LoadedWithTwoCopiesOfABase();
+
+        var placed = await PlacedReferencesIn("Master.esm");
+
+        Assert.Equal("MasterLever", placed.GetProperty("baseEditorId").GetString());
+    }
+
+    [Fact]
+    public async Task APlacedReference_WhosePluginHoldsNoCopyOfItsBase_NamesItAsTheWinningCopyDoes()
+    {
+        await LoadedWithTwoCopiesOfABase();
+
+        var placed = await PlacedReferencesIn("Other.esp");
+
+        Assert.Equal("PatchLever", placed.GetProperty("baseEditorId").GetString());
     }
 
     [Fact]

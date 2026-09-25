@@ -554,6 +554,7 @@ export interface components {
             isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
             hasParseFailure: boolean;
+            parseDiagnosis?: string | null;
         };
         CellSummaryPagedResult: {
             items: components["schemas"]["CellSummary"][];
@@ -766,6 +767,7 @@ export interface components {
             hasParseFailure: boolean;
             fullName?: string | null;
             baseEditorId?: string | null;
+            parseDiagnosis?: string | null;
         };
         PluginAddress: {
             name: string;
@@ -1011,6 +1013,7 @@ export interface components {
             editorId?: string | null;
             hasParseFailure: boolean;
             fullName?: string | null;
+            parseDiagnosis?: string | null;
         };
     };
     responses: never;
