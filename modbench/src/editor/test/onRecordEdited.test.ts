@@ -112,7 +112,7 @@ describe('a write and the stream, together (ADR-0015 invariant 3)', () => {
     const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, release: () => undefined });
+    subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, waitingFor: () => undefined, release: () => false });
 
     const treeSync: RecordTreeSync = { refresh: vi.fn(), workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn().mockReturnValue(false) };
     const decorationProvider = fakeDecorationProvider();

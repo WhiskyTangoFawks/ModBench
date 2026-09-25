@@ -12,13 +12,17 @@ export function subscribeTreeToNotifications(
   return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
 
-// One FormKey spans its whole override chain, so matching it alone is enough. `heldReads` holds a
-// panel's reads until its edit is answered, and on reconnect frees one waiting on a missed report.
+// A FormKey spans its override chain, so matching it is enough. `heldReads` holds a panel's reads
+// until its edit is answered; on reconnect, one waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
-  client: Pick<MEditClient, 'subscribe' | 'onReconnected'>,
+  client: Pick<MEditClient, 'subscribe' | 'onReconnected' | 'getRecordOwner'>,
   recordPanels: Set<Panel>,
   activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
-  heldReads: { holds(panel: Panel, keys: readonly string[]): boolean; release(panel: Panel): string | undefined },
+  heldReads: {
+    holds(panel: Panel, keys: readonly string[]): boolean;
+    waitingFor(panel: Panel): string | undefined;
+    release(panel: Panel, formKey: string): boolean;
+  },
 ): () => void {
   const read = (panel: Panel, formKey: string) => {
     void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
@@ -32,8 +36,12 @@ export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pi
   });
   const unsubscribeReconnect = client.onReconnected(() => {
     for (const panel of recordPanels) {
-      const formKey = heldReads.release(panel);
-      if (formKey) read(panel, formKey);
+      const formKey = heldReads.waitingFor(panel);
+      if (!formKey) continue;
+      // A failed ask leaves the panel waiting, as a missing key does: the report still reads it.
+      client.getRecordOwner(formKey).then(
+        owner => { if (owner && heldReads.release(panel, formKey)) read(panel, formKey); },
+        () => undefined);
     }
   });
   return () => { unsubscribeRows(); unsubscribeReconnect(); };

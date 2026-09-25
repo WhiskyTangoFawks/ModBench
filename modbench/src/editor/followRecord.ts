@@ -59,12 +59,16 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return this.awaitsRead(panel);
   }
 
-  /** The FormKey a panel waiting on a report it may have missed reads now, marked read. */
-  release(panel: Panel): string | undefined {
-    if (this.inFlight.has(panel) || !this.awaitsRead(panel)) return undefined;
-    const shown = this.tracker.formKeyOf(panel);
-    if (shown) this.markRead(panel, shown);
-    return shown;
+  /** The FormKey a panel waits on a report for, when no edit of it is in flight. */
+  waitingFor(panel: Panel): string | undefined {
+    return this.inFlight.has(panel) || !this.awaitsRead(panel) ? undefined : this.tracker.formKeyOf(panel);
+  }
+
+  /** True when the panel still waited on `formKey`, which it now reads, marked read. */
+  release(panel: Panel, formKey: string): boolean {
+    if (this.waitingFor(panel) !== formKey) return false;
+    this.markRead(panel, formKey);
+    return true;
   }
 
   /** A closed panel: nothing of it is held any longer. */
@@ -118,9 +122,16 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return (this.moves.get(panel) ?? []).some(move => move.to === shown && move.readAt === undefined);
   }
 
+  // Reading a chain's last key ends every move in it, back to the key the tab last read.
   private markRead(panel: Panel, formKey: string): void {
-    for (const move of this.moves.get(panel) ?? []) {
-      if (move.to === formKey && move.readAt === undefined) move.readAt = ++this.clock;
+    const moves = this.moves.get(panel) ?? [];
+    const readAt = ++this.clock;
+    let ended = moves.filter(move => move.readAt === undefined && move.to === formKey);
+    while (ended.length > 0) {
+      for (const move of ended) move.readAt = readAt;
+      const reached = ended;
+      ended = moves.filter(move => move.readAt === undefined && reached.some(later =>
+        later.from === move.to && later.plugin === move.plugin && later.origin === move.origin));
     }
   }
 
