@@ -46,7 +46,7 @@ public sealed partial class SourceRepository
             // Refused before the tree is touched, as a container's removal is: putting a record no
             // document holds would have the repository decide its place and mint the levels above it,
             // which one document's bytes cannot take back.
-            if (repository.Locate(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
+            if (repository.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
             var before = Snapshot(unit.FullPath);
             var minted = LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));

@@ -106,7 +106,7 @@ public sealed partial class SourceRepository
     public void Put(PluginCopyKey plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        var unit = Locate(plugin, identity)
+        var unit = LocateToPlace(plugin, identity)
                    ?? PlaceNewDocument(plugin, identity, placement)
                    ?? throw NoPlaceInTheTree(plugin, identity);
 

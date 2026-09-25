@@ -108,6 +108,24 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("EditedAfterTheRename", (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
+    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEditThatKeepsItsName_InThatDocument(string renamedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
+        var renamed = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        var before = await Client.Sequence();
+
+        (await Client.Edit(npc, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(modFolder, Plugin, "0.75"));
+    }
+
     [Fact]
     public async Task ARecordABackupCopyAlsoHolds_RefusesAnEdit_NamingBothDocuments()
     {

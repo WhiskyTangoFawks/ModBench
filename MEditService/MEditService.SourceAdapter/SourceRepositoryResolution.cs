@@ -43,6 +43,7 @@ public sealed partial class SourceRepository
     // looks at the tree again (ADR-0009 — never a file timestamp).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Plugin, string FormKey), string> _foundByText = [];
 
     /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
     /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
@@ -55,7 +56,15 @@ public sealed partial class SourceRepository
 
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
     /// record's. The one place an identity becomes a path, which is why it stays here.</summary>
-    internal SourceUnit? Locate(PluginCopyKey plugin, RecordIdentity identity)
+    internal SourceUnit? Locate(PluginCopyKey plugin, RecordIdentity identity) => Resolve(plugin, identity, byText: true);
+
+    /// <summary><see cref="Locate"/> for a write: a document found by its
+    /// text earlier in this operation still answers, and no other document is read, so a record no
+    /// document holds is placed from its identity alone.</summary>
+    internal SourceUnit? LocateToPlace(PluginCopyKey plugin, RecordIdentity identity) =>
+        Resolve(plugin, identity, byText: false);
+
+    private SourceUnit? Resolve(PluginCopyKey plugin, RecordIdentity identity, bool byText)
     {
         if (identity.RecordType == PluginHeader.RecordType)
         {
@@ -68,7 +77,7 @@ public sealed partial class SourceRepository
         if (ComputedFlatPath(plugin, identity) is { } computed)
         {
             return Unit(
-                OwnDocumentUnder([PathShape.DirectoryOf(computed)], plugin.Name, identity.FormKey) ?? computed,
+                OwnDocumentUnder([PathShape.DirectoryOf(computed)], plugin.Name, identity.FormKey, byText) ?? computed,
                 identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
@@ -76,7 +85,7 @@ public sealed partial class SourceRepository
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
         if (RecordTypeDispatch.For(_release).GroupFolderNameFor(identity.RecordType) is not null
-            && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey) is { } own)
+            && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey, byText) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
         }
@@ -232,18 +241,22 @@ public sealed partial class SourceRepository
 
     // The one named for the FormKey, else one whose text declares it under any other name: a hand
     // move can rename a document, and the name alone reads a live record as deleted.
-    private string? OwnDocumentUnder(IReadOnlyList<string> scanRoots, string pluginFileName, string formKey)
+    private string? OwnDocumentUnder(
+        IReadOnlyList<string> scanRoots, string pluginFileName, string formKey, bool byText)
     {
         var roots = scanRoots.Where(Directory.Exists).ToList();
         var documents = roots
             .SelectMany(root => DocumentsNaming(root, formKey))
             .Where(File.Exists)
             .ToList();
-        if (documents.Count == 0)
+        if (documents.Count == 0 && _foundByText.TryGetValue((pluginFileName, formKey), out var found) && File.Exists(found))
+            documents = [found];
+        if (documents.Count == 0 && byText)
         {
             documents = [.. ScanOf(Path.Combine(_modFolder, RootFor(pluginFileName)))
                 .DocumentsDeclaring(formKey)
                 .Where(document => roots.Exists(root => IsUnder(root, document)))];
+            if (documents.Count == 1) _foundByText[(pluginFileName, formKey)] = documents[0];
         }
 
         return documents.Count switch
@@ -352,11 +365,11 @@ public sealed partial class SourceRepository
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
     // or inside its worldspace's.
-    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey) =>
+    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey, bool byText = true) =>
         OwnDocumentUnder(
             [.. RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
-            pluginFileName, formKey);
+            pluginFileName, formKey, byText);
 
     // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree).
     private string[] EntriesUnder(string scanRoot)
@@ -373,6 +386,7 @@ public sealed partial class SourceRepository
     {
         _entriesByScanRoot.Clear();
         _scansBySourceRoot.Clear();
+        _foundByText.Clear();
         _filesByPluginAndRef.Clear();
     }
 
