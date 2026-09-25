@@ -13,9 +13,9 @@ it is handed and never reloads.
    an install or an uninstall. Editing registers what is new, indexing only what the record index
    has never seen, unregisters what is gone, updates slot and flags on what moved, then runs one
    winner sweep. A snapshot identical to the current state is a no-op.
-2. **The snapshot names every physical copy** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)),
+2. **The snapshot names every plugin file in the instance** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)),
    each with the three facts Mod Management already computes: the name's `plugins.txt` slot or
-   none, whether its line is enabled, and whether this copy is the one the Mod override order
+   none, whether its line is enabled, and whether this plugin is the one the Mod override order
    resolves the name to. The one fact the service derives itself is the set of forced names, the
    game's implicit masters and the Creation Club catalogue, read from the game directory at the
    API.
@@ -33,8 +33,8 @@ it is handed and never reloads.
 ## Derived tactical observations
 
 - The snapshot is what Mod Management already walks for its file order conflict index: every root-level
-  plugin in every enabled mod, `overwrite/`, and the `Data/` copy of every listed name no mod
-  provides. A disabled mod's plugins are not in it, so enabling a mod is when its copies first pay
+  plugin in every enabled mod, `overwrite/`, and the `Data/` plugin of every listed name no mod
+  provides. A disabled mod's plugins are not in it, so enabling a mod is when its plugins first pay
   their one index.
 - Opening the record index does not clear the registration rows; they are the last known load
   order, and the snapshot sent on activation corrects them. Whether Editing should read the
@@ -44,7 +44,7 @@ it is handed and never reloads.
 ## Alternatives rejected
 
 - **A bulk load verb plus a verb per loadout gesture**, the state this replaced: reread for a
-  mod-order change, participation for enable and disable, load and unload for unlisted copies.
+  mod-order change, participation for enable and disable, load and unload for unlisted plugins.
   Every future gesture would need its own endpoint and its own drift story.
 - **Editing reads `modlist.txt` and `plugins.txt` itself.** Self-validating like the record
   index, but puts Mod override order resolution, and "mod", inside Editing. Deferred, not refused.
