@@ -121,9 +121,10 @@ ticket names the fix).
   message.
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
   selection. Any other gesture does not ask. A contract names an exception.
-- **A write is forgotten.** A gesture that changes an MO2 file writes it and keeps no copy of the
-  new state. The watch reads the file back, and every view updates from the new instance value. A
-  view shows the old state until the disk says otherwise.
+- **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
+  reads the file back, and every view updates from the disk's next value. Until then, the thing the
+  gesture changed shows its result, marked unconfirmed, and nothing else in the view changes
+  (common.md, Unconfirmed writes). The disk's value always wins.
 - **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing
   and says nothing.
 - **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts,
