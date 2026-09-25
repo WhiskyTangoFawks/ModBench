@@ -36,7 +36,7 @@ import {
   registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
   registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
-import { originFolder } from '../../instanceLoader/loadOrderSnapshot';
+import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { PluginTreeProvider } from '../PluginTreeProvider';
@@ -181,7 +181,9 @@ describe('registerRebaseCommand', () => {
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
-    registerRebaseCommand(client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins);
+    const modA = { name: 'MyMod.esp', path: '/instance/mods/ModA/MyMod.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
+    registerRebaseCommand(
+      client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins, (origin) => originFiles([modA], origin));
     return {
       handler: present(handlers.get('modbench.mod.rebaseEditBranch'), 'the rebase command registerRebaseCommand registers'),
       refresh, refreshMatchingPlugins, reporter,
@@ -252,8 +254,8 @@ describe('registerRebaseCommand', () => {
 
     await handler(pluginNode());
 
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Bar.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Bar.psc' }));
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
@@ -272,7 +274,7 @@ describe('registerRebaseCommand', () => {
 
     await handler(pluginNode());
 
-    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
     expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -291,7 +293,7 @@ describe('registerRebaseCommand', () => {
 
     await handler(pluginNode());
 
-    expect(executeCommand).toHaveBeenCalledWith('vscode.open', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('vscode.open', expect.objectContaining({ fsPath: '/instance/mods/ModA/source/Scripts/Foo.psc' }));
     expect(reporter.reports).toEqual([{
       severity: 'warning',
       message: 'Could not open the merge editor for "source/Scripts/Foo.psc" — opened it as a text editor instead.',
@@ -420,9 +422,23 @@ describe('publishCompileDiagnostics', () => {
     const diagnostics = new FakeDiagnosticCollection();
     const row = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
 
-    publishCompileDiagnostics(diagnostics, originFolder([row], 'overwrite'), compiled('Source/Stray.psc'));
+    publishCompileDiagnostics(diagnostics, originFiles([row], 'overwrite'), compiled('Source/Stray.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
+  });
+
+  it("replaces the entries the origin's folder holds, and leaves every other folder's", () => {
+    const diagnostics = new FakeDiagnosticCollection();
+    const rows = [
+      { name: 'A.esp', path: '/instance/mods/ModA/A.esp', origin: 'ModA', slot: 0, enabled: true, winning: true },
+      { name: 'B.esp', path: '/instance/mods/ModB/B.esp', origin: 'ModB', slot: 1, enabled: true, winning: true },
+    ];
+    publishCompileDiagnostics(diagnostics, originFiles(rows, 'ModA'), compiled('Source/Old.psc'));
+    publishCompileDiagnostics(diagnostics, originFiles(rows, 'ModB'), compiled('Source/Other.psc'));
+
+    publishCompileDiagnostics(diagnostics, originFiles(rows, 'ModA'), compiled('Source/A.psc'));
+
+    expect(publishedPaths(diagnostics)).toEqual(['/instance/mods/ModB/Source/Other.psc', '/instance/mods/ModA/Source/A.psc']);
   });
 
   it('publishes nothing when the value knows no folder for the origin', () => {

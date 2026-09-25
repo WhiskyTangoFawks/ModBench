@@ -109,13 +109,16 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Contains("No load order", ex.Message);
     }
 
+    // plugins.md, Order and view state, story 5: the filter clears on purpose, whatever is held.
     [Fact]
-    public void ClearFilter_NoLoadOrder_ThrowsNoLoadOrderException()
+    public void ClearFilter_NoLoadOrder_LeavesNoFilter()
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeIndexer(holder);
-        var ex = Assert.Throws<NoLoadOrderException>(() => manager.ClearFilter());
-        Assert.Contains("No load order", ex.Message);
+
+        manager.ClearFilter();
+
+        Assert.Null(manager.ActiveFilter);
     }
 
     [Fact]
@@ -135,6 +138,51 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         manager.ClearFilter();
         Assert.Null(manager.FilterSql);
+    }
+
+    [Fact]
+    public void Reconcile_AnotherInstance_DropsTheFilter()
+    {
+        var holder = new LoadOrderHolder();
+        var manager = MakeLoadedManager(holder);
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        var otherInstance = Directory.CreateTempSubdirectory("medit-filter-other-instance-");
+        try
+        {
+            manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance.FullName);
+
+            Assert.Null(manager.ActiveFilter);
+        }
+        finally
+        {
+            manager.Dispose();
+            otherInstance.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Reconcile_AnotherGameRelease_DropsTheFilter()
+    {
+        var holder = new LoadOrderHolder();
+        using var manager = MakeLoadedManager(holder);
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE);
+
+        Assert.Null(manager.ActiveFilter);
+    }
+
+    [Fact]
+    public void Reconcile_AnotherDataFolder_DropsTheFilter()
+    {
+        var holder = new LoadOrderHolder();
+        using var manager = MakeLoadedManager(holder);
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        using var other = new PluginFixtureBuilder("filter-other-data-folder").WithPlugin("Other.esp").Build();
+
+        manager.Reconcile(holder, other.DataFolder, other.Plugins, GameRelease.Fallout4);
+
+        Assert.Null(manager.ActiveFilter);
     }
 
     // --- Filter re-materialization ---

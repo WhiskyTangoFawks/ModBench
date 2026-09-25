@@ -24,7 +24,12 @@ vi.mock('vscode', () => ({
 import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openExtendedFieldEditor, extendedEditorPath, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
+import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
+import { extendedFieldFile } from '../../medit/extendedFieldFiles';
+
+// The composition root's own answer, so the file a test reads back is the file the editor wrote.
+const extendedEditorPath = (tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string) =>
+  extendedFieldFile(tempRoot, { recordLabel, fieldName, plugin, origin }).file;
 
 function makeFakeDocEvent() {
   const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];
@@ -58,46 +63,13 @@ afterEach(async () => {
 
 function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> = {}): ExtendedFieldEditorDeps {
   return {
-    tempRoot,
+    fieldFile: (field) => extendedFieldFile(tempRoot, field),
     onCommit: vi.fn(),
     log: vi.fn(),
     reporter: { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     ...overrides,
   };
 }
-
-describe('extendedEditorPath', () => {
-  it('sanitizes reserved/colon characters and composes dir/origin/file from record, field, plugin', () => {
-    const path = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
-    // Brackets are valid on every filesystem; only the FormKey's colon is Windows-reserved.
-    expect(path).toBe(join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm].txt'));
-  });
-
-  it('is deterministic — the same identity always produces the same path', () => {
-    const a = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
-    const b = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
-    expect(a).toBe(b);
-  });
-
-  it('folds a non-Data origin into its own directory segment, between the record and the field', () => {
-    const path = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModA');
-    expect(path).toBe(join('/tmp/root', 'Deacon', 'ModA', 'Description [Shared.esp].txt'));
-  });
-
-  it('two columns sharing a filename but differing in origin never collide', () => {
-    const colA = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModA');
-    const colB = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModB');
-    expect(colA).not.toBe(colB);
-  });
-
-  // Origin is read off disk, so it is user-controlled input, not a trusted literal.
-  it('strips path separators from a hostile origin, so it cannot escape tempRoot', () => {
-    const path = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
-    expect(path.startsWith('/tmp/root')).toBe(true);
-    expect(path).not.toContain('/etc/passwd');
-    expect(path).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm].txt'));
-  });
-});
 
 describe('openExtendedFieldEditor', () => {
   beforeEach(() => {

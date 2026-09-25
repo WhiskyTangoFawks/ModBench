@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { join } from 'node:path';
 import type {
   MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal,
 } from '../client';
@@ -8,6 +7,7 @@ import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
+import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { errorMessage } from '../ports/errorMessage';
@@ -29,7 +29,7 @@ const NO_RECORD_BROWSER = 'mEdit is not connected.';
 const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
-const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
+const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
 const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
 
 /** `reorderPlugins`, bound to the instance root and the active profile by the composition root;
@@ -58,8 +58,6 @@ export interface PluginMatch {
   hasMatchingRecords: boolean;
 }
 
-/** `dataFolder` is a getter, not a settled `Promise`: the setting it resolves is editable while
- *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0015). */
   instance: InstanceView;
@@ -75,7 +73,10 @@ export interface PluginsTreeProviderOptions {
    *  land on the same channel level. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporter?: Reporter;
-  dataFolder?: () => Promise<string | undefined>;
+  /** The Instance adapter's path of a file at the root of the Data folder, read fresh at each
+   *  call: the game folder setting is editable while Modbench runs. `undefined` while the folder
+   *  is not found. */
+  dataFolderFile?: (name: string) => string | undefined;
   /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
    *  could not be reached — renders no implicit row rather than a guessed one. */
   implicitMasters?: ImplicitMasterSource;
@@ -115,7 +116,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
     // Routed through the modbench.openHeader bridge command, as PluginNode's row click is.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
-    if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
+    if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }
 
@@ -259,7 +260,7 @@ export class PluginsTreeProvider
   private readonly source: PluginListSource;
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
-  private readonly dataFolder: () => Promise<string | undefined>;
+  private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly implicitMasters: ImplicitMasterSource;
   private readonly instance: InstanceView;
   private readonly records?: RecordBrowser;
@@ -278,13 +279,13 @@ export class PluginsTreeProvider
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
-  private lastImplicitNames: ReadonlySet<string> = new Set();
+  private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
-    this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
+    this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
     this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
     this.instance = options.instance;
     this.records = options.records;
@@ -361,8 +362,8 @@ export class PluginsTreeProvider
   }
 
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
-  implicitMasterNames(): ReadonlySet<string> {
-    return this.lastImplicitNames;
+  lockedRowUris(): ReadonlySet<string> {
+    return this.lastLockedRowUris;
   }
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
@@ -411,7 +412,6 @@ export class PluginsTreeProvider
     | { kind: 'empty' }
     | { kind: 'ok'; cache: { rows: PluginListNode[] } }
   > {
-    const dataFolder = await this.dataFolder();
     // An unreachable backend renders no implicit row: a plugins.txt line for one of them then
     // renders as an ordinary row, which is what the file says, rather than a guessed lock.
     const implicitNames = (await this.implicitMasters()) ?? [];
@@ -429,9 +429,10 @@ export class PluginsTreeProvider
     const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
     if (implicitNames.length + dedupedOrder.length === 0) return { kind: 'empty' };
 
-    this.lastImplicitNames = implicitLower;
+    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.dataFolderFile(name)));
+    this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     const rows: PluginListNode[] = [
-      ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
+      ...lockedRows,
       ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
     ];
     return { kind: 'ok', cache: { rows } };
@@ -567,8 +568,8 @@ export class PluginsTreeProvider
     this.applyPluginFacts(plugins);
     // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
     // vanishing under `mods/` is a watcher event, and that is a reconcile.
-    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map((p) => p.name));
-    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map((p) => p.name));
+    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map(({ name, origin }) => ({ name, origin })));
+    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map(({ name, origin }) => ({ name, origin })));
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);

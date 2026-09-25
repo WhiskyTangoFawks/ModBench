@@ -13,8 +13,9 @@ npx vitest run src/<box>   # skips the cross-cutting scans in src/test/; npm run
 - A gesture belongs to the object it acts on, never to a view
   ([commands.md](../docs/architecture/commands.md)). A view shows objects and offers their gestures;
   each gesture is a command of the core box for its object.
-- A view takes every path it shows or opens from the instance value and never builds one: the
-  Instance adapter owns every path function, and no scan keeps `node:path` out of a view.
+- A view takes every path it shows or opens from the instance value and never builds one: the box
+  that owns a path answers it, the Instance adapter for the instance's, and a lint rule keeps
+  `node:path` out of every view.
 - The generated schema is the frontend type: `src/client/MEditClient.ts`,
   `src/client/apiClient.ts` and `webview/src/types.ts` alias `components['schemas'][…]`, and
   a new wire field is a C# model change plus `/regenerate-api`. A hand-written type is a transform

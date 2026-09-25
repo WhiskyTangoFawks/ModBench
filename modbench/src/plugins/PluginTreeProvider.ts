@@ -3,7 +3,7 @@ import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
-  ContainerChildSummary, MEditClient,
+  ContainerChildSummary, MEditClient, PluginAddress,
 } from '../client';
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -278,6 +278,34 @@ function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
   return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
 }
 
+// ADR-0012 invariant 1: keyed by (origin, filename), so two copies of one name never share a fact.
+class PluginCopySet {
+  private readonly copies = new Set<string>();
+  private readonly names = new Set<string>();
+
+  private static key(name: string, origin: string): string {
+    return `${origin.toLowerCase()}|${name.toLowerCase()}`;
+  }
+
+  replace(copies: Iterable<PluginAddress>): void {
+    this.copies.clear();
+    this.names.clear();
+    for (const c of copies) {
+      this.copies.add(PluginCopySet.key(c.name, c.origin));
+      this.names.add(c.name.toLowerCase());
+    }
+  }
+
+  has(name: string, origin: string): boolean {
+    return this.copies.has(PluginCopySet.key(name, origin));
+  }
+
+  // debt #1070
+  hasLoadOrderCopyNamed(name: string): boolean {
+    return this.names.has(name.toLowerCase());
+  }
+}
+
 type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
@@ -303,46 +331,48 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // surface that pages. Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
-  // Lowercased filenames of the load order's immutable plugins, pushed in from the tree's own
-  // `GET /plugins` read — record/placed rows under one get a contextValue Remove's `when`
-  // clause in package.json omits from its viewItem list.
-  private readonly immutablePlugins = new Set<string>();
-  // Lowercased filenames of the load order's *tracked* plugins, from the same `GET /plugins`
-  // answer the immutable set comes from — never a filesystem probe from here: tracked-ness is a
-  // fact the backend derives on every read.
-  private readonly trackedPlugins = new Set<string>();
+  // The load order's immutable plugin copies, pushed in from the tree's own `GET /plugins` read —
+  // record/placed rows under one get a contextValue Remove's `when` clause in package.json omits
+  // from its viewItem list.
+  private readonly immutablePlugins = new PluginCopySet();
+  // The load order's *tracked* plugin copies, from the same `GET /plugins` answer the immutable
+  // set comes from — never a filesystem probe from here: tracked-ness is a fact the backend
+  // derives on every read.
+  private readonly trackedPlugins = new PluginCopySet();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
 
-  setImmutablePlugins(names: Iterable<string>): void {
-    this.immutablePlugins.clear();
-    for (const n of names) this.immutablePlugins.add(n.toLowerCase());
+  setImmutablePlugins(copies: Iterable<PluginAddress>): void {
+    this.immutablePlugins.replace(copies);
     this._onDidChangeTreeData.fire(undefined);
   }
 
   /** Replaced wholesale on every reconcile, firing a re-render rather than clearing a cache. A
    *  `.git` appearing or disappearing under a plugin's origin is a watched event that drives a
    *  reconcile, so both directions arrive on that path. */
-  setTrackedPlugins(names: Iterable<string>): void {
-    this.trackedPlugins.clear();
-    for (const n of names) this.trackedPlugins.add(n.toLowerCase());
+  setTrackedPlugins(copies: Iterable<PluginAddress>): void {
+    this.trackedPlugins.replace(copies);
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // Filename alone, matching the set's own keying: a shadowed copy (origin stated) is immutable
-  // by construction below, so it never reaches the tracked/untracked distinction at all.
-  private isTracked(plugin: string): boolean {
-    return this.trackedPlugins.has(plugin.toLowerCase());
+  // A shadowed copy (origin stated) is immutable by construction below, so it never reaches the
+  // tracked/untracked distinction at all.
+  private isTracked(record: { plugin: string; origin: string }): boolean {
+    return this.trackedPlugins.has(record.plugin, record.origin);
   }
 
   // ADR-0012: a shadowed copy (origin stated) is read-only by construction — an edit to a
-  // file the game does not load changes nothing observable — so origin alone decides before the
-  // immutable set is even consulted.
-  private isImmutable(plugin: string, origin?: string): boolean {
-    return origin !== undefined || this.immutablePlugins.has(plugin.toLowerCase());
+  // file the game does not load changes nothing observable — so the stated origin alone decides
+  // before the immutable set is even consulted.
+  private isImmutable(record: { plugin: string; origin: string }, statedOrigin?: string): boolean {
+    return statedOrigin !== undefined || this.immutablePlugins.has(record.plugin, record.origin);
+  }
+
+  private isPlacedImmutable(plugin: string, statedOrigin?: string): boolean {
+    return statedOrigin !== undefined || this.immutablePlugins.hasLoadOrderCopyNamed(plugin);
   }
 
   refresh(): void {
@@ -421,7 +451,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     if (element instanceof CellNode) return this.fetchCellGroups(element);
     if (element instanceof PlacedGroupNode) {
       return element.placed.map(p =>
-        new PlacedNode(element.plugin, p, element.origin, this.isImmutable(element.plugin, element.origin)));
+        new PlacedNode(element.plugin, p, element.origin, this.isPlacedImmutable(element.plugin, element.origin)));
     }
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
     return [];
@@ -541,7 +571,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const children = await this.getOrLoad(this.containerChildCache, cacheKey,
         () => this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin));
       return children.map(c => new RecordNode(
-        c, node.origin, this.isImmutable(c.plugin, node.origin), this.isTracked(c.plugin),
+        c, node.origin, this.isImmutable(c, node.origin), this.isTracked(c),
         containerChildTypeOf(c.recordType), c.hasContainerChildren));
     });
   }
@@ -572,7 +602,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // listing still expands into its container children, the same mechanism
       // fetchContainerChildren uses.
       return cached.items.map(r => new RecordNode(
-        r, node.origin, this.isImmutable(r.plugin, node.origin), this.isTracked(r.plugin),
+        r, node.origin, this.isImmutable(r, node.origin), this.isTracked(r),
         containerChildTypeOf(node.recordType), r.hasContainerChildren));
     });
   }

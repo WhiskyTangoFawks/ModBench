@@ -38,7 +38,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     onRecordEdited,
     followRecord: vi.fn(),
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
-    tempRoot: '/tmp/does-not-open-here',
+    fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
     ...overrides,
   };
@@ -197,15 +197,6 @@ describe('the extended editor opens and saves from the host', () => {
       value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id',
       plugin: IDENTITY.plugin, origin: IDENTITY.origin, readOnly: true,
     });
-  });
-
-  it('threads the load order-static temp root and log through to the editor', async () => {
-    const { deps } = makeDeps({ tempRoot: '/tmp/modbench-fields' });
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext());
-
-    expect(openedWith().deps.tempRoot).toBe('/tmp/modbench-fields');
   });
 
   it('a save lands one set envelope at the leaf\'s own path, and re-reads', async () => {

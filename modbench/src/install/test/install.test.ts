@@ -6,7 +6,9 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
-import { ARCHIVE_EXTENSIONS, defaultModName, installFromArchive, installFromFolder } from '../install';
+import {
+  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, isArchiveName,
+} from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import type { Runner } from '../extractArchive';
 import { writeMetaIni } from '../../mo2Codecs/metaIni';
@@ -369,6 +371,22 @@ describe('install commands', () => {
 describe('ARCHIVE_EXTENSIONS', () => {
   it('is the archive extensions install can extract, lower-cased', () => {
     expect([...ARCHIVE_EXTENSIONS].sort()).toEqual(['7z', 'rar', 'zip']);
+  });
+});
+
+describe('isArchiveName', () => {
+  it('takes a name ending in an extension install can extract, case-insensitively', () => {
+    expect(['a.zip', 'b.7z', 'c.RAR'].map(isArchiveName)).toEqual([true, true, true]);
+  });
+
+  it('refuses any other name', () => {
+    expect(['notes.txt', 'a.zip.meta', 'zip'].map(isArchiveName)).toEqual([false, false, false]);
+  });
+});
+
+describe('defaultModNameForFolder', () => {
+  it("names a new mod after the folder it is installed from", () => {
+    expect(defaultModNameForFolder(join('/somewhere', 'Sleep or Save'))).toBe('Sleep or Save');
   });
 });
 

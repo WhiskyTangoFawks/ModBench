@@ -433,27 +433,6 @@ describe('package.json filtering is one UX', () => {
   it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
     expect(commandTitle(clearCommand).icon).toBe('$(clear-all)');
   });
-
-  // `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code. Trees left it
-  // unbound when `list.find` moved to `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding
-  // conflicts with nothing.
-  it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
-    const keybindings: { command: string; key: string; when: string }[] = pkg.contributes.keybindings;
-    const entry = present(
-      keybindings.find((k) => k.command === openCommand),
-      `a ctrl+F binding for ${openCommand}`,
-    );
-    expect(entry.key).toBe('ctrl+f');
-    expect(entry.when).toBe(`focusedView == ${view} && ${IN_AN_INSTANCE}`);
-  });
-
-  // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
-  // shadow the editor's own Find for the whole workbench.
-  it('never binds ctrl+F outside a specific focused view', () => {
-    const keybindings: { command: string; key: string; when?: string }[] = pkg.contributes.keybindings;
-    const unscoped = keybindings.filter((k) => k.key === 'ctrl+f' && !k.when?.startsWith('focusedView == '));
-    expect(unscoped.map((k) => k.command)).toEqual([]);
-  });
 });
 
 describe('package.json Refresh is one command', () => {
@@ -751,6 +730,32 @@ describe('package.json Downloads row menu order', () => {
   });
 });
 
+// common.md, A view, story 5: a view's keys wait for the tree itself, as the Explorer's do.
+describe('package.json view keys', () => {
+  const ON_THE_TREE = ['listFocus', '!inputFocus'];
+
+  it('binds every view key only while the tree itself has focus — never in a prompt, the tree\'s find box or the view\'s title bar', () => {
+    const rowKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith('focusedView == '));
+    expect(rowKeys.length).toBeGreaterThan(0);
+    const firesOffTheTree = rowKeys.filter((k) => !ON_THE_TREE.every((term) => requires(k.when, term)));
+    expect(firesOffTheTree.map((k) => `${k.key} → ${k.command} (when: ${k.when})`)).toEqual([]);
+  });
+
+  it('binds no key to a filter', () => {
+    const filterKeys = pkg.contributes.keybindings.filter((k) => k.command.endsWith('.filter'));
+    expect(
+      filterKeys.map((k) => `${k.key} → ${k.command}`),
+      'common.md, The name filter, story 1: the filter is the title-bar control only, with no key — '
+        + 'Ctrl+Alt+F and F3 stay VS Code\'s own Find on the tree.',
+    ).toEqual([]);
+  });
+
+  it('binds no key outside a focused view', () => {
+    const unscoped = pkg.contributes.keybindings.filter((k) => !k.when.startsWith('focusedView == '));
+    expect(unscoped.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
+  });
+});
+
 // downloads.md, Menus and keys: "Keys | Delete: delete."
 describe('package.json Downloads delete key', () => {
   it('binds Delete to modbench.downloadedFile.delete, scoped to the focused Downloads view', () => {
@@ -761,7 +766,7 @@ describe('package.json Downloads delete key', () => {
     );
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
-    expect(entry.when).toBe(`focusedView == modbench.downloads && ${IN_AN_INSTANCE}`);
+    expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
   });
 });
 
@@ -944,7 +949,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       .filter((k) => k.when.startsWith('focusedView == modbench.modList'))
       .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
     expect(modsKeys).toEqual([
-      { command: 'modbench.mod.filter', key: 'ctrl+f', mac: 'cmd+f', when: `focusedView == modbench.modList && ${IN_AN_INSTANCE}`, args: undefined },
       { command: 'modbench.mod.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == enable`, args: undefined },
       { command: 'modbench.mod.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.mod.selectionToggle == disable`, args: undefined },
       { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },

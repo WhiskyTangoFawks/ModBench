@@ -1,48 +1,31 @@
 import * as vscode from 'vscode';
 import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { Reporter } from '../ports/reporter';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
-// Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
-// and a length cap keep the result one sane segment; `|| '_'` guards a segment that sanitizes
-// down to nothing.
-function sanitizeForPath(segment: string): string {
-  return segment
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80) || '_';
-}
-
-// Deterministic per record+field+plugin, so re-opening the same cell reveals the same tab.
-// `origin` is its own directory segment: two columns can share a filename and would otherwise
-// alias onto one temp file (ADR-0012).
-export function extendedEditorPath(
-  tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string,
-): string {
-  const dir = join(tempRoot, sanitizeForPath(recordLabel), sanitizeForPath(origin));
-  const file = `${sanitizeForPath(fieldName)} [${sanitizeForPath(plugin)}].txt`;
-  return join(dir, file);
-}
-
-export interface OpenExtendedFieldEditorParams {
-  value: string;
+/** Which cell a tab edits: the record, the field and the plugin copy (ADR-0012). */
+export interface ExtendedFieldIdentity {
   recordLabel: string;
   fieldName: string;
   plugin: string;
-  // ADR-0012: threaded into extendedEditorPath so two same-filename columns never alias onto one
-  // temp file.
   origin: string;
+}
+
+/** Where a cell's tab is written: the file, and the folder that must exist for it. */
+export interface ExtendedFieldFile {
+  folder: string;
+  file: string;
+}
+
+export interface OpenExtendedFieldEditorParams extends ExtendedFieldIdentity {
+  value: string;
   readOnly: boolean;
 }
 
 export interface ExtendedFieldEditorDeps {
-  // The temp directory every extended-editor file is
-  // written under — injected rather than computed from `os.tmpdir()` here, so a test can point it
-  // at its own throwaway directory instead of littering (and depending on) the real OS temp dir.
-  tempRoot: string;
+  // The composition root's answer for where a cell's tab is written: this view builds no path.
+  fieldFile: (field: ExtendedFieldIdentity) => ExtendedFieldFile;
   // Runs once per save, not once per tab: a tab can be saved any number of times while open, and
   // each save is its own commit of the leaf.
   onCommit: (value: string) => Promise<void> | void;
@@ -56,9 +39,9 @@ export interface ExtendedFieldEditorDeps {
 export async function openExtendedFieldEditor(
   params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps,
 ): Promise<void> {
-  const path = extendedEditorPath(deps.tempRoot, params.recordLabel, params.fieldName, params.plugin, params.origin);
+  const { folder, file: path } = deps.fieldFile(params);
   try {
-    await mkdir(join(path, '..'), { recursive: true });
+    await mkdir(folder, { recursive: true });
     // A second open of an immutable cell finds a file already `chmod`-ed 0o444 by the first, and
     // writeFile against a non-writable file throws EACCES. ENOENT is the one error to ignore —
     // nothing exists to chmod yet.

@@ -33,8 +33,8 @@ As a user, I want:
 
 One filter on every list (commands.md, One filter). As a user, I want:
 
-1. To open it from the title bar's first slot, or with Ctrl+F while the view has focus. *Chrome;
-   catalog*
+1. To open it from the title bar's first slot. It has no key: Ctrl+Alt+F and F3 stay VS Code's own
+   Find on the tree. *ruling; catalog*
 2. Typing to narrow the list live, by case-insensitive substring of the row's label.
 3. The filter to stay when the input box closes by any route: Enter, Esc, a click on a row or
    elsewhere. Reopening the box shows the term, to edit.

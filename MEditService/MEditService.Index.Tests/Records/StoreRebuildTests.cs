@@ -72,6 +72,76 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
+    // plugins.md, Order and view state, story 5: the record filter clears only on purpose. A.esp
+    // holds the one NPC it matches beside one it does not; B.esp is parked mid-refill.
+    private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
+
+    private static PluginFixtureData FilteredRefillFixture(string name) => new PluginFixtureBuilder(name)
+        .WithPlugin("A.esp", mod => { mod.Npcs.AddNew("NpcA"); mod.Npcs.AddNew("NpcOther"); })
+        .WithPlugin("B.esp", mod => mod.Npcs.AddNew("NpcB"))
+        .Build();
+
+    private static string[] ListedNpcs(Indexer index) =>
+        [.. index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Items.Select(i => i.EditorId ?? "")];
+
+    [Fact]
+    public async Task Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
+    {
+        using var data = FilteredRefillFixture("store-rebuild-filter-kept");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, _opens);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+
+        await index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+
+        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.ActiveFilter);
+        Assert.Equal(["NpcA"], ListedNpcs(index));
+    }
+
+    [Fact]
+    public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()
+    {
+        using var data = FilteredRefillFixture("store-rebuild-filter-refill");
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance);
+        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
+        index.Reconcile(onlyA, holder.Apply(onlyA));
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+        holder.Apply(IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+        await gate.WaitUntilParkedAsync();
+        var midRefill = ListedNpcs(index);
+        gate.Release();
+        await refill;
+
+        Assert.Equal(["NpcA"], midRefill);
+        Assert.Equal(["NpcA"], ListedNpcs(index));
+    }
+
+    // While no store is open, a filter is still reported, so it must still clear.
+    [Fact]
+    public async Task AFilterKeptThroughARebuild_ClearsBeforeTheRefillOpensAStore()
+    {
+        using var data = FilteredRefillFixture("store-rebuild-filter-clear");
+        var refills = new HeldBackScheduler();
+        var holder = new LoadOrderHolder();
+        using var index = new Indexer(holder, _opens, SharedSchemaReflector.Instance, refillScheduler: refills);
+        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        index.Reconcile(snapshot, holder.Apply(snapshot));
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+
+        index.ClearFilter();
+        refills.RunHeldBack();
+        await refill;
+
+        Assert.Null(index.ActiveFilter);
+        Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
+    }
+
     [Fact]
     public async Task Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {
