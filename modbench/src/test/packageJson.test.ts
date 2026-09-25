@@ -619,11 +619,16 @@ describe('package.json record-row context menu', () => {
 describe('package.json plugin-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  const forPluginRows = () => contextMenus().filter((e) => requires(e.when, 'view == modbench.pluginListTree')
-    && /viewItem =~ \/\\b(plugin|untrackedInMod|rebasable|compilable)\\b\//.test(e.when));
+  // plugins.md, Menus and keys: the plugin menu. Open Header has no entries: it opens via row
+  // click, not a menu entry.
+  const PLUGIN_MENU = [
+    'modbench.plugin.reveal', 'modbench.plugin.track', 'modbench.saveAndCompile',
+    'modbench.pluginListTree.compileAtMain', 'modbench.mod.rebaseEditBranch',
+  ];
+  const forPluginRows = () => contextMenus()
+    .filter((e) => PLUGIN_MENU.includes(e.command) && requires(e.when, 'view == modbench.pluginListTree'));
 
-  // Every command reachable from a plugin row, listed, with the row flag it needs. Open Header has
-  // no entries: it opens via row click, not a menu entry.
+  // Each plugin-menu command, with the row flag it needs.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
     const ON = 'view == modbench.pluginListTree && viewItem =~ ';
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
