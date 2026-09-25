@@ -78,11 +78,8 @@ public sealed class TrackCommitShapeTests : IDisposable
         await Track("First.esp", "Second.esp");
 
         Assert.Equal(
-            new BaselineTrailers("First.esp", "1.2.3", metaSha256, first),
-            SourceRepository.LatestBaselineTrailers(_modFolder, "First.esp"));
-        Assert.Equal(
-            new BaselineTrailers("Second.esp", "1.2.3", metaSha256, second),
-            SourceRepository.LatestBaselineTrailers(_modFolder, "Second.esp"));
+            [new BaselineTrailers("Second.esp", "1.2.3", metaSha256, second), new BaselineTrailers("First.esp", "1.2.3", metaSha256, first)],
+            SourceRepository.LatestBaselineTrailersNewestFirst(_modFolder, ["First.esp", "Second.esp"]));
     }
 
     [Fact]
@@ -109,7 +106,7 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Equal([Key("First.esp")], result.Landed);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
-        Assert.Null(SourceRepository.LatestBaselineTrailers(_modFolder, "Second.esp"));
+        Assert.Empty(SourceRepository.LatestBaselineTrailersNewestFirst(_modFolder, ["Second.esp"]));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
         Assert.Null(SourceRepository.ParkedCompileBinarySha256(_modFolder, "Second.esp"));
     }

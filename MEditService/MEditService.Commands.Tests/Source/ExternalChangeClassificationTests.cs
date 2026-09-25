@@ -133,13 +133,47 @@ public sealed class ExternalChangeClassificationTests : IDisposable
             ModFolder, SourcePreset.Edits,
             [BaselineOver(ModFolder, "First.esp", Convert.ToHexString(SHA256.HashData(unchanged))), BaselineOver(ModFolder, "Second.esp")]);
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
-        SourceRepository.CommitPristineToMain(ModFolder, [BaselineOver(ModFolder, "Second.esp")]);
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
 
         Settled.Handle(loadOrder, ModFolder);
 
         Assert.Equal(["Second.esp"], TheQuestion().Plugins);
         Assert.False(TheQuestion().MetaChanged);
         Assert.Equal("2.0.0", TheQuestion().OldVersion);
+    }
+
+    [Theory]
+    [InlineData("First.esp", "Second.esp")]
+    [InlineData("Second.esp", "First.esp")]
+    public void ASettle_ShowsTheNewestChangedBaselinesVersion_AsTheOldVersion_InAnyLoadOrder(string earlier, string later)
+    {
+        var loadOrder = WithPlugins((earlier, "an external binary"u8.ToArray()), (later, "another external binary"u8.ToArray()));
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
+        SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.5.0\n");
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.True(TheQuestion().MetaChanged);
+        Assert.Equal("1.5.0", TheQuestion().OldVersion);
+        Assert.Equal("2.0.0", TheQuestion().NewVersion);
+    }
+
+    [Fact]
+    public void ASettle_ShowsTheVersionTheMetaMovedFrom_WhenTheNewestChangedBaselineIsAlreadyAtTheNewVersion()
+    {
+        var loadOrder = WithPlugins(("First.esp", "an external binary"u8.ToArray()), ("Second.esp", "another external binary"u8.ToArray()));
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=1.0.0\n");
+        SourceRepository.Track(ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp"), BaselineOver(ModFolder, "Second.esp")]);
+        File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
+        CommitToMain([BaselineOver(ModFolder, "Second.esp")]);
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.True(TheQuestion().MetaChanged);
+        Assert.Equal("1.0.0", TheQuestion().OldVersion);
     }
 
     // A meta.ini edit with no accompanying plugin or tracked-file change raises nothing at all —
@@ -214,6 +248,9 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
         Assert.Empty(_notifications.Notifications);
     }
+
+    private void CommitToMain(IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines) =>
+        Assert.Null(SourceRepository.CommitBaselinesToMain(ModFolder, baselines));
 
     private static void Track(string modFolder, string plugin)
     {

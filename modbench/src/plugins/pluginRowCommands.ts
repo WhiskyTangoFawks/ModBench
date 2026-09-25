@@ -121,7 +121,7 @@ export function registerRebaseCommand(
 
     const result = await runRebase({
       client, openMergeEditor: makeMergeEditorOpener(originFiles, outputChannel, reporter),
-      showError: (message) => reporter.report('error', message),
+      reporter,
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
     }, origin);

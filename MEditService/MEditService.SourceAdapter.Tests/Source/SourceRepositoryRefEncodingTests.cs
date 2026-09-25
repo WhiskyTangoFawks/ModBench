@@ -51,7 +51,7 @@ public sealed class SourceRepositoryRefEncodingTests
     }
 
     [Fact]
-    public void CommitPristineToMain_Succeeds_ForASpaceNamedPlugin()
+    public void CommitBaselinesToMain_Succeeds_ForASpaceNamedPlugin()
     {
         var modFolder = NewModFolder();
         const string plugin = "LitR - Settings Holotapes Sorting.esp";
@@ -62,7 +62,7 @@ public sealed class SourceRepositoryRefEncodingTests
                 modFolder, SourcePreset.Edits,
                 [([new TreeFile(relativePath, "{\"old\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "OLDBIN"))]);
 
-            SourceRepository.CommitPristineToMain(
+            PluginBaselines.CommitToMain(
                 modFolder,
                 [([new TreeFile(relativePath, "{\"new\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "NEWBIN"))]);
 

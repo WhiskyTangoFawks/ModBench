@@ -21,8 +21,9 @@ As a user, I want:
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a
    setting.
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a
-   check box, Delete destroys, F2 renames, Ctrl+C copies. A template's own keys are not adopted.
-   *ruling*
+   check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only
+   while the tree has focus and no input box does, as VS Code's list keys do. The keys of a
+   template, xEdit or MO2, are not adopted. *ADR-0018, invariant 1; ruling*
 6. Every tree to let me select several rows, and a gesture to act on the whole selection unless it
    only makes sense for one row, which its Argument in the catalog says. *ruling*
 7. Every list to reverse its order from its title bar. The direction never changes what the order
@@ -32,8 +33,8 @@ As a user, I want:
 
 One filter on every list (commands.md, One filter). As a user, I want:
 
-1. To open it from the title bar's first slot, or with Ctrl+F while the view has focus. *Chrome;
-   catalog*
+1. To open it from the title bar's first slot. It has no key: Ctrl+Alt+F and F3 stay VS Code's own
+   Find on the tree. *ruling; catalog*
 2. Typing to narrow the list live, by case-insensitive substring of the row's label.
 3. The filter to stay when the input box closes by any route: Enter, Esc, a click on a row or
    elsewhere. Reopening the box shows the term, to edit.
