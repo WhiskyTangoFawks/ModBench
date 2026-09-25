@@ -124,9 +124,8 @@ export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
 
-/** The folders directly in `path`, each link followed as MO2 follows it (QDir::Dirs without
- *  NoSymLinks): a link or junction to a folder is one, a link to a file is not. A link whose target
- *  cannot be checked, for any reason, is skipped as MO2 skips it, and handed to `skippedLink`. */
+/** The folders directly in `path`, following links as MO2 does (QDir::Dirs without NoSymLinks).
+ *  A link whose target cannot be checked is skipped, as MO2 skips it, and handed to `skippedLink`. */
 export async function listFolders(
   path: string, skippedLink?: (name: string, reason: string) => void,
 ): Promise<string[]> {
