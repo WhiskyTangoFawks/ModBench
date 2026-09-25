@@ -942,8 +942,7 @@ const A_ROW = () => plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod' });
 const B_ROW = () => plugin({ name: 'B.esp', slot: 1, origin: 'SomeMod' });
 
 // mEdit is always running (target-architecture.md): a client that answers every call with a
-// rejection is what a real disconnect looks like from here, indistinguishable from one this
-// provider has simply not synced with yet.
+// rejection is what a real disconnect looks like from here (plugins.md, States 3).
 function makeDisconnectedClient(): InMemoryMEditClient {
   return disconnect(makeClient());
 }
@@ -1008,14 +1007,48 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
   });
 });
 
+// plugins.md, A row story 5: the game does not load a disabled plugin's records, so there is
+// nothing behind the row to expand into — same as a losing copy, viewing it is deferred.
+describe('PluginsTreeProvider — a disabled plugin row has no expander', () => {
+  it('renders TreeItemCollapsibleState.None for a disabled plugin, before any reconcile', async () => {
+    const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0, enabled: false })]);
+    const [row] = await tree.getChildren();
+
+    expect(tree.getTreeItem(present(row, 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  it('stays None once mEdit holds the plugin — enabling is what would give it a chevron, not indexing', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, enabled: false })]);
+    await reconcile(h, [held('A.esp')]);
+    const [row] = await h.tree.getChildren();
+
+    expect(h.tree.getTreeItem(present(row, 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  // The rival this guards: a chevron rendered anyway because collapsibleState still reads only
+  // `pluginFileOf`, never the row's own enabled bit.
+  it('an enabled row beside it still gets a chevron', async () => {
+    const { tree } = makeTree([
+      plugin({ name: 'A.esp', slot: 0, enabled: false }),
+      plugin({ name: 'B.esp', slot: 1, enabled: true }),
+    ]);
+    const rows = await tree.getChildren();
+
+    expect(tree.getTreeItem(present(rows[0], "A.esp's row")).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+    expect(tree.getTreeItem(present(rows[1], "B.esp's row")).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+});
+
 describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
-  it('never asks the record browser before any reconcile has landed, answering one error node instead', async () => {
+  // plugins.md, States 2: mEdit not yet up, or the plugin not yet indexed, is "Still indexing…" —
+  // never "mEdit is not connected", which promises nothing is coming back.
+  it('never asks the record browser before any reconcile has landed, answering "still indexing" instead', async () => {
     const { tree, client } = makeTree([A_ROW()]);
     const [row] = await tree.getChildren();
 
     const children = await tree.getChildren(row);
 
-    expect(children).toEqual([expect.any(ErrorNode)]);
+    expect(children).toEqual([expect.any(IndexingNode)]);
     expect(callCount(client, 'getRecordTypes')).toBe(0);
   });
 
@@ -1173,6 +1206,19 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     expect(children[0]).toBeInstanceOf(ErrorNode);
   });
 
+  // plugins.md, States 3: the error row names the reason, not a generic "not connected" message.
+  it('names the reason the read failed, not a generic "not connected" message', async () => {
+    const client = makeClient();
+    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+    const h = makeTree([A_ROW()], { client });
+    await h.tree.applyReconciled([]);
+    const [row] = await h.tree.getChildren();
+
+    const [child] = await h.tree.getChildren(row);
+
+    expect(expectInstanceOf(child, ErrorNode).tooltip).toBe('ECONNREFUSED');
+  });
+
   it('renders no backend-derived badge on any row', async () => {
     const h = makeTree([A_ROW()], { client: makeDisconnectedClient() });
     await h.tree.applyReconciled([]);
@@ -1201,6 +1247,58 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     expect(discChild).toBeInstanceOf(ErrorNode);
     expect(idxChild).toBeInstanceOf(IndexingNode);
     expect(expectInstanceOf(discChild, ErrorNode).label).not.toBe(expectInstanceOf(idxChild, IndexingNode).label);
+  });
+});
+
+// plugins.md, States 4; ADR-0009 point 5: another window holds the instance's index. No tick from
+// this window's own reconcile is ever coming, so every row names the refusal instead of promising
+// "Still indexing…" forever.
+describe("PluginsTreeProvider — the load order's second-window refusal", () => {
+  it('expands a row to the error row naming the refusal, before any reconcile has landed', async () => {
+    const h = makeTree([A_ROW()]);
+    const [row] = await h.tree.getChildren();
+
+    h.tree.applyRefused('another Modbench window holds this instance');
+    const children = await h.tree.getChildren(row);
+
+    expect(children).toHaveLength(1);
+    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('another Modbench window holds this instance');
+  });
+
+  it("overrides an already-held plugin's records too, not only the unindexed rows", async () => {
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
+    const h = makeTree([A_ROW()], { client });
+    await reconcile(h, [held('A.esp')]);
+    const [row] = await h.tree.getChildren();
+
+    h.tree.applyRefused('another Modbench window holds this instance');
+    const children = await h.tree.getChildren(row);
+
+    expect(children).toEqual([expect.any(ErrorNode)]);
+  });
+
+  it('leaves the row set and each row\'s status alone — the tree does not change shape', async () => {
+    const h = makeTree([A_ROW(), B_ROW()]);
+    await reconcile(h, [held('A.esp'), held('B.esp', { masterIssues: [{ kind: 'DirectlyMissing', masterName: 'C.esp' }] })]);
+    const before = await h.tree.getChildren();
+    const statusBefore = h.tree.getTreeItem(present(before[1], "B.esp's row")).description;
+
+    h.tree.applyRefused('another Modbench window holds this instance');
+    const after = await h.tree.getChildren();
+
+    expect(after).toEqual(before);
+    expect(h.tree.getTreeItem(present(after[1], "B.esp's row")).description).toBe(statusBefore);
+  });
+
+  it('clears once a later tick lands, resuming normal expansion', async () => {
+    const h = makeTree([A_ROW()]);
+    h.tree.applyRefused('another Modbench window holds this instance');
+
+    h.tree.applyIndexed(['A.esp'], []);
+    const [row] = await h.tree.getChildren();
+    const children = await h.tree.getChildren(row);
+
+    expect(children.some((c) => c instanceof ErrorNode)).toBe(false);
   });
 });
 

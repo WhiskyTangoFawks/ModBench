@@ -21,8 +21,8 @@ export function isDropPayload(value: unknown): value is { names: string[] } {
   return Array.isArray(witness.names) && witness.names.every((n): n is string => typeof n === 'string');
 }
 
-// mEdit is always running (target-architecture.md); reaching this means the tree has nothing
-// held from it at all, which reads to the user the same as a disconnect.
+// The record browser is always wired in production (ADR-0002); reaching this means a test
+// exercised rows with none, which reads to the user the same as a disconnect.
 const NOT_CONNECTED = 'mEdit is not connected.';
 const notConnected = (): [ErrorNode] => [new ErrorNode(NOT_CONNECTED)];
 
@@ -364,8 +364,20 @@ export class PluginsTreeProvider
     if (!isRow(element)) return this.records?.getChildren(element) ?? [];
     const file = pluginFileOf(element);
     if (file === undefined) return []; // EmptyNode: no plugin to expand into
-    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
-    if (this.heldFiles === undefined) return notConnected();
+    return this.expandPluginRow(element, file);
+  }
+
+  // plugins.md, States 2-4: what a plugin row expands into.
+  private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
+    // A second window's refusal names itself on every row until a later tick or reconcile clears
+    // it — never "Still indexing…" for a load that cannot land here.
+    if (this.indexRefusal !== undefined) return [new ErrorNode(this.indexRefusal)];
+    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019). Nothing has
+    // landed yet reads as "Still indexing…", unless the last attempt to reach mEdit itself
+    // failed, which names the reason instead.
+    if (this.heldFiles === undefined) {
+      return [this.unreachableReason !== undefined ? new ErrorNode(this.unreachableReason) : new IndexingNode()];
+    }
     if (!this.heldFiles.has(file.toLowerCase())) {
       // A plugin the load order gave up on will never be reached by a later tick — saying
       // "still indexing" would promise a completion that is not coming (ADR-0019).
@@ -430,11 +442,7 @@ export class PluginsTreeProvider
 
   getTreeItem(element: PluginsTreeNode): vscode.TreeItem {
     if (!isRow(element)) return this.records?.getTreeItem(element) ?? element;
-    // ADR-0002: every row is collapsible — mEdit is always running, so there is no absence for a
-    // chevron to encode. `pluginFileOf` is the row's own identity, never a backend fact.
-    element.collapsibleState = pluginFileOf(element) === undefined
-      ? vscode.TreeItemCollapsibleState.None
-      : vscode.TreeItemCollapsibleState.Collapsed;
+    element.collapsibleState = this.collapsibleStateOf(element);
     // A row is returned *as* its own TreeItem, so decorating in place would accumulate
     // permanently, with no way back once the condition clears.
     const base = this.captureOriginalDecoration(element);
@@ -445,6 +453,14 @@ export class PluginsTreeProvider
     // row's tooltip is MO2's one sentence alone (plugins.md, A plugin the game loads with no line).
     if (element.kind === 'plugin') this.decoratePlugin(element);
     return element;
+  }
+
+  // plugins.md, A row story 5: a disabled plugin's records are not the game's to load, so there
+  // is nothing behind the row to expand into.
+  private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
+    if (pluginFileOf(element) === undefined) return vscode.TreeItemCollapsibleState.None;
+    if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
+    return vscode.TreeItemCollapsibleState.Collapsed;
   }
 
   private readonly originalDecoration = new WeakMap<object, RowDecoration>();
@@ -502,6 +518,14 @@ export class PluginsTreeProvider
   // each time: a plugin not yet reached this reload reads as "still indexing", never a stale
   // failure from before the reload began.
   private reachableFailures = new ByPluginCopy<string>();
+  // plugins.md, States 3: the reason the last plugin-facts read failed — distinct from
+  // `heldFiles === undefined` meaning no reconcile has landed yet. Cleared the moment a read
+  // succeeds.
+  private unreachableReason?: string;
+  // plugins.md, States 4; ADR-0009 point 5: the load order's own refusal — a second window holds
+  // the instance's index. Every row's expansion names this instead, until a later tick or
+  // reconcile clears it.
+  private indexRefusal?: string;
   // Bumped by every write to the held load order, so a slow read answering after a newer
   // reconcile — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
@@ -511,9 +535,18 @@ export class PluginsTreeProvider
    *  this reload's own ticks. */
   applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
+    this.indexRefusal = undefined;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** ADR-0009 point 5; plugins.md, States 4: the load order's own refusal, named on every row
+   *  until a later `applyIndexed` or `applyReconciled` lands and clears it. */
+  applyRefused(reason: string): void {
+    this.generation++;
+    this.indexRefusal = reason;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -524,6 +557,7 @@ export class PluginsTreeProvider
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
+    this.indexRefusal = undefined;
     this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -558,9 +592,13 @@ export class PluginsTreeProvider
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
-      return (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
+      const plugins = (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
+      this.unreachableReason = undefined;
+      return plugins;
     } catch (err) {
-      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${errorMessage(err)}`);
+      const message = errorMessage(err);
+      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);
+      this.unreachableReason = message;
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
       this.matches = undefined;
       this._onDidChangeTreeData.fire(undefined);

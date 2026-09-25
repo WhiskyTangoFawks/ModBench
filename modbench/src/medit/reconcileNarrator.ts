@@ -6,6 +6,9 @@ export interface ReconcileNarratorDeps {
   /** Opens the Plugins view's progress, closed when `until` settles. */
   showProgress: (until: Promise<void>) => void;
   applyIndexed: (indexedPlugins: string[], failures: PluginLoadFailure[]) => void;
+  /** plugins.md, States 4: the load order's own refusal, handed to the Plugins tree alongside the
+   *  status bar so every row names it too. */
+  applyRefused: (reason: string) => void;
   setStatusText: (text: string) => void;
   /** A reconcile reached Ready: its whole hand-off to the views. */
   settle: (status: LoadOrderProgress) => Promise<void>;
@@ -76,6 +79,7 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
   const settle = (status: LoadOrderProgress, reconcileSeen: boolean): void => {
     if (status.refusalMessage !== undefined) {
       reportIndexRefusal(status, deps);
+      deps.applyRefused(status.refusalMessage);
       markSettled(status.version);
       return;
     }

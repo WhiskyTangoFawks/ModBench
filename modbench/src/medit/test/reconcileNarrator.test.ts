@@ -17,6 +17,7 @@ function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => P
       void until.then(() => { span.closed = true; });
     }),
     applyIndexed: vi.fn(),
+    applyRefused: vi.fn(),
     setStatusText: vi.fn(),
     settle: vi.fn(settle),
     log: vi.fn(),
@@ -108,6 +109,17 @@ describe('the reconcile narrator', () => {
     expect(progress).toEqual([{ closed: true }]);
     expect(deps.setStatusText).toHaveBeenCalledWith('$(error) mEdit: another Modbench window holds this instance');
     expect(deps.settle).not.toHaveBeenCalled();
+  });
+
+  // plugins.md, States 4: the refusal reaches the Plugins tree too, not only the status bar — a
+  // row must name it, never keep promising "Still indexing…" for a load that cannot land here.
+  it('hands the refusal to the tree as well as the status bar', async () => {
+    const { deps, narrator } = narrated();
+
+    narrator.hear(tick({ refusalMessage: 'another Modbench window holds this instance' }));
+    await flushed();
+
+    expect(deps.applyRefused).toHaveBeenCalledWith('another Modbench window holds this instance');
   });
 
   it('answers settled(version) once that version is handed to the views, not when its Ready is heard', async () => {
