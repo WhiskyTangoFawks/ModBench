@@ -72,6 +72,43 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
+    // plugins.md, Order and view state, story 5: the record filter clears only on purpose.
+    [Fact]
+    public async Task Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
+    {
+        Reconcile(_fixture.InstanceRoot);
+        const string matchesNothing = "SELECT form_key FROM npc_ WHERE editor_id = 'NoSuchNpc'";
+        _index.SetFilter(matchesNothing, "none.sql");
+
+        await _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal((matchesNothing, "none.sql"), _index.ActiveFilter);
+        var listed = _index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        Assert.Equal(0, listed.Total);
+    }
+
+    [Fact]
+    public async Task WhileARebuildRefills_TheRowsAlreadyBackAnswerThroughTheFilter()
+    {
+        using var data = new PluginFixtureBuilder("store-rebuild-filter-refill")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("NpcA")).WithPlugin("B.esp").Build();
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = new Indexer(holder, gate, SharedSchemaReflector.Instance);
+        var onlyA = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, [data.Plugins[0]]);
+        index.Reconcile(onlyA, holder.Apply(onlyA));
+        index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NoSuchNpc'", "none.sql");
+        holder.Apply(IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        var refill = index.RebuildStore(GameRelease.Fallout4, data.InstanceRoot);
+        await gate.WaitUntilParkedAsync();
+        var listed = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        gate.Release();
+        await refill;
+
+        Assert.Equal(0, listed.Total);
+    }
+
     [Fact]
     public async Task Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {

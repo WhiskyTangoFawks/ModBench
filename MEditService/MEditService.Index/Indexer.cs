@@ -32,9 +32,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
-    // Dropped with the scope it was materialized against (see DisposeCurrent): a filter names
-    // tables a freshly opened store has no _filter for.
-    private (string Sql, string Source)? _filter;
+    // Survives a rebuild of its own scope, since it clears only on purpose (plugins.md, Order and
+    // view state, story 5), and is dropped when another scope opens: its SQL names that scope's tables.
+    private ScopedFilter? _filter;
     // The reconcile's own progress. Guarded by _lock like _heldPlugins/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
@@ -336,9 +336,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     {
         lock (_lock)
         {
-            if (_heldPlugins is { } current && _index is { } index && SameScope(current, snapshot))
+            if (_heldPlugins is { } current && _index is { } index && SameScope(ScopeOf(current), snapshot))
                 return (current, index);
             DisposeCurrent();
+            if (_filter is { } filter && !SameScope(filter.Scope, snapshot)) _filter = null;
         }
 
         _logger.LogDebug("Initializing DuckDB record index");
@@ -361,15 +362,22 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             _heldPlugins = held;
             _index = fresh;
             _gameRelease = snapshot.GameRelease;
+            ReapplyFilter();
         }
         PublishStatus();
         return (held, fresh);
     }
 
-    private static bool SameScope(HeldPlugins held, LoadOrderSnapshot snapshot) =>
-        held.GameRelease == snapshot.GameRelease
-        && SamePath(held.DataFolderPath, snapshot.DataFolderPath)
-        && (held.InstanceRoot, snapshot.InstanceRoot) switch
+    private readonly record struct IndexScope(GameRelease GameRelease, string DataFolderPath, string? InstanceRoot);
+
+    private sealed record ScopedFilter(string Sql, string Source, IndexScope Scope);
+
+    private static IndexScope ScopeOf(HeldPlugins held) => new(held.GameRelease, held.DataFolderPath, held.InstanceRoot);
+
+    private static bool SameScope(IndexScope scope, LoadOrderSnapshot snapshot) =>
+        scope.GameRelease == snapshot.GameRelease
+        && SamePath(scope.DataFolderPath, snapshot.DataFolderPath)
+        && (scope.InstanceRoot, snapshot.InstanceRoot) switch
         {
             (null, null) => true,
             ({ } a, { } b) => SamePath(a, b),
@@ -951,7 +959,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
     /// concurrent set never pairs one filter's SQL with another's source.</summary>
-    public (string Sql, string Source)? ActiveFilter { get { lock (_lock) return _filter; } }
+    public (string Sql, string Source)? ActiveFilter
+    {
+        get { lock (_lock) return _filter is { } filter ? (filter.Sql, filter.Source) : null; }
+    }
 
     /// <summary>Throws <see cref="ArgumentException"/> if the SQL does not return a form_key
     /// column.</summary>
@@ -971,9 +982,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
         lock (_lock)
         {
-            var (_, index) = RequireScopeCore();
+            var (held, index) = RequireScopeCore();
             index.SetFilter(filter?.Sql);
-            _filter = filter;
+            _filter = filter is { } set ? new ScopedFilter(set.Sql, set.Source, ScopeOf(held)) : null;
         }
     }
 
@@ -1064,7 +1075,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         _heldPlugins = null;
         _index?.Dispose();
         _index = null;
-        _filter = null;
         _indexed.Clear();
         _failedHashes.Clear();
         _conflictsComputed = false;

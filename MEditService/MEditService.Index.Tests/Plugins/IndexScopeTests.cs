@@ -137,6 +137,26 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Null(manager.FilterSql);
     }
 
+    [Fact]
+    public void Reconcile_AnotherInstance_DropsTheFilter()
+    {
+        var holder = new LoadOrderHolder();
+        var manager = MakeLoadedManager(holder);
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
+        var otherInstance = Directory.CreateTempSubdirectory("medit-filter-other-instance-");
+        try
+        {
+            manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance.FullName);
+
+            Assert.Null(manager.ActiveFilter);
+        }
+        finally
+        {
+            manager.Dispose();
+            otherInstance.Delete(recursive: true);
+        }
+    }
+
     // --- Filter re-materialization ---
     //
     // _filter is a one-shot snapshot of whatever matched the filter SQL when it ran, so every mutation
