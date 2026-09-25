@@ -15,23 +15,13 @@ export function lockedRowUri(pluginFile: string): vscode.Uri {
  *  `FileDecorationProvider`. */
 export class ImplicitMasterDecorationProvider implements vscode.FileDecorationProvider {
   constructor(
-    // A getter, not a settled Promise — `modbench.mods.gameDirectory` is editable while
-    // Modbench runs, so a value captured once at construction could go stale for the life of the
-    // provider. Each call re-reads through the single game-directory resolver.
-    private readonly dataFolder: () => Promise<string | undefined>,
-    private readonly implicitMasterNames: () => ReadonlySet<string>,
+    // The URIs of the locked rows the tree renders now, read at each call, so the grey follows
+    // the rows and never a copy of them.
+    private readonly lockedRowUris: () => ReadonlySet<string>,
   ) {}
 
-  async provideFileDecoration(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
-    if (uri.scheme !== LOCKED_ROW_SCHEME) return undefined;
-    const dataFolder = await this.dataFolder();
-    if (!dataFolder) return undefined;
-    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). A URI path's
-    // parent never carries a trailing separator, so a Data folder setting that does needs stripping.
-    const dataPath = vscode.Uri.file(dataFolder).path.replace(/\/+$/, '');
-    const lastSlash = uri.path.lastIndexOf('/');
-    if (uri.path.slice(0, lastSlash) !== dataPath) return undefined;
-    if (!this.implicitMasterNames().has(uri.path.slice(lastSlash + 1).toLowerCase())) return undefined;
+  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    if (!this.lockedRowUris().has(uri.toString())) return undefined;
     return { color: new vscode.ThemeColor('disabledForeground') };
   }
 }

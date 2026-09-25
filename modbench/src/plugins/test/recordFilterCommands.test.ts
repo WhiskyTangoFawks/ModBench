@@ -28,6 +28,7 @@ import { makeShowRecordFilter, registerFilterCommands, type FilterCommandDeps } 
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { posix } from 'node:path';
 
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
 
@@ -37,7 +38,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function registered(client: InMemoryMEditClient): FilterCommandDeps & {
+function registered(
+  client: InMemoryMEditClient, nameOf: (uri: { path: string }) => string = (uri) => posix.basename(uri.path),
+): FilterCommandDeps & {
   treeProvider: { refresh: ReturnType<typeof vi.fn> };
   refreshMatchingPlugins: ReturnType<typeof vi.fn>;
   showRecordFilter: ReturnType<typeof vi.fn>;
@@ -48,6 +51,7 @@ function registered(client: InMemoryMEditClient): FilterCommandDeps & {
       folder: '/scripts',
       sqlFiles: () => [...files.keys()].filter((name) => name.endsWith('.sql')),
       read: (name: string) => present(files.get(name), `the script ${name}`),
+      nameOf,
     },
     client,
     treeProvider: { refresh: vi.fn() },
@@ -137,16 +141,16 @@ describe('modbench.record.filter, from a document', () => {
     expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'Untitled-1' });
   });
 
-  it('names a saved document by its file name alone, on Windows too', async () => {
+  it('names a document by the name the composition root gives it', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('setFilter', null);
-    const deps = registered(client);
-    const uri = { scheme: 'file', path: '/c:/elsewhere/queries/armor.sql' };
-    openTextDocument.mockResolvedValue({ uri, fileName: String.raw`c:\elsewhere\queries\armor.sql`, getText: () => ARMOR_SQL });
+    const deps = registered(client, () => 'from-the-root.sql');
+    const uri = { scheme: 'file', path: '/elsewhere/queries/armor.sql' };
+    openTextDocument.mockResolvedValue({ uri, fileName: '/elsewhere/queries/armor.sql', getText: () => ARMOR_SQL });
 
     await filter(uri);
 
-    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'armor.sql' });
+    expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'from-the-root.sql' });
   });
 
   // The rival: showing the filter (or refreshing) on a failed set would leave the view claiming a

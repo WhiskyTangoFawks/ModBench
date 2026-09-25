@@ -6,7 +6,7 @@ import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked, type PluginFolder,
+  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginCopyKey, type IsTracked, type PluginFolder,
 } from './trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
@@ -323,9 +323,10 @@ export async function registerHeldTrackedRepositories(
  *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
  *  rejected `status()` is logged, never surfaced. */
 export function refreshSourceControlFor(
-  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, outputChannel: vscode.LogOutputChannel,
+  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, origin: string,
+  outputChannel: vscode.LogOutputChannel,
 ): void {
-  const repo = pluginRepositories?.get(plugin);
+  const repo = pluginRepositories?.get(pluginCopyKey(plugin, origin));
   if (!repo) return;
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);

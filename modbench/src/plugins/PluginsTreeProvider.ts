@@ -279,7 +279,7 @@ export class PluginsTreeProvider
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
-  private lastImplicitNames: ReadonlySet<string> = new Set();
+  private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
     this.source = options.source;
@@ -362,8 +362,8 @@ export class PluginsTreeProvider
   }
 
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
-  implicitMasterNames(): ReadonlySet<string> {
-    return this.lastImplicitNames;
+  lockedRowUris(): ReadonlySet<string> {
+    return this.lastLockedRowUris;
   }
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
@@ -429,9 +429,10 @@ export class PluginsTreeProvider
     const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
     if (implicitNames.length + dedupedOrder.length === 0) return { kind: 'empty' };
 
-    this.lastImplicitNames = implicitLower;
+    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.dataFolderFile(name)));
+    this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     const rows: PluginListNode[] = [
-      ...implicitNames.map((name) => new ImplicitMasterNode(name, this.dataFolderFile(name))),
+      ...lockedRows,
       ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
     ];
     return { kind: 'ok', cache: { rows } };

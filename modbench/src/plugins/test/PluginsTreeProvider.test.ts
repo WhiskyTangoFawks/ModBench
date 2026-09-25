@@ -857,10 +857,11 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
-  it('publishes the implicit names, lowercased, for the graying decoration provider', async () => {
+  it('publishes each locked row\'s URI, for the graying decoration provider', async () => {
     const tree = treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
-    await tree.getChildren();
-    expect([...tree.implicitMasterNames()]).toEqual(['fallout4.esm']);
+    const [locked] = await tree.getChildren();
+    const rowUri = present(expectInstanceOf(locked, ImplicitMasterNode).resourceUri, 'the locked row\'s URI');
+    expect([...tree.lockedRowUris()]).toEqual([rowUri.toString()]);
   });
 
   // The rival: treating an unreachable backend as "no implicit masters" here would be harmless,
@@ -871,7 +872,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
-    expect([...treeFor([], null).implicitMasterNames()]).toEqual([]);
+    expect([...treeFor([], null).lockedRowUris()]).toEqual([]);
   });
 
   it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {

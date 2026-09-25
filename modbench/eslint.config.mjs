@@ -96,10 +96,10 @@ export default tseslint.config(
         files: VIEW_BOXES.map((box) => `src/${box}/**/*.ts`),
         ignores: VIEW_BOXES.map((box) => `src/${box}/test/**`),
         rules: {
-            'no-restricted-imports': ['error', { paths: ['node:path', 'path'].map((name) => ({
-                name,
+            'no-restricted-imports': ['error', { patterns: [{
+                group: ['node:path', 'node:path/*', 'path', 'path/*'],
                 message: 'A view never builds a path: take it from the instance value, or from the box that owns it, injected at the composition root when the view does not reference that box.',
-            })) }],
+            }] }],
         },
     },
 

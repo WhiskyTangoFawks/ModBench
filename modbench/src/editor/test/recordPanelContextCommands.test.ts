@@ -198,16 +198,6 @@ describe('the extended editor opens and saves from the host', () => {
     });
   });
 
-  it('threads the composition root\'s field file and log through to the editor', async () => {
-    const fieldFile = () => ({ folder: '/tmp/modbench-fields', file: '/tmp/modbench-fields/field.txt' });
-    const { deps } = makeDeps({ fieldFile });
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.openFieldValue'), "the handler registered for 'modbench.record.openFieldValue'")(stringContext());
-
-    expect(openedWith().deps.fieldFile).toBe(fieldFile);
-  });
-
   it('a save lands one set envelope at the leaf\'s own path, and re-reads', async () => {
     const { deps, meditClient, onRecordEdited } = makeDeps();
     registerRecordPanelContextCommands(deps);

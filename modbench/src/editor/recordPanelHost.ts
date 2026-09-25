@@ -35,7 +35,7 @@ export interface EditorCommandDeps {
   // The two things a committed field edit redrives (the filter's match map, the plugin's Source
   // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
   refreshMatchingPlugins: () => void;
-  refreshSourceControlFor: (plugin: string) => void;
+  refreshSourceControlFor: (plugin: string, origin: string) => void;
   outputChannel: vscode.LogOutputChannel;
   // The two ports (ADR-0019), built over the window API by the composition root: this box
   // surfaces a failure and asks a question, and implements neither.
@@ -54,7 +54,7 @@ function recordPanelWriteDeps(
     onRecordEdited: makeOnRecordEdited(
       deps.treeSync, recordDecorationProvider,
       () => { deps.refreshMatchingPlugins(); },
-      (plugin) => deps.refreshSourceControlFor(plugin),
+      (plugin, origin) => deps.refreshSourceControlFor(plugin, origin),
     ),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),

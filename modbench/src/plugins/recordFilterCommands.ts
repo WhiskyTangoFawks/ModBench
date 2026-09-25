@@ -9,13 +9,15 @@ export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscod
   return vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node));
 }
 
-/** The scripts folder the pick lists, read at the composition root: this view holds no door onto
- *  the disk of its own. */
+/** The filter's sources, answered at the composition root: the scripts folder the pick lists,
+ *  and a document's name. This view holds no door onto the disk and builds no path. */
 export interface FilterScripts {
   readonly folder: string;
   /** The `.sql` file names in the folder, none when it does not exist. */
   sqlFiles(): string[];
   read(name: string): string;
+  /** The name a document shows under as the filter's source: its file name. */
+  nameOf(uri: vscode.Uri): string;
 }
 
 export interface FilterCommandDeps {
@@ -76,7 +78,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   // catalog `filter`, Option "query source": a document the caller names, or the input box.
   const fromDocument = async (uri: vscode.Uri): Promise<void> => {
     const document = await vscode.workspace.openTextDocument(uri);
-    await apply({ sql: document.getText(), source: document.uri.path.split('/').at(-1) ?? document.uri.path });
+    await apply({ sql: document.getText(), source: scripts.nameOf(document.uri) });
   };
 
   const fromPick = async (): Promise<void> => {

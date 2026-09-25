@@ -716,12 +716,12 @@ describe('the locked row is greyed and carries no Problems badge', () => {
     assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
   });
 
-  it('is greyed', async () => {
-    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+  it('is greyed', () => {
+    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
+    const provider = new ImplicitMasterDecorationProvider(() => new Set([rowUri.toString()]));
 
-    const decoration = await provider.provideFileDecoration(present(node.resourceUri, 'the locked row\'s resourceUri'));
-
-    assert.deepStrictEqual(decoration?.color, new vscode.ThemeColor('disabledForeground'));
+    assert.deepStrictEqual(provider.provideFileDecoration(rowUri)?.color, new vscode.ThemeColor('disabledForeground'));
+    assert.strictEqual(provider.provideFileDecoration(vscode.Uri.file(path.join(dataFolder, 'Fallout4.esm'))), undefined);
   });
 });
 

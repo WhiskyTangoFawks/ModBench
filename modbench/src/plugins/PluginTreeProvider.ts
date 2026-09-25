@@ -300,8 +300,7 @@ class PluginCopySet {
     return this.copies.has(PluginCopySet.key(name, origin));
   }
 
-  // A `PlacedSummary` names no copy. Under a load-order row it is the load-order copy, and the
-  // load order holds one copy of each name.
+  // debt #1070
   hasLoadOrderCopyNamed(name: string): boolean {
     return this.names.has(name.toLowerCase());
   }

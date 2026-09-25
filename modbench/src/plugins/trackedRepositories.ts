@@ -35,18 +35,21 @@ export async function registerTrackedRepositories<T>(
   return repositories;
 }
 
-/** Reindexed by filename because a field edit knows the plugin it edited, never the folder.
- *  Filename is unique among plugins an edit can reach: a file-level loser is read-only
- *  (ADR-0012). */
+/** ADR-0012 invariant 1: a plugin is `(origin, filename)` on every map key. */
+export function pluginCopyKey(name: string, origin: string): string {
+  return `${origin.toLowerCase()}|${name.toLowerCase()}`;
+}
+
+/** Reindexed by plugin copy because a field edit knows the plugin it edited, never the folder. */
 export function pluginRepositoriesOf<T>(
-  plugins: readonly Pick<PluginMetadata, 'name' | 'path'>[],
+  plugins: readonly Pick<PluginMetadata, 'name' | 'origin' | 'path'>[],
   folderRepositories: ReadonlyMap<string, T>,
   pluginFolder: PluginFolder,
 ): Map<string, T> {
   const byPlugin = new Map<string, T>();
   for (const plugin of plugins) {
     const repository = folderRepositories.get(pluginFolder(plugin.path));
-    if (repository) byPlugin.set(plugin.name, repository);
+    if (repository) byPlugin.set(pluginCopyKey(plugin.name, plugin.origin), repository);
   }
   return byPlugin;
 }

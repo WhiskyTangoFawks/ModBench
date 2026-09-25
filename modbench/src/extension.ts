@@ -193,7 +193,7 @@ export function activate(context: vscode.ExtensionContext) {
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-      refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
+      refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
   );
@@ -293,6 +293,7 @@ function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): FilterScripts {
     folder: scriptsPath,
     sqlFiles: () => (fs.existsSync(scriptsPath) ? fs.readdirSync(scriptsPath).filter((f) => f.endsWith('.sql')) : []),
     read: (name) => fs.readFileSync(path.join(scriptsPath, name), 'utf8'),
+    nameOf: (uri) => path.basename(uri.fsPath),
   };
 }
 
