@@ -396,7 +396,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaseline_AndLeavesTheEditToTheUsersRebase()
+    public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaseline_AndLeavesTheEditInTheWorkingTree()
     {
         var fx = Owned(await Watched());
         var formKey = await Client.FirstFormKey(Plugin);
@@ -409,35 +409,9 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 
         answered.EnsureSuccessStatusCode();
         Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
-        var rebase = await rebased.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Refused", rebase.GetProperty("outcome").GetString());
-        Assert.Contains(".json", rebase.GetProperty("refusalReason").GetString().Require(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task RebasingACleanEditBranch_ReportsClean()
-    {
-        Owned(await Watched());
-
-        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
-
-        rebased.EnsureSuccessStatusCode();
-        Assert.Equal(
-            "Clean",
-            (await rebased.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outcome").GetString());
-    }
-
-    [Theory]
-    [InlineData("/plugins/rebase")]
-    [InlineData("/plugins/rebase/continue")]
-    public async Task RebasingAnOriginNoLoadOrderHolds_Is404(string route)
-    {
-        Owned(await Watched());
-
-        var response = await Client.PostAsJsonAsync(route, new { origin = "NoSuchMod" });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains(
+            TrackedTree.GitStatus(OtherTool.ModFolderOf(fx, Origin)),
+            line => line.Contains(".json", StringComparison.Ordinal));
     }
 
     // ADR-0003: the answer covers every changed tracked file, not the plugin alone. A baseline that

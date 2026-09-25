@@ -156,10 +156,8 @@ public sealed class SourceRepositoryAbsorbCommitsTests
             var gitDir = Path.Combine(modFolder, ".git");
             var branchBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
             var headBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
-            // RebaseEditBranch refuses before touching the branch whenever the source tree carries
-            // dirt, naming every dirty path in the refusal — a public probe for exactly that fact.
-            var dirtBefore = SourceRepository.RebaseEditBranch(modFolder);
-            Assert.Equal(RebaseOutcome.Refused, dirtBefore.Outcome);
+            var dirtBefore = GitProbe.Run(gitDir, modFolder, "status", "--porcelain");
+            Assert.Contains(relativePath, dirtBefore, StringComparison.Ordinal);
             var fileContentBefore = File.ReadAllText(fullPath);
 
             PluginBaselines.CommitToMain(
@@ -167,9 +165,7 @@ public sealed class SourceRepositoryAbsorbCommitsTests
 
             Assert.Equal(branchBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
             Assert.Equal(headBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim());
-            var dirtAfter = SourceRepository.RebaseEditBranch(modFolder);
-            Assert.Equal(RebaseOutcome.Refused, dirtAfter.Outcome);
-            Assert.Equal(dirtBefore.RefusalReason, dirtAfter.RefusalReason);
+            Assert.Equal(dirtBefore, GitProbe.Run(gitDir, modFolder, "status", "--porcelain"));
             Assert.Equal(fileContentBefore, File.ReadAllText(fullPath));
             Assert.Equal(EditBranch.Name, branchBefore);
         }

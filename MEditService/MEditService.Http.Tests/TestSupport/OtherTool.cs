@@ -108,6 +108,11 @@ internal static class OtherTool
             "restore", "--", Path.GetRelativePath(modFolder, document).Replace('\\', '/'));
     }
 
+    /// <summary>The user rebasing the edit branch onto <c>main</c> in Source Control: git moves the
+    /// branch, not Modbench (ADR-0007 invariant 5).</summary>
+    internal static void RebasesTheEditBranch(string modFolder) =>
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "rebase", "refs/heads/main");
+
     internal static string SourceDocumentCarrying(string modFolder, string plugin, string text) =>
         Directory
             .EnumerateFiles(SourceRepository.RootIn(modFolder, plugin), "*.json", SearchOption.AllDirectories)

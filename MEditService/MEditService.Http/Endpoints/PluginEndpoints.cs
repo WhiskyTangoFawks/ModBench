@@ -123,21 +123,6 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Origin-scoped — the repo, not any one plugin, is the unit of baselines and rebase.
-        app.MapPost("/plugins/rebase", Rebase)
-            .WithName("RebaseEditBranch")
-            .WithTags(Tag)
-            .Produces<RebaseResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404);
-
-        app.MapPost("/plugins/rebase/continue", ContinueRebase)
-            .WithName("ContinueRebaseEditBranch")
-            .WithTags(Tag)
-            .Produces<RebaseResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404);
-
         return app;
     }
 
@@ -359,40 +344,6 @@ public static class PluginEndpoints
         logger.LogWarning("No tracked mod in the load order has origin {Origin}", origin);
         return WriteEndpointMapping.NotTrackedMod(origin);
     }
-
-    // The manual rebase, origin-scoped — the repo is the unit of baselines and rebase, not
-    // any one plugin inside it.
-    internal static IResult Rebase(RebaseRequest req, RebaseEditBranchHandler handler, ILoggerFactory loggerFactory)
-    {
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        return Rebased(
-            handler.RebaseEditBranch(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
-    }
-
-    internal static IResult ContinueRebase(
-        RebaseRequest req, ContinueRebaseEditBranchHandler handler, ILoggerFactory loggerFactory)
-    {
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        return Rebased(
-            handler.ContinueRebase(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
-    }
-
-    // An origin no registered plugin carries names no repository, which is a 404 rather than one of
-    // the three outcomes a rebase reports.
-    private static IResult Rebased(RebaseResult? result, string origin, ILogger logger)
-    {
-        if (result is null)
-        {
-            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
-            return WriteEndpointMapping.OriginNotFound(origin);
-        }
-        return Results.Ok(new RebaseResponse(result.Outcome, result.RefusalReason, result.ConflictedPaths));
-    }
-
 }
 
 // Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
@@ -423,15 +374,7 @@ public record TrackResponse(
 public record CompileRequest(string Origin, string? Ref);
 
 // Absorb / Keep are origin-scoped — the mod, not one plugin in it, is
-// the unit of a baseline, matching RebaseRequest's own shape.
+// the unit of a baseline.
 public record ExternalChangeActionRequest(string Origin);
 
 public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);
-
-// Origin-scoped — the repo is the unit of baselines and rebase.
-public record RebaseRequest(string Origin);
-
-// Outcome is the RebaseOutcome enum rather than a string so the OpenAPI schema, and the generated
-// client, get the closed union. ConflictedPaths is the extension's cue to open each path in
-// VS Code's merge editor.
-public record RebaseResponse(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);

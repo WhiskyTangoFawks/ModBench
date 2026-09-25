@@ -55,16 +55,4 @@ public sealed class WireEnumSerializationTests
 
         Assert.Contains("\"state\":\"Reconciling\"", json, StringComparison.Ordinal);
     }
-
-    [Theory]
-    [InlineData(RebaseOutcome.Clean, "Clean")]
-    [InlineData(RebaseOutcome.Refused, "Refused")]
-    [InlineData(RebaseOutcome.Conflicted, "Conflicted")]
-    public async Task RebaseResponseOutcome_SerializesAsMemberName(RebaseOutcome outcome, string expected)
-    {
-        var options = await AppSerializerOptionsAsync();
-        var json = JsonSerializer.Serialize(new RebaseResponse(outcome, null, []), options);
-
-        Assert.Contains($"\"outcome\":\"{expected}\"", json, StringComparison.Ordinal);
-    }
 }

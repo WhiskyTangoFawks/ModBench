@@ -86,13 +86,8 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>A registered plugin carries no such origin — a 404, well-formed and addressed at
-    /// nothing real.</summary>
-    internal static IResult OriginNotFound(string origin) =>
-        Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
-
     /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now"
-    /// rather than <see cref="OriginNotFound"/>'s 404.</summary>
+    /// rather than a 404.</summary>
     internal static IResult NotTrackedMod(string origin) =>
         Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
 

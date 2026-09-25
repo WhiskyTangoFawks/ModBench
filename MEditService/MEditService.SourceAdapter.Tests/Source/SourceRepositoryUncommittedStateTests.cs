@@ -5,55 +5,10 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Uncommitted state through the two public doors that surface it: a rebase's own refusal,
-/// and the tracked-files-outside-source query (ADR-0003).</summary>
+/// <summary>Uncommitted state through the tracked-files-outside-source query (ADR-0003).</summary>
 public sealed class SourceRepositoryUncommittedStateTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-uncommitted-").FullName;
-
-    [Fact]
-    public void RebaseEditBranch_RefusesOverAnUnstagedEdit()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var relativePath = Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json");
-            var files = new[] { new TreeFile(relativePath, "{\"a\":1}"u8.ToArray()) };
-            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
-
-            // Plain unstaged edit — never `git add`ed. A rebase refusal built off staged changes
-            // only would miss this and report clean.
-            File.WriteAllText(Path.Combine(modFolder, relativePath), "{\"a\":2}");
-
-            var result = SourceRepository.RebaseEditBranch(modFolder);
-
-            Assert.Equal(RebaseOutcome.Refused, result.Outcome);
-            Assert.Contains(relativePath.Replace('\\', '/'), result.RefusalReason, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void RebaseEditBranch_IsCleanForARepoWithNoDirt()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
-            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
-
-            var result = SourceRepository.RebaseEditBranch(modFolder);
-
-            Assert.Equal(RebaseOutcome.Clean, result.Outcome);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
 
     // ---- what git last saw is the index (ADR-0003 invariant 3) ----
 

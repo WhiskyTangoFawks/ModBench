@@ -54,12 +54,6 @@ internal static class TestEditService
     internal static KeepExternalChangeHandler KeepHandler(LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null) =>
         Over(holder, logging).GetRequiredService<KeepExternalChangeHandler>();
 
-    internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<RebaseEditBranchHandler>();
-
-    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<ContinueRebaseEditBranchHandler>();
-
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CreatePluginHandler>();
 

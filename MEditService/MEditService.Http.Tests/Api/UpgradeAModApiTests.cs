@@ -60,7 +60,7 @@ public sealed class UpgradeAModApiTests : HostedTests
     }
 
     [Fact]
-    public async Task TheBaselineAnswerToAnUpgrade_ThenRebaseEditBranch_AnswersTheNextReadWithTheUpgradedContent()
+    public async Task TheBaselineAnswerToAnUpgrade_ThenTheUsersRebase_AnswersTheNextReadWithTheUpgradedContent()
     {
         using var fx = await AnInstalledTrackedMod();
         var formKey = await Client.FirstFormKey(Plugin);
@@ -72,10 +72,9 @@ public sealed class UpgradeAModApiTests : HostedTests
         answered.EnsureSuccessStatusCode();
         Assert.Empty((await answered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         var before = await Client.Sequence();
-        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
 
-        rebased.EnsureSuccessStatusCode();
-        Assert.Equal("Clean", (await rebased.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outcome").GetString());
+        OtherTool.RebasesTheEditBranch(OtherTool.ModFolderOf(fx, Origin));
+
         await Client.SequenceReaches(before + 1);
         var height = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");

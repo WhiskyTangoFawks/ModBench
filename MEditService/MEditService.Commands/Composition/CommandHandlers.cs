@@ -95,12 +95,6 @@ public static class CommandHandlers
             sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
-        services.AddSingleton(sp => new RebaseEditBranchHandler(
-            sp.GetRequiredService<LoadOrderHolder>()));
-
-        services.AddSingleton(sp => new ContinueRebaseEditBranchHandler(
-            sp.GetRequiredService<LoadOrderHolder>()));
-
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),

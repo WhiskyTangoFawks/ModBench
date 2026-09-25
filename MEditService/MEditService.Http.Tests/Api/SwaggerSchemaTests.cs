@@ -238,9 +238,6 @@ public sealed class SwaggerSchemaTests
     [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
     [InlineData("TrackPhase", new[] { "Idle", "Parsing", "Serializing", "Committing" })]
     [InlineData("LoadOrderState", new[] { "None", "Reconciling", "Ready", "HeldElsewhere", "Failed" })]
-    // RebaseOutcome reaches the wire only because RebaseResponse.Outcome names the enum; it was a
-    // bare `string` filled by `.ToString()`, so the schema could say nothing better than "string".
-    [InlineData("RebaseOutcome", new[] { "Clean", "Refused", "Conflicted" })]
     public async Task WireEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
     {
         var root = await GetSchemaAsync();
