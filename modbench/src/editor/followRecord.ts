@@ -8,19 +8,33 @@ interface FormKeyTracker<Panel> {
   setFormKey(panel: Panel, formKey: string): void;
 }
 
+/** Where an edit is addressed: the record, and the plugin copy whose column it was made in
+ *  (ADR-0012). */
+export interface EditAddress { formKey: string; plugin: string; origin: string }
+
 /** One edit a panel makes: the write, sent to the FormKey the record is at now. */
-export type EditGate = (formKey: string, write: (formKey: string) => Promise<string | undefined>) => Promise<void>;
+export type EditGate = (address: EditAddress, write: (formKey: string) => Promise<string | undefined>) => Promise<void>;
 
 interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
+
+// One plugin copy's record moved by an edit of its FormID. `readAt` is when the tab read `to`: an
+// address taken after it names what it means.
+interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
 
 /** A panel with an edit in flight reads again once, after the answer, under the FormKey it then
  *  shows, and only on mEdit's report of the change, which may land first (editor.md, States 5). */
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
-  // A panel whose record's FormID changed: the webview names `from` until it reads `to`.
-  private readonly moved = new Map<Panel, { from: string; to: string; read: boolean }>();
+  private readonly moves = new Map<Panel, Move[]>();
+  private clock = 0;
 
   constructor(private readonly tracker: FormKeyTracker<Panel>) {}
+
+  /** The panel's gate for edits addressed from now on. */
+  gate(panel: Panel): EditGate {
+    const addressedAt = ++this.clock;
+    return (address, write) => this.edit(panel, address, addressedAt, write);
+  }
 
   /** The notification wiring's gate: true holds the panel's read, keeping the keys reported. */
   holds(panel: Panel, keys: readonly string[]): boolean {
@@ -29,8 +43,8 @@ export class EditsInFlight<Panel extends FollowedPanel> {
       for (const key of keys) entry.reported.add(key);
       return true;
     }
-    const move = this.moved.get(panel);
-    if (move && keys.includes(move.to)) move.read = true;
+    const shown = this.tracker.formKeyOf(panel);
+    if (shown && keys.includes(shown)) this.markRead(panel, shown);
     return false;
   }
 
@@ -45,14 +59,30 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return this.awaitsRead(panel);
   }
 
-  async edit(panel: Panel, formKey: string, write: (formKey: string) => Promise<string | undefined>): Promise<void> {
-    const target = this.targetOf(panel, formKey);
+  /** The FormKey a panel waiting on a report it may have missed reads now, marked read. */
+  release(panel: Panel): string | undefined {
+    if (this.inFlight.has(panel) || !this.awaitsRead(panel)) return undefined;
+    const shown = this.tracker.formKeyOf(panel);
+    if (shown) this.markRead(panel, shown);
+    return shown;
+  }
+
+  /** A closed panel: nothing of it is held any longer. */
+  forget(panel: Panel): void {
+    this.inFlight.delete(panel);
+    this.moves.delete(panel);
+  }
+
+  private async edit(
+    panel: Panel, address: EditAddress, addressedAt: number, write: (formKey: string) => Promise<string | undefined>,
+  ): Promise<void> {
+    const target = { ...address, formKey: this.targetOf(panel, address, addressedAt) };
     const entry = this.inFlight.get(panel) ?? { writes: 0, reported: new Set<string>(), refreshed: false };
     entry.writes += 1;
     this.inFlight.set(panel, entry);
     let newFormKey: string | undefined;
     try {
-      newFormKey = await write(target);
+      newFormKey = await write(target.formKey);
     } finally {
       entry.writes -= 1;
       if (entry.writes === 0) this.inFlight.delete(panel);
@@ -61,22 +91,22 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     if (entry.writes === 0) this.settle(panel, entry);
   }
 
-  // An edit of the FormID takes the tab with the record (editor.md, The FormID).
-  private follow(panel: Panel, formKey: string, newFormKey: string): void {
-    if (this.tracker.formKeyOf(panel) !== formKey) return;
+  // An edit of the FormID moves its own plugin copy's record, and the tab goes with it (editor.md,
+  // The FormID).
+  private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
+    const moves = this.moves.get(panel) ?? [];
+    moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, readAt: undefined });
+    this.moves.set(panel, moves);
+    if (this.tracker.formKeyOf(panel) !== target.formKey) return;
     this.tracker.setFormKey(panel, newFormKey);
-    if (panel.title === formKey) panel.title = newFormKey;
-    const previous = this.moved.get(panel);
-    const named = previous && !previous.read && previous.to === formKey ? previous.from : formKey;
-    this.moved.set(panel, { from: named, to: newFormKey, read: false });
+    if (panel.title === target.formKey) panel.title = newFormKey;
   }
 
   // The last answer in: what the held reports and refreshes asked for, once.
   private settle(panel: Panel, entry: InFlight): void {
     const shown = this.tracker.formKeyOf(panel);
     if (shown && entry.reported.has(shown)) {
-      const move = this.moved.get(panel);
-      if (move?.to === shown) move.read = true;
+      this.markRead(panel, shown);
       this.post(panel, { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: shown });
     } else if (entry.refreshed && !this.awaitsRead(panel)) {
       this.post(panel, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
@@ -84,14 +114,24 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   }
 
   private awaitsRead(panel: Panel): boolean {
-    const move = this.moved.get(panel);
-    return move !== undefined && !move.read && this.tracker.formKeyOf(panel) === move.to;
+    const shown = this.tracker.formKeyOf(panel);
+    return (this.moves.get(panel) ?? []).some(move => move.to === shown && move.readAt === undefined);
   }
 
-  // The webview names the old FormKey until it reads the new one.
-  private targetOf(panel: Panel, formKey: string): string {
-    const move = this.moved.get(panel);
-    return move && formKey === move.from && this.tracker.formKeyOf(panel) === move.to ? move.to : formKey;
+  private markRead(panel: Panel, formKey: string): void {
+    for (const move of this.moves.get(panel) ?? []) {
+      if (move.to === formKey && move.readAt === undefined) move.readAt = ++this.clock;
+    }
+  }
+
+  // The same copy's record, addressed before the tab read where it moved to, is where it moved to.
+  private targetOf(panel: Panel, address: EditAddress, addressedAt: number): string {
+    let formKey = address.formKey;
+    for (const move of this.moves.get(panel) ?? []) {
+      const sameCopy = move.plugin === address.plugin && move.origin === address.origin;
+      if (sameCopy && move.from === formKey && (move.readAt === undefined || addressedAt < move.readAt)) formKey = move.to;
+    }
+    return formKey;
   }
 
   private post(panel: Panel, message: ExtensionToWebview): void {

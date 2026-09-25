@@ -15,6 +15,9 @@ function fakeActiveRecordTracker() {
   };
 }
 
+// The copy of Mod.esp the edits are made in.
+const COPY = { formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' };
+
 const rowsChanged = (keys: string[]) =>
   ({ kind: 'rows-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
 
@@ -44,7 +47,7 @@ describe('EditsInFlight', () => {
   it('reads the new FormKey once mEdit reports it, when the answer lands first, and posts nothing before', async () => {
     const { client, panel, tracker, edits } = openOn('000800:Mod.esp');
 
-    await edits.edit(panel, '000800:Mod.esp', () => Promise.resolve('000900:Mod.esp'));
+    await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
 
     expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
     expect(loadsOf(panel)).toEqual([]);
@@ -56,7 +59,7 @@ describe('EditsInFlight', () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
     const { write, answer } = pendingAnswer();
 
-    const editing = edits.edit(panel, '000800:Mod.esp', write);
+    const editing = edits.gate(panel)(COPY, write);
     client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     expect(loadsOf(panel)).toEqual([]);
     answer('000900:Mod.esp');
@@ -69,7 +72,7 @@ describe('EditsInFlight', () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
     const { write, answer } = pendingAnswer();
 
-    const editing = edits.edit(panel, '000800:Mod.esp', write);
+    const editing = edits.gate(panel)(COPY, write);
     client.emit(rowsChanged(['000800:Mod.esp']));
     answer(undefined);
     await editing;
@@ -88,7 +91,7 @@ describe('EditsInFlight', () => {
     subscribeRecordPanelsToNotifications(client, new Set([editing, other]), tracker, edits);
     const { write, answer } = pendingAnswer();
 
-    const edit = edits.edit(editing, '000800:Mod.esp', write);
+    const edit = edits.gate(editing)(COPY, write);
     client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
     answer('000900:Mod.esp');
     await edit;
@@ -102,7 +105,7 @@ describe('EditsInFlight', () => {
   it('holds a refresh of the comparison between the answer and the report, which then reads the new FormKey', async () => {
     const { client, panel, edits } = openOn('000800:Mod.esp');
 
-    await edits.edit(panel, '000800:Mod.esp', () => Promise.resolve('000900:Mod.esp'));
+    await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
     announceConflictsComputed(new Set([panel]), edits);
     expect(loadsOf(panel)).toEqual([]);
     client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
@@ -118,7 +121,7 @@ describe('EditsInFlight', () => {
     const { panel, edits } = openOn('000800:Mod.esp');
     const { write, answer } = pendingAnswer();
 
-    const editing = edits.edit(panel, '000800:Mod.esp', write);
+    const editing = edits.gate(panel)(COPY, write);
     announceConflictsComputed(new Set([panel]), edits);
     expect(loadsOf(panel)).toEqual([]);
     answer(undefined);
@@ -127,12 +130,82 @@ describe('EditsInFlight', () => {
     expect(loadsOf(panel)).toEqual([{ type: 'conflictsComputed' }]);
   });
 
+  // ADR-0012 invariant 1: an edit of the FormID moves the one plugin copy it was made in. The
+  // override in another plugin, and the other copy of Mod.esp, stay under the old FormKey.
+  describe('a write addressed to the old FormKey', () => {
+    const sentTo = async (edits: EditsInFlight<ReturnType<typeof fakePanel>>, panel: ReturnType<typeof fakePanel>,
+      address: typeof COPY, gate = edits.gate(panel)) => {
+      const targets: string[] = [];
+      await gate(address, formKey => { targets.push(formKey); return Promise.resolve(undefined); });
+      return targets;
+    };
+
+    it('in the moved copy goes to the new FormKey, before the tab reads it', async () => {
+      const { panel, edits } = openOn('000800:Mod.esp');
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      expect(await sentTo(edits, panel, COPY)).toEqual(['000900:Mod.esp']);
+    });
+
+    it('in an override\'s column goes to its own old FormKey', async () => {
+      const { panel, edits } = openOn('000800:Mod.esp');
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      expect(await sentTo(edits, panel, { ...COPY, plugin: 'Other.esp', origin: 'ModB' })).toEqual(['000800:Mod.esp']);
+    });
+
+    it('in the other copy of the plugin is untouched', async () => {
+      const { panel, edits } = openOn('000800:Mod.esp');
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+      expect(await sentTo(edits, panel, { ...COPY, origin: 'ModB' })).toEqual(['000800:Mod.esp']);
+    });
+
+    // An extended editor keeps the address it was opened on, so its saves follow the move
+    // however late they come; a write addressed after the tab reads the new key names what it means.
+    it('from a gate taken before the move goes to the new FormKey after the tab reads it, and one taken after does not', async () => {
+      const { client, panel, edits } = openOn('000800:Mod.esp');
+      const openedBefore = edits.gate(panel);
+      await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+      client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+
+      expect(await sentTo(edits, panel, COPY, openedBefore)).toEqual(['000900:Mod.esp']);
+      expect(await sentTo(edits, panel, COPY)).toEqual(['000800:Mod.esp']);
+    });
+  });
+
+  it('forgets a closed panel: nothing of it is held or sent elsewhere', async () => {
+    const { panel, edits } = openOn('000800:Mod.esp');
+    await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+    edits.forget(panel);
+
+    expect(edits.holdsRefresh(panel)).toBe(false);
+    const targets: string[] = [];
+    await edits.gate(panel)(COPY, formKey => { targets.push(formKey); return Promise.resolve(undefined); });
+    expect(targets).toEqual(['000800:Mod.esp']);
+  });
+
+  // A report missed while the stream was down would leave the tab waiting for ever.
+  it('reads the new FormKey when the stream reconnects, and refreshes as usual afterwards', async () => {
+    const { client, panel, edits } = openOn('000800:Mod.esp');
+    await edits.gate(panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+
+    client.reconnected();
+    announceConflictsComputed(new Set([panel]), edits);
+
+    expect(loadsOf(panel)).toEqual([
+      { type: 'loadRecord', formKey: '000900:Mod.esp' },
+      { type: 'conflictsComputed' },
+    ]);
+  });
+
   it('retitles a tab titled with the old FormKey, and leaves one titled with the EditorID', async () => {
     const byFormKey = openOn('000800:Mod.esp', '000800:Mod.esp');
     const byEditorId = openOn('000800:Mod.esp', 'MovedNpc');
 
-    await byFormKey.edits.edit(byFormKey.panel, '000800:Mod.esp', () => Promise.resolve('000900:Mod.esp'));
-    await byEditorId.edits.edit(byEditorId.panel, '000800:Mod.esp', () => Promise.resolve('000900:Mod.esp'));
+    await byFormKey.edits.gate(byFormKey.panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
+    await byEditorId.edits.gate(byEditorId.panel)(COPY, () => Promise.resolve('000900:Mod.esp'));
 
     expect(byFormKey.panel.title).toBe('000900:Mod.esp');
     expect(byEditorId.panel.title).toBe('MovedNpc');

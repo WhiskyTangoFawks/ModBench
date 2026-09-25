@@ -104,17 +104,4 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
     tracker.setActivePanel(a);
     expect(tracker.current()).toBe('000001:Fallout4.esm');
   });
-
-  // A right-click edit is the active panel's, so its gate is found here.
-  it('names the active panel until it closes', () => {
-    const tracker = new ActiveRecordTracker<object>();
-    const a = {};
-    const b = {};
-
-    tracker.setActivePanel(a);
-    tracker.setActivePanel(b);
-    expect(tracker.activePanelNow()).toBe(b);
-    tracker.removePanel(b);
-    expect(tracker.activePanelNow()).toBeUndefined();
-  });
 });

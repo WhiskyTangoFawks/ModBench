@@ -50,7 +50,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     channel: fakeChannel(), reporter: fakeReporter,
     meditClient, onRecordEdited,
     // No panel holds this suite's reads: the gate sends each write where it was addressed.
-    editInFlight: async (formKey, write) => { await write(formKey); },
+    editInFlight: async (address, write) => { await write(address.formKey); },
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     ...overrides,

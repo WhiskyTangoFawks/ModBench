@@ -41,7 +41,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
-    editInFlight: (formKey, write) => edits.edit(panel, formKey, write),
+    editInFlight: edits.gate(panel),
   };
 }
 
@@ -192,5 +192,5 @@ async function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  await deps.editInFlight(m.formKey, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
+  await deps.editInFlight(m, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
 }
