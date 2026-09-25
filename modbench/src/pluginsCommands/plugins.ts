@@ -73,21 +73,18 @@ export type PluginSyncResult =
   | { applied: true; wrote: boolean; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
-// `inData` is presence only, never a source of added lines; `undefined` — an unresolved game
-// directory — makes presence unknowable, so nothing is dropped.
+// `inData` is presence only, never a source of added lines.
 function pluginLinesDelta(
   listed: readonly string[],
   provided: ReadonlyMap<string, string>,
-  inData: ReadonlySet<string> | undefined,
+  inData: ReadonlySet<string>,
 ): PluginLinesDelta {
   const listedFolded = new Set(listed.map(foldPath));
   const added = [...provided]
     .filter(([folded]) => !listedFolded.has(folded))
     .map(([, real]) => real)
     .sort((a, b) => foldPath(a).localeCompare(foldPath(b)));
-  const dropped = inData === undefined
-    ? []
-    : listed.filter((name) => !provided.has(foldPath(name)) && !inData.has(foldPath(name)));
+  const dropped = listed.filter((name) => !provided.has(foldPath(name)) && !inData.has(foldPath(name)));
   return { added, dropped };
 }
 
@@ -101,21 +98,20 @@ export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
  *  presence, both handed in — this walks nothing. */
 export async function syncPlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
-  inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
+  inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
 ): Promise<PluginSyncResult> {
+  // Without the Data folder's listing or the implicit masters, a line for a Data plugin is
+  // dropped and a mod's copy of a vanilla master earns one (update-load-order-file, Refusals).
+  if (inData.kind === 'unresolved') return { applied: false, refusal: 'the game folder is not found' };
+  if (inData.kind === 'unreadable') {
+    return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
+  }
   let addable: ReadonlyMap<string, string>;
   try {
     const implicit = await implicitMasters();
-    // Without them every verdict is a guess: a mod's copy of a vanilla master earns a line, and
-    // a line for one is dropped. So the run does nothing, as an unresolved game directory
-    // already does for dropping.
     if (implicit === undefined) {
-      log('[plugins] the implicit masters are unknown — adding and dropping nothing this run');
-      return { applied: true, wrote: false, added: [], dropped: [] };
+      return { applied: false, refusal: 'mEdit cannot say which plugins the game loads with no line' };
     }
-    // A folder that resolved and could not be read leaves every verdict a guess the same way, so
-    // the run refuses with the read's own reason rather than adding against half an answer.
-    if (inData.kind === 'unreadable') return { applied: false, refusal: inData.reason };
     // An implicit master is left out: the tree gives it a row of its own, never from a line, so
     // a mod's copy of one must not earn a line.
     const implicitFolded = new Set(implicit.map(foldPath));
@@ -123,7 +119,7 @@ export async function syncPlugins(
   } catch (err) {
     return refuse(err);
   }
-  const inDataNames = inData.kind === 'listed' ? inData.names : undefined;
+  const inDataNames = inData.names;
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
   const result = await modifyPlugins(instanceRoot, profile, (text) => {

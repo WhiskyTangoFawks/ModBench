@@ -370,7 +370,7 @@ export async function syncMods(
   instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
 ): Promise<ModSyncResult> {
   if (modFolders === undefined) {
-    return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist, so modlist.txt is left as it is.` };
+    return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist` };
   }
   let added: string[] = [];
   let dropped: string[] = [];

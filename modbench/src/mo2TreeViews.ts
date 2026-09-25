@@ -15,8 +15,9 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { registerNameFilter } from './nameFilter';
+import { messageLine, registerNameFilter } from './nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
+import type { SyncMessage } from './syncFailureReport';
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
@@ -25,6 +26,7 @@ export function createModListView(
   own: Own,
   modListProvider: ModListProvider,
   log: (line: string) => void,
+  modSync: SyncMessage,
 ): { modListView: vscode.TreeView<ModlistNode> } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
@@ -41,8 +43,9 @@ export function createModListView(
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    viewMessage: () => modListProvider.emptyListMessage(),
+    viewMessage: () => messageLine(modListProvider.emptyListMessage(), modSync.message()),
     onRowsChanged: modListProvider.onDidChangeTreeData,
+    onViewMessageChanged: (listener) => modSync.onMessageChanged(listener),
   }));
   const showCount = () => modListFilter.setBaseDescription(modListProvider.description());
   showCount();
