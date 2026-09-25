@@ -777,7 +777,17 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             return;
         }
 
-        index.RefreshByKeys(key, modFolder, formKeys);
+        try
+        {
+            index.RefreshByKeys(key, modFolder, formKeys);
+        }
+        catch (AmbiguousSourceUnitException)
+        {
+            // Two documents hold one of these keys: the whole read is what diagnoses the tree on the
+            // copy, as a first ingest would.
+            ReindexHeldCopy(key);
+            return;
+        }
         ReapplyFilter();
     }
 

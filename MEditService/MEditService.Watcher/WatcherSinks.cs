@@ -143,7 +143,12 @@ internal sealed class WatcherSinks
         {
             if (SourceRepository.CarriesNoRecord(path)) continue;
             if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is { } formKey)
+            {
+                // Named for another key or none: a copy or a hand rename, which a refresh by key
+                // cannot tell from the document the key names.
+                if (SourceRepository.PathCarrying([path], change.PluginName, formKey) is null) return null;
                 declared.Add(formKey);
+            }
             else if (SourceRepository.FormKeyCommittedAt(change.ModFolder, path, change.PluginName) is { } committed)
                 namedByHead.Add(committed);
             else
