@@ -48,10 +48,9 @@ internal static class RecordViewBuilder
         }
         else if (col.DuckDbType == "VARCHAR")
         {
-            // One projection covers plain strings, enums, FormLinks and translated strings: a
-            // translated string is an object ({TargetLanguage, Value}), so probe .Value first; the
-            // probe returns NULL for a bare scalar and COALESCE moves on.
-            raw = $"COALESCE(json_extract_string(body, '$.{col.PropertyName}.Value'), json_extract_string(body, {path}))";
+            // One projection covers plain strings, enums, FormLinks and translated strings: the
+            // translated-string read returns NULL for a bare scalar and COALESCE moves on.
+            raw = $"COALESCE({TranslatedStringSql.Resolved("body", $"$.{col.PropertyName}")}, json_extract_string(body, {path}))";
         }
         else
         {
