@@ -30,8 +30,9 @@ or an installed mod the user confirmed. Install never infers the target from dis
 6. The mod lands:
    - **A new mod.** `meta.ini` is written in the staged tree first. Then one rename moves the tree
      into `mods/<name>`, so the folder is never seen half built.
-   - **An upgrade.** The folder's contents are replaced in place, except `.git`. The folder is never
-     renamed, so its identity, its repository and its watchers survive (ADR-0007).
+   - **An upgrade.** The folder's contents are replaced in place, except `.git`, `.gitignore` and
+     `source/`. The folder is never renamed, so its identity, its repository and its watchers
+     survive (ADR-0007).
 7. For a downloaded file, it marks the file installed in its `.meta`, for MO2's Downloads tab
    (ADR-0017, invariant 1).
 8. The install box removes the staging folder, then answers: applied, and whether the source was a
@@ -44,7 +45,7 @@ This flow waits for no hand-off. Install writes no `modlist.txt` line.
 - The Instance loader's watch sees the folder. `mod sync` adds its line at the winning end,
   disabled, and `plugin sync` adds its plugins' lines
   ([update-load-order-file](update-load-order-file.md)).
-- For a tracked mod, the Mod watcher sees the new bytes and the moved `meta.ini` version.
+- For a tracked mod, the Mod watcher sees the new bytes.
   [decompile-plugin](decompile-plugin.md)'s trigger asks, with the new baseline as the default.
   That question is the user's notice that tracked files changed.
 
