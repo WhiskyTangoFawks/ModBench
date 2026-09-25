@@ -24,11 +24,11 @@ public sealed class TrackedModSettled
     internal TrackedModSettled(INotificationPublisher notifications) => _notifications = notifications;
 
     /// <summary>Reads every plugin the load order holds in the mod off disk, then classifies. A
-    /// plugin caught mid-write is no verdict.</summary>
+    /// plugin caught mid-write is no verdict, and the mark is read as the load-time check reads it.</summary>
     public TrackedModSettledOutcome Handle(LoadOrderSnapshot loadOrder, string modFolder) =>
         ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is { } plugins
             ? Handle(loadOrder, modFolder, plugins)
-            : TrackedModSettledOutcome.NoQuestion;
+            : HandleUnreadable(loadOrder, modFolder);
 
     /// <summary>Classifies from bytes the caller already read, so a load-time readability probe and
     /// the settle share one read of each tracked binary.</summary>

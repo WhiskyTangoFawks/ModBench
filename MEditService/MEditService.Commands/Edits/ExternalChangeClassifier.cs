@@ -51,7 +51,8 @@ internal static class ExternalChangeClassifier
     /// <summary>The mark an interrupted compile left in a tracked mod, which needs none of its
     /// plugins' bytes, or null.</summary>
     public static ExternalChangeClassification.CompileUnfinished? UnfinishedCompile(string modFolder) =>
-        SourceRepository.IsTracked(modFolder) && CompileJournal.UnfinishedBatch(modFolder) is { } unfinished
+        SourceRepository.IsTracked(modFolder) && !CompileJournal.IsCompiling(modFolder)
+            && CompileJournal.UnfinishedBatch(modFolder) is { } unfinished
             ? new ExternalChangeClassification.CompileUnfinished(unfinished.Unlanded)
             : null;
 

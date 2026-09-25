@@ -126,6 +126,37 @@ public sealed class TrackedModSettledTests : IDisposable
     }
 
     [Fact]
+    public async Task Handle_PublishesCompileUnfinished_WhenABinaryCannotBeRead_AndAnotherPluginsCompileWasInterrupted()
+    {
+        await Assert.ThrowsAnyAsync<Exception>(() => CompileJournal.RunAsync(_mod.ModFolder, "Other.esp",
+            () => throw new InvalidOperationException("simulated crash")));
+        File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
+
+        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
+
+        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
+        Assert.Equal(
+            [new CompileUnfinishedNotification(new PluginAddress("Other.esp", SourceEditFixture.ModFolderOrigin))],
+            _notifications.Notifications);
+    }
+
+    [Fact]
+    public async Task Handle_PublishesNothing_WhenABinaryCannotBeRead_WhileACompileOfTheModRuns()
+    {
+        var outcome = TrackedModSettledOutcome.CompileUnfinished;
+
+        await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName, () =>
+        {
+            File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
+            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
+            return Task.FromResult(false);
+        });
+
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
+        Assert.Empty(_notifications.Notifications);
+    }
+
+    [Fact]
     public async Task Handle_StillWarnsOfAnInterruptedCompile_WhileACompileOfAnotherModRuns()
     {
         using var other = SourceEditFixture.Tracked();
