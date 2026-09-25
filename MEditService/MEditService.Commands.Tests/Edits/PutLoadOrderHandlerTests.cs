@@ -32,7 +32,7 @@ public sealed class PutLoadOrderHandlerTests
         Assert.Equal(DataFolder, _holder.Current.DataFolderPath);
         Assert.Equal(InstanceRoot, _holder.Current.InstanceRoot);
         Assert.Equal(GameRelease.Fallout4, _holder.Current.GameRelease);
-        Assert.Equal(["A.esp"], _holder.Current.Copies.Select(c => c.Name));
+        Assert.Equal(["A.esp"], _holder.Current.Plugins.Select(c => c.Name));
         Assert.Equal(_holder.Version, result.Version);
     }
 
@@ -61,27 +61,27 @@ public sealed class PutLoadOrderHandlerTests
         Assert.True(result.Applied);
         Assert.Equal(
             [("Fallout4.esm", 0), ("DLCRobot.esm", 1), ("A.esp", 2), ("B.esp", 3)],
-            _holder.Current.Copies.Select(c => (c.Name, c.Slot ?? -1)));
+            _holder.Current.Plugins.Select(c => (c.Name, c.Slot ?? -1)));
     }
 
     [Fact]
-    public void Put_RegistersEachForcedPlugin_AsAWinningEnabledCopyOfTheDataDirectory()
+    public void Put_RegistersEachForcedPlugin_AsAWinningEnabledPluginOfTheDataDirectory()
     {
         _adapter.Forced = ["Fallout4.esm"];
 
         Put(entries: Entry("A.esp", 0));
 
-        var forced = _holder.Current.Copies[0];
+        var forced = _holder.Current.Plugins[0];
         Assert.True(forced.IsForced);
         Assert.True(forced.Enabled);
         Assert.True(forced.Winning);
         Assert.Equal(PluginOrigin.DataDirectory, forced.Origin);
         Assert.Equal(Path.Combine(DataFolder, "Fallout4.esm"), forced.Path);
-        Assert.False(_holder.Current.Copies[1].IsForced);
+        Assert.False(_holder.Current.Plugins[1].IsForced);
     }
 
-    // A sent entry naming a forced plugin would give one file two copies; the forced row is the
-    // one the game loads, so it is the one kept.
+    // A sent entry naming a forced plugin would register two plugins that share a filename; the
+    // forced row is the one the game loads, so it is the one kept.
     [Fact]
     public void Put_DropsASentEntry_ThatNamesAForcedPlugin()
     {
@@ -89,11 +89,11 @@ public sealed class PutLoadOrderHandlerTests
 
         Put(entries: [Entry("fallout4.esm", 0), Entry("A.esp", 1)]);
 
-        Assert.Equal(["Fallout4.esm", "A.esp"], _holder.Current.Copies.Select(c => c.Name));
-        Assert.Equal([0, 2], _holder.Current.Copies.Select(c => c.Slot));
+        Assert.Equal(["Fallout4.esm", "A.esp"], _holder.Current.Plugins.Select(c => c.Name));
+        Assert.Equal([0, 2], _holder.Current.Plugins.Select(c => c.Slot));
     }
 
-    // An unlisted copy has no slot to offset: it stays unlisted.
+    // An unlisted plugin has no slot to offset: it stays unlisted.
     [Fact]
     public void Put_LeavesAnUnslottedEntryUnslotted_PastTheForcedPlugins()
     {
@@ -101,7 +101,7 @@ public sealed class PutLoadOrderHandlerTests
 
         Put(entries: new LoadOrderEntry("Loose.esp", "C:\\Instance\\mods\\ModA\\Loose.esp", "ModA", null, false, false));
 
-        Assert.Null(_holder.Current.Copies[1].Slot);
+        Assert.Null(_holder.Current.Plugins[1].Slot);
     }
 
     private sealed class ForcingAdapter : ReadOnlyPluginAdapter

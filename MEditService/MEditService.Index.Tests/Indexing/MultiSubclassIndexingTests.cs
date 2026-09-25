@@ -21,7 +21,7 @@ public class MultiSubclassIndexingTests
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var summary in reads.Search(new RecordQuery(RecordTypes: [table], Limit: 100, Offset: 0)).Items)
         {
-            var detail = reads.GetDocument(summary.FormKey, new PluginCopyKey(summary.Plugin, summary.Origin));
+            var detail = reads.GetDocument(summary.FormKey, new PluginAddress(summary.Plugin, summary.Origin));
             Assert.NotNull(detail);
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
             Assert.NotNull(value);

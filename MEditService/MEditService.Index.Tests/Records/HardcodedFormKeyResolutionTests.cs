@@ -25,7 +25,7 @@ public class HardcodedFormKeyResolutionTests
             }, origin: "ModA")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginCopyKey("Hardcoded.esp", "ModA");
+        var key = new PluginAddress("Hardcoded.esp", "ModA");
 
         var doc = index.RequireReads().GetDocument(npcKey.ToString(), key);
 

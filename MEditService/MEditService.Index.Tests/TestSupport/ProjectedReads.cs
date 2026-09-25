@@ -17,12 +17,12 @@ internal static class ProjectedReads
 
     internal static void Settle(this Indexer index) => index.ValidateIndex(null);
 
-    /// <summary>The committed state of one copy's record, which the override stack carries beside
-    /// its effective state; null when the copy holds no effective row for it.</summary>
-    internal static RecordDocument? HeadDocument(this IRecordReads reads, string formKey, PluginCopyKey plugin) =>
+    /// <summary>The committed state of one plugin's record, which the override stack carries beside
+    /// its effective state; null when the plugin holds no effective row for it.</summary>
+    internal static RecordDocument? HeadDocument(this IRecordReads reads, string formKey, PluginAddress plugin) =>
         reads.GetOverrideStack(formKey)?.Entries
             .SingleOrDefault(e => e.Plugin.Equals(plugin))?.Head;
 
-    internal static OverrideStackEntry? StackEntry(this IRecordReads reads, string formKey, PluginCopyKey plugin) =>
+    internal static OverrideStackEntry? StackEntry(this IRecordReads reads, string formKey, PluginAddress plugin) =>
         reads.GetOverrideStack(formKey)?.Entries.SingleOrDefault(e => e.Plugin.Equals(plugin));
 }

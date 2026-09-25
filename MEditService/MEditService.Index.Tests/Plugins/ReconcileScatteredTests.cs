@@ -27,9 +27,9 @@ public sealed class ReconcileScatteredTests
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         var reads = manager.RequireReads();
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("B.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("B.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -72,7 +72,7 @@ public sealed class ReconcileScatteredTests
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Same(firstRepo, manager.RequireReads());
-        Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data")));
+        Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginAddress("A.esp", "Data")));
     }
 
     // A single plugin whose binary data Mutagen can't parse (e.g.
@@ -93,9 +93,9 @@ public sealed class ReconcileScatteredTests
 
         var reads = manager.RequireReads();
         Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("Good.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginCopyKey("Bad.esp", "Data"))
+        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // A plugin whose open threw never returned, so it is never listed as indexed.
         Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");

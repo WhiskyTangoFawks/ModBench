@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-/// <summary>Whether a registered copy's file opens for the read that follows, asked of real files.
+/// <summary>Whether a registered plugin's file opens for the read that follows, asked of real files.
 /// Another tool owns them too, so the answer is about this moment and no other.</summary>
 public sealed class PluginReadabilityTests : IDisposable
 {

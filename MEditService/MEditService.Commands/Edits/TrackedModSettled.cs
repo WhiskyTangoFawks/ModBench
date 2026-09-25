@@ -81,6 +81,6 @@ public sealed class TrackedModSettled
     // A change's own Plugins list can be empty (a tracked-file-only change), so origin resolves off
     // the mod folder alone.
     private static string OriginOf(LoadOrderSnapshot loadOrder, string modFolder) =>
-        loadOrder.Copies.FirstOrDefault(copy => LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path) == modFolder)
+        loadOrder.Plugins.FirstOrDefault(plugin => LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) == modFolder)
             ?.Origin ?? "";
 }

@@ -109,7 +109,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-701-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-701-game-").FullName;
 
-        public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+        public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Npc { get; }
@@ -137,7 +137,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();

@@ -7,10 +7,10 @@ namespace MEditService.Index;
 /// <c>Queries/</c>, built from the document body.</summary>
 public interface IRecordReads
 {
-    /// <summary>What the Index read out of each copy it has open, keyed by identity. A copy it has
-    /// not reached, or could not open, is absent, so this is also "which copies are open?".
+    /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
+    /// not reached, or could not open, is absent, so this is also "which plugins are open?".
     /// </summary>
-    IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies { get; }
+    IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins { get; }
 
     /// <summary>The winning override of <paramref name="formKey"/>, across every participating
     /// plugin. Null if the FormKey isn't indexed.</summary>
@@ -18,11 +18,11 @@ public interface IRecordReads
 
     /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
     /// that plugin never indexed this FormKey.</summary>
-    RecordDocument? GetDocument(string formKey, PluginCopyKey plugin);
+    RecordDocument? GetDocument(string formKey, PluginAddress plugin);
 
     /// <summary>Every document <paramref name="plugin"/> holds, in one bulk read, for consumers that
     /// scan a whole plugin and would otherwise pay two point queries per record.</summary>
-    IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin);
+    IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin);
 
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
@@ -32,7 +32,7 @@ public interface IRecordReads
 
     /// <summary>Row count per record type for one plugin — a single grouped query replacing a
     /// per-type loop.</summary>
-    IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin);
+    IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin);
 
     /// <summary>O(1) FormKey → (record type, EditorID) lookup against the winning override,
     /// backed by <c>form_lookup</c> (ADR-0005).</summary>
@@ -40,18 +40,18 @@ public interface IRecordReads
 
     IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey);
 
-    /// <summary>Every copy at least one filtered record matches, restricted to
-    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every copy
+    /// <summary>Every plugin at least one filtered record matches, restricted to
+    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>
-    IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
+    IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
 
-    /// <summary>Every Kind B diagnosis the registered copies' binaries prove, projected when each
+    /// <summary>Every Kind B diagnosis the registered plugins' binaries prove, projected when each
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses();
 
-    /// <summary>The registered copies whose rows were derived from a source tree: tracked, as the
-    /// Index knows it. A copy derived from its binary is absent.</summary>
-    IReadOnlySet<PluginCopyKey> GetTrackedCopies();
+    /// <summary>The registered plugins whose rows were derived from a source tree: tracked, as the
+    /// Index knows it. A plugin derived from its binary is absent.</summary>
+    IReadOnlySet<PluginAddress> GetTrackedPlugins();
 
     /// <summary>Every plugin holding at least one record Mutagen could not read, as
     /// <c>ColumnKey.Of(name, origin)</c> values: the tree's "has a failure below it" for a plugin
@@ -61,32 +61,32 @@ public interface IRecordReads
     /// <summary>Worldspace FormKeys with an unreadable cell, or an unreadable placed reference
     /// in one, somewhere below them: the worldspace row's "has a failure below it", which the
     /// container relation cannot answer.</summary>
-    IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey plugin);
+    IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress plugin);
 
     /// <summary>FormKeys native to <paramref name="plugin"/> (the FormKey's own ModKey is this
     /// plugin) — ESL-eligibility validation.</summary>
-    IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin);
+    IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin);
 
     // Worldspace tree reads (ADR-0005) (from the placement / cell_location side tables).
-    IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey);
-    PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int limit, int offset);
-    CellReferences GetCellReferences(PluginCopyKey plugin, string cellFormKey);
+    IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey);
+    PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int limit, int offset);
+    CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey);
 
     /// <summary>A placed ref's structural parentage (cell, persistent/temporary, position). Null
     /// when not placed.</summary>
-    PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin);
+    PlacementRow? GetPlacement(string formKey, PluginAddress plugin);
 
     /// <summary>One cell's own structural parentage, or null when it isn't a cell this plugin
     /// indexed. Ref-invariant like <see cref="GetPlacement"/>: no gesture moves a cell.</summary>
-    CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey);
+    CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey);
 
     /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
     /// reads don't carry (see <see cref="ContainerChildRow"/>), in slot order; empty when it has
     /// none. Ref-invariant by construction.</summary>
-    IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey);
+    IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey);
 
     /// <summary>The one parent slot <paramref name="childFormKey"/> sits in, or null. Needed because
     /// an embedded child has no file of its own; a placed reference answers null here and through
     /// <see cref="GetPlacement"/> instead.</summary>
-    ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey);
+    ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey);
 }

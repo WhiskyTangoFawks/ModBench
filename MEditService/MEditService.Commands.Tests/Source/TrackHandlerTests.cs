@@ -30,7 +30,7 @@ public sealed class TrackHandlerTests : IDisposable
         mod.WriteToBinary(pluginPath);
 
         Snapshot = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredCopy(PluginName, Origin, pluginPath, 0, Enabled: true, Winning: true)]);
+            [new RegisteredPlugin(PluginName, Origin, pluginPath, 0, Enabled: true, Winning: true)]);
     }
 
     private LoadOrderSnapshot Snapshot { get; }
@@ -55,7 +55,7 @@ public sealed class TrackHandlerTests : IDisposable
         var handler = TestEditService.TrackHandler(_holder);
 
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.TrackAsync([new PluginCopyKey(PluginName, Origin)], SourcePreset.Edits));
+            () => handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits));
     }
 
     [Fact]
@@ -64,9 +64,9 @@ public sealed class TrackHandlerTests : IDisposable
         _holder.Apply(Snapshot);
         var handler = TestEditService.TrackHandler(_holder);
 
-        var result = await handler.TrackAsync([new PluginCopyKey(PluginName, Origin)], SourcePreset.Edits);
+        var result = await handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits);
 
-        Assert.Equal([new PluginCopyKey(PluginName, Origin)], result.Landed);
+        Assert.Equal([new PluginAddress(PluginName, Origin)], result.Landed);
         Assert.True(SourceRepository.HoldsTreeFor(_modFolder, PluginName));
     }
 }

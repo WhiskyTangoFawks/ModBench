@@ -29,7 +29,7 @@ public sealed class SourceContainerFixture : IDisposable
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
-    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+    public PluginAddress Plugin { get; } = new(PluginName, Origin);
     public FormKey Worldspace { get; }
     public FormKey TopCell { get; }
     public FormKey TopCellRef { get; }
@@ -58,7 +58,7 @@ public sealed class SourceContainerFixture : IDisposable
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)

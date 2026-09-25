@@ -76,7 +76,7 @@ export const downloadFile = (downloadsDir: string, name: string): string => join
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
 
-/** The folder a plugin copy sits in: its mod's folder, overwrite/, or Data/. */
+/** The folder a plugin sits in: its mod's folder, overwrite/, or Data/. */
 export const pluginFolder = (pluginFile: string): string => dirname(pluginFile);
 
 /** A file inside `folder`, by the relative path a source tree names it with. */

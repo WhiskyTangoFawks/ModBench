@@ -104,9 +104,9 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     // The hand-off: the Mod watcher sees the source tree Track wrote, and the Indexer reads the
-    // copy's documents from then on. The load order did not change, so nothing is put.
+    // plugin's documents from then on. The load order did not change, so nothing is put.
     [Fact]
-    public async Task AfterTrack_ThePluginListReportsTheCopyTracked_WithNoLoadOrderInBetween()
+    public async Task AfterTrack_ThePluginListReportsThePluginTracked_WithNoLoadOrderInBetween()
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
@@ -117,7 +117,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     // ADR-0015 invariant 2: no load order is put between the Track and the hand edit, so the tracked
-    // copy can only have reached the answers through the watch Track's own write armed.
+    // plugin can only have reached the answers through the watch Track's own write armed.
     [Fact]
     public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheNextQuery_WithNoLoadOrderInBetween()
     {

@@ -28,13 +28,13 @@ public sealed class ContainerChildQueryService(
         ["Responses"] = (0, "info"),
     };
 
-    // ADR-0012: origin — a caller that already knows which copy of `plugin` it's browsing
+    // ADR-0012: origin — a caller that already knows which plugin named `plugin` it's browsing
     // (a tree row built from one) states it explicitly, else it's resolved from the load order.
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
         origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var repo = _index.RequireReads();
-        var pluginKey = new PluginCopyKey(plugin, origin);
+        var pluginKey = new PluginAddress(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
             .Where(r => SlotOrder.ContainsKey(r.SlotName))

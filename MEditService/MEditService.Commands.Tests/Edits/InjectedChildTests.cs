@@ -34,8 +34,8 @@ public sealed class InjectedChildTests : IDisposable
     private readonly string _gameDirectory;
     private readonly LoadOrderSnapshot _loadOrder;
 
-    private readonly PluginCopyKey _base = new(BasePluginName, BaseOrigin);
-    private readonly PluginCopyKey _injector = new(InjectorPluginName, InjectorOrigin);
+    private readonly PluginAddress _base = new(BasePluginName, BaseOrigin);
+    private readonly PluginAddress _injector = new(InjectorPluginName, InjectorOrigin);
 
     private readonly FormKey _quest;
     private readonly FormKey _baseTopic;
@@ -82,7 +82,7 @@ public sealed class InjectedChildTests : IDisposable
             (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
         _loadOrder = new LoadOrderSnapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of(
+            SnapshotPlugins.Of(
             [
                 new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),
@@ -126,7 +126,7 @@ public sealed class InjectedChildTests : IDisposable
         Assert.NotEmpty(own);
     }
 
-    private async Task<IModDisposeGetter> CompileAndReimport(PluginCopyKey plugin, string modFolder)
+    private async Task<IModDisposeGetter> CompileAndReimport(PluginAddress plugin, string modFolder)
     {
         var result = await CompileServices.Over(_loadOrder).CompileAsync(plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);

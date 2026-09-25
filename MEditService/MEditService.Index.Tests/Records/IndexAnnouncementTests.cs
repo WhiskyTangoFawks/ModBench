@@ -15,7 +15,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 {
     private const string PluginName = "Watched.esp";
     private const string Origin = "WatchedMod";
-    private static readonly PluginCopyKey Key = new(PluginName, Origin);
+    private static readonly PluginAddress Key = new(PluginName, Origin);
 
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
@@ -115,7 +115,7 @@ public sealed class IndexAnnouncementTests : IDisposable
     }
 
     [Fact]
-    public void AValidateThatRebuiltACopy_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
+    public void AValidateThatRebuiltAPlugin_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();

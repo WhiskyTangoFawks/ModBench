@@ -16,7 +16,7 @@ public class WorldspaceQueryServiceTests
         CellReferences? cellRefs = null,
         IReadOnlySet<string>? failedWorldspaces = null) : IRecordReads
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey)
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
         {
             LastGetWorldspaceCellsOrigin = plugin.Origin;
             return cells;
@@ -35,35 +35,35 @@ public class WorldspaceQueryServiceTests
             LastSearchOrigin = query.Origin;
             return new(records ?? [], (records ?? []).Count);
         }
-        public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies =>
-            new Dictionary<PluginCopyKey, PluginContent>();
+        public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins =>
+            new Dictionary<PluginAddress, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginCopyKey plugin) => null;
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin) => [];
+        public RecordDocument? GetDocument(string formKey, PluginAddress plugin) => null;
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginAddress plugin) => [];
         public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) => [];
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
-        public IReadOnlySet<PluginCopyKey> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginCopyKey>();
+        public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<PluginAddress>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
-        public IReadOnlySet<PluginCopyKey> GetTrackedCopies() => new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => failedWorldspaces ?? new HashSet<string>();
+        public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int l, int o)
+        public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
+        public PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int l, int o)
         {
             LastGetInteriorCellsOrigin = plugin.Origin;
             return new(cells.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY)).ToList(), cells.Count);
         }
-        public CellReferences GetCellReferences(PluginCopyKey plugin, string fk)
+        public CellReferences GetCellReferences(PluginAddress plugin, string fk)
         {
             LastGetCellReferencesOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
         }
-        public PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin) => null;
-        public CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey) => null;
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey) => [];
-        public ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey) => null;
+        public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
+        public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey) => [];
+        public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
     // The reads' presence is what "no load order" means for the Index side; this service takes
@@ -76,14 +76,14 @@ public class WorldspaceQueryServiceTests
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
     }
 
-    private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
+    private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, plugins));
         return holder;
     }
 
-    private static RegisteredCopy Copy(string name, string origin) =>
+    private static RegisteredPlugin Plugin(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
@@ -169,20 +169,20 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_ResolvesRealOriginFromLoadOrder_AndPassesItToGetRecords()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
         svc.GetWorldspaces("M.esp");
 
         Assert.Equal("ModA", reader.LastSearchOrigin);
     }
 
-    // A caller that already knows which copy it is browsing states it explicitly, and that must win
+    // A caller that already knows which plugin it is browsing states it explicitly, and that must win
     // over what the load order would resolve.
     [Fact]
     public void GetWorldspaces_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -193,7 +193,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaceBlocks_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -204,7 +204,7 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
         svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
 

@@ -18,7 +18,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
 {
     private const string PluginName = "HoldsAtEitherRef.esp";
-    private static readonly PluginCopyKey Plugin = new(PluginName, "HoldsMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "HoldsMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-holds-").FullName;

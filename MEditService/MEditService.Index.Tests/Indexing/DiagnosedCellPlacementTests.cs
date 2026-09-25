@@ -18,7 +18,7 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
     private const string CellFormKey = "000800:Diagnosed.esp";
     private const string PersistentRef = "000801:Diagnosed.esp";
     private const string TemporaryRef = "000802:Diagnosed.esp";
-    private static readonly PluginCopyKey Key = new(Plugin, PluginOrigin.DataDirectory);
+    private static readonly PluginAddress Key = new(Plugin, PluginOrigin.DataDirectory);
 
     // Any real binary: the adapter double below answers the documents, the binary only the open.
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("diagnosed-cell").WithPlugin(Plugin).Build();

@@ -6,7 +6,7 @@ import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginCopyKey, type IsTracked, type PluginFolder,
+  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
 } from './trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
@@ -32,8 +32,8 @@ export interface PluginsViewProgress {
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
-// ADR-0012: the origin, once resolved, tells two copies of one file apart; a row whose mod cannot
-// be resolved has none, and none is invented for it.
+// ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
+// mod cannot be resolved has none, and none is invented for it.
 type TrackedRow = { name: string; origin?: string };
 
 function rowName(row: TrackedRow): string {
@@ -326,7 +326,7 @@ export function refreshSourceControlFor(
   pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, origin: string,
   outputChannel: vscode.LogOutputChannel,
 ): void {
-  const repo = pluginRepositories?.get(pluginCopyKey(plugin, origin));
+  const repo = pluginRepositories?.get(pluginAddressKey(plugin, origin));
   if (!repo) return;
   void repo.status().then(undefined, (err: unknown) => {
     outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);

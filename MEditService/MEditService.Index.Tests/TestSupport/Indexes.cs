@@ -81,8 +81,8 @@ internal static class Indexes
         return true;
     }
 
-    /// <summary>One record type's row count for one copy, zero when the copy holds none.</summary>
-    internal static int CountOf(this IRecordReads reads, PluginCopyKey plugin, string recordType) =>
+    /// <summary>One record type's row count for one plugin, zero when the plugin holds none.</summary>
+    internal static int CountOf(this IRecordReads reads, PluginAddress plugin, string recordType) =>
         reads.GetRecordTypeCounts(plugin)
             .FirstOrDefault(c => string.Equals(c.Type, recordType, StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 }

@@ -182,7 +182,7 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.Edit(
-                new PluginCopyKey(request.Plugin, request.Origin), decoded,
+                new PluginAddress(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
             onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
             onWriteFailure: ex =>
@@ -216,7 +216,7 @@ public static class RecordEndpoints
         try
         {
             var result = edits.DeleteRecords(
-                [.. records.Select(r => new RecordAt(new PluginCopyKey(r.Plugin, r.Origin), r.FormKey))]);
+                [.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
             if (result.SelectionRefusal is { } selectionRefusal) return WriteEndpointMapping.Refusal(selectionRefusal);
             return Results.Ok(new RecordDeleteResponse(
                 [.. result.Applied.Select(Addressed)],
@@ -258,8 +258,8 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.CopyRecordAsOverride(
-                new PluginCopyKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginCopyKey(request.DestinationPlugin, request.DestinationOrigin)),
+                new PluginAddress(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginAddress(request.DestinationPlugin, request.DestinationOrigin)),
             onApplied: result => Results.Ok(new RecordCopyAsOverrideResponse(true, decoded)),
             onWriteFailure: ex =>
             {
@@ -297,8 +297,8 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.CopyRecordAsNewRecord(
-                new PluginCopyKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginCopyKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
+                new PluginAddress(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginAddress(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
             onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
             onWriteFailure: ex =>
             {

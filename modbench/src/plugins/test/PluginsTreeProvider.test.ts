@@ -275,7 +275,7 @@ describe('PluginNode', () => {
     expect(node.description).toBeUndefined();
   });
 
-  it('carries the origin of the copy the row stands for (ADR-0012)', () => {
+  it('carries the origin of the plugin the row stands for (ADR-0012)', () => {
     expect(new PluginNode({ name: 'A.esp', enabled: true }, 'WinnerMod').origin).toBe('WinnerMod');
   });
 });
@@ -327,9 +327,9 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite']);
   });
 
-  // A losing copy of a listed name carries the same slot as the winning one (ADR-0013) — it
+  // An overridden plugin of a listed name carries the same slot as the winning one (ADR-0013) — it
   // must not become a second row for that name.
-  it('a losing copy of a listed name renders no row of its own', async () => {
+  it('an overridden plugin of a listed name renders no row of its own', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', winning: true }),
       plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', winning: false }),
@@ -340,7 +340,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   // A plugin file an enabled mod provides with no plugins.txt line (`slot: null`) is the
   // plugin sync's business, never merged in here.
-  it('an unlisted plugin copy (slot: null) gets no row', async () => {
+  it('an unlisted plugin (slot: null) gets no row', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0 }),
       plugin({ name: 'Unlisted.esp', slot: null, winning: true }),
@@ -786,7 +786,7 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
 });
 
 describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () => {
-  it('resolves a plugin name to the path of its winning copy', async () => {
+  it('resolves a plugin name to the path of its winning plugin', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0, path: '/data/mods/Winner/Base.esp', winning: true }),
       plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
@@ -794,7 +794,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
     expect(await tree.resolvePluginPath('Base.esp')).toBe('/data/mods/Winner/Base.esp');
   });
 
-  it('returns undefined for a name with no winning copy', async () => {
+  it('returns undefined for a name with no winning plugin', async () => {
     const { tree } = makeTree([plugin({ name: 'Base.esp', slot: 0, winning: false })]);
     expect(await tree.resolvePluginPath('Base.esp')).toBeUndefined();
   });
@@ -1010,7 +1010,7 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
 });
 
 // plugins.md, A row story 5: the game does not load a disabled plugin's records, so there is
-// nothing behind the row to expand into — same as a losing copy, viewing it is deferred.
+// nothing behind the row to expand into — same as an overridden plugin, viewing it is deferred.
 describe('PluginsTreeProvider — a disabled plugin row has no expander', () => {
   it('renders TreeItemCollapsibleState.None for a disabled plugin, before any reconcile', async () => {
     const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0, enabled: false })]);
@@ -1173,8 +1173,8 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(tracked).toHaveBeenCalledWith([{ name: 'B.esp', origin: 'SomeMod' }]);
   });
 
-  // ADR-0012 invariant 1: two copies of one filename are two plugins.
-  it("never marks a copy's records read-only or tracked for another copy of the same name", async () => {
+  // ADR-0012 invariant 1: two plugins that share a filename are never one plugin.
+  it("never marks a plugin's records read-only or tracked for another plugin of the same name", async () => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
@@ -1924,7 +1924,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('Malformed record');
   });
 
-  it('matches the copy, name and origin, case-insensitively', async () => {
+  it('matches the plugin, name and origin, case-insensitively', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.ESP', origin: 'SOMEMOD', reason: 'Malformed record' }]);
 
@@ -2178,12 +2178,12 @@ describe('PluginsTreeProvider fact refresh', () => {
 
 // ── the origin join (ADR-0012) ───────────────────────────────────────────────
 
-// Two held copies can share a filename (ADR-0013), so a name-only join answers about whichever
-// copy the reply lists last. Every fixture below lists the row's own copy first.
+// Two held plugins can share a filename (ADR-0013), so a name-only join answers about whichever
+// plugin the reply lists last. Every fixture below lists the row's own plugin first.
 describe('PluginsTreeProvider — a name under two origins joins to the row own origin', () => {
   const SHARED_ROW = () => plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA' });
 
-  it('badges the row from its own copy master issues, not the other copy', async () => {
+  it('badges the row from its own plugin master issues, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'ModA', masterIssues: [{ masterName: 'AMaster.esm', kind: 'DirectlyMissing' }] }),
@@ -2195,7 +2195,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(tooltip).not.toContain('BMaster.esm');
   });
 
-  it('reads read-only from its own copy, not the other copy', async () => {
+  it('reads read-only from its own plugin, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'ModA', isImmutable: false }),
@@ -2205,7 +2205,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).tooltip).toBe('Shared.esp\nModA');
   });
 
-  it('reads the parse failure from its own copy, not the other copy', async () => {
+  it('reads the parse failure from its own plugin, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'ModA', hasParseFailure: false }),
@@ -2215,7 +2215,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).iconPath).toBeUndefined();
   });
 
-  it('reads the record filter answer from its own copy, not the other copy', async () => {
+  it('reads the record filter answer from its own plugin, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'ModA', hasMatchingRecords: true }),
@@ -2225,7 +2225,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
-  it('reads the diagnoses from its own copy, not the other copy', async () => {
+  it('reads the diagnoses from its own plugin, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('Shared.esp', 'ModB is malformed', 'ModB')]);
     await reconcile(h, [
@@ -2236,10 +2236,10 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).description).toBeUndefined();
   });
 
-  // A load failure names the copy that failed. The losing copy is not a row (rows are the
-  // winning copy of every plugins.txt line), so its failure lands on no row rather than on the
-  // copy that loaded.
-  it('leaves the winning row clean when the other copy is the one that failed to load', async () => {
+  // A load failure names the plugin that failed. The overridden plugin is not a row (rows are the
+  // winning plugin of every plugins.txt line), so its failure lands on no row rather than on the
+  // plugin that loaded.
+  it('leaves the winning row clean when the other plugin is the one that failed to load', async () => {
     const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB', winning: false })]);
     await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
       [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
@@ -2252,7 +2252,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(item.tooltip).toBe('Shared.esp\nModA');
   });
 
-  it('expands the winning row as still indexing, never into the other copy failure', async () => {
+  it('expands the winning row as still indexing, never into the other plugin failure', async () => {
     const h = makeTree([SHARED_ROW()]);
     h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
 
@@ -2260,7 +2260,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
 
-  it('flags the row when its own copy failed to load and the other copy loaded', async () => {
+  it('flags the row when its own plugin failed to load and the other plugin loaded', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [held('Shared.esp', { origin: 'ModB' })],
       [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
@@ -2278,7 +2278,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).tooltip).toContain('AMaster.esm');
   });
 
-  it('falls back to the name alone when the row origin matches no copy the answer names', async () => {
+  it('falls back to the name alone when the row origin matches no plugin the answer names', async () => {
     const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
     await reconcile(h, [held('A.esp', {
       origin: 'SomeOtherMod', masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],

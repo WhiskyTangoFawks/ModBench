@@ -13,7 +13,7 @@ namespace MEditService.Index.Tests.Indexing;
 /// among the container children.</summary>
 public sealed class ContainerChildIndexingTests : IDisposable
 {
-    private static readonly PluginCopyKey Key = new("Dialogue.esp", "Data");
+    private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
 
     private readonly PluginFixtureData _fixture;
     private readonly string _questFk;

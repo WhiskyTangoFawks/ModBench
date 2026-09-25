@@ -17,8 +17,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
     private readonly LoadOrderEntry _winner;
-    private readonly PluginCopyKey _baseKey;
-    private readonly PluginCopyKey _winnerKey;
+    private readonly PluginAddress _baseKey;
+    private readonly PluginAddress _winnerKey;
     private readonly string _npc;
     private readonly string _raceA;
     private readonly string _raceB;
@@ -101,7 +101,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         using var index = Indexes.Reconciled(_fixture);
         var reads = index.RequireReads();
         var winnersDocument = reads.DocumentOf(_npc, _winnerKey);
-        var winnersCopy = winnersDocument.BodyOf();
+        var winnersBody = winnersDocument.BodyOf();
 
         // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
         index.Delete(_winner, winnersDocument);
@@ -111,8 +111,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
 
         // ...and then the file comes back carrying a different value, the direction a create takes
         // too, so its appearance has to move winner status.
-        var edited = winnersCopy.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
-        Assert.NotEqual(winnersCopy, edited);
+        var edited = winnersBody.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
+        Assert.NotEqual(winnersBody, edited);
         index.Create(_winner, _npc, "npc_", "TestNpc", edited);
 
         var effectiveWinner = reads.GetDocument(_npc);

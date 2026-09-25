@@ -47,7 +47,7 @@ internal sealed class WorkingTreeOverlay
     /// converges. <c>Structural</c> is an Effective row added or removed, which winners resweep on;
     /// <c>Touched</c> is every key whose rows moved.</summary>
     public (bool Structural, List<string> Touched) ProjectDocuments(
-        PluginCopyKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+        PluginAddress key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var structural = false;
         // The deltas' own keys are named whether or not their bytes moved: the caller asked about
@@ -60,7 +60,7 @@ internal sealed class WorkingTreeOverlay
 
     // Returns true when it added or removed an Effective row — a structural change, the only kind
     // that can move winner status. touched collects every key whose rows this call moved.
-    private bool ApplyOneWorkingTreeChange(PluginCopyKey key, string formKey, string? body, ICollection<string> touched)
+    private bool ApplyOneWorkingTreeChange(PluginAddress key, string formKey, string? body, ICollection<string> touched)
     {
         // The committed bytes, wherever they currently live: the snapshot if this record already
         // diverged, else the still-clean Effective row itself. Reading through the Head relation is
@@ -127,18 +127,18 @@ internal sealed class WorkingTreeOverlay
         return !existedBefore;
     }
 
-    internal bool RowExistsAtEffective(PluginCopyKey key, string formKey) =>
+    internal bool RowExistsAtEffective(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin) != null;
 
-    internal bool RowExistsAtHead(PluginCopyKey key, string formKey) =>
+    internal bool RowExistsAtHead(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(_connection, $"SELECT form_key FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin) != null;
 
     // A record at neither ref, materialized: the shape an embedded child re-derived out of a
     // container's document arrives in. Its caller has already established that neither ref holds it.
     private void MaterializeRecord(
-        PluginCopyKey key, string formKey, string recordType, string body, ICollection<string> touched)
+        PluginAddress key, string formKey, string recordType, string body, ICollection<string> touched)
     {
         InsertNewWorkingTreeRow(key, formKey, recordType, body);
         RederiveIndexRowsForRecord(key, formKey, body, touched);
@@ -147,7 +147,7 @@ internal sealed class WorkingTreeOverlay
     // A create writes a row straight to `ref = working-tree` with nothing in records_committed; that
     // omission is what makes records_head answer nothing for this FormKey without the view knowing
     // about creation.
-    private void InsertNewWorkingTreeRow(PluginCopyKey key, string formKey, string recordType, string body)
+    private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
     {
         // ADR-0009: no load_order_idx to carry into the row; this check only refuses a plugin the
         // registration doesn't know.
@@ -163,7 +163,7 @@ internal sealed class WorkingTreeOverlay
     // Both InsertNewWorkingTreeRow and SeedOneCommittedOnly write through this one column list in
     // one $-binding order, so the two cannot drift apart or leave a column off a row.
     private void InsertRecordRow(
-        PluginCopyKey key, string table, string refValue, string formKey, string recordType, string body,
+        PluginAddress key, string table, string refValue, string formKey, string recordType, string body,
         string? parseDiagnosis)
     {
         using var cmd = _connection.CreateCommand();
@@ -181,18 +181,18 @@ internal sealed class WorkingTreeOverlay
         cmd.ExecuteNonQuery();
     }
 
-    private bool IsRegisteredPlugin(PluginCopyKey key) =>
+    private bool IsRegisteredPlugin(PluginAddress key) =>
         DuckDbSql.ScalarString(_connection,
             $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin) != null;
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
-    public void SetCommittedBaseline(PluginCopyKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
+    public void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines)
     {
         foreach (var (formKey, body) in baselines)
             SetOneCommittedBaseline(key, formKey, body);
     }
 
-    private void SetOneCommittedBaseline(PluginCopyKey key, string formKey, string body)
+    private void SetOneCommittedBaseline(PluginAddress key, string formKey, string body)
     {
         var effectiveBody = DuckDbSql.ScalarString(_connection,
             "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
@@ -228,7 +228,7 @@ internal sealed class WorkingTreeOverlay
     }
 
     /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
-    public void MarkWorkingTreeOnly(PluginCopyKey key, IReadOnlyList<string> formKeys)
+    public void MarkWorkingTreeOnly(PluginAddress key, IReadOnlyList<string> formKeys)
     {
         foreach (var formKey in formKeys)
         {
@@ -245,13 +245,13 @@ internal sealed class WorkingTreeOverlay
     }
 
     /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>.</summary>
-    public void SeedCommittedOnly(PluginCopyKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
+    public void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
     {
         foreach (var (formKey, recordType, body) in records)
             SeedOneCommittedOnly(key, formKey, recordType, body);
     }
 
-    private void SeedOneCommittedOnly(PluginCopyKey key, string formKey, string recordType, string body)
+    private void SeedOneCommittedOnly(PluginAddress key, string formKey, string recordType, string body)
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
@@ -268,7 +268,7 @@ internal sealed class WorkingTreeOverlay
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
     // never the previous working-tree ones.
-    private void SnapshotCommittedIfFirstDivergence(PluginCopyKey key, string formKey)
+    private void SnapshotCommittedIfFirstDivergence(PluginAddress key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, $"""
             INSERT INTO mirror.records_committed ({RecordColumnList})
@@ -280,7 +280,7 @@ internal sealed class WorkingTreeOverlay
             """, formKey, key.Name, key.Origin);
     }
 
-    private void RestoreFromSnapshot(PluginCopyKey key, string formKey)
+    private void RestoreFromSnapshot(PluginAddress key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
@@ -291,7 +291,7 @@ internal sealed class WorkingTreeOverlay
             """, formKey, key.Name, key.Origin);
     }
 
-    private void UpsertEffectiveBody(PluginCopyKey key, string formKey, string body)
+    private void UpsertEffectiveBody(PluginAddress key, string formKey, string body)
     {
         var contentHash = SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body));
 
@@ -321,7 +321,7 @@ internal sealed class WorkingTreeOverlay
     // ADR-0007: the extracted tables are derived from the document, never written independently of
     // it. Rebuilt for one record through the same collectors ingest uses, so an edit cannot leave
     // derived answers describing bytes that are gone.
-    private void RederiveIndexRowsForRecord(PluginCopyKey key, string formKey, string body, ICollection<string> touched)
+    private void RederiveIndexRowsForRecord(PluginAddress key, string formKey, string body, ICollection<string> touched)
     {
         var recordType = DuckDbSql.ScalarString(_connection,
             "SELECT record_type FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
@@ -401,7 +401,7 @@ internal sealed class WorkingTreeOverlay
     // The children last recorded under this container. embeddedIn names the container's type and
     // keeps only the children its document carries; null takes every child, the set a deleted
     // directory held.
-    private List<string> ChildrenRecorded(PluginCopyKey key, string parentFormKey, string? embeddedIn)
+    private List<string> ChildrenRecorded(PluginAddress key, string parentFormKey, string? embeddedIn)
     {
         var recorded = new List<string>();
         using var cmd = _connection.CreateCommand();
@@ -426,7 +426,7 @@ internal sealed class WorkingTreeOverlay
         return recorded;
     }
 
-    private bool HeldByAnotherContainer(PluginCopyKey key, string childFormKey, string thisParentFormKey) =>
+    private bool HeldByAnotherContainer(PluginAddress key, string childFormKey, string thisParentFormKey) =>
         DuckDbSql.ScalarString(_connection, """
             SELECT form_key FROM mirror.placement
             WHERE form_key = $1 AND parent_cell <> $2 AND plugin = $3 AND origin = $4
@@ -443,7 +443,7 @@ internal sealed class WorkingTreeOverlay
     // row: serialized out of the container's graph through the codec ingest uses. No schema, no
     // row, as at ingest.
     private void DeriveEmbeddedChildRows(
-        PluginCopyKey key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
+        PluginAddress key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> touched)
     {
         foreach (var child in children)
@@ -462,7 +462,7 @@ internal sealed class WorkingTreeOverlay
         }
     }
 
-    private string? EffectiveBody(PluginCopyKey key, string formKey) =>
+    private string? EffectiveBody(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
@@ -470,7 +470,7 @@ internal sealed class WorkingTreeOverlay
     // table) is correct by construction. An embedded child that is itself a container derives its
     // own containment through its own row.
     private void RederiveContainmentForRecord(
-        PluginCopyKey key, string formKey, string recordType, string containerType,
+        PluginAddress key, string formKey, string recordType, string containerType,
         IReadOnlyList<ContainerDocuments.ChildDocument> children)
     {
         // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and the
@@ -529,7 +529,7 @@ internal sealed class WorkingTreeOverlay
         PluginIngest.AppendCellLocationRow(cellLocationAppender, cellRow, key.Name, key.Origin);
     }
 
-    private void DeleteDerivationsForRecord(PluginCopyKey key, string formKey)
+    private void DeleteDerivationsForRecord(PluginAddress key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
@@ -537,7 +537,7 @@ internal sealed class WorkingTreeOverlay
         DeleteContainmentForRecord(key, formKey);
     }
 
-    private void DeleteFormReferencesForRecord(PluginCopyKey key, string formKey) =>
+    private void DeleteFormReferencesForRecord(PluginAddress key, string formKey) =>
         DuckDbSql.ExecuteFor(_connection,
             "DELETE FROM mirror.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
             formKey, key.Name, key.Origin);
@@ -545,7 +545,7 @@ internal sealed class WorkingTreeOverlay
     // Its own facts plus, as a backstop, whatever names it as a parent: DeleteRecord's descendant
     // cascade already gives every descendant its own null-body delta, so a deleted container's
     // children lose their rows via their own deletion.
-    private void DeleteContainmentForRecord(PluginCopyKey key, string formKey)
+    private void DeleteContainmentForRecord(PluginAddress key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);

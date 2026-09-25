@@ -17,7 +17,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 {
     private const string PluginName = "CellFullName.esp";
     private const string Origin = "CellFullNameMod";
-    private readonly PluginCopyKey _plugin = new(PluginName, Origin);
+    private readonly PluginAddress _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-cell-fullname-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-cell-fullname-game-").FullName;
     private readonly Indexer _index;

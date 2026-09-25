@@ -6,10 +6,10 @@ namespace MEditService.Index;
 /// document, named in <c>ChangedKeys</c>, or a moved binary. <c>Failures</c> tells "nothing drifted"
 /// from "nothing was checked" (ADR-0019).</summary>
 public sealed record ValidationReport(
-    PluginCopyKey Plugin,
+    PluginAddress Plugin,
     IReadOnlyList<string> ChangedKeys,
     bool NeedsRebuild,
     IReadOnlyList<string> Failures)
 {
-    internal static ValidationReport Clean(PluginCopyKey plugin) => new(plugin, [], NeedsRebuild: false, []);
+    internal static ValidationReport Clean(PluginAddress plugin) => new(plugin, [], NeedsRebuild: false, []);
 }

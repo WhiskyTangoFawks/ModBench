@@ -9,7 +9,7 @@ type Schemas = components['schemas'];
 // honestly, so a hand-written mirror is only a staler copy. A frontend declaration earns its place
 // only as a genuine transform (LoadOrderStatus).
 
-/** `GET /plugins`. Two held copies can share a filename, so name-keyed hand-offs read
+/** `GET /plugins`. Two held plugins can share a filename, so name-keyed hand-offs read
  *  `inLoadOrder` rather than matching on the name (ADR-0013). */
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
@@ -37,7 +37,8 @@ export interface UnansweredExternalChange {
   newVersion: string | null;
 }
 
-/** ADR-0013: names the copy that failed — two copies of one name are two registrations. */
+/** ADR-0013: names the plugin that failed — two plugins that share a filename are two
+ *  registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
 /** The one list `CrashRepairReason` and `isCrashRepairReason` both derive from, since the enum
@@ -97,7 +98,7 @@ export type LoadOrderRefusal = { kind: 'heldElsewhere' | 'failed'; message: stri
 /** The `load-order-status` notification's payload, subscribed alongside the in-flight
  *  `PUT /load-order`. The wire's `state` survives only as `refusal.kind` and `holdsNone`. */
 export interface LoadOrderStatus {
-  /** How many plugin copies the snapshot resolved to — the denominator for progress. Copies that
+  /** How many plugins the snapshot resolved to — the denominator for progress. Plugins that
    *  fail to open still count toward it. */
   totalPlugins: number;
   /** Filenames of the plugins whose indexing has completed, in the order they landed. A plugin

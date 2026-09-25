@@ -18,7 +18,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public CompileRoundTripGateFixture()
     {
@@ -26,7 +26,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
         var loadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
         Holder.Apply(loadOrder);
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())

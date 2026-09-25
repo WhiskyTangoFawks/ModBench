@@ -27,7 +27,7 @@ public sealed class CompileFixture : IDisposable
     private const GameRelease Release = GameRelease.Fallout4;
 
     public string ModFolder { get; }
-    public PluginCopyKey Plugin { get; }
+    public PluginAddress Plugin { get; }
 
     private readonly string _instanceRoot;
     private readonly string _gameDirectory;
@@ -45,7 +45,7 @@ public sealed class CompileFixture : IDisposable
         _instanceRoot = Directory.CreateTempSubdirectory("medit-compile-instance-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
         _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-game-").FullName;
-        Plugin = new PluginCopyKey(PluginName, Origin);
+        Plugin = new PluginAddress(PluginName, Origin);
 
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
@@ -58,7 +58,7 @@ public sealed class CompileFixture : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, Release,
-            SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();

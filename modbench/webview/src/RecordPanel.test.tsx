@@ -389,7 +389,7 @@ describe('RecordPanel — same-filename, different-origin columns', () => {
 
   // ADR-0012: filename in the header, origin inline only on collision. The rule is
   // response-driven — whatever same-filename pair arrives must render unambiguously.
-  it('renders origin inline in both columns\' headers when two copies share a filename', async () => {
+  it('renders origin inline in both columns\' headers when two plugins share a filename', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
     await waitFor(() => expect(screen.getByText('Shared.esp (ModB)')).toBeInTheDocument());
@@ -399,7 +399,7 @@ describe('RecordPanel — same-filename, different-origin columns', () => {
     expect(screen.queryByText('Shared.esp')).not.toBeInTheDocument();
   });
 
-  // The single-copy control: origin inline is collision-only, not "whenever origin isn't Data".
+  // The single-plugin control: origin inline is collision-only, not "whenever origin isn't Data".
   it('does not render origin inline for a normal, non-colliding column', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
@@ -440,7 +440,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 });
 
-describe('RecordPanel — a copy the load order does not name (ADR-0013)', () => {
+describe('RecordPanel — a plugin the load order does not name (ADR-0013)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('renders the column header dimmed and labeled distinctly from a vanilla master', async () => {

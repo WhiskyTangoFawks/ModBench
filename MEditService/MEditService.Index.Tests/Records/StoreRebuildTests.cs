@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.Records;
 
 // ADR-0009 invariant 5: a rebuild drops every trace of the file, to fix a row no hash-validate can
-// (a wrong but self-consistent body), then reads every copy again against the load order held.
+// (a wrong but self-consistent body), then reads every plugin again against the load order held.
 public sealed class StoreRebuildTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("store-rebuild")
@@ -28,7 +28,7 @@ public sealed class StoreRebuildTests : IDisposable
         _fixture.Dispose();
     }
 
-    private PluginCopyKey Key => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Key => _fixture.Plugins.Single().KeyOf();
 
     private void Reconcile(string? instanceRoot) =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);

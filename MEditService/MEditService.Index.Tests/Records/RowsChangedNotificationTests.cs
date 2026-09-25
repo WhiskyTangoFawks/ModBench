@@ -40,7 +40,7 @@ public sealed class RowsChangedNotificationTests
     // Where a deletion lands when the watch could not name its key: a burst of deletes wider than one
     // batch, an overflow, a ref move in the same window, or a document no commit filed.
     [Fact]
-    public void ValidatingACopyWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
+    public void ValidatingAPluginWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
     {
         FormKey npc = default;
         using var fixture = new PluginFixtureBuilder("rows-changed-delete")
@@ -85,9 +85,9 @@ public sealed class RowsChangedNotificationTests
     }
 
     // Where a gained record lands when the watch could not name its key: a new document no commit
-    // filed. The validate re-derives the copy whole, and still names the rows.
+    // filed. The validate re-derives the plugin whole, and still names the rows.
     [Fact]
-    public void ValidatingACopyThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
+    public void ValidatingAPluginThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
     {
         var (fixture, entry, notifications, index, moved, _) = TwoNpcs("rows-changed-validate-gained");
         using var __ = fixture;

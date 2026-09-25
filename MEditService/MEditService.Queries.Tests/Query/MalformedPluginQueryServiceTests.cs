@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Queries.Tests.Query;
 
 /// <summary>A diagnosis is a row the Index projected when it hashed the binary; this service joins
-/// those rows to the load order, which says which copies an edit can reach and in what order they
+/// those rows to the load order, which says which plugins an edit can reach and in what order they
 /// are read.</summary>
 public sealed class MalformedPluginQueryServiceTests
 {
@@ -22,24 +22,24 @@ public sealed class MalformedPluginQueryServiceTests
     private static readonly PluginDiagnosis Trailing = new(
         "NPC_ 00012345 (Sierra)", "trailing-bytes", "repairable (lossless)", "3 bytes past the last subrecord");
 
-    private static RegisteredCopy Copy(string name, string origin = "SomeMod", bool isForced = false, int? slot = 0) =>
+    private static RegisteredPlugin Plugin(string name, string origin = "SomeMod", bool isForced = false, int? slot = 0) =>
         new(name, origin, $@"C:\mods\{origin}\{name}", slot, Enabled: true, Winning: true, IsForced: isForced);
 
-    private static PluginDiagnosisRow Row(RegisteredCopy copy, PluginDiagnosis diagnosis) => new(copy.Key, diagnosis);
+    private static PluginDiagnosisRow Row(RegisteredPlugin plugin, PluginDiagnosis diagnosis) => new(plugin.Key, diagnosis);
 
     private static PluginDiagnosisReport[] Diagnose(
-        IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredCopy[] copies) =>
+        IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredPlugin[] plugins) =>
         [.. new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), []) { Diagnoses = rows }),
-            FakeLoadOrder.Of(GameRelease.Fallout4, copies))
+            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = rows }),
+            FakeLoadOrder.Of(GameRelease.Fallout4, plugins))
             .GetLoadOrderDiagnoses()];
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ARowAgainstAHeldCopy_IsReportedWithTheRefusalWording()
+    public void GetLoadOrderDiagnoses_ARowAgainstAHeldPlugin_IsReportedWithTheRefusalWording()
     {
-        var copy = Copy(Malformed);
+        var plugin = Plugin(Malformed);
 
-        var report = Assert.Single(Diagnose([Row(copy, Short)], copy));
+        var report = Assert.Single(Diagnose([Row(plugin, Short)], plugin));
 
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
@@ -55,60 +55,60 @@ public sealed class MalformedPluginQueryServiceTests
             report.Text);
     }
 
-    // Immutable copies are the proof set the tables were built from, so a hit there
-    // is a table bug. The Index stamps every copy it hashes, so the load order drops these.
+    // Immutable plugins are the proof set the tables were built from, so a hit there
+    // is a table bug. The Index stamps every plugin it hashes, so the load order drops these.
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAForcedCopy_AreNeverReported()
+    public void GetLoadOrderDiagnoses_RowsOfAForcedPlugin_AreNeverReported()
     {
-        var forced = Copy("Fallout4.esm", origin: "Data", isForced: true);
+        var forced = Plugin("Fallout4.esm", origin: "Data", isForced: true);
 
         Assert.Empty(Diagnose([Row(forced, Short)], forced));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfACopyNoListLineNames_AreNeverReported()
+    public void GetLoadOrderDiagnoses_RowsOfAPluginNoListLineNames_AreNeverReported()
     {
-        var unlisted = Copy(Malformed, slot: null);
+        var unlisted = Plugin(Malformed, slot: null);
 
         Assert.Empty(Diagnose([Row(unlisted, Short)], unlisted));
     }
 
-    // A copy the Index never opened stamps no rows, and neither does a clean one; a copy that failed
-    // to load says so through LoadOrderStatus.Failures.
+    // A plugin the Index never opened stamps no rows, and neither does a clean one; a plugin that
+    // failed to load says so through LoadOrderStatus.Failures.
     [Fact]
-    public void GetLoadOrderDiagnoses_ACopyWithNoRows_IsNotReported()
+    public void GetLoadOrderDiagnoses_APluginWithNoRows_IsNotReported()
     {
-        Assert.Empty(Diagnose([], Copy("Clean.esp")));
+        Assert.Empty(Diagnose([], Plugin("Clean.esp")));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ARowNamingACopyTheLoadOrderDoesNotHold_IsNotReported()
+    public void GetLoadOrderDiagnoses_ARowNamingAPluginTheLoadOrderDoesNotHold_IsNotReported()
     {
-        var held = Copy("Held.esp");
-        var gone = Copy(Malformed, origin: "RemovedMod");
+        var held = Plugin("Held.esp");
+        var gone = Plugin(Malformed, origin: "RemovedMod");
 
         Assert.Empty(Diagnose([Row(gone, Short)], held));
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — origin tells two copies of one apart.
+    // ADR-0012 invariant 1: a filename is not an identity — origin tells two plugins of one apart.
     [Fact]
-    public void GetLoadOrderDiagnoses_TwoCopiesOfOneName_ReportAgainstTheirOwnOrigins()
+    public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins()
     {
-        var winner = Copy(Malformed, origin: "WinningMod");
-        var loser = Copy(Malformed, origin: "LosingMod", slot: 1);
+        var winner = Plugin(Malformed, origin: "WinningMod");
+        var loser = Plugin(Malformed, origin: "LosingMod", slot: 1);
 
         var reports = Diagnose([Row(loser, Short)], winner, loser);
 
         Assert.Equal("LosingMod", Assert.Single(reports).Origin);
     }
 
-    // The load order is the order, and within one copy the rows keep the order the binary proved
+    // The load order is the order, and within one plugin the rows keep the order the binary proved
     // them in.
     [Fact]
     public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrderThenByRecordOrder()
     {
-        var first = Copy("First.esp", origin: "FirstMod");
-        var second = Copy("Second.esp", origin: "SecondMod", slot: 1);
+        var first = Plugin("First.esp", origin: "FirstMod");
+        var second = Plugin("Second.esp", origin: "SecondMod", slot: 1);
 
         var reports = Diagnose([Row(second, Short), Row(first, Short), Row(first, Trailing)], first, second);
 
@@ -118,19 +118,19 @@ public sealed class MalformedPluginQueryServiceTests
             reports.Select(r => (r.Plugin, r.DefectClass)));
     }
 
-    // MEditService/CLAUDE.md: a whole-plugin-set derivation gates on Status, because a copy the
+    // MEditService/CLAUDE.md: a whole-plugin-set derivation gates on Status, because a plugin the
     // projection has not reached has no rows yet and would read clean. GetPlugins answers its own
     // whole-set fact the same way while reconciling.
     [Fact]
     public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing()
     {
-        var copy = Copy(Malformed);
-        var reads = new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), []) { Diagnoses = [Row(copy, Short)] };
+        var plugin = Plugin(Malformed);
+        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = [Row(plugin, Short)] };
         var reconciling = new LoadOrderStatus(
             LoadOrderState.Reconciling, TotalPlugins: 1, [], ConflictsComputed: false, []);
 
         var reports = new MalformedPluginQueryService(
-            new FakeIndex(reads, reconciling), FakeLoadOrder.Of(GameRelease.Fallout4, copy))
+            new FakeIndex(reads, reconciling), FakeLoadOrder.Of(GameRelease.Fallout4, plugin))
             .GetLoadOrderDiagnoses();
 
         Assert.Empty(reports);
@@ -140,7 +140,7 @@ public sealed class MalformedPluginQueryServiceTests
     public void GetLoadOrderDiagnoses_WithNoLoadOrderHeld_Throws()
     {
         var service = new MalformedPluginQueryService(
-            new FakeIndex(new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), [])),
+            new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
             new LoadOrderHolder());
 
         Assert.Throws<NoLoadOrderException>(service.GetLoadOrderDiagnoses);

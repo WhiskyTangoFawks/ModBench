@@ -14,7 +14,7 @@ public sealed partial class SourceRepository
     /// <summary>Every document one plugin's tree holds right now, each as the record at its root. An
     /// embedded child belongs to its owner's document; <see cref="Get"/> answers with the child's own
     /// text.</summary>
-    public IReadOnlyList<SourceDocument> ReadAll(PluginCopyKey plugin)
+    public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin)
     {
         var root = RootIn(_modFolder, plugin.Name);
         if (!Directory.Exists(root)) return [];
@@ -32,7 +32,7 @@ public sealed partial class SourceRepository
     /// <summary>The same set as <paramref name="gitRef"/> committed it, straight from the object store:
     /// a working-tree edit is invisible here, and the ref needs no checkout. Empty when nothing is at
     /// that ref.</summary>
-    public IReadOnlyList<SourceDocument> ReadAll(PluginCopyKey plugin, string gitRef) =>
+    public IReadOnlyList<SourceDocument> ReadAll(PluginAddress plugin, string gitRef) =>
         [.. BlobsAtRef(plugin.Name, gitRef)
             .Select(blob => DocumentAt(blob.RelativePath, blob.Text, plugin.Name))
             .OfType<SourceDocument>()];
@@ -40,7 +40,7 @@ public sealed partial class SourceRepository
     /// <summary>One record's own text as <paramref name="gitRef"/> has it, re-extracted through the
     /// codec when another record's committed document carries it. Null when nothing at that ref holds
     /// it.</summary>
-    public SourceDocument? GetAt(PluginCopyKey plugin, RecordIdentity identity, string gitRef)
+    public SourceDocument? GetAt(PluginAddress plugin, RecordIdentity identity, string gitRef)
     {
         SourceDocument Own(string body) =>
             new(identity.FormKey, identity.RecordType, identity.EditorId, body);
@@ -66,7 +66,7 @@ public sealed partial class SourceRepository
     /// <summary>The text HEAD commits for the record, or null when it is the text
     /// <paramref name="knownText"/> holds, no unit holds the record, or HEAD carries it nowhere. One
     /// record, so a clean one starts no git process.</summary>
-    public string? CommittedTextIfMoved(PluginCopyKey plugin, RecordIdentity identity, string knownText)
+    public string? CommittedTextIfMoved(PluginAddress plugin, RecordIdentity identity, string knownText)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
 
@@ -101,18 +101,18 @@ public sealed partial class SourceRepository
     /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
     /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
     /// destination.</summary>
-    public IReadOnlySet<string> EditorIdsHeld(PluginCopyKey plugin) => EditorIds(ReadAll(plugin));
+    public IReadOnlySet<string> EditorIdsHeld(PluginAddress plugin) => EditorIds(ReadAll(plugin));
 
     /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
     /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
-    public IReadOnlySet<string> NativeFormKeysHeld(PluginCopyKey plugin) => Native(ReadAll(plugin), plugin);
+    public IReadOnlySet<string> NativeFormKeysHeld(PluginAddress plugin) => Native(ReadAll(plugin), plugin);
 
     /// <summary>The same set as <paramref name="gitRef"/> committed it, so an ID a working-tree
     /// deletion freed stays taken until the plugin is compiled.</summary>
-    public IReadOnlySet<string> NativeFormKeysHeldAt(PluginCopyKey plugin, string gitRef) =>
+    public IReadOnlySet<string> NativeFormKeysHeldAt(PluginAddress plugin, string gitRef) =>
         Native(ReadAll(plugin, gitRef), plugin);
 
-    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginCopyKey plugin)
+    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginAddress plugin)
     {
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in documents)
@@ -131,7 +131,7 @@ public sealed partial class SourceRepository
 
     // Native: the record's own FormKey names this plugin, so this plugin allocated it — an override of
     // a master carries the master's key and takes none of this plugin's space.
-    private static void AddIfNative(HashSet<string> keys, string formKey, PluginCopyKey plugin)
+    private static void AddIfNative(HashSet<string> keys, string formKey, PluginAddress plugin)
     {
         var colon = formKey.IndexOf(':', StringComparison.Ordinal);
         if (colon > 0 && formKey.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))

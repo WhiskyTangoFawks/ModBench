@@ -5,14 +5,14 @@ import { columnStatus, type ColumnStatus } from './recordUtils';
 interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
-  // ADR-0013: whether the effective load order names this copy — distinct from isImmutable (a
-  // shadowed copy is immutable *because* this is false). Dimming is applied once at the header
-  // cell; CSS opacity multiplies on nesting.
+  // ADR-0013: whether the effective load order names this plugin — distinct from isImmutable (a
+  // plugin outside the load order is immutable *because* this is false). Dimming is applied once
+  // at the header cell; CSS opacity multiplies on nesting.
   inLoadOrder: boolean;
   // ADR-0007: checked after the two flags above — an immutable plugin's read-only-ness is not
   // something tracking can lift, so its own reason wins.
   isTracked: boolean;
-  // ADR-0012: origin appears inline in the header only when two copies share a filename — decided
+  // ADR-0012: origin appears inline in the header only when two plugins share a filename — decided
   // by the caller over the compare response's own overrides, never recomputed here.
   showOriginInline: boolean;
   collapsed: boolean;
@@ -27,11 +27,11 @@ interface PluginHeaderProps {
   onTogglePartialForm: (next: boolean) => void;
 }
 
-// The tooltip must not advise moving this copy in the load order — wrong axis: a shadowed copy is
-// a file conflict, decided by the Mod override order and not by `plugins.txt`.
+// The tooltip must not advise moving this plugin in the load order — wrong axis: an overridden
+// plugin is a file conflict, decided by the Mod override order and not by `plugins.txt`.
 
-// A column marked `!inLoadOrder` may be shadowed *or* be a plugin file `plugins.txt` never lists;
-// the wire carries no signal telling them apart, so the wording must be true for both.
+// A column marked `!inLoadOrder` may be an overridden plugin *or* a plugin file `plugins.txt` never
+// lists; the wire carries no signal telling them apart, so the wording must be true for both.
 const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   // The record's own diagnosis is appended as the rest of this reason, so the sentence has to end
   // where the diagnosis begins. No way out is named: repairing the record is not offered anywhere.
@@ -50,9 +50,9 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   notInLoadOrder: {
     label: '(not loaded)',
     title:
-      'This copy plays no part in what the game actually loads, so editing it here changes '
-      + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
-      + 'Plugins views.',
+      'This plugin plays no part in what the game actually loads, so editing it here changes '
+      + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
+      + 'decided in the Mods and Plugins views.',
   },
   // The friction is deliberate (ADR-0007): editing someone else's plugin is the community's
   // anti-pattern. The label still says it is one command deep — a read-only column with no stated
@@ -94,7 +94,7 @@ export function PluginHeader({
     <div data-vscode-context={vscodeContext}>
       {/* Left-click the plugin-name chip collapses/expands this column. ADR-0012:
           origin is never what the user reads by default — always in the tooltip, inline in the
-          label only when a second loaded copy shares this filename (showOriginInline). */}
+          label only when a second loaded plugin shares this filename (showOriginInline). */}
       <div
         onClick={onToggleCollapse}
         style={{ cursor: 'pointer' }}

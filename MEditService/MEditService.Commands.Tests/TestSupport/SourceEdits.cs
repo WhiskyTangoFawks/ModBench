@@ -16,7 +16,7 @@ public static class SourceEdits
     public static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
     public static void Rewrite<T>(
-        SourceRepository repository, PluginCopyKey plugin, RecordIdentity identity, GameRelease release, Action<T> change)
+        SourceRepository repository, PluginAddress plugin, RecordIdentity identity, GameRelease release, Action<T> change)
         where T : class, IMajorRecord
     {
         var body = repository.Get(plugin, identity).Require().Body;
@@ -26,7 +26,7 @@ public static class SourceEdits
     }
 
     public static void Write(
-        SourceRepository repository, PluginCopyKey plugin, IMajorRecordGetter record, string recordType, GameRelease release) =>
+        SourceRepository repository, PluginAddress plugin, IMajorRecordGetter record, string recordType, GameRelease release) =>
         repository.Put(plugin, new SourceDocument(
             record.FormKey.ToString(), recordType, record.EditorID,
             Encoding.UTF8.GetString(Codec.SerializeToBytes(record, release))));

@@ -21,7 +21,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     private const string EditedBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"EditedSinceCompile\"\n}";
     private const string LaterBody = "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"Later\"\n}";
 
-    private static readonly PluginCopyKey Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-readall-").FullName;
@@ -156,7 +156,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     [Fact]
     public void ReadAll_AtARefThatHoldsNothingForThisPlugin_IsEmpty()
     {
-        Assert.Empty(Tracked().ReadAll(new PluginCopyKey("Other.esp", "FixtureMod"), "refs/heads/main"));
+        Assert.Empty(Tracked().ReadAll(new PluginAddress("Other.esp", "FixtureMod"), "refs/heads/main"));
     }
 
     [Fact]

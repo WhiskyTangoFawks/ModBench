@@ -23,7 +23,7 @@ public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
 // Slot is null when no plugins.txt line names it. Enabled and Winning are nullable only so an
 // omitted field is detectable: a plain bool would bind a missing property to false, quietly
-// making every copy non-participating.
+// making every plugin non-participating.
 public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
 // ADR-0009 invariant 5: the Refresh rebuild's own request, keyed on the instance as

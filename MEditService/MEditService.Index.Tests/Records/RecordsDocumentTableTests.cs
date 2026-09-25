@@ -87,6 +87,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.True(document.IsWinner, "The only plugin indexed should win its own records.");
         var entry = fixture.Reads.StackEntry(record.FormKey.ToString(), CutDownPluginFixture.Plugin);
         Assert.NotNull(entry);
-        Assert.False(entry.HasWorkingTreeChange, "An untracked copy's document is the committed one.");
+        Assert.False(entry.HasWorkingTreeChange, "An untracked plugin's document is the committed one.");
     }
 }

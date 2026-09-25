@@ -27,7 +27,7 @@ public sealed class IndexedModFixture : IDisposable
     public Indexer Index { get; }
 
     public LoadOrderHolder Holder { get; }
-    public PluginCopyKey Plugin { get; }
+    public PluginAddress Plugin { get; }
 
     // PluginName unless a caller asked otherwise: ref-unsafe names need a real tracked load order.
     public string ActualPluginName { get; }
@@ -46,7 +46,7 @@ public sealed class IndexedModFixture : IDisposable
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
-        Plugin = new PluginCopyKey(pluginName, ModFolderOrigin);
+        Plugin = new PluginAddress(pluginName, ModFolderOrigin);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-edit-instance-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-edit-game-").FullName;
@@ -99,7 +99,7 @@ public sealed class IndexedModFixture : IDisposable
     /// Index over the same instance starts warm — the shape a restart has.</summary>
     public static IndexedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
 
-    /// <summary>The load order snapshot this fixture's one plugin copy is, for a caller reconciling a
+    /// <summary>The load order snapshot this fixture's one plugin is, for a caller reconciling a
     /// second Index over the same instance.</summary>
     public LoadOrderEntry Entry =>
         new(ActualPluginName, Path.Combine(ModFolder, ActualPluginName), ModFolderOrigin, Slot: 0, Enabled: true, Winning: true);

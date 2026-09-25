@@ -35,7 +35,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     private readonly string _modFolder;
     private readonly string _gameDirectory;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _plugin = new(PluginName, Origin);
+    private readonly PluginAddress _plugin = new(PluginName, Origin);
 
     private readonly FormKey _cellA;
     private readonly FormKey _cellB;
@@ -135,7 +135,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)

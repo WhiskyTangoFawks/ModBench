@@ -10,6 +10,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
+import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
@@ -59,7 +60,7 @@ export interface PluginMatch {
 }
 
 export interface PluginsTreeProviderOptions {
-  /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0015). */
+  /** Name, origin, slot, enabled and winning for every plugin — the row input (ADR-0015). */
   instance: InstanceView;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
@@ -83,13 +84,13 @@ export interface PluginsTreeProviderOptions {
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
- *  setting one would silently change every row's icon. Losing copies are registered
+ *  setting one would silently change every row's icon. Overridden plugins are registered
  *  (ADR-0013), not displayed. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
     public readonly plugin: PluginEntry,
-    /** ADR-0012: which copy of the name this row stands for — the join key for every fact. */
+    /** ADR-0012: which plugin of the name this row stands for — the join key for every fact. */
     public readonly origin?: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
@@ -154,7 +155,7 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
   return undefined;
 }
 
-// Everything one `GET /plugins` read knows about one plugin copy. One value rather than three
+// Everything one `GET /plugins` read knows about one plugin. One value rather than three
 // parallel collections: they arrive together, change together, and are keyed the same way.
 interface PluginFacts {
   readOnly?: boolean;
@@ -164,36 +165,32 @@ interface PluginFacts {
 }
 
 // ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
-class ByPluginCopy<T> {
-  private readonly byCopy = new Map<string, T>();
+class ByPluginAddress<T> {
+  private readonly byAddress = new Map<string, T>();
   private readonly byName = new Map<string, T>();
 
-  private static key(name: string, origin: string | undefined): string {
-    return `${(origin ?? '').toLowerCase()}|${name.toLowerCase()}`;
-  }
-
   set(name: string, origin: string | undefined, value: T): void {
-    this.byCopy.set(ByPluginCopy.key(name, origin), value);
+    this.byAddress.set(pluginAddressKey(name, origin), value);
     this.byName.set(name.toLowerCase(), value);
   }
 
-  // Each index accumulates on its own: the name-only fallback reads as every copy's lines
-  // together, a copy's own key as its own. `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginCopy<U[]>, name: string, origin: string | undefined, item: U): void {
-    const copyKey = ByPluginCopy.key(name, origin);
+  // Each index accumulates on its own: the name-only fallback reads as every plugin's lines
+  // together, a plugin's own key as its own. `this` narrows to an array-valued instance.
+  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string | undefined, item: U): void {
+    const addressKey = pluginAddressKey(name, origin);
     const nameKey = name.toLowerCase();
-    this.byCopy.set(copyKey, [...(this.byCopy.get(copyKey) ?? []), item]);
+    this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
     this.byName.set(nameKey, [...(this.byName.get(nameKey) ?? []), item]);
   }
 
   get(name: string, origin: string | undefined): T | undefined {
     return origin === undefined
       ? this.byName.get(name.toLowerCase())
-      : this.byCopy.get(ByPluginCopy.key(name, origin));
+      : this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
-    return this.byCopy.has(ByPluginCopy.key(name, origin));
+    return this.byAddress.has(pluginAddressKey(name, origin));
   }
 }
 
@@ -353,8 +350,8 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The winning copy's own path, already resolved on the Instance value — undefined for a name
-   *  with no winning copy. A synchronous lookup, `Promise`-wrapped only to keep the caller's
+  /** The winning plugin's own path, already resolved on the Instance value — undefined for a name
+   *  with no winning plugin. A synchronous lookup, `Promise`-wrapped only to keep the caller's
    *  `await` unchanged. */
   resolvePluginPath(name: string): Promise<string | undefined> {
     const folded = name.toLowerCase();
@@ -378,7 +375,7 @@ export class PluginsTreeProvider
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
     if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
     if (this.heldFiles?.has(file.toLowerCase()) === true) {
-      // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
+      // Deliberately not the row's own `origin`: a stated origin means "the plugin the load order
       // does not name" downstream, which would make every record row read-only. The backend
       // resolves a load-order filename itself.
       return this.records?.getPluginChildren(file) ?? noRecordBrowser();
@@ -417,8 +414,8 @@ export class PluginsTreeProvider
     const implicitNames = (await this.implicitMasters()) ?? [];
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
-    // One entry per plugins.txt line: the winning copy of every listed name, in file order
-    // (ADR-0013) — a losing copy of the same name carries the same slot and is excluded.
+    // One entry per plugins.txt line: the winning plugin of every listed name, in file order
+    // (ADR-0013) — an overridden plugin of the same name carries the same slot and is excluded.
     const listed = this.instanceValue.plugins
       .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
       .sort((a, b) => a.slot - b.slot);
@@ -508,16 +505,16 @@ export class PluginsTreeProvider
   // ── the load order and its facts ──────────────────────────────────────────
 
   private heldFiles?: Set<string>;
-  private facts?: ByPluginCopy<PluginFacts>;
-  private matches?: ByPluginCopy<boolean>;
-  private diagnoses?: ByPluginCopy<string[]>;
+  private facts?: ByPluginAddress<PluginFacts>;
+  private matches?: ByPluginAddress<boolean>;
+  private diagnoses?: ByPluginAddress<string[]>;
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
   // persists until `applyReconciled` lands the new answer.
-  private loadFailures = new ByPluginCopy<string>();
+  private loadFailures = new ByPluginAddress<string>();
   // Children expansion only (plugins.md, States 2) — this reload's own ticks, replaced wholesale
   // each time: a plugin not yet reached this reload reads as "still indexing", never a stale
   // failure from before the reload began.
-  private reachableFailures = new ByPluginCopy<string>();
+  private reachableFailures = new ByPluginAddress<string>();
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
@@ -555,7 +552,7 @@ export class PluginsTreeProvider
   }
 
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
-   *  every fact it answers about each copy. Returns what the record filter matched;
+   *  every fact it answers about each plugin. Returns what the record filter matched;
    *  `undefined` when the read failed. */
   async applyReconciled(failures: PluginLoadFailure[]): Promise<PluginMatch[] | undefined> {
     const generation = ++this.generation;
@@ -591,7 +588,7 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0013: keyed by filename, reading the `inLoadOrder` copies — two held copies can share
+  // ADR-0013: keyed by filename, reading the `inLoadOrder` plugins — two held plugins can share
   // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
@@ -612,8 +609,8 @@ export class PluginsTreeProvider
   // ADR-0017: `masterIssues` is a required, non-nullable array on the wire, so it is read straight
   // through — a `??` default would compensate for nothing the backend can do.
   private applyPluginFacts(plugins: PluginMetadata[]): void {
-    const facts = new ByPluginCopy<PluginFacts>();
-    const matches = new ByPluginCopy<boolean>();
+    const facts = new ByPluginAddress<PluginFacts>();
+    const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
         readOnly: p.isImmutable, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
@@ -632,7 +629,7 @@ export class PluginsTreeProvider
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
       this.publishDiagnoses?.(reports);
-      const diagnoses = new ByPluginCopy<string[]>();
+      const diagnoses = new ByPluginAddress<string[]>();
       for (const r of reports) diagnoses.append(r.plugin, r.origin, r.text);
       this.diagnoses = diagnoses;
       this._onDidChangeTreeData.fire(undefined);
@@ -650,7 +647,7 @@ export class PluginsTreeProvider
   }
 
   // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
-  // row's own origin rather than through `joinOrigin`, as a failed copy is never a held one.
+  // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
   private reachableFailureOf(row: PluginListNode): string | undefined {
     const file = pluginFileOf(row);
     if (file === undefined) return undefined;
@@ -658,7 +655,7 @@ export class PluginsTreeProvider
   }
 
   // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
-  // the client's answer names no copy for falls back to the filename.
+  // the client's answer names no plugin for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
     const origin = row.kind === 'plugin' ? row.origin : undefined;
     return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
@@ -721,13 +718,13 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
   return element instanceof PluginNode || element instanceof ImplicitMasterNode || element instanceof EmptyNode;
 }
 
-function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginCopy<string> {
-  const byCopy = new ByPluginCopy<string>();
-  mergeLoadFailures(byCopy, failures);
-  return byCopy;
+function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {
+  const byAddress = new ByPluginAddress<string>();
+  mergeLoadFailures(byAddress, failures);
+  return byAddress;
 }
 
-function mergeLoadFailures(target: ByPluginCopy<string>, failures: PluginLoadFailure[]): void {
+function mergeLoadFailures(target: ByPluginAddress<string>, failures: PluginLoadFailure[]): void {
   for (const f of failures) target.set(f.name, f.origin, f.reason);
 }
 

@@ -281,19 +281,20 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
   });
 
-  // ADR-0012 invariant 1: two copies of Mod.esp, in two mods, each shown in a tab of its own under
-  // one FormKey. The edit lands on the copy its own tab's column names, and only that tab follows.
-  it('follows only the tab the edit came from, not a tab showing the other copy of the plugin', async () => {
+  // ADR-0012 invariant 1: two plugins named Mod.esp, in two mods, each shown in a tab of its own
+  // under one FormKey. The edit lands on the plugin its own tab's column names, and only that tab
+  // follows.
+  it('follows only the tab the edit came from, not a tab showing the other plugin of that filename', async () => {
     meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
     const { tracker, tabs: [edited, other], edits } = tabsOn('000800:Mod.esp', 'Mod.esp (SomeMod)', 'Mod.esp (OtherMod)');
-    const editedCopy = present(edited, 'the edited tab');
-    const otherCopy = present(other, 'the other tab');
+    const editedTab = present(edited, 'the edited tab');
+    const otherTab = present(other, 'the other tab');
 
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedCopy, edits));
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedTab, edits));
 
-    expect(tracker.formKeyOf(editedCopy)).toBe('000900:Mod.esp');
-    expect(tracker.formKeyOf(otherCopy)).toBe('000800:Mod.esp');
-    expect(otherCopy.webview.postMessage).not.toHaveBeenCalled();
+    expect(tracker.formKeyOf(editedTab)).toBe('000900:Mod.esp');
+    expect(tracker.formKeyOf(otherTab)).toBe('000800:Mod.esp');
+    expect(otherTab.webview.postMessage).not.toHaveBeenCalled();
   });
 
   // Between the FormID's answer and the report that reads the new key, the webview still names

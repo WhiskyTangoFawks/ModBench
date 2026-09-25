@@ -336,7 +336,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         internal LoadOrderHolder Holder { get; } = new();
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
-        public PluginCopyKey Plugin { get; }
+        public PluginAddress Plugin { get; }
 
         public MutationScope(CompileRoundTripGateFixture fixture)
         {
@@ -344,7 +344,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             Plugin = fixture.Plugin;
 
             var loadOrder = new LoadOrderSnapshot(fixture.GameDirectory, instanceRoot: null, GameRelease.Fallout4,
-                SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+                SnapshotPlugins.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
             Holder.Apply(loadOrder);
         }
 

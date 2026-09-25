@@ -12,5 +12,5 @@ public static class CutDownPluginFixture
     public static string PluginPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", PluginFileName);
 
-    public static readonly PluginCopyKey Plugin = new(PluginFileName, PluginOrigin.DataDirectory);
+    public static readonly PluginAddress Plugin = new(PluginFileName, PluginOrigin.DataDirectory);
 }

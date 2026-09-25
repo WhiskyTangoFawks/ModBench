@@ -45,7 +45,7 @@ describe('reportPutOutcome', () => {
     );
   });
 
-  // ADR-0013: every copy is sent, so a non-empty snapshot does not mean the profile has anything
+  // ADR-0013: every plugin is sent, so a non-empty snapshot does not mean the profile has anything
   // enabled — participation is enabled AND winning AND listed, derived.
   it('warns when plugins were sent but none of them participate', () => {
     const deps = putDeps();
@@ -84,12 +84,12 @@ describe('settleReconciled', () => {
     applyReconciled: vi.fn().mockResolvedValue(undefined),
   });
 
-  it('writes the ready status text with the backend\'s own count of copies', async () => {
+  it('writes the ready status text with the backend\'s own count of plugins', async () => {
     const deps = settleDeps();
 
     await settleReconciled(readyStatus, deps);
 
-    expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (2 plugin copies)');
+    expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (2 plugins)');
   });
 
   // The record browser's page/interior/reference caches must re-read, or rows show stale records.

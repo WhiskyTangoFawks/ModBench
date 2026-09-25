@@ -43,7 +43,7 @@ public sealed class CreatePluginApiTests : HostedTests
         return body;
     }
 
-    // A record gesture resolves its target from the kernel alone, so an applied one is the copy
+    // A record gesture resolves its target from the kernel alone, so an applied one is the plugin
     // being registered and its file being there.
     private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
         Client.PostAsJsonAsync(
@@ -51,7 +51,7 @@ public sealed class CreatePluginApiTests : HostedTests
             new { origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null });
 
     [Fact]
-    public async Task CreatingAPluginInAModOfItsOwn_AnswersWithTheCopyItRegistered_AndItIsWritableAtOnce()
+    public async Task CreatingAPluginInAModOfItsOwn_AnswersWithThePluginItRegistered_AndItIsWritableAtOnce()
     {
         var fx = Owned(await Loaded());
         var modFolder = Path.Combine(fx.Root, "mod-minted");
@@ -64,8 +64,8 @@ public sealed class CreatePluginApiTests : HostedTests
         (await CreateARecordIn("Minted.esp", "MintedMod")).EnsureSuccessStatusCode();
     }
 
-    // The copy reaches the Index through the create's own snapshot change, so the file must be
-    // there when that change lands: a copy the reconcile cannot open is not a row.
+    // The plugin reaches the Index through the create's own snapshot change, so the file must be
+    // there when that change lands: a plugin the reconcile cannot open is not a row.
     [Fact]
     public async Task CreatingAPlugin_ListsItOnTheNextPluginsRead()
     {
@@ -189,7 +189,7 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     // The destination is Tracked inside the create gesture, so its watch is armed there too: the
-    // mod's own copy answers from source with no load order put after the create.
+    // mod's own plugin answers from source with no load order put after the create.
     [Fact]
     public async Task AfterCreate_AHandEditToTheDestinationsSource_ReachesTheNextQuery()
     {

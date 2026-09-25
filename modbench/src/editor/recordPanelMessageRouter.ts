@@ -24,7 +24,7 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
   formKeyPicker: FormKeyPickerDeps | undefined;
   // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
-  // that tab along: its column names the plugin copy the edit landed on (ADR-0012).
+  // that tab along: its column names the plugin the edit landed on (ADR-0012).
   editInFlight: EditGate;
 }
 

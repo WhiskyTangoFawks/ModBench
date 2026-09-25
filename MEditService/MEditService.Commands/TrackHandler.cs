@@ -15,10 +15,10 @@ public sealed class TrackHandler
     internal TrackHandler(TrackService trackService, LoadOrderHolder loadOrder) =>
         (_trackService, _loadOrder) = (trackService, loadOrder);
 
-    /// <summary>Each plugin names its copy, which the held load order resolves to a mod folder
+    /// <summary>Each address names its plugin, which the held load order resolves to a mod folder
     /// (ADR-0013 invariant 4). Throws <see cref="NoLoadOrderException"/> with nothing written when none
     /// is held.</summary>
     public Task<TrackSelectionResult> TrackAsync(
-        IReadOnlyList<PluginCopyKey> plugins, SourcePreset preset, CancellationToken cancel = default) =>
+        IReadOnlyList<PluginAddress> plugins, SourcePreset preset, CancellationToken cancel = default) =>
         _trackService.TrackAsync(_loadOrder.Require(), plugins, preset, cancel);
 }

@@ -7,6 +7,7 @@ import type {
 } from '../client';
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
+import { pluginAddressKey } from './trackedRepositories';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
 export { headerFormKeyFor } from './formKeyIdentity';
@@ -49,7 +50,7 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly recordType: string,
     count: number,
     displayName: string = recordType,
-    /** ADR-0012: which copy of `plugin` this node browses, or undefined for an ordinary
+    /** ADR-0012: which plugin named `plugin` this node browses, or undefined for an ordinary
      *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
     public readonly origin?: string,
     hasParseFailure = false,
@@ -116,7 +117,7 @@ export class RecordNode extends vscode.TreeItem {
 // ── Worldspace / cell / placed-object nodes ─────────────────────────
 
 // ADR-0012: every node in the spatial chain carries the same optional `origin` — a node built for
-// a specific copy has to keep saying so down to its leaves, since each hop's own repository call
+// a specific plugin has to keep saying so down to its leaves, since each hop's own repository call
 // needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
@@ -278,30 +279,27 @@ function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
   return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
 }
 
-// ADR-0012 invariant 1: keyed by (origin, filename), so two copies of one name never share a fact.
-class PluginCopySet {
-  private readonly copies = new Set<string>();
+// ADR-0012 invariant 1: keyed by (origin, filename), so two plugins that share a filename never
+// share a fact.
+class PluginAddressSet {
+  private readonly addresses = new Set<string>();
   private readonly names = new Set<string>();
 
-  private static key(name: string, origin: string): string {
-    return `${origin.toLowerCase()}|${name.toLowerCase()}`;
-  }
-
-  replace(copies: Iterable<PluginAddress>): void {
-    this.copies.clear();
+  replace(plugins: Iterable<PluginAddress>): void {
+    this.addresses.clear();
     this.names.clear();
-    for (const c of copies) {
-      this.copies.add(PluginCopySet.key(c.name, c.origin));
-      this.names.add(c.name.toLowerCase());
+    for (const p of plugins) {
+      this.addresses.add(pluginAddressKey(p.name, p.origin));
+      this.names.add(p.name.toLowerCase());
     }
   }
 
   has(name: string, origin: string): boolean {
-    return this.copies.has(PluginCopySet.key(name, origin));
+    return this.addresses.has(pluginAddressKey(name, origin));
   }
 
   // debt #1070
-  hasLoadOrderCopyNamed(name: string): boolean {
+  hasLoadOrderPluginNamed(name: string): boolean {
     return this.names.has(name.toLowerCase());
   }
 }
@@ -325,54 +323,54 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly refCache = new Map<string, CellReferences>();
   // A Quest/DialogTopic row's own children, keyed the same
   // `${originKey(plugin, origin)}::${formKey}` shape refCache already uses for a cell's own
-  // references — two same-filename copies' rows never share an entry.
+  // references — two same-filename plugins' rows never share an entry.
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
   // Last load-more failure per parent, keyed by originKey alone — interior cells are the only
   // surface that pages. Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
-  // The load order's immutable plugin copies, pushed in from the tree's own `GET /plugins` read —
+  // The load order's immutable plugins, pushed in from the tree's own `GET /plugins` read —
   // record/placed rows under one get a contextValue Remove's `when` clause in package.json omits
   // from its viewItem list.
-  private readonly immutablePlugins = new PluginCopySet();
-  // The load order's *tracked* plugin copies, from the same `GET /plugins` answer the immutable
+  private readonly immutablePlugins = new PluginAddressSet();
+  // The load order's *tracked* plugins, from the same `GET /plugins` answer the immutable
   // set comes from — never a filesystem probe from here: tracked-ness is a fact the backend
   // derives on every read.
-  private readonly trackedPlugins = new PluginCopySet();
+  private readonly trackedPlugins = new PluginAddressSet();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
 
-  setImmutablePlugins(copies: Iterable<PluginAddress>): void {
-    this.immutablePlugins.replace(copies);
+  setImmutablePlugins(plugins: Iterable<PluginAddress>): void {
+    this.immutablePlugins.replace(plugins);
     this._onDidChangeTreeData.fire(undefined);
   }
 
   /** Replaced wholesale on every reconcile, firing a re-render rather than clearing a cache. A
    *  `.git` appearing or disappearing under a plugin's origin is a watched event that drives a
    *  reconcile, so both directions arrive on that path. */
-  setTrackedPlugins(copies: Iterable<PluginAddress>): void {
-    this.trackedPlugins.replace(copies);
+  setTrackedPlugins(plugins: Iterable<PluginAddress>): void {
+    this.trackedPlugins.replace(plugins);
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // A shadowed copy (origin stated) is immutable by construction below, so it never reaches the
-  // tracked/untracked distinction at all.
+  // A plugin outside the load order (origin stated) is immutable by construction below, so it
+  // never reaches the tracked/untracked distinction at all.
   private isTracked(record: { plugin: string; origin: string }): boolean {
     return this.trackedPlugins.has(record.plugin, record.origin);
   }
 
-  // ADR-0012: a shadowed copy (origin stated) is read-only by construction — an edit to a
-  // file the game does not load changes nothing observable — so the stated origin alone decides
-  // before the immutable set is even consulted.
+  // ADR-0012: a plugin outside the load order (origin stated) is read-only by construction — an
+  // edit to a file the game does not load changes nothing observable — so the stated origin alone
+  // decides before the immutable set is consulted.
   private isImmutable(record: { plugin: string; origin: string }, statedOrigin?: string): boolean {
     return statedOrigin !== undefined || this.immutablePlugins.has(record.plugin, record.origin);
   }
 
   private isPlacedImmutable(plugin: string, statedOrigin?: string): boolean {
-    return statedOrigin !== undefined || this.immutablePlugins.hasLoadOrderCopyNamed(plugin);
+    return statedOrigin !== undefined || this.immutablePlugins.hasLoadOrderPluginNamed(plugin);
   }
 
   refresh(): void {
@@ -475,9 +473,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(parent);
   }
 
-  // The origin is part of every cache key, not decoration: two copies of one filename have their
-  // own pages, and serving one copy's page under the other's node is a "right target, wrong
-  // content" failure.
+  // The origin is part of every cache key, not decoration: two plugins that share a filename have
+  // their own pages, and serving one plugin's page under the other's node is a "right target,
+  // wrong content" failure.
   private originKey(plugin: string, origin?: string): string {
     return `${(origin ?? '').toLowerCase()}|${plugin.toLowerCase()}`;
   }
@@ -521,8 +519,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
       // The spatial endpoints take the same optional origin the flat record routes do
-      // (RecordTypeNode below), so a copy the load order does not name browses its own worldspaces
-      // and cells instead of having them omitted entirely.
+      // (RecordTypeNode below), so a plugin the load order does not name browses its own
+      // worldspaces and cells instead of having them omitted entirely.
       const failureOf = new Map(types.map(t => [t.type, t.hasParseFailure] as const));
       for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
         if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin, failureOf.get(type) ?? false));

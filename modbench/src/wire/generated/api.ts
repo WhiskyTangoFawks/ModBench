@@ -29,7 +29,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Validates the index by content hash against the systems of record its rows came from — each source document at both refs for a tracked copy, the binary for an untracked one — and refreshes what differs. Name one copy with plugin and origin together, or omit both to check every registered copy. Rows it changes are published on /notifications/stream as they land. */
+        /** @description Validates the index by content hash against the systems of record its rows came from — each source document at both refs for a tracked plugin, the binary for an untracked one — and refreshes what differs. Name one plugin with plugin and origin together, or omit both to check every registered plugin. Rows it changes are published on /notifications/stream as they land. */
         post: operations["ReconcileIndex"];
         delete?: never;
         options?: never;
@@ -45,7 +45,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance — winning and overridden, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Plugins new to the load order are opened and registered (indexed only if never seen), plugins absent from the snapshot are unregistered, moved plugins are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;

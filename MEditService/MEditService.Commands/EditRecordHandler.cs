@@ -40,7 +40,7 @@ public sealed class EditRecordHandler
     /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
     /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
     /// the IO around that.</summary>
-    public RecordEditResult Edit(PluginCopyKey plugin, string formKey, RecordEditEnvelope envelope)
+    public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
         if (FormKeyChange.IsFormIdEdit(envelope)) return _formKeyChange.Change(plugin, formKey, editTarget, envelope.Value);

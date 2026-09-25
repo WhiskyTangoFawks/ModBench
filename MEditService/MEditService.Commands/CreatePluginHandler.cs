@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands;
 
 /// <summary>The create gesture: the plugin file, the Track its destination needs before anything
-/// can be edited there (ADR-0007 invariant 1), and the copy's registration in Load order state.
+/// can be edited there (ADR-0007 invariant 1), and the plugin's registration in Load order state.
 /// Never touches plugins.txt.</summary>
 public sealed class CreatePluginHandler
 {
@@ -25,32 +25,32 @@ public sealed class CreatePluginHandler
     public async Task<PluginCreateResult> CreatePlugin(string name, string pluginPath, string origin)
     {
         var previous = _holder.Require();
-        var copy = new RegisteredCopy(name, origin, pluginPath, NextSlot(previous), Enabled: true, Winning: true);
+        var plugin = new RegisteredPlugin(name, origin, pluginPath, NextSlot(previous), Enabled: true, Winning: true);
 
         // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary editable
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a
         // full master.
-        var modKey = ModKey.FromFileName(copy.Name);
+        var modKey = ModKey.FromFileName(plugin.Name);
         await _adapter.CreateAndWriteAsync(
-            modKey, copy.Path, previous.GameRelease, smallMaster: modKey.Type == ModType.Plugin);
+            modKey, plugin.Path, previous.GameRelease, smallMaster: modKey.Type == ModType.Plugin);
 
         // Applied once the destination is tracked, so the one snapshot change every reader sees
-        // names a tracked, readable copy; a refused Track leaves the load order as it was.
-        var track = await TrackDestination(previous.With(copy), copy);
-        if (track is { Applied: false }) return new PluginCreateResult(copy, Version: 0, track);
+        // names a tracked, readable plugin; a refused Track leaves the load order as it was.
+        var track = await TrackDestination(previous.With(plugin), plugin);
+        if (track is { Applied: false }) return new PluginCreateResult(plugin, Version: 0, track);
 
-        var version = _holder.Apply(_holder.Current.With(copy));
-        return new PluginCreateResult(copy, version, track);
+        var version = _holder.Apply(_holder.Current.With(plugin));
+        return new PluginCreateResult(plugin, version, track);
     }
 
-    private async Task<TrackResult?> TrackDestination(LoadOrderSnapshot registered, RegisteredCopy copy)
+    private async Task<TrackResult?> TrackDestination(LoadOrderSnapshot registered, RegisteredPlugin plugin)
     {
-        var modFolder = LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path);
+        var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
         if (modFolder is null) return null;
         if (!SourceRepository.IsTracked(modFolder))
         {
             var track = await _track.TrackAsync(
-                registered, [.. registered.CopiesOfOrigin(copy.Origin).Select(c => c.Key)], SourcePreset.Edits);
+                registered, [.. registered.PluginsOfOrigin(plugin.Origin).Select(c => c.Key)], SourcePreset.Edits);
             return track.SelectionRefusal
                 ?? (track.Refused is [var refused, ..]
                     ? TrackResult.Refused(refused.Refusal, refused.Message)
@@ -59,11 +59,11 @@ public sealed class CreatePluginHandler
 
         // Modbench's own write is never an external change (ADR-0003 invariant 3): parked as the
         // binary this gesture wrote, so the mod's next settle has nothing to ask about it.
-        SourceRepository.ParkCompileSnapshot(modFolder, copy.Name, atRef: null, PluginBinaryHash.TrailerFormOfFile(copy.Path));
+        SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef: null, PluginBinaryHash.TrailerFormOfFile(plugin.Path));
         return null;
     }
 
     // One past the highest slot, not the count: a reused slot would give two participants one index.
     private static int NextSlot(LoadOrderSnapshot loadOrder) =>
-        loadOrder.Copies.Count == 0 ? 0 : loadOrder.Copies.Max(copy => copy.Slot ?? 0) + 1;
+        loadOrder.Plugins.Count == 0 ? 0 : loadOrder.Plugins.Max(plugin => plugin.Slot ?? 0) + 1;
 }

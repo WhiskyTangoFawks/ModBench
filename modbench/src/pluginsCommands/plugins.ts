@@ -135,7 +135,7 @@ export async function syncPlugins(
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
-  // Without the implicit masters, a mod's copy of a vanilla master would earn a line
+  // Without the implicit masters, a mod's plugin named like a vanilla master would earn a line
   // (update-load-order-file, Refusals).
   let addable: ReadonlyMap<string, string>;
   try {
@@ -144,7 +144,7 @@ export async function syncPlugins(
       return { applied: false, refusal: 'mEdit cannot say which plugins the game loads with no line' };
     }
     // An implicit master is left out: the tree gives it a row of its own, never from a line, so
-    // a mod's copy of one must not earn a line.
+    // a mod's plugin of that name must not earn a line.
     const implicitFolded = new Set(implicit.map(foldPath));
     addable = new Map([...provided].filter(([folded]) => !implicitFolded.has(folded)));
   } catch (err) {

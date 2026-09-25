@@ -15,7 +15,7 @@ first is the Mod watcher's, and it ends in the same tail.
 ## The flow
 
 1. Instance commands send the whole load order snapshot to Commands, through the mEdit client and
-   the HTTP endpoints: every physical copy, as origin, file name and path, with its slot, whether
+   the HTTP endpoints: every plugin file in the instance, as origin, file name and path, with its slot, whether
    it is enabled and whether it wins, and the game release (ADR-0013, invariant 2). The mEdit
    client sends one snapshot at a time, and a newer one replaces a snapshot still waiting.
 2. Commands puts the snapshot in Load order state, and answers at once with its version. The index
@@ -24,17 +24,17 @@ first is the Mod watcher's, and it ends in the same tail.
    per mod folder the snapshot names, and asks the Indexer to reconcile.
 4. The Indexer compares the snapshot with the one it last reconciled. An identical snapshot does
    nothing (ADR-0013, invariant 1). Otherwise:
-   - A copy that left is unregistered. Its rows stay, and no read sees them.
-   - A copy that moved, or whose enabled or winning fact changed, updates its registration only.
-   - A copy that arrived is registered. The Indexer reads it only when the index holds no rows for
+   - A plugin that left is unregistered. Its rows stay, and no read sees them.
+   - A plugin that moved, or whose enabled or winning fact changed, updates its registration only.
+   - A plugin that arrived is registered. The Indexer reads it only when the index holds no rows for
      its content, by hash (ADR-0009, invariant 4).
-   - A copy that became tracked or untracked is read again, from its new source.
-5. For each copy it reads, one at a time, the Indexer reads the documents through the Source
+   - A plugin that became tracked or untracked is read again, from its new source.
+5. For each plugin it reads, one at a time, the Indexer reads the documents through the Source
    adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
-   not. It takes the schema from the Codec, and writes the copy's rows to the Store.
-6. After the last copy, the Indexer takes the participating copies from Load order state, enabled,
+   not. It takes the schema from the Codec, and writes the plugin's rows to the Store.
+6. After the last plugin, the Indexer takes the participating plugins from Load order state, enabled,
    listed and winning (ADR-0013, invariant 3), and computes the winners and the conflicts once.
-7. Through Ports, the Indexer publishes the index status at each copy: reconciling, with the count
+7. Through Ports, the Indexer publishes the index status at each plugin: reconciling, with the count
    done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
    The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3).
 
@@ -50,9 +50,9 @@ Nothing here refuses a gesture: no user starts this flow. Each outcome is the in
 | Outcome | What the status says | What stays |
 |---|---|---|
 | Another window holds the instance's index | held elsewhere, naming the index file and saying to close mEdit there | Nothing is read (ADR-0009, invariant 5). |
-| A copy cannot be read or parsed | ready, with the copy flagged and its reason | The copy stays registered, never dropped (ADR-0013, invariant 4). It is read again only when its bytes change. |
-| The reconcile fails | failed, with the reason | The snapshot stays held. Each copy is read in its own transaction, so the copies read before the failure stand. The next snapshot tries again. |
-| mEdit stops before the reconcile ends | nothing | The next start's snapshot finds the copies already read, by their hashes, and reads the rest. |
+| A plugin cannot be read or parsed | ready, with the plugin flagged and its reason | The plugin stays registered, never dropped (ADR-0013, invariant 4). It is read again only when its bytes change. |
+| The reconcile fails | failed, with the reason | The snapshot stays held. Each plugin is read in its own transaction, so the plugins read before the failure stand. The next snapshot tries again. |
+| mEdit stops before the reconcile ends | nothing | The next start's snapshot finds the plugins already read, by their hashes, and reads the rest. |
 
 ## Test seam
 

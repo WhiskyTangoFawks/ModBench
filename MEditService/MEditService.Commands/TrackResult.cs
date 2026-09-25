@@ -51,23 +51,23 @@ public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Mess
 
 /// <summary>A plugin of the selection that wrote nothing of its own, with the typed refusal and the
 /// message naming the way out.</summary>
-public sealed record TrackRefused(PluginCopyKey Plugin, TrackRefusal Refusal, string Message);
+public sealed record TrackRefused(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
 /// <summary>Track over a selection answers per plugin (ADR-0019 invariant 4), except for a cause no
 /// plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
 public sealed class TrackSelectionResult
 {
     private TrackSelectionResult(
-        IReadOnlyList<PluginCopyKey> landed, IReadOnlyList<TrackRefused> refused, TrackResult? selectionRefusal) =>
+        IReadOnlyList<PluginAddress> landed, IReadOnlyList<TrackRefused> refused, TrackResult? selectionRefusal) =>
         (Landed, Refused, SelectionRefusal) = (landed, refused, selectionRefusal);
 
-    public static TrackSelectionResult PerPlugin(IReadOnlyList<PluginCopyKey> landed, IReadOnlyList<TrackRefused> refused) =>
+    public static TrackSelectionResult PerPlugin(IReadOnlyList<PluginAddress> landed, IReadOnlyList<TrackRefused> refused) =>
         new(landed, refused, selectionRefusal: null);
 
     public static TrackSelectionResult WholeSelectionRefused(TrackRefusal refusal, string message) =>
         new([], [], TrackResult.Refused(refusal, message));
 
-    public IReadOnlyList<PluginCopyKey> Landed { get; }
+    public IReadOnlyList<PluginAddress> Landed { get; }
 
     public IReadOnlyList<TrackRefused> Refused { get; }
 

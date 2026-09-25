@@ -17,7 +17,7 @@ public sealed partial class SourceRepository
     /// its own, else the document of the container it is embedded in — a container may itself be
     /// embedded.</summary>
     public SourceDocument? ContainerDocument(
-        PluginCopyKey plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
         var text = Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(unit.FullPath)));

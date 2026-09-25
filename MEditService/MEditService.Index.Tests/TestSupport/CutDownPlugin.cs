@@ -9,7 +9,7 @@ namespace MEditService.Index.Tests.TestSupport;
 /// MEditService.TestSupport regenerates the file when the schema or curation changes.</summary>
 public sealed class CutDownPluginFixture : IDisposable
 {
-    public static readonly PluginCopyKey Plugin = new(RealDataPlugin.PluginFileName, PluginOrigin.DataDirectory);
+    public static readonly PluginAddress Plugin = new(RealDataPlugin.PluginFileName, PluginOrigin.DataDirectory);
 
     public string InstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-cutdown-instance-").FullName;
 

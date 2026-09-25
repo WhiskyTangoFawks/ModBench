@@ -10,5 +10,5 @@ internal static class TrackEveryPluginOf
 {
     internal static Task<TrackSelectionResult> TrackModAsync(
         this TrackService track, LoadOrderSnapshot loadOrder, string origin, SourcePreset preset) =>
-        track.TrackAsync(loadOrder, [.. loadOrder.CopiesOfOrigin(origin).Select(copy => copy.Key)], preset);
+        track.TrackAsync(loadOrder, [.. loadOrder.PluginsOfOrigin(origin).Select(plugin => plugin.Key)], preset);
 }

@@ -42,7 +42,7 @@ public sealed class ArchitectureTests
         (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
-    // ADR-0012: a bare filename compiles and passes single-copy tests, then misidentifies.
+    // ADR-0012: a bare filename compiles and passes single-plugin tests, then misidentifies.
     [Fact]
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
@@ -68,7 +68,7 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "A plugin name travels without its origin:\n" + string.Join("\n", offenders));
     }
 
-    // A typed PluginCopyKey parameter already carries both halves; only a string name can travel alone.
+    // A typed PluginAddress parameter already carries both halves; only a string name can travel alone.
     internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
         PluginStringsWithoutOrigin(parameters
             .Select(p => (p.Name ?? throw new InvalidOperationException("Expected a parameter to have a name."), p.ParameterType))
@@ -132,7 +132,7 @@ public sealed class ArchitectureTests
     public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheWatcher()
     {
         var root = SolutionDirectory();
-        // Create never reconciles: its copy reaches the Index through the next snapshot. The
+        // Create never reconciles: its plugin reaches the Index through the next snapshot. The
         // watcher, the one listener to the change, is the one caller of the reconcile door.
         string[] reconcilers = ["ModFolderWatcher.cs", "WatcherSinks.cs"];
         string[] writers = ["CreatePluginHandler.cs", "PutLoadOrderHandler.cs"];
@@ -258,7 +258,7 @@ public sealed class ArchitectureTests
     }
 
     // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
-    // answer to "which copy wins". As a parameter it is the snapshot going in, the allowed
+    // answer to "which plugin wins". As a parameter it is the snapshot going in, the allowed
     // direction.
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
@@ -504,7 +504,7 @@ public sealed class ArchitectureTests
     {
         static void Bare(string plugin, string other) { }
         static void Paired(string sourcePlugin, string sourceOrigin, string destinationPlugin) { }
-        static void Typed(PluginCopyKey plugin) { }
+        static void Typed(PluginAddress plugin) { }
 
         Assert.Equal(["plugin"], PluginStringsWithoutOrigin(ParametersOf(Bare)));
         Assert.Equal(["destinationPlugin"], PluginStringsWithoutOrigin(ParametersOf(Paired)));

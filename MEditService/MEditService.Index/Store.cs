@@ -17,7 +17,7 @@ namespace MEditService.Index;
 internal sealed class Store : IDisposable
 {
     internal const string FilesRelation = "mirror.files";
-    internal const string CopySourceRelation = $"mirror.{TableDdlBuilder.CopySourceTable}";
+    internal const string PluginDerivationRelation = $"mirror.{TableDdlBuilder.PluginDerivationTable}";
     internal const string PluginDiagnosisRelation = $"mirror.{TableDdlBuilder.PluginDiagnosisTable}";
     internal const string SequenceRelation = "mirror.sequence";
 
@@ -210,9 +210,9 @@ internal sealed class Store : IDisposable
     /// <summary>ADR-0009: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
     /// and the user all write these files. Registrations are not cleared (ADR-0013); the first
     /// reconcile corrects them.</summary>
-    public List<PluginCopyKey> ValidateAgainstDisk()
+    public List<PluginAddress> ValidateAgainstDisk()
     {
-        var stale = new List<PluginCopyKey>();
+        var stale = new List<PluginAddress>();
         if (_databasePath == null) return stale;
 
         var timer = Stopwatch.StartNew();
@@ -253,14 +253,14 @@ internal sealed class Store : IDisposable
         return stale;
     }
 
-    private List<(PluginCopyKey Key, string FilePath, string ContentHash)> IndexedFiles()
+    private List<(PluginAddress Key, string FilePath, string ContentHash)> IndexedFiles()
     {
-        var rows = new List<(PluginCopyKey Key, string FilePath, string ContentHash)>();
+        var rows = new List<(PluginAddress Key, string FilePath, string ContentHash)>();
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
-            rows.Add((new PluginCopyKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
+            rows.Add((new PluginAddress(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
         return rows;
     }
 
@@ -283,7 +283,7 @@ internal sealed class Store : IDisposable
     /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
     /// Validate's untracked half asks for both halves at once: the path to re-hash and the hash the
     /// rows were built under.</summary>
-    internal (string FilePath, string ContentHash)? IndexedFile(PluginCopyKey key)
+    internal (string FilePath, string ContentHash)? IndexedFile(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2";
@@ -294,9 +294,9 @@ internal sealed class Store : IDisposable
 
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
     /// holds no rows for it.</summary>
-    internal DerivedFrom? DerivationOf(PluginCopyKey key) =>
+    internal DerivedFrom? DerivationOf(PluginAddress key) =>
         DuckDbSql.ScalarString(Connection,
-            $"SELECT derived_from FROM {CopySourceRelation} WHERE plugin = $1 AND origin = $2",
+            $"SELECT derived_from FROM {PluginDerivationRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin) is { } stamp && Enum.TryParse<DerivedFrom>(stamp, out var derivedFrom)
             ? derivedFrom
             : null;
@@ -304,13 +304,13 @@ internal sealed class Store : IDisposable
     /// <summary>Restates which truth <paramref name="key"/>'s rows read as, leaving the file claim
     /// beside it: a refresh re-derives the rows in place, and the binary they were stamped against
     /// is still the file on disk.</summary>
-    internal void RestampDerivation(PluginCopyKey key, DerivedFrom derivedFrom) =>
+    internal void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom) =>
         DuckDbSql.ExecuteFor(Connection,
-            $"UPDATE {CopySourceRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
+            $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3",
             derivedFrom.ToString(), key.Name, key.Origin);
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginCopyKey key)
+    public string? IndexedContentHash(PluginAddress key)
     {
         using var connection = OpenReadConnection();
         return DuckDbSql.ScalarString(connection,
@@ -318,14 +318,14 @@ internal sealed class Store : IDisposable
             key.Name, key.Origin);
     }
 
-    // ADR-0009 invariant 4: the copy half of an Index() call, inside its transaction. A caller
+    // ADR-0009 invariant 4: the plugin half of an Index() call, inside its transaction. A caller
     // naming no file (an in-memory mod) writes no file row, so nothing vouches for those rows and
     // the next load re-indexes.
-    public void StampCopy(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)
+    public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)
     {
-        DeleteCopyFacts(plugin, origin);
+        DeletePluginFacts(plugin, origin);
         DuckDbSql.ExecuteFor(Connection, $"""
-            INSERT INTO {CopySourceRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
+            INSERT INTO {PluginDerivationRelation} (plugin, origin, derived_from) VALUES ($1, $2, $3)
             """, plugin, origin, derivedFrom.ToString());
         if (filePath == null || PluginBinaryHash.BytesOfFile(filePath) is not { } bytes)
         {
@@ -376,11 +376,11 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>The file claim, the derivation and the diagnoses go together: every one of them is
-    /// about the rows this copy holds, and Unindex is the verb that drops those.</summary>
-    public void DeleteCopyFacts(string plugin, string origin)
+    /// about the rows this plugin holds, and Unindex is the verb that drops those.</summary>
+    public void DeletePluginFacts(string plugin, string origin)
     {
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
-        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {CopySourceRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {PluginDerivationRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 

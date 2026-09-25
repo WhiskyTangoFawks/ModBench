@@ -17,7 +17,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceTreeDocumentsTests : IDisposable
 {
     private const string PluginName = "TreeDocuments.esp";
-    private static readonly PluginCopyKey Plugin = new(PluginName, "TreeDocumentsMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "TreeDocumentsMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-treedocuments-").FullName;

@@ -35,7 +35,7 @@ public sealed class IndexerTests
             .BuildScattered();
 
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
+        new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins ?? fx.Plugins));
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
     private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
@@ -61,10 +61,10 @@ public sealed class IndexerTests
     }
 
     // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the copies the Index has open still carry the old winner: an Indexer
+    // next snapshot here, so the plugins the Index has open still carry the old winner: an Indexer
     // reading them answers B.esp.
     [Fact]
-    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()
+    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-winners-from-holder");
@@ -81,7 +81,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public void Reconcile_RegistersExactlyTheLoadOrdersCopies()
+    public void Reconcile_RegistersExactlyTheLoadOrdersPlugins()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-registrations");
@@ -90,17 +90,18 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Copies, copy => Assert.True(indexer.Registers(copy.Key)));
+        Assert.All(snapshot.Plugins, plugin => Assert.True(indexer.Registers(plugin.Key)));
         Assert.Equal(
-            snapshot.Copies.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
-            indexer.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
-        Assert.False(indexer.Registers(new PluginCopyKey("Nobody.esp", PluginOrigin.DataDirectory)));
+            snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
+            indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
+        Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
-    // Header flags, the master list and the record count are read out of the file when the copy is
-    // opened and are stored in no row, so the reads answer them from the copies the Index holds open.
+    // Header flags, the master list and the record count are read out of the file when the plugin is
+    // opened and are stored in no row, so the reads answer them from the plugins the Index holds
+    // open.
     [Fact]
-    public void TheReads_CarryTheContentFactsOfEveryCopyTheIndexOpened()
+    public void TheReads_CarryTheContentFactsOfEveryPluginTheIndexOpened()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-opened-content");
@@ -109,18 +110,18 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedCopies;
-        var patch = opened[snapshot.Copies.Single(c => c.Name == "B.esp").Key];
+        var opened = indexer.RequireReads().OpenedPlugins;
+        var patch = opened[snapshot.Plugins.Single(c => c.Name == "B.esp").Key];
         Assert.Equal(["A.esm"], patch.Masters);
         Assert.Equal(1, patch.RecordCount);
         Assert.False(patch.IsMaster);
-        Assert.True(opened[snapshot.Copies.Single(c => c.Name == "A.esm").Key].IsMaster);
+        Assert.True(opened[snapshot.Plugins.Single(c => c.Name == "A.esm").Key].IsMaster);
     }
 
-    // A copy the Index could not open has no content to report, and the plugin listing is built by
-    // joining the load order's copies to exactly this set.
+    // A plugin the Index could not open has no content to report, and the plugin listing is built by
+    // joining the load order's plugins to exactly this set.
     [Fact]
-    public void TheReads_OmitACopyTheIndexCouldNotOpen()
+    public void TheReads_OmitAPluginTheIndexCouldNotOpen()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-unopenable-content");
@@ -130,9 +131,9 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        var opened = indexer.RequireReads().OpenedCopies;
-        Assert.DoesNotContain(new PluginCopyKey("Gone.esp", "SomeMod"), opened.Keys);
-        Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
+        var opened = indexer.RequireReads().OpenedPlugins;
+        Assert.DoesNotContain(new PluginAddress("Gone.esp", "SomeMod"), opened.Keys);
+        Assert.Contains(snapshot.Plugins.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
 
     [Fact]
@@ -145,7 +146,7 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(await indexer.RefreshBinary(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
+        Assert.True(await indexer.RefreshBinary(new PluginAddress("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
 
         Assert.Equal(before + 1, indexer.Sequence);
     }
@@ -170,7 +171,7 @@ public sealed class IndexerTests
     }
 
     [Fact]
-    public void AnArrivingCopy_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
+    public void AnArrivingPlugin_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-arriving-filter");

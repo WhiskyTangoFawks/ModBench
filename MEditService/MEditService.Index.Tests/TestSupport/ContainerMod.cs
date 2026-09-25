@@ -20,7 +20,7 @@ internal sealed class ContainerMod : IDisposable
     private readonly ScatteredFixtureData _fixture;
 
     public LoadOrderEntry Entry { get; }
-    public PluginCopyKey Plugin => Entry.KeyOf();
+    public PluginAddress Plugin => Entry.KeyOf();
     public string GameDirectory => _fixture.GameDirectory;
 
     public FormKey Cell { get; }
@@ -77,7 +77,7 @@ internal sealed class IndexedContainerMod : IDisposable
 
     public ContainerMod Mod => _mod;
     public LoadOrderEntry Entry => _mod.Entry;
-    public PluginCopyKey Plugin => _mod.Plugin;
+    public PluginAddress Plugin => _mod.Plugin;
     public IRecordReads Reads => Index.RequireReads();
 
     public string Cell => _mod.Cell.ToString();

@@ -44,7 +44,7 @@ public sealed class LoadOrderLocalizedTests
             Assert.Empty(manager.Status.Failures);
 
             var reads = manager.RequireReads();
-            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginCopyKey("Fixture.esp", "Data"));
+            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginAddress("Fixture.esp", "Data"));
             Assert.NotNull(detail);
             Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Big Door") == true);
         }

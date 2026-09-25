@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Http.Tests.Api;
 
 /// <summary>Refresh's own first step (load-instance, refresh): the index file is dropped, and mEdit
-/// reads every copy again against the load order it holds, as a cold load does. Nothing is sent.
+/// reads every plugin again against the load order it holds, as a cold load does. Nothing is sent.
 /// </summary>
 [Collection(WebHostCollection.Name)]
 public sealed class IndexRebuildApiTests : HostedTests
@@ -32,7 +32,7 @@ public sealed class IndexRebuildApiTests : HostedTests
     private async Task<JsonElement> Status() => await Client.GetFromJsonAsync<JsonElement>("/load-order/status");
 
     [Fact]
-    public async Task RebuildingWithALoadOrderHeld_ReadsEveryCopyAgain_WithNoPut_WithoutRegressingTheSequence()
+    public async Task RebuildingWithALoadOrderHeld_ReadsEveryPluginAgain_WithNoPut_WithoutRegressingTheSequence()
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();

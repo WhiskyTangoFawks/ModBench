@@ -50,7 +50,7 @@ describe('buildColumns', () => {
     expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
 
-  // ADR-0012: two loaded copies sharing a filename are two columns with distinct keys — the
+  // ADR-0012: two loaded plugins sharing a filename are two columns with distinct keys — the
   // compound (plugin, origin) identity is minted here, once, for every consumer.
   it('keys same-filename columns by compound identity', () => {
     const cols = buildColumns([
@@ -66,7 +66,7 @@ describe('buildColumns', () => {
   });
 });
 
-// ADR-0013: `immutableSet` alone can't tell a vanilla master from a copy the load order does
+// ADR-0013: `immutableSet` alone can't tell a vanilla master from a plugin the load order does
 // not name, and the header needs both facts to word the tooltip and decide whether to dim.
 describe('columnStatus', () => {
   it('is "tracked" for a mutable, tracked column, regardless of inLoadOrder', () => {

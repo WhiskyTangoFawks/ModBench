@@ -27,7 +27,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _referrer = new(ReferrerName, ReferrerOrigin);
+    private readonly PluginAddress _referrer = new(ReferrerName, ReferrerOrigin);
     private readonly string _targetPath;
     private readonly string _referrerPath;
     private readonly FormKey _embeddedTarget;
@@ -61,7 +61,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 Target(enabled: true),
                 Referrer,
             ]));
@@ -113,13 +113,13 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0013: a registered copy the game does not load is not where the link points, so its file
+    // ADR-0013: a registered plugin the game does not load is not where the link points, so its file
     // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
-    public async Task Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
+    public async Task Compile_ForALinkIntoATrackedPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = new LoadOrderSnapshot(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([Target(enabled: false), Referrer]));
+            _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of([Target(enabled: false), Referrer]));
 
         var result = await CompileServices.Over(notLoaded).CompileAsync(_referrer, new CompileSource.WorkingTree());
 
@@ -136,7 +136,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     {
         var targets = TestAdapters.Mutagen().LinkTargets(
             _loadOrder,
-            _loadOrder.Copy(_referrer).Require(),
+            _loadOrder.Plugin(_referrer).Require(),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             [_embeddedTarget.ToString()]);
 

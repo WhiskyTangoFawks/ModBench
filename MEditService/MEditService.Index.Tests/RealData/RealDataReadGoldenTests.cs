@@ -56,7 +56,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = Types.ToDictionary(
             type => type,
             type => FormKeysOf(type)
-                .SelectMany(fk => _repo.GetDocument(fk, new PluginCopyKey(TestPluginName, Origin))
+                .SelectMany(fk => _repo.GetDocument(fk, new PluginAddress(TestPluginName, Origin))
                     is not { } document ? [] : new[] { Project(document) })
                 .ToList());
 
@@ -68,13 +68,13 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         var captured = new
         {
-            Counts = Types.ToDictionary(t => t, t => _repo.GetRecordTypeCounts(new PluginCopyKey(TestPluginName, Origin))
+            Counts = Types.ToDictionary(t => t, t => _repo.GetRecordTypeCounts(new PluginAddress(TestPluginName, Origin))
                 .FirstOrDefault(c => string.Equals(c.Type, t, StringComparison.OrdinalIgnoreCase))?.Count ?? 0),
             Listings = Types.ToDictionary(t => t, WholeListing),
             SearchAllTypesTotal = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
             SearchByEditorId = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
                 .Items.OrderBy(r => r.FormKey, StringComparer.Ordinal).Take(20).ToList(),
-            NativeFormKeyCount = _repo.GetNativeFormKeys(new PluginCopyKey(TestPluginName, Origin)).Count,
+            NativeFormKeyCount = _repo.GetNativeFormKeys(new PluginAddress(TestPluginName, Origin)).Count,
         };
 
         Golden.Verify("realdata-listings", captured);
@@ -88,14 +88,14 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(
-                fk => fk, fk => _repo.GetWorldspaceCells(new PluginCopyKey(TestPluginName, Origin), fk)
+                fk => fk, fk => _repo.GetWorldspaceCells(new PluginAddress(TestPluginName, Origin), fk)
                     .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList()),
-            InteriorCells = _repo.GetInteriorCells(new PluginCopyKey(TestPluginName, Origin), WholeType, 0)
+            InteriorCells = _repo.GetInteriorCells(new PluginAddress(TestPluginName, Origin), WholeType, 0)
                 .Items.OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
             CellReferences = cells.ToDictionary(
                 fk => fk, fk =>
                 {
-                    var refs = _repo.GetCellReferences(new PluginCopyKey(TestPluginName, Origin), fk);
+                    var refs = _repo.GetCellReferences(new PluginAddress(TestPluginName, Origin), fk);
                     return new
                     {
                         Persistent = refs.Persistent.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
@@ -103,7 +103,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                     };
                 }),
             Placements = FormKeysOf("refr").ToDictionary(
-                fk => fk, fk => _repo.GetPlacement(fk, new PluginCopyKey(TestPluginName, Origin))),
+                fk => fk, fk => _repo.GetPlacement(fk, new PluginAddress(TestPluginName, Origin))),
         };
 
         Golden.Verify("realdata-spatial", captured);

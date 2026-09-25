@@ -84,8 +84,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copyfail-dest-").FullName;
         private readonly string _sourcePath;
 
-        public PluginCopyKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
-        public PluginCopyKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
+        public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
+        public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
         public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
         public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
 
@@ -116,7 +116,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             destination.WriteToBinary(destinationPath);
             inputs.Add(new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, inputs.Count, Enabled: true, Winning: true));
 
-            var loadOrder = new LoadOrderSnapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+            var loadOrder = new LoadOrderSnapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, SnapshotPlugins.Of(inputs));
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 

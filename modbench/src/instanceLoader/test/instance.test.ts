@@ -263,7 +263,7 @@ describe('Instance — the value', () => {
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
   });
 
-  it('carries every plugin copy — listed, unlisted and Data-folder — with origin, slot, enabled and winning', async () => {
+  it('carries every plugin — listed, unlisted and Data-folder — with origin, slot, enabled and winning', async () => {
     const { root, instance } = await realInstance();
 
     await instance.refresh();
@@ -277,29 +277,29 @@ describe('Instance — the value', () => {
     ]);
   });
 
-  it('sends the losing copy of a plugin two enabled mods provide, at the same slot', async () => {
+  it('sends the overridden plugin of a filename two enabled mods provide, at the same slot', async () => {
     const { root, instance } = await realInstance();
-    const losing = await writeModFile(root, 'Unofficial Fallout 4 Patch', 'NonAsciiRetexture.esp', 'losing copy');
+    const overridden = await writeModFile(root, 'Unofficial Fallout 4 Patch', 'NonAsciiRetexture.esp', 'overridden plugin');
 
     await instance.refresh();
 
     expect(instance.value.plugins).toContainEqual(
-      { name: 'NonAsciiRetexture.esp', path: losing, origin: 'Unofficial Fallout 4 Patch', slot: 0, enabled: true, winning: false },
+      { name: 'NonAsciiRetexture.esp', path: overridden, origin: 'Unofficial Fallout 4 Patch', slot: 0, enabled: true, winning: false },
     );
   });
 });
 
 describe('Instance — the overwrite folder', () => {
-  it('resolves a listed plugin to the overwrite copy, sending the mod copy as losing', async () => {
+  it('resolves a listed plugin to the overwrite plugin, sending the mod plugin as overridden', async () => {
     const { root, instance } = await realInstance();
-    const overwriteCopy = join(root, 'overwrite', 'NonAsciiRetexture.esp');
-    await writeFile(overwriteCopy, 'overwrite-copy');
+    const overwritePlugin = join(root, 'overwrite', 'NonAsciiRetexture.esp');
+    await writeFile(overwritePlugin, 'overwrite-plugin');
 
     await instance.refresh();
 
-    const copies = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
-    expect(copies).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: overwriteCopy, origin: 'overwrite', slot: 0, enabled: true, winning: true },
+    const plugins = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(plugins).toEqual([
+      { name: 'NonAsciiRetexture.esp', path: overwritePlugin, origin: 'overwrite', slot: 0, enabled: true, winning: true },
       { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: false },
     ]);
   });

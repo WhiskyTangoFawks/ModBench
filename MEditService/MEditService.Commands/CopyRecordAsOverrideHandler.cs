@@ -32,14 +32,14 @@ public sealed class CopyRecordAsOverrideHandler
 
     /// <summary>The source's text is read before anything is written, so a record the codec cannot
     /// read refuses rather than landing as a stub. The master dependency follows at compile.</summary>
-    public RecordEditResult CopyRecordAsOverride(PluginCopyKey sourcePlugin, string formKey, PluginCopyKey destinationPlugin)
+    public RecordEditResult CopyRecordAsOverride(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
         return CopyAsOverride(copy, destinationPlugin);
     }
 
-    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginCopyKey destinationPlugin)
+    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -156,16 +156,16 @@ public sealed class CopyRecordAsOverrideHandler
 
     // A destination loading before the origin would be an underride, silently
     // beaten at runtime. A plugin the load order does not place passes.
-    private RecordEditResult? RefuseIfUnderride(string formKey, PluginCopyKey destinationPlugin)
+    private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
     {
-        var copies = _loadOrder.Current.Copies;
+        var plugins = _loadOrder.Current.Plugins;
 
-        // A FormKey carries only a filename, so with two same-named copies (ADR-0012) the winning one
-        // is the origin.
+        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
+        // winning one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var sameNamed = copies.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
         var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.Slot;
-        var destinationIndex = copies.FirstOrDefault(
+        var destinationIndex = plugins.FirstOrDefault(
             p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
                 && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.Slot;
         if (originIndex is not { } origin || destinationIndex is not { } destination || destination >= origin)

@@ -25,8 +25,8 @@ public class LoadOrderViaRegistrationTests
                 mod.Npcs.Set(built[0].Npcs.First().DeepCopy());
             })
             .Build();
-        var aKey = new PluginCopyKey("PluginA.esm", "Data");
-        var bKey = new PluginCopyKey("PluginB.esp", "Data");
+        var aKey = new PluginAddress("PluginA.esm", "Data");
+        var bKey = new PluginAddress("PluginB.esp", "Data");
         var holder = new LoadOrderHolder();
         using var opens = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, opens);

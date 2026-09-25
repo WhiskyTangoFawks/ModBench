@@ -103,7 +103,7 @@ public class PluginParticipationTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.RequireReads().GetDocument(npcKey.ToString(), new PluginCopyKey("Disabled.esp", "Data"));
+        var record = index.RequireReads().GetDocument(npcKey.ToString(), new PluginAddress("Disabled.esp", "Data"));
 
         Assert.NotNull(record);
         Assert.False(record.IsWinner);

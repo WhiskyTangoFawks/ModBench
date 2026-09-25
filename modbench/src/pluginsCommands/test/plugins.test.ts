@@ -211,17 +211,17 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
 
   it('an implicit master the backend reports, which an enabled mod also ships, is never appended: the tree has no line-backed row for it', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
-    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
     expect(await run(undefined, ['Fallout4.esm'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
   });
 
-  // The rival this forbids: ignoring the backend's answer. Then the mod's copy is an ordinary
+  // The rival this forbids: ignoring the backend's answer. Then the mod's plugin is an ordinary
   // unlisted plugin and earns a line.
   it('appends a mod-shipped vanilla plugin the backend does not call implicit', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
-    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
     expect(await run(undefined, [])).toEqual({
       applied: true, wrote: true, added: ['Fallout4.esm'], dropped: [],
@@ -229,7 +229,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   });
 
   it('an implicit master matches its plugins.txt line case-insensitively', async () => {
-    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
     expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
   });

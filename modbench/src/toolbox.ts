@@ -197,7 +197,7 @@ interface PluginListDeps {
   /** The rows the game forces on, asked of the backend (ADR-0016). */
   implicitMasters: ImplicitMasterSource;
   /** ADR-0015: the tree's only row input — name, origin, slot, enabled and winning for every
-   *  plugin copy. */
+   *  plugin. */
   instance: Instance;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
@@ -326,7 +326,7 @@ async function handleLoadOrder(
   // The game folder not found has its own one Output line; a line per value would repeat it.
   if (!put.sent) return;
   const { plugins } = put.snapshot;
-  outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugin copies)`);
+  outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins)`);
   reportPutOutcome(plugins, put.outcome, {
     warn: (m) => reporter.report('warning', m), error: (m) => reporter.report('error', m),
   });
@@ -363,7 +363,7 @@ async function applyLoadOrderToTree(
   // Do not remove as logging noise: `held.length + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
   outputChannel.info(
-    `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
+    `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`,
   );
 }
 

@@ -14,7 +14,7 @@ public sealed class CompilePluginHandler
     internal CompilePluginHandler(WriteTargets targets, PluginCompileService compileService) =>
         (_targets, _compileService) = (targets, compileService);
 
-    public Task<CompileResult> CompileAsync(PluginCopyKey plugin, CompileSource source)
+    public Task<CompileResult> CompileAsync(PluginAddress plugin, CompileSource source)
     {
         // Only the deferral is the door's to refuse here: an untracked or unknown plugin gets
         // compile's own refusal, which names the source it lacks rather than a Track it cannot run.

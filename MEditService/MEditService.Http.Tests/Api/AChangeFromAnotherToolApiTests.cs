@@ -436,7 +436,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private static bool Names(JsonElement rowsChanged, string formKey) =>
         rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
 
-    // An untracked copy's bytes are its only truth, so the Index re-derives the copy itself and
+    // An untracked plugin's bytes are its only truth, so the Index re-derives the plugin itself and
     // names it whole: too many rows to list.
     [Fact]
     public async Task ARewriteOfAnUntrackedPluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
@@ -457,10 +457,10 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(0.9, (await Field(formKey, "HeightMax")).GetDouble(), 3);
     }
 
-    // A tracked copy's bytes are the mod's system of record and its rows come from the source
+    // A tracked plugin's bytes are the mod's system of record and its rows come from the source
     // tree, so a rewrite is Commands' question, never the Index's projection.
     [Fact]
-    public async Task ARewriteOfTheTrackedPluginsBytes_OpensAQuestionNamingTheCopy()
+    public async Task ARewriteOfTheTrackedPluginsBytes_OpensAQuestionNamingThePlugin()
     {
         using var fx = await ATrackedMod();
         using var stream = await Client.NotificationStream();

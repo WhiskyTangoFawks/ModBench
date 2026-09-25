@@ -37,7 +37,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDir, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)
@@ -69,7 +69,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         foreach (var fileName in originalStringsFiles.Keys)
             File.Delete(Path.Combine(stringsDir, fileName));
 
-        var plugin = new PluginCopyKey(PluginName, Origin);
+        var plugin = new PluginAddress(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
         var result = await compileService.CompileAsync(plugin, new CompileSource.WorkingTree());
 

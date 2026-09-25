@@ -34,7 +34,7 @@ public sealed class CreateRecordHandler
     /// <summary>The FormKey is <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or the next
     /// free local ID, collision-checked at both refs so an uncompiled create or a working-tree-deleted
     /// record is never handed out twice.</summary>
-    public RecordEditResult CreateRecord(PluginCopyKey plugin, string recordType, string? editorId, string? requestedFormKey = null)
+    public RecordEditResult CreateRecord(PluginAddress plugin, string recordType, string? editorId, string? requestedFormKey = null)
     {
         if (_targets.RefuseIfBlocked(plugin, out _, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository

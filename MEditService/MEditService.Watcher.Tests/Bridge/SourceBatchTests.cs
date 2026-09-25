@@ -17,7 +17,7 @@ public sealed class SourceBatchTests
     private static async Task<string> OneTrackedMod(WatchedTree tree, params string[] plugins)
     {
         var modFolder = tree.AddMod(Origin, plugins[0]);
-        foreach (var plugin in plugins.Skip(1)) tree.AddCopy(Origin, modFolder, plugin);
+        foreach (var plugin in plugins.Skip(1)) tree.AddPlugin(Origin, modFolder, plugin);
         WatchedTree.Track(modFolder, plugins);
         await tree.ApplyLoadOrder();
         return modFolder;
@@ -88,7 +88,7 @@ public sealed class SourceBatchTests
         Assert.Single(tree.Index.Of("validate"));
     }
 
-    // The narrow route: a whole-copy validate would land the same rows, so only the verb the Index
+    // The narrow route: a whole-plugin validate would land the same rows, so only the verb the Index
     // was asked for tells the two apart.
     [Fact]
     public async Task ADocumentThatNamesItsRecord_IsRefreshedByKey_NotValidatedWhole()
@@ -125,7 +125,7 @@ public sealed class SourceBatchTests
     }
 
     // Its name still carries the key, but a document that declares nothing files no record, so the
-    // whole-copy validate would count it unreadable and keep the stale row.
+    // whole-plugin validate would count it unreadable and keep the stale row.
     [Fact]
     public async Task ACommittedDocumentOverwrittenToDeclareNothing_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
     {
@@ -170,7 +170,7 @@ public sealed class SourceBatchTests
     // The operating system watches a new folder only once its creation is handled, so a batch naming
     // the folder cannot vouch for the documents written into it.
     [Fact]
-    public async Task AFolderCreatedUnderTheSourceRoot_ValidatesTheCopyWhole()
+    public async Task AFolderCreatedUnderTheSourceRoot_ValidatesThePluginWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
@@ -207,7 +207,7 @@ public sealed class SourceBatchTests
     }
 
     [Fact]
-    public async Task ADocumentNoCommitFiled_DeletedFromTheWorkingTree_ValidatesTheCopyWhole()
+    public async Task ADocumentNoCommitFiled_DeletedFromTheWorkingTree_ValidatesThePluginWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
@@ -237,10 +237,10 @@ public sealed class SourceBatchTests
         Assert.Equal(["A.esp", "B.esp"], ValidatedIn(tree, 1));
     }
 
-    // A document that names no record cannot be refreshed by key, so the whole copy is the only
+    // A document that names no record cannot be refreshed by key, so the whole plugin is the only
     // honest question to ask the Index.
     [Fact]
-    public async Task ADocumentNamingNoRecord_ValidatesTheCopyWhole()
+    public async Task ADocumentNamingNoRecord_ValidatesThePluginWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");

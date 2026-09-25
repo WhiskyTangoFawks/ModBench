@@ -17,7 +17,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     private const string NpcEditorId = "FixtureNpc";
     private const string NpcBody = "{\n  \"FormKey\": \"000800:FilesOf.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
 
-    private static readonly PluginCopyKey Plugin = new(PluginName, "FilesOfMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "FilesOfMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-filesof-").FullName;
@@ -123,7 +123,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     [Fact]
     public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty_AtEitherSource()
     {
-        var stranger = new PluginCopyKey("Stranger.esp", Plugin.Origin);
+        var stranger = new PluginAddress("Stranger.esp", Plugin.Origin);
 
         Assert.Empty(Repository.FilesOf(stranger, gitRef: null).Files);
         Assert.Empty(Repository.FilesOf(stranger, "HEAD").Files);
