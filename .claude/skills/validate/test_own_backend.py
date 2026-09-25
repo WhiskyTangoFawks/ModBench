@@ -1,7 +1,6 @@
-"""Observes own-backend.sh: each caller reaches the backend it started, on a port no other run
-shares, and on every exit path stops that backend's whole process group and nothing else."""
 import os
 import pathlib
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -12,11 +11,14 @@ import unittest
 HELPER = pathlib.Path(__file__).resolve().parent / "own-backend.sh"
 
 FAKE_BACKEND = textwrap.dedent("""
-    import http.server, os, pathlib, subprocess, sys
+    import http.server, os, pathlib, socket, subprocess, sys, time
     token, pid_file = sys.argv[1], sys.argv[2]
     host, port = sys.argv[sys.argv.index("--urls") + 1].rsplit("/", 1)[1].rsplit(":", 1)
     child = subprocess.Popen(["sleep", "600"])
     pathlib.Path(pid_file).write_text(f"{os.getpid()} {child.pid}")
+    if "--silent-listener-first" in sys.argv:
+        silent = socket.create_server((host, 0))
+        time.sleep(1)
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -68,10 +70,10 @@ class OwnBackend(unittest.TestCase):
     def pids(self, token):
         return [int(p) for p in self.pid_file(token).read_text().split()]
 
-    def run_with_backend(self, token, client, server=None):
-        server = server or ["python3", str(self.fake), token, str(self.pid_file(token))]
-        script = f'source "{HELPER}"; start_own_backend "$@" || exit 1; {client}'
-        run = subprocess.Popen(["bash", "-c", script, "_", *server], start_new_session=True,
+    def run_with_backend(self, token, client, server=None, before="", fake_args=(), env=None):
+        server = server or ["python3", str(self.fake), token, str(self.pid_file(token)), *fake_args]
+        script = f'{before}\nsource "{HELPER}"; start_own_backend "$@" || exit 1; {client}'
+        run = subprocess.Popen(["bash", "-c", script, "_", *server], start_new_session=True, env=env,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         self.addCleanup(self.kill_leftovers, run, token)
         return run
@@ -132,6 +134,34 @@ class OwnBackend(unittest.TestCase):
         self.assertEqual(run.returncode, 1)
         self.assertIn("boom", out)
         self.assertNotIn("reached-client", out)
+
+    def test_reaches_the_listener_that_answers_health_when_another_opened_first(self):
+        run = self.run_with_backend("two-listeners", 'curl -sf "$OWN_BACKEND_URL/token"',
+                                    fake_args=["--silent-listener-first"])
+        out, _ = run.communicate(timeout=30)
+        self.assertEqual(run.returncode, 0, out)
+        self.assertEqual(out.strip().splitlines()[-1], "two-listeners")
+
+    def test_without_ss_the_start_fails_at_once_naming_it(self):
+        tools = self.dir / "bin"
+        tools.mkdir()
+        for tool in ["bash", "python3", "setsid", "pgrep", "paste", "awk", "grep", "curl", "sleep",
+                     "mktemp", "tail", "rm", "seq"]:
+            (tools / tool).symlink_to(shutil.which(tool))
+        run = self.run_with_backend("no-ss", "echo reached-client", env={**os.environ, "PATH": str(tools)})
+        out, _ = run.communicate(timeout=10)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("`ss`", out)
+        self.assertNotIn("reached-client", out)
+        self.assertFalse(self.pid_file("no-ss").exists(), "a backend started without a way to find its port")
+
+    def test_with_job_control_on_the_start_refuses_before_starting_a_backend(self):
+        run = self.run_with_backend("job-control", "echo reached-client", before="set -m")
+        out, _ = run.communicate(timeout=10)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("job control", out)
+        self.assertNotIn("reached-client", out)
+        self.assertFalse(self.pid_file("job-control").exists(), "a backend started outside the caller's reach")
 
 
 if __name__ == "__main__":
