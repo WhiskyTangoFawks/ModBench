@@ -42,7 +42,7 @@ export type ModlistCommandResult =
 async function spliceModlist(
   instanceRoot: string,
   profile: string,
-  transform: (text: string) => string,
+  transform: (text: string) => string | Promise<string>,
 ): Promise<ModlistCommandResult> {
   try {
     const { wrote } = await putIfChanged(modlistFile(instanceRoot, profile), transform);
@@ -401,42 +401,40 @@ const lineNameOf = (entry: ModlistEntry): string =>
 const listedFolderOf = (entry: ModlistEntry): string | undefined =>
   (entry.kind === 'mod' ? entry.name : separatorFolderName(entry.name));
 
+async function keepWhere<T>(items: readonly T[], keep: (item: T) => Promise<boolean>): Promise<T[]> {
+  const kept = await Promise.all(items.map(keep));
+  return items.filter((_, i) => kept[i]);
+}
+
 /** `modbench.mod.sync`: a disabled line for each folder with none, and each line whose folder is
- *  gone dropped, in one write; `dropped` names those folders. No `mods/` to list is refused. */
+ *  gone dropped, in one write; `dropped` names those lines. No `mods/` to list is refused. */
 export async function syncMods(
   instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
 ): Promise<ModSyncResult> {
   if (modFolders === undefined) {
     return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist` };
   }
-  const folders = new Set(modFolders);
+  const listed = new Set(modFolders);
   const inGesture = (folder: string) => foldersInGesture.has(modDir(instanceRoot, folder));
-  const goneFrom = (text: string) => parseModlist(text).flatMap((entry): { entry: ModlistEntry; folder: string | undefined }[] => {
-    const folder = listedFolderOf(entry);
-    if (folder === undefined) return [{ entry, folder }];
-    return !folders.has(folder) && !inGesture(folder) ? [{ entry, folder }] : [];
-  });
-  // The value lags the disk, so a folder it misses is dropped only once it is gone from disk too.
-  let goneOnDisk: ReadonlySet<string>;
-  try {
-    const candidates = goneFrom(await get(modlistFile(instanceRoot, profile)));
-    const onDisk = await Promise.all(candidates.map(({ folder }) =>
-      folder === undefined ? Promise.resolve(false) : exists(modDir(instanceRoot, folder))));
-    goneOnDisk = new Set(candidates.filter((_, i) => !onDisk[i]).map(({ entry }) => lineNameOf(entry)));
-  } catch (err) {
-    return refuse(err);
-  }
+  const onDisk = (folder: string) => exists(modDir(instanceRoot, folder));
   let added: string[] = [];
   let dropped: string[] = [];
-  const outcome = await spliceModlist(instanceRoot, profile, (text) => {
-    // Read inside the write lock: two values can hand over the same folders before the first
-    // write comes back, and only the text about to be spliced says what is still to do.
-    added = unlistedModNames([...modFolders], parseModlist(text)).filter((folder) => !inGesture(folder));
-    const gone = goneFrom(text).filter(({ entry }) => goneOnDisk.has(lineNameOf(entry)));
-    dropped = gone.map(({ entry }) => lineNameOf(entry));
+  const outcome = await spliceModlist(instanceRoot, profile, async (text) => {
+    // Under the write lock: two values can hand over the same folders before the first write comes
+    // back, and each lags the disk, so only the text about to be spliced and the disk as it is now
+    // say what is still to do.
+    const entries = parseModlist(text);
+    const gone = await keepWhere(entries, async (entry) => {
+      const folder = listedFolderOf(entry);
+      if (folder === undefined) return true;
+      return !listed.has(folder) && !inGesture(folder) && !(await onDisk(folder));
+    });
+    added = await keepWhere(unlistedModNames([...modFolders], entries),
+      async (folder) => !inGesture(folder) && onDisk(folder));
+    dropped = gone.map(lineNameOf);
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so
     // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
-    const withoutGone = gone.reduce((out, { entry }) => (entry.kind === 'separator'
+    const withoutGone = gone.reduce((out, entry) => (entry.kind === 'separator'
       ? deleteSeparatorInText(out, entry.name)
       : removeModFromText(out, entry.name)), text);
     return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);

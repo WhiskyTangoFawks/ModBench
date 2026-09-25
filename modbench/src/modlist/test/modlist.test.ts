@@ -8,7 +8,9 @@ import { present } from '../../ports/present';
 // Delay is 0 by default (a passthrough), so only the concurrent-write test below opts in.
 const fsState = vi.hoisted(() => {
   type ReadFile = typeof import('node:fs/promises')['readFile'];
-  const state: { real: ReadFile | undefined; delayMs: number } = { real: undefined, delayMs: 0 };
+  // `accessAnswered` lists each path `access` has answered for, in order.
+  const state: { real: ReadFile | undefined; delayMs: number; accessAnswered: string[] } =
+    { real: undefined, delayMs: 0, accessAnswered: [] };
   return state;
 });
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -23,7 +25,13 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const writeFile = vi.fn(actual.writeFile);
   const mkdir = vi.fn(actual.mkdir);
   const rename = vi.fn(actual.rename);
-  const access = vi.fn(actual.access);
+  const access = vi.fn(async (...args: Parameters<typeof actual.access>) => {
+    try {
+      await actual.access(...args);
+    } finally {
+      fsState.accessAnswered.push(String(args[0]));
+    }
+  });
   return { ...actual, readFile, writeFile, mkdir, rename, access };
 });
 
@@ -975,6 +983,9 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // separator, neither of whose folders is among MOD_FOLDERS.
   // Rival: two splices, one per direction, which writes the file twice.
   it('adds a line for a folder with none and drops each line whose folder is gone, in one write', async () => {
+    await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
+    vi.mocked(writeFile).mockClear();
+
     const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
 
     expect(outcome).toEqual({
@@ -1045,6 +1056,8 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   });
 
   it('writes a batch of added lines ascending top-to-bottom, winning-most first', async () => {
+    for (const name of ['Zeta Mod', 'Alpha Mod']) await mkdir(join(dir, 'mods', name));
+
     const outcome = await sync([...MOD_FOLDERS, 'Zeta Mod', 'Alpha Mod']);
 
     expect(outcome).toMatchObject({ applied: true, added: ['Alpha Mod', 'Zeta Mod'] });
@@ -1054,11 +1067,52 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
-  // The folders arrive from the Instance value, so the command never looks at mods/ itself.
-  it('syncs against the folders it is handed with no mods/ directory on disk at all', async () => {
-    await rm(join(dir, 'mods'), { recursive: true, force: true });
+  // The value lags the disk: a folder it still lists may be gone by write time, as a renamed
+  // separator's old folder is. Rival: adding from the handed list alone, a ghost line the next
+  // sync drops again, at the cost of two writes and two Output lines.
+  it('adds no line for a folder the value lists but that is gone from disk at write time', async () => {
+    await rename(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), join(dir, 'mods', 'Renamed_separator'));
+    await writeFile(modlistPath(), (await readFile(modlistPath(), 'utf8')).replace(
+      'Unassigned (Modlist Development)_separator', 'Renamed_separator'));
 
-    expect(await sync([...MOD_FOLDERS, 'Hand Extracted Mod'])).toMatchObject({ applied: true, added: ['Hand Extracted Mod'] });
+    const outcome = await sync([...MOD_FOLDERS, 'Ghost Mod']);
+
+    expect(outcome.applied && outcome.added).toEqual([]);
+    const separators = (await readModlist()).filter((e) => e.kind === 'separator').map((e) => e.name);
+    expect(separators).toContain('Renamed');
+    expect(separators).not.toContain('Unassigned (Modlist Development)');
+  });
+
+  // The folder comes back while the sync waits its turn on modlist.txt. Rival: looking at the disk
+  // before the write lock, which drops the line and loses its enabled state and its place.
+  it('keeps a line whose folder is back on disk by the time the sync writes', async () => {
+    const lagging = MOD_FOLDERS.filter((f) => f !== 'Harder VATS');
+    const harderVats = join(dir, 'mods', 'Harder VATS');
+    await rm(harderVats, { recursive: true });
+    let reached = (): void => {};
+    let release = (): void => {};
+    const holding = new Promise<void>((resolve) => { reached = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const realWrite = present(vi.mocked(writeFile).getMockImplementation(), 'the real writeFile');
+    vi.mocked(writeFile).mockImplementationOnce(async (...args) => { reached(); await released; return realWrite(...args); });
+    const holder = setModsEnabled(dir, 'Default', ['ENBoost - 12k'], false);
+    await holding;
+    const readsBefore = vi.mocked(readFile).mock.calls.filter(([p]) => p === modlistPath()).length;
+    fsState.accessAnswered.length = 0;
+
+    const syncing = sync(lagging);
+    // Whatever the sync does before its turn is done before the folder comes back.
+    await vi.waitFor(() => {
+      const readEarly = vi.mocked(readFile).mock.calls.filter(([p]) => p === modlistPath()).length > readsBefore;
+      expect(!readEarly || fsState.accessAnswered.includes(harderVats)).toBe(true);
+    });
+    await mkdir(harderVats);
+    release();
+    await holder;
+    const outcome = await syncing;
+
+    expect(outcome.applied && outcome.dropped).not.toContain('Harder VATS');
+    expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Harder VATS', enabled: false });
   });
 
   it('refuses when modlist.txt cannot be read, rather than throwing', async () => {
