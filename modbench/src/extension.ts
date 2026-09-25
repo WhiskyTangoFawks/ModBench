@@ -88,7 +88,8 @@ export function activate(context: vscode.ExtensionContext) {
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-  const { scriptsPath, filterProvider } = setupScripts(meditConfig());
+  const scriptsPath = setupScriptsFolder(meditConfig());
+  const filterProvider = new FilterCodeLensProvider();
 
   // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
@@ -275,12 +276,12 @@ function backendOptions(port: number, channel: vscode.LogOutputChannel): Backend
   };
 }
 
-function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string; filterProvider: FilterCodeLensProvider } {
+function setupScriptsFolder(cfg: vscode.WorkspaceConfiguration): string {
   const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
   const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
   fs.mkdirSync(scriptsPath, { recursive: true });
 
-  return { scriptsPath, filterProvider: new FilterCodeLensProvider() };
+  return scriptsPath;
 }
 
 

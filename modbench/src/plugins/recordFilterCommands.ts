@@ -51,7 +51,6 @@ const NEW_FILTER_LABEL = '$(add) New filter…';
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
   const { scriptsPath, client, treeProvider, refreshMatchingPlugins, showRecordFilter, reporter } = deps;
 
-  // Symmetric on purpose (plugins.md): a set and a clear both re-derive the same two things.
   const show = (filter: RecordFilter | null): void => {
     showRecordFilter(filter);
     treeProvider.refresh();
@@ -73,7 +72,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     await apply({ sql: document.getText(), source: path.basename(document.fileName) });
   };
 
-  const fromInputBox = async (): Promise<void> => {
+  const fromPick = async (): Promise<void> => {
     const files = fs.existsSync(scriptsPath)
       ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
       : [];
@@ -92,7 +91,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
 
   return [
     vscode.commands.registerCommand('modbench.record.filter', (source?: vscode.Uri) =>
-      source === undefined ? fromInputBox() : fromDocument(source)),
+      source === undefined ? fromPick() : fromDocument(source)),
     vscode.commands.registerCommand('modbench.record.clearFilter', async () => {
       const error = await client.clearFilter();
       if (error !== null) {

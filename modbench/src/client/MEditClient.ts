@@ -178,8 +178,9 @@ export interface MEditClient {
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
-  /** Each answers null when mEdit took the change, or the reason it did not. */
+  /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
+  /** Null when mEdit dropped the filter, or the reason it did not. */
   clearFilter(): Promise<string | null>;
   getActiveFilter(): Promise<RecordFilter | null>;
 

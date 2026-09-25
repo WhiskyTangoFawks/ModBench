@@ -211,17 +211,27 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     };
   }
 
-  async function filteredView(testModMatches: boolean) {
+  async function filteredView(testModMatches: boolean, source: string | null = 'armor.sql') {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', [held('Other.esp', false), held('TestMod.esp', testModMatches)]);
     client.setQueryAnswer('getDiagnoses', []);
     const instance = new FakeInstance(valueOf([plugin('Other.esp'), plugin('TestMod.esp')]));
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource(), client });
     const view: { description?: string; message?: string } = {};
-    registerPluginsNameFilter(view, provider, syncMessageDouble());
-    provider.setRecordFilterSource('armor.sql');
+    const pluginSync = syncMessageDouble();
+    registerPluginsNameFilter(view, provider, pluginSync);
+    provider.setRecordFilterSource(source ?? undefined);
     await provider.refreshFacts();
-    return { client, provider, view };
+    return { client, provider, view, pluginSync };
+  }
+
+  // The line once every render before it has landed: the sync's own message is composed after the
+  // view's, so the line reads the sentinel alone only when the view has nothing to say.
+  const SENTINEL = 'sentinel.';
+  async function settledLine(view: { message?: string }, pluginSync: ReturnType<typeof syncMessageDouble>) {
+    pluginSync.say(SENTINEL);
+    await waitForMessage(view, (m) => m?.endsWith(SENTINEL) === true, 'the sentinel reaching the line');
+    return view.message;
   }
 
   it('says so in its message line, naming the source', async () => {
@@ -232,10 +242,16 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
   });
 
   it('says nothing while the filter matches a record in any plugin', async () => {
-    const { view } = await filteredView(true);
+    const { view, pluginSync } = await filteredView(true);
 
-    await flush();
-    expect(view.message).toBeUndefined();
+    expect(await settledLine(view, pluginSync)).toBe(SENTINEL);
+  });
+
+  // Rival: the message read off the facts alone, which name no source to say.
+  it('says nothing while no record filter is in force, whatever the facts say', async () => {
+    const { view, pluginSync } = await filteredView(false, null);
+
+    expect(await settledLine(view, pluginSync)).toBe(SENTINEL);
   });
 
   it('takes the message back once the filter clears', async () => {

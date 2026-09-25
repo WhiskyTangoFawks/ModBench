@@ -1103,7 +1103,8 @@ const LEGACY_GESTURES = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'] },
   { gesture: 'record open', removedBy: '#963', ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'] },
   { gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'] },
-  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },] as const;
+  { gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'] },
+] as const;
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
