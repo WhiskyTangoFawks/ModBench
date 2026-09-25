@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderOf } from './instanceAdapter/gameDirectory';
-import { reportSyncFailures, type SyncMessage } from './syncFailureReport';
+import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
 // as the Plugins view's directory.
@@ -12,7 +12,7 @@ type PluginSyncOutcome =
   | { applied: false; toldAsInstanceState: true };
 
 /** Its message is the Plugins view's, for a failed run until a run lands. */
-export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage {
+export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns {
   /** Runs on the current value: mEdit answers which plugins load with no line, and the first
    *  value lands before it can. Until the first call, no landed value runs plugin sync. */
   runOnConnect(): void;
@@ -33,8 +33,9 @@ export function registerPluginSync(
   // update-load-order-file, Refusals: before mEdit first attaches, plugin sync waits, so a launch
   // reports nothing.
   let attachedOnce = false;
+  const runs = trackSyncRuns();
   const run = (value: InstanceValue): void => {
-    void (async () => {
+    runs.begin((async () => {
       const outcome = await failures.run(() => sync(
         value.activeProfile, providedPluginsOf(value.plugins), value.dataFolderPlugins,
         dataFolderOf(value.gameFolder), value.gameRelease));
@@ -45,7 +46,7 @@ export function registerPluginSync(
       if (outcome.dropped.length > 0) {
         channel.info(`[modmanager] plugin sync dropped ${outcome.dropped.length} plugins.txt line(s) with no plugin on disk: ${outcome.dropped.join(', ')}`);
       }
-    })();
+    })());
   };
   const subscription = instance.subscribe((value) => {
     if (attachedOnce) run(value);
@@ -53,6 +54,7 @@ export function registerPluginSync(
   return {
     message: () => failures.message(),
     onMessageChanged: (listener) => failures.onMessageChanged(listener),
+    settled: () => runs.settled(),
     runOnConnect: () => {
       attachedOnce = true;
       run(instance.value);

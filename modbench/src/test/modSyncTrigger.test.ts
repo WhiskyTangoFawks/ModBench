@@ -77,7 +77,7 @@ async function wiredInstance(): Promise<{
   const syncs: Promise<ModSyncResult>[] = [];
   // What the trigger handed the command, so a test can hold it against the value's own field.
   const handed: (readonly string[] | undefined)[] = [];
-  registerModSync(instance, (profile, modFolders) => {
+  const trigger = registerModSync(instance, (profile, modFolders) => {
     handed.push(modFolders);
     const run = syncMods(root, profile, modFolders);
     syncs.push(run);
@@ -87,9 +87,7 @@ async function wiredInstance(): Promise<{
   // settle both before a test takes its own baseline, or the fixture's mismatch reads as the
   // test's effect.
   await instance.refresh();
-  await syncs[syncs.length - 1];
-  // The trigger logs after the command answers; a macrotask runs after every microtask it queued.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await trigger.settled();
   channel.info.mockClear();
   return { root, instance, channel, syncs, handed };
 }
@@ -205,14 +203,34 @@ function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
   trigger.onMessageChanged(messageChanged);
   const fire = async (): Promise<void> => {
     expect(() => instance.fire()).not.toThrow();
-    await Promise.allSettled([calls[calls.length - 1]]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await trigger.settled();
   };
   return { channel, messageChanged, trigger, fire };
 }
 
 const refused = (refusal: string) => () => Promise.resolve<ModSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
+
+// How a caller learns a run has told what it did: no sleep and no poll.
+describe('registerModSync — settled', () => {
+  // Rival: resolving once the command answers, before the trigger has written its Output line.
+  it('resolves once every run begun has written its Output', async () => {
+    const instance = fakeInstance();
+    const channel = channelDouble();
+    let answer = (): void => {};
+    const answered = new Promise<ModSyncResult>((resolve) => {
+      answer = () => resolve({ applied: true, added: ['New Mod'], dropped: [] });
+    });
+    const trigger = registerModSync(instance, () => answered, channel);
+
+    instance.fire();
+    const settled = trigger.settled();
+    answer();
+    await settled;
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New Mod'));
+  });
+});
 
 describe('registerModSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
@@ -284,10 +302,14 @@ describe('registerModSync — outcome handling', () => {
     let answerOlder!: (outcome: ModSyncResult) => void;
     const older = new Promise<ModSyncResult>((resolve) => { answerOlder = resolve; });
     const { trigger, fire } = fired(() => older, refused('gone'));
+    const newerSaid = new Promise<void>((resolve) => {
+      const listening = trigger.onMessageChanged(() => { listening.dispose(); resolve(); });
+    });
     const olderFire = fire();
-    await fire();
+    const newerFire = fire();
+    await newerSaid;
     answerOlder({ applied: true, added: [], dropped: [] });
-    await olderFire;
+    await Promise.all([olderFire, newerFire]);
 
     expect(trigger.message()).toContain('gone');
   });

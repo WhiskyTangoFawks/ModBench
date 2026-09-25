@@ -13,6 +13,26 @@ export interface SyncMessage {
   onMessageChanged(listener: () => void): { dispose(): void };
 }
 
+/** A system command's runs, each begun by a landed value and ended once it has told what it did. */
+export interface SyncRuns {
+  /** Resolves once every run begun so far has written its Output and settled its message. */
+  settled(): Promise<void>;
+}
+
+/** Tracks the runs a trigger begins, for its `settled`. */
+export function trackSyncRuns(): SyncRuns & { begin(run: Promise<void>): void } {
+  const inFlight = new Set<Promise<void>>();
+  return {
+    begin: (run) => {
+      inFlight.add(run);
+      void run.finally(() => inFlight.delete(run));
+    },
+    settled: async () => {
+      while (inFlight.size > 0) await Promise.all([...inFlight]);
+    },
+  };
+}
+
 export interface SyncFailureReport extends SyncMessage {
   /** Runs the command once. Its landed outcome is returned even when a later run overtook it,
    *  since what it wrote stands; only the latest run decides the failure shown. */

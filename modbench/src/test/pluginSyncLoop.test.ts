@@ -17,7 +17,7 @@ import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
-import { syncMods, type ModSyncResult } from '../modlist/modlist';
+import { syncMods } from '../modlist/modlist';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -207,15 +207,10 @@ describe('the game folder not found, across the whole instance', () => {
       resolveDownloadsDirectory: downloadsDirectoryResolver(), log: write, logReadFailure: write,
     });
     instances.push(instance);
-    const runs: Promise<PluginSyncResult | ModSyncResult>[] = [];
-    const ran = <T extends PluginSyncResult | ModSyncResult>(run: Promise<T>): Promise<T> => {
-      runs.push(run);
-      return run;
-    };
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
     const pluginSync = registerPluginSync(instance, (profile, provided, inData) =>
-      ran(syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined))), channel);
-    registerModSync(instance, (profile, modFolders) => ran(syncMods(root, profile, modFolders)), channel);
+      syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined)), channel);
+    const modSync = registerModSync(instance, (profile, modFolders) => syncMods(root, profile, modFolders), channel);
 
     await instance.refresh();
     pluginSync.runOnConnect();
@@ -224,8 +219,8 @@ describe('the game folder not found, across the whole instance', () => {
       watcherFor(glob).fireChange();
       expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
     }
-    await Promise.all(runs);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await pluginSync.settled();
+    await modSync.settled();
 
     expect(output).toEqual([
       '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
@@ -284,10 +279,7 @@ function firedAnswering(answer: (profile: string, call: number) => Promise<Plugi
     return run;
   }, channel);
   trigger.onMessageChanged(messageChanged);
-  const settled = async (): Promise<void> => {
-    await Promise.allSettled([calls[calls.length - 1]]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  };
+  const settled = (): Promise<void> => trigger.settled();
   const land = async (value = instanceValueFixture()): Promise<void> => {
     instance.value = value;
     seq += 1;
@@ -313,6 +305,27 @@ const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: f
 
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
+
+// How a caller learns a run has told what it did: no sleep and no poll.
+describe('registerPluginSync — settled', () => {
+  // Rival: resolving once the command answers, before the trigger has written its Output line.
+  it('resolves once every run begun has written its Output', async () => {
+    const instance = { value: instanceValueFixture(), subscribe: () => ({ dispose: () => {} }) };
+    const channel = { error: vi.fn(), info: vi.fn() };
+    let answer = (): void => {};
+    const answered = new Promise<PluginSyncResult>((resolve) => {
+      answer = () => resolve({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
+    });
+    const trigger = registerPluginSync(instance, () => answered, channel);
+
+    trigger.runOnConnect();
+    const settled = trigger.settled();
+    answer();
+    await settled;
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New.esp'));
+  });
+});
 
 describe('registerPluginSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
