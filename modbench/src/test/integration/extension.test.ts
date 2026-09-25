@@ -138,12 +138,13 @@ let getPluginsShouldFail = false;
 // Mutable per-test so a suite can script a load landing one plugin at a time. `state` is carried
 // even though the mEdit client drops it: it is non-nullable on the wire.
 type MockLoadOrderStatus = {
-  state: 'None' | 'Reconciling' | 'Ready';
+  state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
   totalPlugins: number;
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
   failures: { name: string; origin: string; reason: string }[];
   version: number;
+  message?: string;
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
@@ -2227,6 +2228,53 @@ describe('Progressive load', () => {
       !(await stillIndexing('Immutable.esm')),
       'Immutable.esm was indexed but never named in a progress tick — it must still browse once the completion hand-off lands',
     );
+  });
+
+  // plugins.md, States 3-4: what the stream or the client says reaches the rows as their expansion.
+  const expandsTo = async (name: string): Promise<string | undefined> => {
+    const [child] = await childrenFor(name);
+    return nodeKind(child) === 'error' && child !== undefined ? describeTooltip(pluginsTree().getTreeItem(child).tooltip) : undefined;
+  };
+  const heldAndLoaded = async (): Promise<{ launch: Promise<void> }> => {
+    const launched = await launchAndAwaitOpeningTick();
+    setIndexed(['TestMod.esp']);
+    await waitForIndexed('TestMod.esp');
+    return launched;
+  };
+
+  it('expands every row, held or not, to the second window\'s refusal the stream carries', async () => {
+    const { launch } = await heldAndLoaded();
+    const HELD_ELSEWHERE = 'This instance\'s index is open in another Modbench window.';
+
+    setIndexed(['TestMod.esp'], { state: 'HeldElsewhere', message: HELD_ELSEWHERE });
+
+    for (const name of ['TestMod.esp', 'Other.esp']) {
+      await waitFor(`${name} to expand to the refusal`, async () => (await expandsTo(name)) === HELD_ELSEWHERE);
+    }
+    releasePut();
+    await launch;
+  });
+
+  it('expands a row the load never reached to a Failed refusal, and leaves a held row its records', async () => {
+    const { launch } = await heldAndLoaded();
+    const FAILED = 'the reconcile hit something it cannot name';
+
+    setIndexed(['TestMod.esp'], { state: 'Failed', message: FAILED });
+
+    await waitFor('Other.esp to expand to the refusal', async () => (await expandsTo('Other.esp')) === FAILED);
+    assert.notStrictEqual(await expandsTo('TestMod.esp'), FAILED, 'a held row keeps what already landed');
+    releasePut();
+    await launch;
+  });
+
+  it('expands a row the load never reached to why mEdit cannot be reached once the client stops', async () => {
+    const { launch } = await heldAndLoaded();
+
+    await ext?.exports.client.stop();
+
+    await waitFor('Other.esp to expand to the unreachable reason', async () => (await expandsTo('Other.esp')) === 'mEdit is stopped.');
+    releasePutLoadOrder?.();
+    await launch;
   });
 });
 
