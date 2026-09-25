@@ -129,13 +129,14 @@ export async function syncPlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
 ): Promise<PluginSyncResult> {
-  // Without the Data folder's listing or the implicit masters, a line for a Data plugin is
-  // dropped and a mod's copy of a vanilla master earns one (update-load-order-file, Refusals). A
-  // game folder not found is told once, as the instance's state (common.md, States, story 5).
+  // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
+  // not found is told once, as the instance's state (common.md, States, story 5).
   if (inData.kind === 'unresolved') return { applied: false, toldAsInstanceState: true };
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
+  // Without the implicit masters, a mod's copy of a vanilla master would earn a line
+  // (update-load-order-file, Refusals).
   let addable: ReadonlyMap<string, string>;
   try {
     const implicit = await implicitMasters();

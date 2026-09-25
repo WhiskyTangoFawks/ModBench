@@ -244,9 +244,8 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
   });
 
-  // Rivals: the old answer to an unknown game folder, appending and pruning nothing, which would
-  // list a plugin the game already loads from Data; and a refusal of its own, which tells the
-  // user a second time what the instance's state already told once (common.md, States, story 5).
+  // Rivals: appending against an unknown game folder, which lists a plugin the game already loads
+  // from Data; and a refusal of its own, a second telling beside the instance's state.
   it('writes nothing when the game folder is not found, never asks mEdit, and leaves the telling to the instance\'s state', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');

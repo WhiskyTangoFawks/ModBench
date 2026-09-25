@@ -364,14 +364,12 @@ export type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
-/** A mod's line or a separator's names a folder in `mods/`; a separator whose name MO2 never
- *  gives a folder names none, so its line never goes. */
+// A separator whose name MO2 never gives a folder names none, so its line never goes.
 const listedFolderOf = (entry: ModlistEntry): string | undefined =>
   (entry.kind === 'mod' ? entry.name : separatorFolderName(entry.name));
 
-/** `modbench.mod.sync`: a disabled winning-end line for each folder with none, and each mod or
- *  separator line whose folder is gone dropped, in one write. `dropped` names the folders gone.
- *  `modFolders` is undefined when there is no `mods/` to list, and that is refused. */
+/** `modbench.mod.sync`: a disabled line for each folder with none, and each line whose folder is
+ *  gone dropped, in one write; `dropped` names those folders. No `mods/` to list is refused. */
 export async function syncMods(
   instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
 ): Promise<ModSyncResult> {
