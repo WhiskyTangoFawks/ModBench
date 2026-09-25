@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EditsInFlight } from '../followRecord';
-import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from '../../medit/notificationWiring';
+import { EditsInFlight } from '../../editor/followRecord';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client';
 
 function fakePanel(title: string) {

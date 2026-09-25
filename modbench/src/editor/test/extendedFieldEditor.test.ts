@@ -25,11 +25,18 @@ import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
-import { extendedFieldFile } from '../../medit/extendedFieldFiles';
 
-// The composition root's own answer, so the file a test reads back is the file the editor wrote.
+type FieldFile = ExtendedFieldEditorDeps['fieldFile'];
+
+// The editor's field-file port, answered the way the composition root answers it: a folder per
+// record and origin, a file per field and plugin, every segment escaped into one path segment.
+const fieldFileUnder = (tempRoot: string): FieldFile => (field) => {
+  const folder = join(tempRoot, encodeURIComponent(field.recordLabel), encodeURIComponent(field.origin));
+  return { folder, file: join(folder, `${encodeURIComponent(field.fieldName)} [${encodeURIComponent(field.plugin)}].txt`) };
+};
+
 const extendedEditorPath = (tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string) =>
-  extendedFieldFile(tempRoot, { recordLabel, fieldName, plugin, origin }).file;
+  fieldFileUnder(tempRoot)({ recordLabel, fieldName, plugin, origin }).file;
 
 function makeFakeDocEvent() {
   const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];
@@ -63,7 +70,7 @@ afterEach(async () => {
 
 function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> = {}): ExtendedFieldEditorDeps {
   return {
-    fieldFile: (field) => extendedFieldFile(tempRoot, field),
+    fieldFile: fieldFileUnder(tempRoot),
     onCommit: vi.fn(),
     log: vi.fn(),
     reporter: { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
@@ -231,8 +238,8 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
   });
 
-  // Proves the real write, not just the computed string, stays under tempRoot.
-  it('a hostile origin cannot make the write land outside tempRoot', async () => {
+  // The editor builds no path of its own from the origin: the write lands where the port answers.
+  it('a hostile origin cannot make the write land outside the file the port answers', async () => {
     const tempRoot = await makeTempRoot();
     const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });

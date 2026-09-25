@@ -69,7 +69,6 @@ import {
 } from '../modlist';
 import { insertModAtWinningEnd, parseModlist } from '../../mo2Codecs/modlistText';
 import { modDir, modsDir } from '../../instanceAdapter/layout';
-import { modNameCollisionRefusal } from '../../install/install';
 
 const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
@@ -1006,13 +1005,14 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     // On disk and in modFolders, but with no modlist.txt line — mod sync has not caught up yet.
-    // Rival: the old ad hoc text, which read differently from install's own refusal.
-    it('refuses a lineless folder in the words install gives the same collision', async () => {
+    // Install's own words for the same collision are held to this one in src/test.
+    it('refuses a lineless folder as a name that already exists', async () => {
       await mkdir(join(dir, 'mods', 'Lineless Folder'));
 
       const outcome = await createEmptyMod(dir, 'Default', 'Lineless Folder', [...MOD_FOLDERS, 'Lineless Folder']);
 
-      expect(outcome).toEqual({ applied: false, refusal: modNameCollisionRefusal('Lineless Folder') });
+      expect(outcome.applied).toBe(false);
+      expect(!outcome.applied && outcome.refusal).toMatch(/"Lineless Folder" already exists/);
     });
 
     // Models mod sync winning the race against this command's own line write.

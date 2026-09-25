@@ -50,10 +50,9 @@ import {
   type DownloadInstallDeps,
 } from '../DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
-import type { DownloadRow } from '../../mo2Codecs/downloads';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
-import type { DownloadFile, Instance, InstanceValue } from '../../instanceLoader/instance';
+import type { DownloadFile, DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';

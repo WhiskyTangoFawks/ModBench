@@ -56,15 +56,14 @@ import {
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
   type ModInstallDeps,
+  type NexusModRow,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { MODS_KEY_ARGS } from '../gestureEntry';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
-import { DownloadNode } from '../../downloads/DownloadsProvider';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -1090,6 +1089,8 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 
   const instance = { value: instanceValueFixture({ nexusSlug: 'skyrimspecialedition' }) };
   const opened = (): string[] => openExternal.mock.calls.map((c) => String(c[0]));
+  // A downloaded file row adapts itself to the gesture's Argument; the row is Downloads' own.
+  const downloadedFileRow = (nexusModId?: string): NexusModRow => ({ nexusModId });
 
   it('opens the mod\'s Nexus page from a mod row', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
@@ -1100,7 +1101,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 
   it('opens the mod\'s Nexus page from a downloaded file row', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
-    await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+    await invoke('modbench.mod.viewOnNexus', downloadedFileRow('123'));
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
   });
@@ -1118,14 +1119,14 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 
   it('opens the selected row\'s Nexus page from the palette, which hands it no row', async () => {
-    registerViewOnNexusCommand(instance, recordingReporter(), () => new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+    registerViewOnNexusCommand(instance, recordingReporter(), () => downloadedFileRow('123'));
     await invoke('modbench.mod.viewOnNexus');
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/123']);
   });
 
   it('opens the right-clicked row\'s page, never the selected one\'s', async () => {
-    registerViewOnNexusCommand(instance, recordingReporter(), () => new DownloadNode(downloadRowFixture('foo.7z', { modID: '123' })));
+    registerViewOnNexusCommand(instance, recordingReporter(), () => downloadedFileRow('123'));
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42' }));
 
     expect(opened()).toEqual(['https://www.nexusmods.com/skyrimspecialedition/mods/42']);
@@ -1133,7 +1134,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 
   it('opens nothing for a row with no Nexus id', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
-    await invoke('modbench.mod.viewOnNexus', new DownloadNode(downloadRowFixture('foo.7z')));
+    await invoke('modbench.mod.viewOnNexus', downloadedFileRow());
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }));
 
     expect(openExternal).not.toHaveBeenCalled();
