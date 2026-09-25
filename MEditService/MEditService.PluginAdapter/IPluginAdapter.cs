@@ -58,11 +58,6 @@ public interface IPluginAdapter
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys);
 
-    /// <summary>Whether any record in the plugin links <paramref name="target"/>,
-    /// <paramref name="itself"/> aside. The master list answers first: a plugin that does not master
-    /// the target's origin cannot express a link to it.</summary>
-    bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself);
-
     // A source tree's root is the plugin's name as the load order spells it, so registeredName
     // travels beside the path: a ModKey renders the extension from Mutagen's lowercase constants.
 

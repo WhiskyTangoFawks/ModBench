@@ -345,7 +345,7 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** A delete+create pair plus the cross-plugin reference cascade; an override is refused
+  /** A delete+create pair that leaves every referencer as it was; an override is refused
    *  server-side (native records only). `newFormKey` left undefined auto-allocates. */
   async renumberRecord(
     formKey: string, plugin: string, origin: string, newFormKey?: string,

@@ -150,15 +150,14 @@ public sealed partial class SourceRepository
             return unrestored;
         }
 
-        /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every repository
-        /// this batch could have touched stripped out of it, so a caller's report reads the same whichever
-        /// tree the fault named.</summary>
+        /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every mod folder
+        /// this batch touched, and <paramref name="repository"/>'s, stripped out of it, so a report reads
+        /// the same whichever tree the fault named.</summary>
         public (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
-            Exception cause, IEnumerable<SourceRepository> repositories)
+            Exception cause, SourceRepository repository)
         {
             var unrestored = Rollback();
-            var modFolders = _log.Select(op => op.ModFolder).Concat(repositories.Select(r => r.ModFolder))
-                .Distinct().ToList();
+            var modFolders = _log.Select(op => op.ModFolder).Append(repository.ModFolder).Distinct().ToList();
             var relativeError = modFolders
                 .OrderByDescending(f => f.Length)
                 .Aggregate(cause.Message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));

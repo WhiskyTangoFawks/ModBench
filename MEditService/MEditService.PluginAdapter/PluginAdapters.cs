@@ -58,8 +58,4 @@ public static class PluginAdapters
 
     private static bool SameFile(RegisteredCopy copy, RegisteredCopy other) =>
         copy.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
-
-    public static bool LinksTo(
-        this IPluginAdapter adapter, RegisteredCopy copy, GameRelease release, FormKey target, FormKey? itself) =>
-        adapter.LinksTo(new ModPath(copy.Path), release, target, itself);
 }

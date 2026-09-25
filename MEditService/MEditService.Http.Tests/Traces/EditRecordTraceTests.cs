@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -143,6 +145,60 @@ public sealed class EditRecordTraceTests : HostedTests
         record.GetProperty("formKey").GetString().Require(),
         record.GetProperty("plugin").GetString().Require(),
         record.GetProperty("origin").GetString().Require());
+
+    // A race that morphs into itself links itself, and the NPCs of three plugins link it: its own,
+    // a tracked one and an untracked one.
+    private static ScatteredFixtureData ARaceAndItsReferencers() =>
+        new PluginFixtureBuilder("trace-renumber-target-only")
+            .WithPlugin(Plugin, mod =>
+            {
+                var race = mod.Races.AddNew("RenumberedRace");
+                race.MorphRace.SetTo(race);
+                mod.Npcs.AddNew("SamePluginNpc").Race.SetTo(race);
+            }, origin: Origin)
+            .WithPlugin(OtherPlugin, (mod, earlier) =>
+                mod.Npcs.AddNew("TrackedReferencerNpc").Race.SetTo(earlier[0].Races.First()), origin: OtherOrigin)
+            .WithPlugin(UntrackedPlugin, (mod, earlier) =>
+                mod.Npcs.AddNew("UntrackedReferencerNpc").Race.SetTo(earlier[0].Races.First()), origin: UntrackedOrigin)
+            .BuildScattered();
+
+    private const string UntrackedPlugin = "Untracked.esp";
+    private const string UntrackedOrigin = "UntrackedMod";
+
+    [Fact]
+    public async Task RenumberingARecord_ChangesOnlyItsFormKey_AndLeavesEveryReferencerAsItWas()
+    {
+        using var fx = ARaceAndItsReferencers();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
+        var targetFolder = OtherTool.ModFolderOf(fx, Origin);
+        var target = new PluginCopyKey(Plugin, Origin);
+        var oldFormKey = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=race"))
+            .GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey"))).Single();
+        var targetBefore = TrackedTree.Document(targetFolder, target, oldFormKey).Require();
+        var samePluginReferencer = OtherTool.SourceDocumentCarrying(targetFolder, Plugin, "SamePluginNpc");
+        var samePluginBefore = File.ReadAllText(samePluginReferencer);
+        var trackedBefore = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin));
+        var untrackedBefore = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin));
+
+        var response = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(oldFormKey)}/renumber",
+            new { plugin = Plugin, origin = Origin, newFormKey = (string?)null });
+
+        response.EnsureSuccessStatusCode();
+        var newFormKey = DocumentNodes.StringValueOf((await Body(response)).GetProperty("newFormKey"));
+        Assert.Null(TrackedTree.Document(targetFolder, target, oldFormKey));
+        var targetAfter = TrackedTree.Document(targetFolder, target, newFormKey).Require();
+        var formKeyLine = $"\"FormKey\": \"{oldFormKey}\"";
+        Assert.Contains(formKeyLine, targetBefore.Body, StringComparison.Ordinal);
+        Assert.Equal(
+            targetBefore.Body.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
+            targetAfter.Body);
+        Assert.Equal(samePluginBefore, File.ReadAllText(samePluginReferencer));
+        Assert.Equal(trackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin)));
+        Assert.Equal(untrackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin)));
+    }
 
     [Fact]
     public async Task EditingAnUntrackedPlugin_IsRefusedWithATypedRefusal()
