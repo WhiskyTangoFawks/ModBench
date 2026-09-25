@@ -120,8 +120,6 @@ describe('wireBackendStatus', () => {
     expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is stopped.');
   });
 
-  // The rival this guards: Connecting treated as unreachable, which would read a fresh launch as
-  // broken before it has had a chance to attach.
   it('never names the tree unreachable while the backend is starting', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();

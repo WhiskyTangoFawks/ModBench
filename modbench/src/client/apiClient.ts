@@ -120,7 +120,7 @@ export interface LoadOrderStatus {
   holdsNone: boolean;
 }
 
-// A refusal state with no message is not carried as a refusal at all — same as before this typed.
+// A refusal state with no message is not carried as a refusal at all.
 function refusalOf(wire: Schemas['LoadOrderStatus']): LoadOrderRefusal | undefined {
   if (wire.message == null) return undefined;
   if (wire.state === 'HeldElsewhere') return { kind: 'heldElsewhere', message: wire.message };
