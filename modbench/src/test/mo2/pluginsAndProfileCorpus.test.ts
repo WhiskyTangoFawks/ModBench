@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { appendPlugin, syncPlugins, reorderPlugins, setPluginEnabled } from '../../pluginsCommands/plugins';
 import { switchProfile } from '../../instanceCommands/profile';
+import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
   readModlistEntries, readPluginLines, snapshotTree,
@@ -11,6 +12,9 @@ import {
 
 const INI = 'ModOrganizer.ini';
 const PROFILE = 'Default';
+// The fixture has no game folder, so its Creation Club plugin stands in the game's Data folder,
+// case-folded as the Instance lists it.
+const GAME_DATA: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
 
 const pluginOrder = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).map((p) => p.name);
@@ -39,13 +43,15 @@ describe('plugins.txt + profile corpus', () => {
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await syncPlugins(
-      dir, PROFILE, await providedPluginsIn(dir), { kind: 'unresolved' }, () => Promise.resolve([]), () => {});
+      dir, PROFILE, await providedPluginsIn(dir), GAME_DATA, () => Promise.resolve([]));
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    // The fixture ships this plugin on disk with no plugins.txt line; an unresolved game
-    // directory makes Data-folder presence unknowable, so nothing is pruned.
-    expect(result).toEqual({ applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: [] });
+    // The fixture ships the add-on on disk with no plugins.txt line, and lists the patch that no
+    // enabled mod provides. The Creation Club line is the game's own, so it stays.
+    expect(result).toEqual({
+      applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: ['Unofficial Fallout 4 Patch.esp'],
+    });
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
     expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
   });

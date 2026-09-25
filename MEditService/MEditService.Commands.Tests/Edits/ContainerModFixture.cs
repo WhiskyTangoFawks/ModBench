@@ -157,7 +157,7 @@ public sealed class ContainerModFixture : IDisposable
     /// under test, and no mock can answer that.</summary>
     internal void Track() =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(LoadOrder, ModFolderOrigin, SourcePreset.Edits)
+            .TrackModAsync(LoadOrder, ModFolderOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write

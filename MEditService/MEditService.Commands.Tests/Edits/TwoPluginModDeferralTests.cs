@@ -52,7 +52,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var loadOrder = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(loadOrder, Origin, SourcePreset.Edits)
+            .TrackModAsync(loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         holder.Apply(loadOrder);

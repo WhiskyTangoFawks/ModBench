@@ -95,7 +95,7 @@ public sealed class CopyFixture : IDisposable
 
     private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
     public SourceDocument? Document(PluginCopyKey plugin, string formKey) =>

@@ -74,9 +74,9 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
         }
 
-        public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(_loadOrder, "TrueStormsMod", SourcePreset.Edits);
+        public async Task<TrackResult> TrackAsync() =>
+            (await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
+                .TrackModAsync(_loadOrder, "TrueStormsMod", SourcePreset.Edits)).Only();
 
         public void Dispose()
         {

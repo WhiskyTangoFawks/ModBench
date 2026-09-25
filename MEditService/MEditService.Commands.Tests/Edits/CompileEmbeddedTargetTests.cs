@@ -67,9 +67,9 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-        trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits)
+        trackService.TrackModAsync(_loadOrder, TargetOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
-        trackService.TrackAsync(_loadOrder, ReferrerOrigin, SourcePreset.Edits)
+        trackService.TrackModAsync(_loadOrder, ReferrerOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

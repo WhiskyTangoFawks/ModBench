@@ -49,6 +49,8 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Destination path and origin are required.", statusCode: 400)""",
         """Results.Problem( $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
+        """Results.Problem("At least one plugin is required.", statusCode: 400)""",
+        """Results.Problem("Every plugin needs a name and an origin.", statusCode: 400)""",
         """Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400)""",
         """Results.Problem("A record type is required.", statusCode: 400)""",
         """Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400)""",

@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>A record gesture with git missing from the PATH: a cause no record can escape, so the whole
-/// selection is refused once, before any record is written.</summary>
+/// <summary>A gesture over a selection with git missing from the PATH: a cause no item can escape, so
+/// the whole selection is refused once, before any item is written.</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class GitMissingApiTests : HostedTests
 {
@@ -22,7 +22,7 @@ public sealed class GitMissingApiTests : HostedTests
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew("FirstNpc"); mod.Npcs.AddNew("SecondNpc"); }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
@@ -49,6 +49,37 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Equal(before, FilesOutsideGit(modFolder));
+    }
+
+    [Fact]
+    public async Task TrackingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
+    {
+        using var fx = new PluginFixtureBuilder("trace-track-without-git")
+            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
+            .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
+        var before = modFolders.Select(FilesOutsideGit).ToList();
+
+        HttpResponseMessage response;
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            response = await Client.Track([(Plugin, Origin), ("Second.esp", "SecondMod")]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
+        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
+        Assert.All(modFolders, modFolder => Assert.False(Directory.Exists(Path.Combine(modFolder, ".git"))));
+        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
     }
 
     private static SortedDictionary<string, string> FilesOutsideGit(string modFolder) =>

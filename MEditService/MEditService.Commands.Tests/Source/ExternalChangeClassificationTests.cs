@@ -199,6 +199,22 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Equal(["texture.dds"], TheQuestion().TrackedFiles);
     }
 
+    // An untracked plugin has no source to lose, so its bytes are no part of the question
+    // (decompile-plugin, The trigger, step 3).
+    [Fact]
+    public void ASettle_ReportsNothing_ForAnUntrackedPluginBesideATrackedOne()
+    {
+        var tracked = "the first plugin's tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins(("First.esp", tracked), ("Untracked.esp", "never tracked"u8.ToArray()));
+        SourceRepository.Track(
+            ModFolder, SourcePreset.Edits, [BaselineOver(ModFolder, "First.esp", Convert.ToHexString(SHA256.HashData(tracked)))]);
+
+        var outcome = Settled.Handle(loadOrder, ModFolder);
+
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
+        Assert.Empty(_notifications.Notifications);
+    }
+
     private static void Track(string modFolder, string plugin)
     {
         SourceRepository.Track(modFolder, SourcePreset.Edits, [BaselineOver(modFolder, plugin)]);

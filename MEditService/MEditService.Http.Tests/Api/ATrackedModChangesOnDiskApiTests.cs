@@ -86,7 +86,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         beforeTracking?.Invoke(OtherTool.ModFolderOf(fx, Origin));
-        (await Client.Track(Origin, preset)).EnsureSuccessStatusCode();
+        (await Client.Track(Plugin, Origin, preset)).EnsureSuccessStatusCode();
         await Client.PluginReportsTracked(Plugin);
         return fx;
     }

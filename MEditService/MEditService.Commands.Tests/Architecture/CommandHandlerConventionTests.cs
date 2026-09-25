@@ -19,7 +19,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(DeleteRecordHandler), "AllApplied"),
         (typeof(CreateRecordHandler), "Applied"),
         (typeof(PeekNextFreeFormKeyHandler), "Applied"),
-        (typeof(TrackHandler), "Applied"),
+        (typeof(TrackHandler), "AllApplied"),
         (typeof(CompilePluginHandler), "Succeeded"),
         (typeof(CopyRecordAsOverrideHandler), "Applied"),
         (typeof(CopyRecordAsNewRecordHandler), "Applied"),
@@ -42,7 +42,9 @@ public sealed class CommandHandlerConventionTests
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),
         typeof(TrackRefusal),
+        typeof(TrackRefused),
         typeof(TrackResult),
+        typeof(TrackSelectionResult),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
