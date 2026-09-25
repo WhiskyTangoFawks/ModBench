@@ -88,10 +88,10 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Empty(TheQuestion().TrackedFiles);
     }
 
-    // ── Crash-marker suppression: crash recovery's territory, never the external-change dialog for the same event. ──
+    // ── An unfinished compile: a warning naming the plugin, never the external-change question. ──
 
     [Fact]
-    public async Task ASettle_ReportsCrashRecovery_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
+    public async Task ASettle_WarnsCompileUnfinished_AndOpensNoQuestion_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
     {
         var loadOrder = WithPlugin("anything, hash mismatches regardless"u8.ToArray());
         Track(ModFolder, PluginName);
@@ -99,8 +99,28 @@ public sealed class ExternalChangeClassificationTests : IDisposable
 
         var outcome = Settled.Handle(loadOrder, ModFolder);
 
-        Assert.Equal(TrackedModSettledOutcome.CrashRecovery, outcome);
-        Assert.Equal(nameof(CrashRepairReason.InterruptedCompile), TheQuestion().CrashRepairReason);
+        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
+        Assert.Null(SourceRepository.UnansweredExternalChange(ModFolder));
+        Assert.Equal(
+            [new CompileUnfinishedNotification(new PluginAddress(PluginName, Origin))],
+            _notifications.Notifications);
+    }
+
+    // The rival this pins: naming every plugin the batch named, when its first plugin landed and only
+    // the second's binary is bad.
+    [Fact]
+    public async Task ASettle_NamesOnlyThePluginsTheInterruptedBatchDidNotLand()
+    {
+        const string landed = "Landed.esp";
+        var loadOrder = WithPlugin("anything"u8.ToArray());
+        Track(ModFolder, PluginName);
+        await CompileJournal.RunBatchAsync(ModFolder, [landed, PluginName], plugin => Task.FromResult(plugin == landed));
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.Equal(
+            [new CompileUnfinishedNotification(new PluginAddress(PluginName, Origin))],
+            _notifications.Notifications);
     }
 
     // ── The meta tell: default-button evidence, never acted on by itself (ADR-0003). ──

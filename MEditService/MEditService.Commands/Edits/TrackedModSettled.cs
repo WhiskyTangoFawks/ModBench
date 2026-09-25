@@ -5,12 +5,12 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Edits;
 
 /// <summary>What handling "a tracked mod settled" found, for the caller's own logging: whichever
-/// question or repair offer it names is already published by the time this returns.</summary>
+/// question or warning it names is already published by the time this returns.</summary>
 public enum TrackedModSettledOutcome
 {
     NoQuestion,
     QuestionOpened,
-    CrashRecovery,
+    CompileUnfinished,
 }
 
 /// <summary>The watcher's one verb (ADR-0015 invariant 2): plugins off the load order, classified
@@ -41,27 +41,18 @@ public sealed class TrackedModSettled
                 Raise(loadOrder, modFolder, change);
                 return TrackedModSettledOutcome.QuestionOpened;
 
-            case ExternalChangeClassification.CrashRecovery:
-                // Never opened or cleared as the external-change question is — the repair offer's
-                // own state, and the two prompts must never both fire for one event.
-                RaiseCrashRepair(
-                    loadOrder, modFolder, [.. plugins.Select(p => p.PluginName)], CrashRepairReason.InterruptedCompile);
-                return TrackedModSettledOutcome.CrashRecovery;
+            case ExternalChangeClassification.CompileUnfinished unfinished:
+                // Neither opens nor clears the external-change question (compile-plugin, Failure).
+                var origin = OriginOf(loadOrder, modFolder);
+                foreach (var plugin in unfinished.Plugins)
+                    _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
+                return TrackedModSettledOutcome.CompileUnfinished;
 
             default:
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return TrackedModSettledOutcome.NoQuestion;
         }
     }
-
-    /// <summary>The repair offer's own verdict of the same question-open notification kind: a
-    /// tracked binary the load-time check found unreadable, or an interrupted compile above, each
-    /// naming the plugins it found.</summary>
-    public void RaiseCrashRepair(
-        LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<string> plugins, CrashRepairReason reason) =>
-        _notifications.Publish(new QuestionOpenNotification(
-            OriginOf(loadOrder, modFolder), plugins, TrackedFiles: [], MetaChanged: false, OldVersion: null,
-            NewVersion: null, CrashRepairReason: reason.ToString()));
 
     private void Raise(LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.ExternalChange change)
     {

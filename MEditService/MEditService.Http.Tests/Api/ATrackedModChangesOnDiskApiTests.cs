@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -303,6 +304,82 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var question = Assert.Single(await stream.EventsUntil("question-open"));
         Assert.Contains(
             Asset, question.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    // The mark step 5 of compile-plugin leaves when the write never finishes.
+    private static Task InterruptACompile(string modFolder) =>
+        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunBatchAsync(modFolder, [Plugin],
+            _ => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
+
+    private static void AssertNamesThePlugin(JsonElement unfinished)
+    {
+        Assert.Equal(Plugin, unfinished.GetProperty("plugin").GetString());
+        Assert.Equal(Origin, unfinished.GetProperty("origin").GetString());
+    }
+
+    // compile-plugin, Failure: the settle finds the mark and warns, even over bytes that differ from
+    // the last compile, and no question opens.
+    [Fact]
+    public async Task SettlingAModWhoseCompileWasInterrupted_WarnsCompileUnfinished_NamingThePlugin_AndOpensNoQuestion()
+    {
+        var fx = Owned(await Watched());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        await InterruptACompile(modFolder);
+        using var stream = await Client.NotificationStream();
+
+        ARelease(fx);
+
+        var frames = await stream.FramesThrough("compile-unfinished", _ => true);
+        AssertNamesThePlugin(frames[^1].Data);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
+        Assert.Null(SourceRepository.UnansweredExternalChange(modFolder));
+    }
+
+    [Fact]
+    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_NamingThePlugin_AndOpensNoQuestion()
+    {
+        var fx = Owned(await Watched());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        await InterruptACompile(modFolder);
+        Restart();
+        using var stream = await Client.NotificationStream();
+
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var frames = await stream.FramesThrough("compile-unfinished", _ => true);
+        AssertNamesThePlugin(frames[^1].Data);
+        Assert.DoesNotContain(frames, f => f.Kind == "question-open");
+        Assert.Null(SourceRepository.UnansweredExternalChange(modFolder));
+    }
+
+    // plugins.md, A row: the status says it, and the load-time check asks nothing.
+    [Fact]
+    public async Task ATrackedPluginWhoseBinaryCannotBeRead_FailsToLoad_AndNothingIsAsked()
+    {
+        var fx = Owned(await Watched());
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var binary = fx.Plugins.Single(p => p.Origin == Origin).Path;
+        Restart();
+        using var stream = await Client.NotificationStream();
+        FileModes.Set(binary, "000");
+        try
+        {
+            var since = LogMark();
+            (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+            var status = await Client.GetFromJsonAsync<JsonElement>("/load-order/status");
+            var failure = Assert.Single(status.GetProperty("failures").EnumerateArray());
+            Assert.Equal(Plugin, failure.GetProperty("name").GetString());
+            Assert.Equal(Origin, failure.GetProperty("origin").GetString());
+            Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the load-time settle line");
+        }
+        finally
+        {
+            FileModes.Set(binary, "644");
+        }
+
+        var frames = await FramesThroughAMarkerPut(stream, fx);
+        Assert.DoesNotContain(frames, f => f.Kind is "question-open" or "compile-unfinished");
     }
 
     // No plugin can land while one cannot be parsed: the answer covers the whole mod.

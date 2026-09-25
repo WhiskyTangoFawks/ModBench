@@ -27,7 +27,7 @@ internal sealed class WatcherSinks
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => _index.Reconcile(snapshot, version);
 
     /// <summary>"A tracked mod settled" (ADR-0015 invariant 2) at load, over the bytes the
-    /// readability probe already read. Logging only: whichever question or offer Commands found, it
+    /// readability probe already read. Logging only: whichever question or warning Commands found, it
     /// already published.</summary>
     public void SettleAtLoad(
         LoadOrderSnapshot order, string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins)
@@ -39,7 +39,7 @@ internal sealed class WatcherSinks
                     _logger.LogInformation("External change detected at load for {ModFolder}", modFolder);
                 break;
 
-            case TrackedModSettledOutcome.CrashRecovery:
+            case TrackedModSettledOutcome.CompileUnfinished:
                 if (_logger.IsEnabled(LogLevel.Information))
                     _logger.LogInformation("Interrupted compile detected at load for {ModFolder}", modFolder);
                 break;
@@ -49,11 +49,6 @@ internal sealed class WatcherSinks
     /// <summary>The same verb for a live settle, where Commands reads the mod's binaries itself: a
     /// plugin caught mid-write is no verdict.</summary>
     public void Settle(LoadOrderSnapshot order, string modFolder) => _settled.Handle(order, modFolder);
-
-    /// <summary>A tracked binary the load-time probe could not read: a repair offer, never Commands'
-    /// own external-change question.</summary>
-    public void OfferRepairForUnreadable(LoadOrderSnapshot order, string modFolder, string pluginName) =>
-        _settled.RaiseCrashRepair(order, modFolder, [pluginName], CrashRepairReason.MissingOrUnreadableBinary);
 
     /// <summary>ADR-0009's runtime half: key and path only, never a locally remembered hash. The
     /// Index owns the comparison and announces whatever landed.</summary>

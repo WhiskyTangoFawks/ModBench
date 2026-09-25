@@ -750,7 +750,6 @@ export interface components {
             externalChangeOldVersion?: string | null;
             externalChangeNewVersion?: string | null;
             externalChangeTrackedFiles?: string[] | null;
-            crashRepairReason?: string | null;
         };
         PathHop: {
             kind: string;
