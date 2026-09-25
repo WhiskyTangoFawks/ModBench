@@ -42,12 +42,26 @@ internal sealed class WriteTargets(
             ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
+        try
+        {
+            return ResolveInTheTree(plugin, formKey, repository, release, out target);
+        }
+        catch (AmbiguousSourceUnitException ex)
+        {
+            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
+        }
+    }
+
+    private RecordEditResult? ResolveInTheTree(
+        PluginCopyKey plugin, string formKey, SourceRepository repository, GameRelease release, out EditTarget target)
+    {
+        target = default;
         RecordIdentity? found;
         try
         {
             found = repository.IdentityOf(plugin, formKey, schemaReflector.GetSchemas(release));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not (OutOfMemoryException or AmbiguousSourceUnitException))
         {
             // Naming this record means reading the document that carries it, and the codec is the only
             // reader of one: its own words are the reason.

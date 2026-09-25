@@ -57,6 +57,19 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         Assert.True(repository.HoldsAtEitherRef(Plugin, headerFormKey));
     }
 
+    [Theory]
+    [InlineData("Npcs/RenamedByHand.json")]
+    [InlineData("Npcs/Misnamed - 000900_HoldsAtEitherRef.esp.json")]
+    public void AnUncommittedDocumentNamedForNoKeyItDeclares_IsHeld(string relativePath)
+    {
+        var repository = Tracked();
+        var file = Path.Combine(_modFolder, SourceRepository.RootFor(PluginName), relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
+        File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
+
+        Assert.True(repository.HoldsAtEitherRef(Plugin, $"000850:{PluginName}"));
+    }
+
     [Fact]
     public void AnUncommittedEmbeddedChild_IsHeld_UnderAnyFormKeySpellingThatParses()
     {

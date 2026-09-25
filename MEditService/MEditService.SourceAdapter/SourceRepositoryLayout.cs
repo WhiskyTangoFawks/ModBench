@@ -255,40 +255,6 @@ public sealed partial class SourceRepository
         || (leaf.EndsWith(tail, StringComparison.Ordinal)
             && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
 
-    // The computed path when it exists, else whichever file in the group folder carries this FormKey:
-    // name and document EditorIDs can disagree, and the name alone reads a live record as deleted.
-    private static string FlatSourcePath(
-        string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
-        GameRelease release)
-    {
-        var computed = Path.Combine(
-            modFolder, FlatPathFor(pluginFileName, recordType, formKey, editorId, release));
-        if (File.Exists(computed)) return computed;
-
-        var groupFolder = RecordTypeDispatch.For(release).FolderNameFor(recordType);
-        if (groupFolder == null) return computed;
-
-        var groupDirectory = Path.Combine(RootIn(modFolder, pluginFileName), groupFolder);
-        if (!Directory.Exists(groupDirectory)) return computed;
-
-        var suffix = FilesafeFormKey(formKey) + JsonSuffix;
-        var matches = Directory
-            .EnumerateFiles(groupDirectory, $"*{suffix}", SearchOption.TopDirectoryOnly)
-            .Where(f => NameCarries(Path.GetFileName(f), suffix))
-            .Take(2)
-            .ToList();
-
-        return matches.Count switch
-        {
-            0 => computed,
-            1 => matches[0],
-            _ => throw new AmbiguousSourceUnitException(
-                $"More than one file in '{groupDirectory}' claims FormKey {formKey}. A FormKey is unique " +
-                "within a mod, so this tree is corrupt — most likely a rename that was interrupted " +
-                "partway. Resolve the duplicate by hand before editing."),
-        };
-    }
-
     // One place that knows a container is a directory and a flat record a file, so callers and
     // the rollback cannot disagree.
     private static void MoveEntry(string from, string to)
@@ -407,7 +373,7 @@ public sealed partial class SourceRepository
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
 
-        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), worldspace) is not { } document)
+        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } document)
         {
             throw new InvalidOperationException(
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
@@ -538,7 +504,7 @@ public sealed partial class SourceRepository
             && Leaf.Equals(RecordDataFileName, StringComparison.Ordinal);
 
         internal bool IsFlatDocument =>
-            _segments.Length == FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
+            _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
             && Leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)
             && !Leaf.Equals(RecordDataFileName, StringComparison.Ordinal)
             && !Leaf.Equals(GroupRecordDataFileName, StringComparison.Ordinal);

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -20,6 +22,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private const string Quest = "SharedQuest";
     private const string Cell = "SharedCell";
     private const string PlacedRef = "SharedRef";
+    private const string World = "SharedWorld";
 
     private async Task<ScatteredFixtureData> ATrackedMod()
     {
@@ -35,6 +38,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
                 var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
                 block.SubBlocks.Add(subBlock);
                 mod.Cells.Records.Add(block);
+                mod.Worldspaces.Add(new Worldspace(mod) { EditorID = World });
             }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -87,26 +91,333 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    // A tool that moves by copying and then deleting: the old path's delete settles in a batch the
-    // new path is not in.
-    [Fact]
-    public async Task ACommittedDocumentCopiedThenDeletedByHand_KeepsItsRecord()
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
+    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEdit(string renamedTo)
     {
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin);
-        var quest = await Client.FirstFormKey(Plugin, "qust");
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
+        var before = await Client.Sequence();
+
+        (await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("EditedAfterTheRename", (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
+    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEditThatKeepsItsName_InThatDocument(string renamedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
+        var renamed = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        var before = await Client.Sequence();
+
+        (await Client.Edit(npc, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(modFolder, Plugin, "0.75"));
+    }
+
+    [Fact]
+    public async Task ADialogResponseCopiedIntoAQuestWhoseDocumentWasRenamedByHand_LandsInThatDocument()
+    {
+        const string master = "DialogueMaster.esm";
+        const string masterOrigin = "DialogueMasterMod";
+        const string patch = "DialoguePatch.esp";
+        const string patchOrigin = "DialoguePatchMod";
+        var response = FormKey.Null;
+        using var fx = new PluginFixtureBuilder("trace-another-tool-dialogue")
+            .WithPlugin(master, mod =>
+            {
+                var quest = new Quest(mod) { EditorID = "SharedDialogueQuest" };
+                var topic = new DialogTopic(mod) { EditorID = "SharedDialogueTopic" };
+                var line = new DialogResponses(mod) { EditorID = "CopiedResponse" };
+                topic.Responses.Add(line);
+                quest.DialogTopics.Add(topic);
+                mod.Quests.Add(quest);
+                response = line.FormKey;
+            }, origin: masterOrigin)
+            .WithPlugin(patch, (mod, earlier) =>
+            {
+                var quest = earlier[0].Quests.Single().DeepCopy();
+                quest.DialogTopics.Single().Responses.Clear();
+                mod.Quests.Set(quest);
+            }, origin: patchOrigin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(patch, patchOrigin)).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(patch);
+        var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
+        OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
+        var renamed = OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\"");
+
+        var copied = await Client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(response.ToString())}/copy-as-override",
+            new { sourcePlugin = master, sourceOrigin = masterOrigin, destinationPlugin = patch, destinationOrigin = patchOrigin });
+
+        copied.EnsureSuccessStatusCode();
+        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\""));
+        Assert.Contains("CopiedResponse", File.ReadAllText(renamed), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARecordABackupCopyAlsoHolds_RefusesAnEdit_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
         using var stream = await Client.NotificationStream();
-        OtherTool.CopiesASourceDocument(original, "SortedByHand/{0}");
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
-        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+        OtherTool.CopiesASourceDocument(original, "Backup/{0}");
+
+        var response = await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedDespiteTheBackup");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("AmbiguousSourceUnit", problem.GetProperty("refusal").GetString());
+        var detail = problem.GetProperty("detail").GetString().Require();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+    }
+
+    // A tool that moves by copying and then deleting leaves the record in two documents until the
+    // delete settles.
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("Misnamed - 000900_Shared.esp.json")]
+    [InlineData("SortedByHand/{0}")]
+    [InlineData("SortedByHand/RenamedByHand.json")]
+    public async Task ACommittedDocumentCopiedThenDeletedByHand_IsDiagnosedUntilTheDelete_AndKeepsItsRecord(
+        string copiedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+
+        OtherTool.CopiesASourceDocument(original, copiedTo);
+
+        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
+        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        Assert.Contains(
+            Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), FailureOf(diagnosed), StringComparison.Ordinal);
 
         OtherTool.DeletesTheFile(original);
 
-        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
-        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // The copy is a cell of its own, and the placed reference it carries is the original's.
+    private static string ACellCopiedUnderAKeyOfItsOwn(string modFolder, string cell)
+    {
+        var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
+        var copy = OtherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
+        OtherTool.CopiesASourceDirectory(original, Path.GetFileName(copy));
+        var document = Path.Combine(copy, "RecordData.json");
+        var text = File.ReadAllText(document);
+        var at = text.IndexOf(cell, StringComparison.Ordinal);
+        File.WriteAllText(document, text[..at] + "000950:Shared.esp" + text[(at + cell.Length)..]);
+        return document;
+    }
+
+    [Fact]
+    public async Task APlacedReferenceTwoCellsCarry_IsDiagnosed_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
+        using var stream = await Client.NotificationStream();
+
+        var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
+
+        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
+        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, copy), FailureOf(diagnosed), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APlacedReferenceTwoCellsCarry_RefusesAnEdit_NamingBothDocuments()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
+        using var stream = await Client.NotificationStream();
+        var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
+
+        var response = await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("AmbiguousSourceUnit", problem.GetProperty("refusal").GetString());
+        var detail = problem.GetProperty("detail").GetString().Require();
+        Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, copy), detail, StringComparison.Ordinal);
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+    }
+
+    [Theory]
+    [InlineData("{0}")]
+    [InlineData("copy.json")]
+    public async Task ABackupCopyIntoAFolderThatAlreadyStood_IsDiagnosed_NamingBothDocuments(string copiedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var quest = await Client.FirstFormKey(Plugin, "qust");
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+        Directory.CreateDirectory(OtherTool.Beside(original, "Backup"));
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+
+        OtherTool.CopiesASourceDocument(original, $"Backup/{copiedTo}");
+
+        var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
+        Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
+        Assert.Contains(
+            Path.GetRelativePath(modFolder, OtherTool.Beside(original, $"Backup/{copiedTo}")), FailureOf(diagnosed),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Backup/{0}")]
+    [InlineData("Backup/copy.json")]
+    public async Task ABackupCopyDeletedByHand_LiftsTheDiagnosis(string copiedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+        OtherTool.CopiesASourceDocument(original, copiedTo);
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+
+        OtherTool.DeletesTheFile(OtherTool.Beside(original, copiedTo));
+
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    private static string? FailureOf(JsonElement loadOrderStatus) =>
+        loadOrderStatus.GetProperty("loadOrderStatus").GetProperty("failures").EnumerateArray()
+            .Where(f => f.GetProperty("name").GetString() == Plugin)
+            .Select(f => f.GetProperty("reason").GetString())
+            .FirstOrDefault();
+
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    public async Task ACommittedDocumentDeletedThenWrittenElsewhereByHand_BringsItsRecordBack(string writtenTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        var text = File.ReadAllText(original);
+        using var stream = await Client.NotificationStream();
+        OtherTool.DeletesTheFile(original);
+        await stream.EventsUntil("rows-changed", e => Names(e, npc));
+        var afterTheDelete = await Client.Sequence();
+
+        OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
+
+        await Client.SequenceReaches(afterTheDelete + 1);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    [Fact]
+    public async Task ACommittedContainerCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
+        using var stream = await Client.NotificationStream();
+        OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+
+        OtherTool.DeletesTheDirectory(original);
+
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
+        Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
+    }
+
+    [Theory]
+    [InlineData(Cell, "cell")]
+    [InlineData(World, "wrld")]
+    public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack(
+        string editorId, string recordType)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var container = await Client.FirstFormKey(Plugin, recordType);
+        var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"");
+        var original = Path.GetDirectoryName(document).Require();
+        var text = File.ReadAllText(document);
+        using var stream = await Client.NotificationStream();
+        OtherTool.DeletesTheDirectory(original);
+        await stream.EventsUntil("rows-changed", e => Names(e, container));
+        var afterTheDelete = await Client.Sequence();
+
+        OtherTool.WritesTheFile(
+            Path.Combine(OtherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
+
+        await Client.SequenceReaches(afterTheDelete + 1);
+        Assert.Equal(editorId, (await Client.Record(container)).GetProperty("editorId").GetString());
+    }
+
+    [Theory]
+    [InlineData(Cell, "cell")]
+    [InlineData(World, "wrld")]
+    public async Task AContainerWhoseDirectoryWasRenamedByHand_TakesAnEdit(string editorId, string recordType)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var container = await Client.FirstFormKey(Plugin, recordType);
+        var directory = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"")).Require();
+        Directory.Move(directory, OtherTool.Beside(directory, "RenamedByHand"));
+        var before = await Client.Sequence();
+
+        (await Client.Edit(container, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("EditedAfterTheRename", (await Client.Record(container)).GetProperty("editorId").GetString());
+    }
+
+    // Only the folder's own arrival is an event: nothing inside it was watched when it was written.
+    [Fact]
+    public async Task ARecordInAFolderMovedInByHand_IsRead()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        const string added = "000900:Shared.esp";
+        var text = File.ReadAllText(original)
+            .Replace(npc, added, StringComparison.Ordinal)
+            .Replace(Npc, "AddedNpc", StringComparison.Ordinal);
+        var before = await Client.Sequence();
+
+        OtherTool.MovesInAFolderHolding(OtherTool.Beside(original, "AddedByHand"), "AddedNpc - 000900_Shared.esp.json", text);
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("AddedNpc", (await Client.Record(added)).GetProperty("editorId").GetString());
     }
 
     // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame

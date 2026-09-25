@@ -65,6 +65,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         if (!Directory.Exists(_root)) yield break;
 
+        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var groupDirectory in Directory.EnumerateDirectories(_root))
         {
             var folder = Path.GetFileName(groupDirectory);
@@ -73,9 +74,9 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             var documents = directoryPerRecord switch
             {
-                null => FlatGroup(groupDirectory),
-                var type when _containers.IsCell(type) => InteriorCells(groupDirectory),
-                _ => Worldspaces(groupDirectory),
+                null => FlatGroup(groupDirectory, filedAt),
+                var type when _containers.IsCell(type) => InteriorCells(groupDirectory, filedAt),
+                _ => Worldspaces(groupDirectory, filedAt),
             };
             foreach (var document in documents) yield return document;
         }
@@ -83,27 +84,28 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // A group with no directory-per-record type files its records flat, and a container that is not a
     // cell or a worldspace keeps its own directory directly under it.
-    private IEnumerable<PluginDocument> FlatGroup(string groupDirectory) =>
+    private IEnumerable<PluginDocument> FlatGroup(string groupDirectory, Dictionary<string, string> filedAt) =>
         Directory
             .EnumerateFiles(groupDirectory, $"*{SourceRepository.JsonSuffix}", SearchOption.AllDirectories)
-            .SelectMany(file => DocumentsAt(file, cell: null));
+            .SelectMany(file => DocumentsAt(file, cell: null, filedAt));
 
     // Interior placement carries no gameplay meaning, so the block levels a cell sits under are read
     // as depth alone — every interior cell's block and sub-block are null.
-    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory) =>
+    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, Dictionary<string, string> filedAt) =>
         Directory.EnumerateDirectories(cellsDirectory)
             .SelectMany(Directory.EnumerateDirectories)
             .SelectMany(Directory.EnumerateDirectories)
             .SelectMany(cellDirectory => DocumentsAt(
                 Path.Combine(cellDirectory, SourceRepository.RecordDataFileName),
-                new CellStructure(null, null, null, null, null, IsInterior: true)));
+                new CellStructure(null, null, null, null, null, IsInterior: true),
+                filedAt));
 
-    private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory)
+    private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory, Dictionary<string, string> filedAt)
     {
         foreach (var worldspaceDirectory in Directory.EnumerateDirectories(worldspacesDirectory))
         {
             var own = Path.Combine(worldspaceDirectory, SourceRepository.RecordDataFileName);
-            foreach (var document in DocumentsAt(own, cell: null)) yield return document;
+            foreach (var document in DocumentsAt(own, cell: null, filedAt)) yield return document;
 
             var worldspaceFormKey = SourceRepository.FormKeyDeclaredBy(own, _pluginFileName);
             foreach (var blockDirectory in Directory.EnumerateDirectories(worldspaceDirectory))
@@ -118,7 +120,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                     foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
                     {
                         var cell = Path.Combine(cellDirectory, SourceRepository.RecordDataFileName);
-                        foreach (var document in DocumentsAt(cell, structure)) yield return document;
+                        foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
                     }
                 }
             }
@@ -127,7 +129,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // The header is the one document with a file of its own that is not yielded here: it has its own
     // member, and the index writes its row through a door of its own.
-    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell)
+    private IEnumerable<PluginDocument> DocumentsAt(string file, CellStructure? cell, Dictionary<string, string> filedAt)
     {
         if (SourceRepository.CarriesNoRecord(file)) yield break;
 
@@ -150,8 +152,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _pluginFileName)
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
+        OneDocumentPerFormKey.Claim(filedAt, formKey, file, _modFolder);
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
-        foreach (var child in Embedded(recordType, formKey, text, file)) yield return child;
+        foreach (var child in Embedded(recordType, formKey, text, file))
+        {
+            OneDocumentPerFormKey.Claim(filedAt, child.FormKey, file, _modFolder);
+            yield return child;
+        }
     }
 
     // ADR-0005: what a cell's two placement groups hold. Read off its own document, since the tree

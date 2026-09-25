@@ -204,6 +204,29 @@ internal sealed class HeldPlugins
         }
     }
 
+    /// <summary>Drops the failure an earlier read recorded, for a copy that has just read cleanly.
+    /// False when none was recorded.</summary>
+    internal bool ClearFailure(PluginCopyKey key)
+    {
+        lock (_mutation)
+        {
+            if (!_loadFailures.Remove(key)) return false;
+            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
+            return true;
+        }
+    }
+
+    /// <summary>Held, and its last read failed: a copy the open itself failed on is not held, and has
+    /// nothing to read again.</summary>
+    internal bool IsHeldWithAFailure(PluginCopyKey key)
+    {
+        lock (_mutation)
+        {
+            return _loadFailures.ContainsKey(key)
+                   && _plugins.Exists(p => PluginCopyKey.Comparer.Equals(p.Key, key));
+        }
+    }
+
     private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredCopy plugin) =>
         new(
             Name: plugin.Name,

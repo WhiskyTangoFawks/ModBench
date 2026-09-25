@@ -64,6 +64,23 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
+    public void DirtOf_AnEditToADocumentSortedBelowItsGroup_NamesItsRecordAsThatGroupsType()
+    {
+        var sortedPath = Path.Combine("source", PluginName, "Npcs", "SortedByHand", $"Sorted - 000900_{PluginName}.json");
+        var repository = Tracked(new TreeFile(sortedPath, Encoding.UTF8.GetBytes($"{{\"FormKey\":\"000900:{PluginName}\"}}")));
+
+        File.WriteAllText(Path.Combine(_modFolder, sortedPath), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Edited\"}}");
+
+        var dirt = repository.DirtOf(Plugin);
+
+        var only = Assert.Single(dirt.Documents);
+        Assert.Equal($"000900:{PluginName}", only.FormKey);
+        Assert.Equal("npc_", only.RecordType);
+        Assert.True(only.InWorkingTree);
+        Assert.False(dirt.NeedsStructuralPass);
+    }
+
+    [Fact]
     public void DirtOf_ReportsNothing_ForACleanRepo()
     {
         var repository = Tracked();
@@ -132,9 +149,8 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     // The rival: skip the structural-pass fallback and every one of these shapes reads as a clean
     // tree instead of one that needs a whole-tree compare.
     [Theory]
-    // Too few / too many path segments — the flat shape is exactly four: source/<plugin>/<folder>/<file>.json.
+    // Too few path segments — the flat shape is at least four: source/<plugin>/<folder>/<file>.json.
     [InlineData("source/Test.esp/000800.json")]
-    [InlineData("source/Test.esp/Npcs/Test.esp/000800.json")]
     // Last segment missing the load-bearing ".json" suffix.
     [InlineData("source/Test.esp/Npcs/000800.txt")]
     [InlineData("source/Test.esp/Npcs/000800")]

@@ -132,8 +132,8 @@ internal sealed class WatcherSinks
         }
     }
 
-    // A file declaring nothing, deleted or unreadable, is named by HEAD's document at its path. Null
-    // when neither names a key, or the key HEAD named is still filed: a rename, which only a
+    // A file declaring nothing is named by HEAD's document at its path. Null when neither names a
+    // key, or another path in the batch declares the key HEAD named: a rename, which only a
     // whole-copy validate keys right.
     private static List<string>? FormKeysOf(SourceChangeEvent change)
     {
@@ -143,7 +143,12 @@ internal sealed class WatcherSinks
         {
             if (SourceRepository.CarriesNoRecord(path)) continue;
             if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is { } formKey)
+            {
+                // Named for another key or none: a copy or a hand rename, which a refresh by key
+                // cannot tell from the document the key names.
+                if (SourceRepository.PathCarrying([path], change.PluginName, formKey) is null) return null;
                 declared.Add(formKey);
+            }
             else if (SourceRepository.FormKeyCommittedAt(change.ModFolder, path, change.PluginName) is { } committed)
                 namedByHead.Add(committed);
             else
@@ -151,10 +156,6 @@ internal sealed class WatcherSinks
         }
 
         if (namedByHead.Intersect(declared, StringComparer.Ordinal).Any()) return null;
-        // The operating system can lose the event for the path a move landed at, or deliver it in
-        // an earlier batch.
-        if (namedByHead.Any(key => SourceRepository.FilesADocumentNamedFor(change.ModFolder, change.PluginName, key)))
-            return null;
         return [.. declared, .. namedByHead];
     }
 }

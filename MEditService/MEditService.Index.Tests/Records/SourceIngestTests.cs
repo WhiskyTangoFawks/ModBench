@@ -78,6 +78,25 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
+    // The edit rides along so that only a read of the tree, never the binary, answers with it.
+    [Fact]
+    public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
+    {
+        using (var live = Opened())
+        {
+            var document = NpcSourceFile(live);
+            var sorted = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "SortedByHand"));
+            File.WriteAllText(
+                Path.Combine(sorted.FullName, Path.GetFileName(document)),
+                File.ReadAllText(document).Replace(NpcEditorId, "SortedByHandNpc", StringComparison.Ordinal));
+            File.Delete(document);
+        }
+
+        using var reloaded = Opened();
+
+        Assert.Equal("SortedByHandNpc", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+    }
+
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
     {
@@ -260,6 +279,32 @@ public sealed class SourceIngestTests : IDisposable
         var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ABackupCopyDeclaringTheSameRecord_DegradesToTheBinary_AndNamesBothDocuments()
+    {
+        string document;
+        using (var live = Opened()) document = NpcSourceFile(live);
+        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
+        File.WriteAllText(backup, File.ReadAllText(document).Replace(NpcEditorId, "BackupNpc", StringComparison.Ordinal));
+
+        using var reloaded = Opened();
+
+        Assert.Equal(NpcEditorId, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        var failure = Assert.Single(reloaded.Status.Failures);
+        Assert.Contains(Path.GetRelativePath(ModFolder, document), failure.Reason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(ModFolder, backup), failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACopyWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
+    {
+        File.WriteAllText(_entry.Path, "this is not a plugin");
+        using var index = Opened();
+        Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
+
+        index.RefreshKeys(Plugin, [_npc]);
     }
 
     [Fact]

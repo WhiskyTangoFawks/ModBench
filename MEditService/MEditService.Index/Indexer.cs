@@ -723,21 +723,35 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         var order = _holder.Current;
         var reports = new List<ValidationReport>(keys.Count);
         foreach (var key in keys)
-        {
-            var report = index.Validate(key, order.ModFolderOf(key));
-            foreach (var failure in report.Failures)
-                _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
-
-            // A record set that moved is re-derived whole. A tree that gained records is refreshed
-            // by their keys, so the rows that moved are named (edit-record.md, Hand-off).
-            if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && order.ModFolderOf(key) is { } modFolder)
-                index.RefreshByKeys(key, modFolder, report.ChangedKeys);
-            else if (report.NeedsRebuild) ReindexHeldCopy(key);
-            reports.Add(report);
-        }
+            reports.Add(ValidateOne(index, key, order.ModFolderOf(key)));
 
         ReapplyFilter();
         return reports;
+    }
+
+    // index-load-order.md, failures: one copy that cannot be read is flagged with its reason, and the
+    // copies after it are still validated.
+    private ValidationReport ValidateOne(IRecordIndex index, PluginCopyKey key, string? modFolder)
+    {
+        try
+        {
+            var report = index.Validate(key, modFolder);
+            foreach (var failure in report.Failures)
+                _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
+
+            // Gained records are refreshed by key so the rows that moved are named (edit-record.md,
+            // Hand-off). A copy whose last read failed is read whole: that lifts the failure (ADR-0003).
+            var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
+            if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)
+                RefreshByKeysOrReadWhole(index, key, folder, report.ChangedKeys);
+            else if (report.NeedsRebuild || failed) ReindexHeldCopy(key);
+            return report;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _logger.LogWarning(ex, "Could not validate {Plugin} ({Origin})", key.Name, key.Origin);
+            return new ValidationReport(key, [], NeedsRebuild: false, [PluginLoadFailure.ReasonFor(ex)]);
+        }
     }
 
     /// <summary>ADR-0015 invariant 2's narrow signal: re-projects these keys from the source tree
@@ -756,8 +770,31 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         // deleted or replaced between the event and this line, and then there is no truth to read.
         if (SourceRepository.TrackedModFolderOf(_holder.Current, key) is not { } modFolder) return;
 
-        index.RefreshByKeys(key, modFolder, formKeys);
+        // ADR-0003: a copy whose last read failed is read whole again, which is what clears the
+        // failure once the tree is sound; a key alone cannot vouch for the rest of the tree.
+        if (_heldPlugins?.IsHeldWithAFailure(key) == true)
+        {
+            ReindexHeldCopy(key);
+            return;
+        }
+
+        RefreshByKeysOrReadWhole(index, key, modFolder, formKeys);
         ReapplyFilter();
+    }
+
+    // A tree the keys cannot be read from is diagnosed on the copy by the whole read, as a first
+    // ingest would diagnose it.
+    private void RefreshByKeysOrReadWhole(
+        IRecordIndex index, PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys)
+    {
+        try
+        {
+            index.RefreshByKeys(key, modFolder, formKeys);
+        }
+        catch (Exception ex) when (ex is AmbiguousSourceUnitException or UnreadableSourceDocumentException)
+        {
+            ReindexHeldCopy(key);
+        }
     }
 
     // ADR-0013 invariant 3: the sweep is handed who competes, read from the kernel's load order —
@@ -832,12 +869,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
                 _heldPlugins?.SetFailure(key,
                     $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still " +
                     "showing what was last read from it — the compiled binary is not used for a tracked plugin.");
+                PublishStatus();
                 throw;
             }
 
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        if (_heldPlugins?.ClearFailure(key) == true) PublishStatus();
         AnnouncePluginChanged(index, key);
     }
 

@@ -144,10 +144,8 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
-    // A move whose two halves settle apart: the new path's batch closed before the old path's
-    // delete arrived, and the folder it went to is where no refresh by key looks.
     [Fact]
-    public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_ValidatesTheCopyWhole()
+    public async Task ACommittedDocumentMovedByHand_WhoseOldPathSettlesAlone_IsRefreshedByTheKeyItFiled_NotValidatedWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, "A.esp");
@@ -163,8 +161,49 @@ public sealed class SourceBatchTests
 
         tree.AdvancePastBothWindows();
 
+        Assert.Equal(
+            [["000800:A.esp"], ["000800:A.esp"]],
+            tree.Index.Of("refresh").Select(refresh => refresh.Keys));
+        Assert.Empty(tree.Index.Of("validate"));
+    }
+
+    // The operating system watches a new folder only once its creation is handled, so a batch naming
+    // the folder cannot vouch for the documents written into it.
+    [Fact]
+    public async Task AFolderCreatedUnderTheSourceRoot_ValidatesTheCopyWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+
+        await tree.Observes(() => Directory.CreateDirectory(
+            Path.Combine(SourceRepository.RootIn(modFolder, "A.esp"), "SortedByHand")));
+
+        tree.AdvancePastBothWindows();
+
         Assert.Single(tree.Index.Of("validate"));
-        Assert.Single(tree.Index.Of("refresh"));
+        Assert.Empty(tree.Index.Of("refresh"));
+    }
+
+    // Windows reports a folder's LastWrite whenever a file inside it changes; a timestamp touch is
+    // how Linux raises the same event.
+    [Fact]
+    public async Task AnExistingFolderChangedBesideADocumentInIt_IsRefreshedByKey_NotValidatedWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, "A.esp");
+        var group = Directory.CreateDirectory(Path.Combine(SourceRepository.RootIn(modFolder, "A.esp"), "Npcs")).FullName;
+        WatchedTree.Track(modFolder, "A.esp");
+        await tree.ApplyLoadOrder();
+        var observed = tree.Clock.Observations;
+
+        tree.WriteFile(Path.Combine(group, "Named - 000800_A.esp.json"), """{"FormKey":"000800:A.esp"}"""u8.ToArray());
+        Directory.SetLastWriteTimeUtc(group, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        Assert.True(await WatchedTree.Reached(() => tree.Clock.Observations >= observed + 2), "the folder's change never arrived");
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Contains(tree.Index.Of("refresh"), refresh => refresh.Keys.SequenceEqual(["000800:A.esp"]));
+        Assert.Empty(tree.Index.Of("validate"));
     }
 
     [Fact]

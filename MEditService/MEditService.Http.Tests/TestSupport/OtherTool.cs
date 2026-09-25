@@ -22,6 +22,16 @@ internal static class OtherTool
 
     internal static void DeletesTheFile(string path) => File.Delete(path);
 
+    internal static void DeletesTheDirectory(string path) => Directory.Delete(path, recursive: true);
+
+    /// <summary>A folder holding one file, written outside the mod folder and moved in whole.</summary>
+    internal static void MovesInAFolderHolding(string folder, string fileName, string contents)
+    {
+        var aside = Path.Combine(Path.GetTempPath(), $"medit-aside-{Guid.NewGuid():n}");
+        WritesTheFile(Path.Combine(aside, fileName), contents);
+        Directory.Move(aside, folder);
+    }
+
     internal static void WritesTheFile(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
@@ -64,7 +74,22 @@ internal static class OtherTool
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
         File.Copy(document, Beside(document, copiedTo));
 
-    private static string Beside(string document, string relativeTarget)
+    /// <summary><see cref="CopiesASourceDocument"/> for a container, whose document is a directory:
+    /// every file under <paramref name="directory"/>, at the same depth under the copy.</summary>
+    internal static void CopiesASourceDirectory(string directory, string copiedTo)
+    {
+        var target = Beside(directory, copiedTo);
+        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+        {
+            var copy = Path.Combine(target, Path.GetRelativePath(directory, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
+            File.Copy(file, copy);
+        }
+    }
+
+    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its
+    /// file name, with the folders it needs made.</summary>
+    internal static string Beside(string document, string relativeTarget)
     {
         var target = Path.Combine(
             Path.GetDirectoryName(document).Require(),

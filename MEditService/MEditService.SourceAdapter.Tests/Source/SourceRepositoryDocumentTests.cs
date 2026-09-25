@@ -57,6 +57,59 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         return repository;
     }
 
+    // A pipe nothing writes to never returns from an open for reading, so a Put that read the document
+    // standing beside the new one would not return either.
+    [Fact]
+    public async Task Put_OfARecordNoDocumentHolds_ReadsNoOtherDocument()
+    {
+        Opened();
+        var pipe = Path.Combine(NpcGroupFolder, "Unnamed.json");
+        MakeFifo(pipe);
+
+        var put = Task.Run(() => RequireOpened().Put(
+            Plugin, new SourceDocument("000A00:Fixture.esp", "npc_", "Created", "{\"FormKey\": \"000A00:Fixture.esp\"}")));
+
+        try
+        {
+            await put.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        catch (TimeoutException)
+        {
+            await ReleaseEveryReaderOf(pipe, put);
+            Assert.Fail("Put opened another document to place a record no document holds.");
+        }
+    }
+
+    // Opened for both reading and writing, a pipe lets a waiting reader's open return, and closing it
+    // hands that reader an end of file.
+    private static async Task ReleaseEveryReaderOf(string pipe, Task until)
+    {
+        while (!until.IsCompleted)
+        {
+            await using (new FileStream(pipe, FileMode.Open, FileAccess.ReadWrite))
+            {
+                try
+                {
+                    await until.WaitAsync(TimeSpan.FromMilliseconds(100));
+                }
+                catch (TimeoutException)
+                {
+                    // Still reading: this handle closes and the next one lets the next open return.
+                }
+            }
+        }
+    }
+
+    private static void MakeFifo(string path)
+    {
+        using var mkfifo = System.Diagnostics.Process.Start(
+            new System.Diagnostics.ProcessStartInfo("mkfifo", [path]) { RedirectStandardError = true })
+            ?? throw new InvalidOperationException($"Expected 'mkfifo {path}' to start a process.");
+        mkfifo.WaitForExit();
+        if (mkfifo.ExitCode != 0)
+            throw new InvalidOperationException($"mkfifo {path} failed: {mkfifo.StandardError.ReadToEnd()}");
+    }
+
     [Fact]
     public void Open_OnAnUntrackedFolder_IsNull()
     {

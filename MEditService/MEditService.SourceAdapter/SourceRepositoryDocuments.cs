@@ -59,18 +59,46 @@ public sealed partial class SourceRepository
             ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
             : null;
 
-    /// <summary>True when a document anywhere in <paramref name="pluginFileName"/>'s working tree is
-    /// named for <paramref name="formKey"/> and declares it. A move by hand keeps the name, and no
-    /// event need have named where it went.</summary>
-    public static bool FilesADocumentNamedFor(string modFolder, string pluginFileName, string formKey)
+    /// <summary>Every document in the working tree by the FormKey it declares, and a line for each file
+    /// that could not be read as one. A FormKey two documents declare throws
+    /// <see cref="AmbiguousSourceUnitException"/>.</summary>
+    public static (IReadOnlyDictionary<string, string> ByFormKey, IReadOnlyList<string> Unreadable)
+        DocumentsByDeclaredFormKey(string modFolder, string pluginFileName)
     {
-        var sourceRoot = RootIn(modFolder, pluginFileName);
-        if (!FormKey.TryFactory(formKey, out _) || !Directory.Exists(sourceRoot)) return false;
+        var unreadable = new List<string>();
+        var filedAt = new Dictionary<string, string>(StringComparer.Ordinal);
+        var documents = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        return DocumentsNamingIn(
-                Directory.EnumerateFileSystemEntries(sourceRoot, "*", SearchOption.AllDirectories), formKey)
-            .Any(document => string.Equals(
-                FormKeyDeclaredBy(document, pluginFileName), formKey, StringComparison.Ordinal));
+        // Keyed by the FormKey the document declares, never by its path: a file name carries an
+        // EditorID that may contain the separator, so a path is not a decidable identity.
+        foreach (var file in Directory.EnumerateFiles(RootIn(modFolder, pluginFileName), $"*{JsonSuffix}", SearchOption.AllDirectories))
+        {
+            if (CarriesNoRecord(file)) continue;
+
+            string text;
+            try
+            {
+                text = Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(file)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Never exclusive owners of a file: it may vanish or lock between the listing and the
+                // read. A skip and a line, and the tree stops counting as evidence a record is gone.
+                unreadable.Add($"Could not read '{file}': {ex.Message}");
+                continue;
+            }
+
+            if (FormKeyDeclaredIn(text, file, pluginFileName) is not { } formKey)
+            {
+                unreadable.Add($"'{file}' declares no FormKey, so the records it holds could not be validated.");
+                continue;
+            }
+
+            OneDocumentPerFormKey.Claim(filedAt, formKey, file, modFolder);
+            documents[formKey] = text;
+        }
+
+        return (documents, unreadable);
     }
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
