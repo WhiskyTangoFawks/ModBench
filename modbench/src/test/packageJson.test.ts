@@ -992,12 +992,12 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 
   // commands.md, view on Nexus: Mods (mod has a Nexus id); Downloads (file has a Nexus id).
-  it('offers view on Nexus in the palette while either view has focus on one row with a Nexus id', () => {
+  it('offers view on Nexus in the palette only on the focused view whose row the command opens', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === 'modbench.mod.viewOnNexus');
     expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.singleNexusMod`
-      + ` || focusedView == modbench.downloads && ${IN_AN_INSTANCE} && modbench.downloadedFile.singleNexusFile`,
+      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.modList`
+      + ` || focusedView == modbench.downloads && ${IN_AN_INSTANCE} && modbench.mod.nexusRowIn == modbench.downloads`,
     ]);
   });
 

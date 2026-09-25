@@ -76,7 +76,7 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, registerDownloadsView, selectedInLastSelectedView, type DownloadsViewDeps } from '../mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps } from '../mo2TreeViews';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
@@ -461,7 +461,11 @@ describe('the Downloads view tells its palette entries what the selection holds'
   });
 });
 
-describe('the selection of the view last selected in', () => {
+// commands.md, Where: a gesture is absent, not refused, where its condition is false. From the
+// palette view on Nexus opens the one row selected in the view last selected in, so the key the
+// palette entry reads names that view only while that row has a Nexus id.
+describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
+  const KEY = 'modbench.mod.nexusRowIn';
   type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
   function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
     const listeners: ((e: SelectionChange) => void)[] = [];
@@ -479,19 +483,23 @@ describe('the selection of the view last selected in', () => {
     return view;
   }
 
-  it('follows whichever view changed its selection last, read as that view holds it now', () => {
+  it('offers it on the view whose one selected row it opens, and nowhere while that row has no Nexus id', () => {
     const mods = fakeView();
     const downloads = fakeView();
-    const selected = selectedInLastSelectedView(own, [mods, downloads]);
+    const nexusRow = nexusRowInLastSelectedView(own, [
+      { id: 'modbench.modList', view: mods }, { id: 'modbench.downloads', view: downloads },
+    ]);
+    const nexusMod = new ModNode({ kind: 'mod', name: 'On Nexus', enabled: true, nexusId: '42' });
+    const nexusFile = new DownloadNode(downloadRowFixture('a.7z', { modID: '7' }));
 
-    expect(selected()).toEqual([]);
-    mods.select(['mod A']);
-    expect(selected()).toEqual(['mod A']);
-    downloads.select(['file B']);
-    expect(selected()).toEqual(['file B']);
-    mods.select(['mod C']);
-    expect(selected()).toEqual(['mod C']);
-    mods.selection = ['mod D'];
-    expect(selected()).toEqual(['mod D']);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
+    mods.select([nexusMod]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.modList', nexusMod]);
+    downloads.select([new DownloadNode(downloadRowFixture('b.7z'))]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
+    downloads.select([nexusFile]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.downloads', nexusFile]);
+    mods.select([nexusMod, new ModNode({ kind: 'mod', name: 'Also', enabled: true, nexusId: '43' })]);
+    expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
   });
 });

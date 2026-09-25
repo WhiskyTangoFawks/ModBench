@@ -221,14 +221,6 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).singleFolder).toBe(false);
   });
 
-  it('view on Nexus sees exactly one selected mod, with a Nexus id', () => {
-    const nexusMod = new ModNode({ kind: 'mod', name: 'Nexus', enabled: true, nexusId: '42' });
-    expect(modsKeyContext([nexusMod], byRow).singleNexusMod).toBe(true);
-    expect(modsKeyContext([enabledMod], byRow).singleNexusMod).toBe(false);
-    expect(modsKeyContext([nexusMod, enabledMod], byRow).singleNexusMod).toBe(false);
-    expect(modsKeyContext([new OverwriteNode(0)], byRow).singleNexusMod).toBe(false);
-  });
-
   it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', () => {
     expect(modsKeyContext([enabledMod, group], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: false });
     expect(modsKeyContext([disabledMod], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });

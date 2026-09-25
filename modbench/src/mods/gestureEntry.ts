@@ -81,7 +81,6 @@ export interface ModsKeyContext {
   readonly singleRow: boolean;
   /** One row, and it has a folder: a mod, or Overwrite. */
   readonly singleFolder: boolean;
-  readonly singleNexusMod: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
 }
@@ -97,7 +96,6 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
     singleFolder: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND,
-    singleNexusMod: onlyRow?.kind === 'mod' && onlyRow.nexusModId !== undefined,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
   };

@@ -2,13 +2,14 @@
 // composition root's, so they sit beside it rather than in the views they render.
 
 import * as vscode from 'vscode';
-import { ModListProvider, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
+import type { NexusModRow } from './mods/modManagementCommands';
 import { errorMessage } from './ports/errorMessage';
 import {
   registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
-import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
+import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
 import { downloadsKeyContext } from './downloads/keyContext';
 import type { InstanceView } from './instanceLoader/instance';
@@ -84,15 +85,27 @@ async function expandFilteredSeparators(
   }
 }
 
-/** The selection of whichever view changed its selection last, read as that view holds it now:
- *  the palette hands a command no row, and no stable API names the focused view. */
-export function selectedInLastSelectedView(
-  own: Own,
-  views: readonly Pick<vscode.TreeView<unknown>, 'selection' | 'onDidChangeSelection'>[],
-): () => readonly unknown[] {
-  let last: Pick<vscode.TreeView<unknown>, 'selection'> | undefined;
-  for (const view of views) own(view.onDidChangeSelection(() => { last = view; }));
-  return () => last?.selection ?? [];
+type SelectableView = Pick<vscode.TreeView<unknown>, 'selection' | 'onDidChangeSelection'>;
+
+/** View on Nexus from the palette opens the one row selected in the view last selected in, since
+ *  no stable API names the focused view. `modbench.mod.nexusRowIn` names that view while its row
+ *  has a Nexus id, so the palette offers the gesture exactly where it acts. */
+export function nexusRowInLastSelectedView(
+  own: Own, views: readonly { id: string; view: SelectableView }[],
+): () => NexusModRow | undefined {
+  let last: SelectableView | undefined;
+  const nexusRow = (): NexusModRow | undefined => {
+    const [only, ...rest] = last?.selection ?? [];
+    const row = only instanceof ModNode || only instanceof DownloadNode ? only : undefined;
+    return rest.length === 0 && row?.nexusModId !== undefined ? row : undefined;
+  };
+  for (const { id, view } of views) {
+    own(view.onDidChangeSelection(() => {
+      last = view;
+      void vscode.commands.executeCommand('setContext', 'modbench.mod.nexusRowIn', nexusRow() && id);
+    }));
+  }
+  return nexusRow;
 }
 
 export interface DownloadsViewDeps {

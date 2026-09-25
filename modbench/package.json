@@ -465,7 +465,7 @@
         },
         {
           "command": "modbench.mod.viewOnNexus",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleNexusMod || focusedView == modbench.downloads && modbench.folder == instance && modbench.downloadedFile.singleNexusFile"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.nexusRowIn == modbench.modList || focusedView == modbench.downloads && modbench.folder == instance && modbench.mod.nexusRowIn == modbench.downloads"
         },
         {
           "command": "modbench.downloadedFile.open",
