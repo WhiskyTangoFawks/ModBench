@@ -1639,7 +1639,8 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 
     const item = tree.getTreeItem(row);
 
-    assert.strictEqual(item.tooltip, undefined);
+    // The base tooltip (file name, mod) is the row's own identity, not a backend fact.
+    assert.strictEqual(item.tooltip, 'TestMod.esp\nData');
   });
 
 });
@@ -1729,7 +1730,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
     // The hand-off follows the index status on the stream, so the tree is read until it lands.
     await waitFor('a resolved master issue to clear the tooltip, not leave the stale decoration stacked on top of the fresh one',
-      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === undefined);
+      async () => tree.getTreeItem(findRow(await tree.getChildren(), 'MissingMaster.esp')).tooltip === 'MissingMaster.esp\nData');
   });
 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
@@ -2018,7 +2019,7 @@ describe('Progressive load', () => {
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
-      return candidate.description === '✗ Failed to load' ? candidate : undefined;
+      return candidate.description === 'failed to load' ? candidate : undefined;
     });
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
@@ -2092,18 +2093,17 @@ describe('Progressive load', () => {
     }
   });
 
-  // Master issues derive from the whole load order, so mid-load they would flag masters not
-  // opened yet. The backend suppresses them while loading; this asserts the suppression holds
-  // end to end and then lifts by itself.
-  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
+  // plugins.md, A row: "no blink" — a reload keeps the last statuses until the new answer
+  // lands, unchanged through the mid-load tick.
+  it('keeps a plugin\'s master-issue tooltip through a reload\'s mid-load tick, unchanged', async () => {
     const { launch } = await launchAndAwaitOpeningTick();
 
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
-      !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),
-      `master issues must not be decorated mid-load, got: ${describeTooltip(midLoad.tooltip)}`,
+      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm'),
+      `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
     releasePut();
@@ -2112,9 +2112,6 @@ describe('Progressive load', () => {
     const loaded = await itemFor('MissingMaster.esp');
     assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
-    // A progressive tick carries empty readOnly/masterIssues, so if a tick were ever the last
-    // setLoadOrder call both decorations would vanish from a fully loaded tree. Asserting one of each
-    // proves the completion hand-off runs after the last tick.
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${describeTooltip(immutable.tooltip)}`);

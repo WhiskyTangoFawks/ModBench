@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { posix } from 'node:path';
 
 /** Grays an implicit master's row as MO2 does for a `forceLoaded` row (ADR-0013);
  *  `TreeItem` has no label-color property, so row coloring must be a
@@ -14,9 +15,12 @@ export class ImplicitMasterDecorationProvider implements vscode.FileDecorationPr
 
   async provideFileDecoration(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
     const dataFolder = await this.dataFolder();
-    if (!dataFolder || !uri.fsPath.startsWith(dataFolder + '/')) return undefined;
-    const name = uri.fsPath.slice(dataFolder.length + 1);
-    if (!this.implicitMasterNames().has(name.toLowerCase())) return undefined;
+    if (!dataFolder) return undefined;
+    // `.path`, never `.fsPath` (Windows round-trips a backslash path through it). `dirname`
+    // never carries a trailing separator, so a Data folder setting that does needs stripping.
+    const dataPath = vscode.Uri.file(dataFolder).path.replace(/\/+$/, '');
+    if (posix.dirname(uri.path) !== dataPath) return undefined;
+    if (!this.implicitMasterNames().has(posix.basename(uri.path).toLowerCase())) return undefined;
     return { color: new vscode.ThemeColor('disabledForeground') };
   }
 }
