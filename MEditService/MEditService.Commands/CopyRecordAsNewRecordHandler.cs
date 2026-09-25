@@ -59,7 +59,8 @@ public sealed class CopyRecordAsNewRecordHandler
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
         // is a separate operation).
         var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
-            _codec, body, release, identity.RecordType, targetFormKey);
+            _codec, body, release, identity.RecordType, targetFormKey,
+            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
         destination.Repository.Put(
             destinationPlugin,
             new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text));
@@ -100,7 +101,8 @@ public sealed class CopyRecordAsNewRecordHandler
         }
 
         var duplicate = RecordDocumentEdits.DuplicatedWithSubtreeRekeyed(
-            _codec, body, release, identity.RecordType, targetFormKey, rekeys);
+            _codec, body, release, identity.RecordType, targetFormKey, rekeys,
+            EditorIdDeriver(destination.Repository.EditorIdsHeld(destinationPlugin)));
 
         var appended = _recordCopy.AppendEmbeddedChild(
             source, container,
@@ -118,6 +120,24 @@ public sealed class CopyRecordAsNewRecordHandler
                 destinationPlugin.Origin, container.ParentFormKey, container.SlotName, rekeys.Count);
         }
         return RecordEditResult.Success(targetFormKey);
+    }
+
+    // The Creation Kit's own shape for a duplicate's EditorID: the source's name, "DUPLICATE" and a
+    // three-digit counter, past whatever the destination already holds.
+    private static Func<string?, string?> EditorIdDeriver(IReadOnlySet<string> heldInDestination)
+    {
+        var taken = new HashSet<string>(heldInDestination, StringComparer.OrdinalIgnoreCase);
+        return sourceEditorId =>
+        {
+            if (sourceEditorId is null) return null;
+            var n = 1;
+            while (true)
+            {
+                var candidate = $"{sourceEditorId}DUPLICATE{n:D3}";
+                if (taken.Add(candidate)) return candidate;
+                n++;
+            }
+        };
     }
 
     // xEdit refuses CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI: a fresh FormKey leaves the copy with no group

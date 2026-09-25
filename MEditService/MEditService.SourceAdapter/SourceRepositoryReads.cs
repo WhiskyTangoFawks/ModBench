@@ -98,6 +98,11 @@ public sealed partial class SourceRepository
             : null;
     }
 
+    /// <summary>Every EditorID the plugin's tree holds now, a record with a document of its own and
+    /// an embedded child alike — what a derived EditorID is checked against to stay unique in the
+    /// destination.</summary>
+    public IReadOnlySet<string> EditorIdsHeld(PluginCopyKey plugin) => EditorIds(ReadAll(plugin));
+
     /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
     /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
     public IReadOnlySet<string> NativeFormKeysHeld(PluginCopyKey plugin) => Native(ReadAll(plugin), plugin);
@@ -132,6 +137,49 @@ public sealed partial class SourceRepository
         if (colon > 0 && formKey.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
             keys.Add(formKey);
     }
+
+    private static HashSet<string> EditorIds(IReadOnlyList<SourceDocument> documents)
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var document in documents)
+        {
+            foreach (var editorId in EditorIdsIn(Encoding.UTF8.GetBytes(document.Body))) ids.Add(editorId);
+        }
+        return ids;
+    }
+
+    // Every EditorID member's string value the document's bytes carry, at its own root or an
+    // embedded child's: RecordMembers.EditorId is the one property name every record's document
+    // uses for it.
+    private static List<string> EditorIdsIn(byte[] bytes)
+    {
+        var found = new List<string>();
+        var reader = new Utf8JsonReader(bytes);
+        var atEditorId = false;
+        try
+        {
+            while (reader.Read())
+            {
+                switch (reader.TokenType)
+                {
+                    case JsonTokenType.PropertyName:
+                        atEditorId = reader.ValueTextEquals(EditorIdPropertyName);
+                        continue;
+                    case JsonTokenType.String when atEditorId && reader.GetString() is { } editorId:
+                        found.Add(editorId);
+                        break;
+                }
+                atEditorId = false;
+            }
+        }
+        catch (JsonException)
+        {
+            // Caught mid-save, or hand-edited into something that is not a document.
+        }
+        return found;
+    }
+
+    private static readonly byte[] EditorIdPropertyName = Encoding.UTF8.GetBytes(RecordMembers.EditorId);
 
     // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
     // Empty, never null: "nothing at that ref" is an answer here.
