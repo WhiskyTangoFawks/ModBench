@@ -77,7 +77,8 @@ public sealed class RenumberRollbackTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
-        Assert.Contains("back as it was", result.Message, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(mod.ModFolder, cellFile), result.Message, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(mod.ModFolder, Path.Combine(impostor, "RecordData.json")), result.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
     }
 
