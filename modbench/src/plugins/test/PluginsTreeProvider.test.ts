@@ -1242,6 +1242,15 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
+  // An implicit master has no mod origin to join facts on, so its filter match falls back to
+  // its name alone (ADR-0012) — it is as filterable as any other row, not exempt.
+  it('hides an implicit master row the record filter matches no records of', async () => {
+    const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    await reconcile(h, [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: false })]);
+
+    expect(await h.tree.getChildren()).toEqual([]);
+  });
+
   it('restores a hidden plugin immediately, in load order, once the filter clears', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
@@ -1540,6 +1549,13 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     expect((await rowItem(h)).tooltip).toBe('A.esp\nSomeMod');
   });
 
+  it('omits the mod line, rather than leaving a blank one, when the row carries no origin', () => {
+    const h = makeTree([A_ROW()]);
+    const node = new PluginNode({ name: 'X.esp', enabled: true });
+
+    expect(h.tree.getTreeItem(node).tooltip).toBe('X.esp');
+  });
+
   // plugins.md, A row: "no blink" — the last statuses, read-only included, stay until the new
   // reconcile's own answer lands.
   it('stays through a fresh load start, until a new reconcile answers', async () => {
@@ -1623,8 +1639,8 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
     expect(item.iconPath).toBeUndefined();
   });
 
-  // The tooltip-only form of this bug happened once; this decoration also touches icon and
-  // description, so the same reused-row hazard applies to both — restore, not just tooltip.
+  // This decoration touches icon and description as well as tooltip, so a reused row must
+  // restore all three, not just the tooltip.
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }]);
@@ -1709,6 +1725,21 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
     expect((await rowItem(h)).tooltip).toContain('Failed to load');
   });
 
+  // plugins.md, States 2: a plugin not yet reached in a fresh reload reads "still indexing",
+  // never an error — even one that failed in the reconcile before this one started.
+  it('keeps the failed-to-load status (no blink) while expansion still reads "still indexing" for an unreached plugin', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
+    expect((await rowItem(h)).description).toBe('failed to load');
+
+    // A fresh reload begins; this tick has not reached A.esp yet.
+    h.tree.applyIndexed([], []);
+
+    expect((await rowItem(h)).description).toBe('failed to load');
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+
   it('clears the failed tooltip once a later reconcile reports the plugin loaded', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
@@ -1782,6 +1813,39 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
     expect(item.description).toBe('malformed');
     expect(item.tooltip).toContain('first diagnosis');
     expect(item.tooltip).toContain('second diagnosis');
+  });
+
+  // plugins.md, A row: "no blink" — the scan's answer is held back deliberately, so this
+  // observes the state strictly before it resolves, not a microtask-ordering race.
+  it('keeps the last diagnoses through a reconcile until its own scan lands', async () => {
+    const h = makeTree([A_ROW()]);
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
+    await reconcile(h, [held('A.esp')]);
+    expect((await rowItem(h)).description).toBe('malformed');
+
+    // Held back deliberately, so this observes the state strictly before the scan resolves.
+    let resolveScan!: (reports: PluginDiagnosisReport[]) => void;
+    const slow = new Promise<PluginDiagnosisReport[]>((resolve) => { resolveScan = resolve; });
+    h.client.setQueryAnswerOnce('getDiagnoses', slow);
+
+    await h.tree.applyReconciled([]);
+    expect((await rowItem(h)).description).toBe('malformed');
+
+    resolveScan([diagnosis('A.esp', 'some diagnosis')]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((await rowItem(h)).description).toBe('malformed');
+  });
+
+  it('keeps the last diagnoses if the next scan fails', async () => {
+    const h = makeTree([A_ROW()]);
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
+    await reconcile(h, [held('A.esp')]);
+    expect((await rowItem(h)).description).toBe('malformed');
+
+    h.client.setQueryFailure('getDiagnoses', new Error('GET /plugins/diagnoses failed (503)'));
+    await reconcile(h, [held('A.esp')]);
+
+    expect((await rowItem(h)).description).toBe('malformed');
   });
 
   it('a reconcile clears the previous scan diagnoses when the new scan finds nothing', async () => {

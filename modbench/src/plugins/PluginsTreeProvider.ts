@@ -195,7 +195,6 @@ class ByPluginCopy<T> {
 }
 
 type RowDecoration = {
-  tooltip: string | vscode.MarkdownString | undefined;
   description: vscode.TreeItem['description'];
   iconPath: vscode.TreeItem['iconPath'];
 };
@@ -213,9 +212,6 @@ interface PluginStatus {
 function malformedIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
-
-// One function per status (plugins.md, A row), each answering `undefined` when this row does
-// not carry it — `statusesOf` just filters the four out.
 
 function failedToLoadStatus(failure: string | undefined): PluginStatus | undefined {
   if (failure === undefined) return undefined;
@@ -373,7 +369,7 @@ export class PluginsTreeProvider
     if (!this.heldFiles.has(file.toLowerCase())) {
       // A plugin the load order gave up on will never be reached by a later tick — saying
       // "still indexing" would promise a completion that is not coming (ADR-0019).
-      const failure = this.loadFailureOf(element);
+      const failure = this.reachableFailureOf(element);
       return [failure !== undefined ? new ErrorNode(failure) : new IndexingNode()];
     }
     // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
@@ -442,7 +438,6 @@ export class PluginsTreeProvider
     // A row is returned *as* its own TreeItem, so decorating in place would accumulate
     // permanently, with no way back once the condition clears.
     const base = this.captureOriginalDecoration(element);
-    element.tooltip = base.tooltip;
     element.description = base.description;
     element.iconPath = base.iconPath;
 
@@ -457,7 +452,7 @@ export class PluginsTreeProvider
   private captureOriginalDecoration(item: vscode.TreeItem): RowDecoration {
     const existing = this.originalDecoration.get(item);
     if (existing) return existing;
-    const captured: RowDecoration = { tooltip: item.tooltip, description: item.description, iconPath: item.iconPath };
+    const captured: RowDecoration = { description: item.description, iconPath: item.iconPath };
     this.originalDecoration.set(item, captured);
     return captured;
   }
@@ -467,25 +462,26 @@ export class PluginsTreeProvider
   private decoratePlugin(row: PluginNode): void {
     const file = row.plugin.name;
     const joinedOrigin = this.joinOrigin(file, row);
-    const statuses = this.statusesOf(file, row.origin, joinedOrigin);
+    const statuses = this.statusesOf(row, joinedOrigin);
     const [first] = statuses;
     if (first !== undefined) {
-      // The first status in spec order sets the icon; only Malformed is warning tier.
       row.iconPath = first.kind === 'malformed' ? malformedIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
-    const lines = [file, row.origin ?? ''];
+    const lines = [file];
+    if (row.origin !== undefined) lines.push(row.origin);
     if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
   }
 
-  // plugins.md, A row: every status the plugin carries, spec order. `rawOrigin` joins load
+  // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
   // failures; `joinedOrigin` joins every other fact.
-  private statusesOf(file: string, rawOrigin: string | undefined, joinedOrigin: string | undefined): PluginStatus[] {
+  private statusesOf(row: PluginNode, joinedOrigin: string | undefined): PluginStatus[] {
+    const file = row.plugin.name;
     const facts = this.facts?.get(file, joinedOrigin);
     const statuses = [
-      failedToLoadStatus(this.loadFailures.get(file, rawOrigin)),
+      failedToLoadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
       malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
@@ -499,18 +495,25 @@ export class PluginsTreeProvider
   private facts?: ByPluginCopy<PluginFacts>;
   private matches?: ByPluginCopy<boolean>;
   private diagnoses?: ByPluginCopy<string[]>;
+  // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
+  // persists until `applyReconciled` lands the new answer.
   private loadFailures = new ByPluginCopy<string>();
+  // Children expansion only (plugins.md, States 2) — this reload's own ticks, replaced wholesale
+  // each time: a plugin not yet reached this reload reads as "still indexing", never a stale
+  // failure from before the reload began.
+  private reachableFailures = new ByPluginCopy<string>();
   // Bumped by every write to the held load order, so a slow read answering after a newer
   // reconcile — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
 
-  /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Statuses stay
-   *  as the last reconcile left them (plugins.md, A row: "no blink") until `applyReconciled`
-   *  lands; a tick's failures merge in rather than replace. */
+  /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
+   *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
+   *  this reload's own ticks. */
   applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
-    for (const f of failures) this.loadFailures.set(f.name, f.origin, f.reason);
+    this.reachableFailures = indexLoadFailures(failures);
+    mergeLoadFailures(this.loadFailures, failures);
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -523,13 +526,14 @@ export class PluginsTreeProvider
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
     this.loadFailures = indexLoadFailures(failures);
+    this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
     // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
     // vanishing under `mods/` is a watcher event, and that is a reconcile.
     this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map((p) => p.name));
     this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map((p) => p.name));
-    // The last scan's diagnoses describe binaries this load order may not hold.
-    this.diagnoses = undefined;
+    // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
+    // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
     // Fire-and-forget (ADR-0019 background tier): the tree hand-off must not wait on a
     // whole-load-order scan, and a blip retries at the next reconcile.
@@ -604,12 +608,12 @@ export class PluginsTreeProvider
     return this.matches?.get(file, this.joinOrigin(file, row)) === false;
   }
 
-  // The facts describe held copies only, and the failed copy is not one, so this joins on the
-  // row's own origin rather than through `joinOrigin`.
-  private loadFailureOf(row: PluginListNode): string | undefined {
+  // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
+  // row's own origin rather than through `joinOrigin`, as a failed copy is never a held one.
+  private reachableFailureOf(row: PluginListNode): string | undefined {
     const file = pluginFileOf(row);
     if (file === undefined) return undefined;
-    return this.loadFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
+    return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
   }
 
   // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
@@ -678,7 +682,11 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginCopy<string> {
   const byCopy = new ByPluginCopy<string>();
-  for (const f of failures) byCopy.set(f.name, f.origin, f.reason);
+  mergeLoadFailures(byCopy, failures);
   return byCopy;
+}
+
+function mergeLoadFailures(target: ByPluginCopy<string>, failures: PluginLoadFailure[]): void {
+  for (const f of failures) target.set(f.name, f.origin, f.reason);
 }
 

@@ -2112,8 +2112,6 @@ describe('Progressive load', () => {
     const loaded = await itemFor('MissingMaster.esp');
     assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
-    // A progressive tick never touches readOnly/masterIssues (plugins.md, A row: "no blink"), so
-    // this also holds after the reload completes, from the completion hand-off's own fresh read.
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${describeTooltip(immutable.tooltip)}`);
