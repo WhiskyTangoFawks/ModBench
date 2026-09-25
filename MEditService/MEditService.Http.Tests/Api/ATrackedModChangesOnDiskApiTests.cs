@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -16,6 +17,7 @@ namespace MEditService.Http.Tests.Api;
 public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
+    private const string SecondPlugin = "WatchedToo.esp";
     private const string Origin = "WatchedMod";
     private const string Npc = "WatchedNpc";
     private const string Asset = "texture.dds";
@@ -317,8 +319,6 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.Equal(Origin, unfinished.GetProperty("origin").GetString());
     }
 
-    // compile-plugin, Failure: the settle finds the mark and warns, even over bytes that differ from
-    // the last compile, and no question opens.
     [Fact]
     public async Task SettlingAModWhoseCompileWasInterrupted_WarnsCompileUnfinished_NamingThePlugin_AndOpensNoQuestion()
     {
@@ -352,7 +352,42 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.Null(SourceRepository.UnansweredExternalChange(modFolder));
     }
 
-    // plugins.md, A row: the status says it, and the load-time check asks nothing.
+    // The scattered fixture gives each plugin a folder of its own, so the second is written beside
+    // the first and listed by hand.
+    private async Task<(ScatteredFixtureData Fx, LoadOrderEntry[] Plugins, string SecondBinary)> WatchedWithASecondPlugin()
+    {
+        var fx = Owned(OneMod());
+        var second = Path.Combine(OtherTool.ModFolderOf(fx, Origin), SecondPlugin);
+        OtherTool.WritesThePlugin(second, mod => mod.Npcs.AddNew("SecondNpc").HeightMax = 0.5f);
+        LoadOrderEntry[] plugins =
+            [.. fx.Plugins, new LoadOrderEntry(SecondPlugin, second, Origin, fx.Plugins.Count, Enabled: true, Winning: true)];
+        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
+        (await Client.Track([(Plugin, Origin), (SecondPlugin, Origin)])).EnsureSuccessStatusCode();
+        await Client.PluginReportsTracked(SecondPlugin);
+        return (fx, plugins, second);
+    }
+
+    [Fact]
+    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_WhenAnotherTrackedPluginOfTheModCannotBeRead()
+    {
+        var (fx, plugins, secondBinary) = await WatchedWithASecondPlugin();
+        await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
+        Restart();
+        using var stream = await Client.NotificationStream();
+        FileModes.Set(secondBinary, "000");
+        try
+        {
+            (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
+
+            var frames = await stream.FramesThrough("compile-unfinished", _ => true);
+            AssertNamesThePlugin(frames[^1].Data);
+        }
+        finally
+        {
+            FileModes.Set(secondBinary, "644");
+        }
+    }
+
     [Fact]
     public async Task ATrackedPluginWhoseBinaryCannotBeRead_FailsToLoad_AndNothingIsAsked()
     {

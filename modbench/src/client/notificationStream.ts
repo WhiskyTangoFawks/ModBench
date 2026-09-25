@@ -19,8 +19,8 @@ class NotificationListenerRegistry {
   }
 
   protected dispatch(event: NotificationEvent): void {
-    // `event.kind` is `string` on the wire type (it reports every kind the schema knows, not just
-    // the five this client subscribes on); an event this build doesn't route stays undelivered.
+    // `event.kind` is `string` on the wire type; an event this build doesn't route stays
+    // undelivered.
     if (!isNotificationKind(event.kind)) return;
     for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
   }

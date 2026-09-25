@@ -13,9 +13,9 @@ public enum TrackedModSettledOutcome
     CompileUnfinished,
 }
 
-/// <summary>The watcher's one verb (ADR-0015 invariant 2): plugins off the load order, classified
-/// from the Source repository's facts; a genuine external change opens the mod's one question and
-/// publishes it.</summary>
+/// <summary>What the watcher calls when a tracked mod settles (ADR-0015 invariant 2): plugins off
+/// the load order, classified from the Source repository's facts; a genuine external change opens
+/// the mod's one question and publishes it.</summary>
 public sealed class TrackedModSettled
 {
     private readonly INotificationPublisher _notifications;
@@ -42,11 +42,7 @@ public sealed class TrackedModSettled
                 return TrackedModSettledOutcome.QuestionOpened;
 
             case ExternalChangeClassification.CompileUnfinished unfinished:
-                // Neither opens nor clears the external-change question (compile-plugin, Failure).
-                var origin = OriginOf(loadOrder, modFolder);
-                foreach (var plugin in unfinished.Plugins)
-                    _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
-                return TrackedModSettledOutcome.CompileUnfinished;
+                return Warn(loadOrder, modFolder, unfinished);
 
             // The compile that is writing the bytes settles the mod again when it lands.
             case ExternalChangeClassification.CompileRunning:
@@ -56,6 +52,23 @@ public sealed class TrackedModSettled
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return TrackedModSettledOutcome.NoQuestion;
         }
+    }
+
+    /// <summary>A tracked binary the caller could not read is no verdict: the question is neither
+    /// opened nor cleared, and an interrupted compile's mark is still published.</summary>
+    public TrackedModSettledOutcome HandleUnreadable(LoadOrderSnapshot loadOrder, string modFolder) =>
+        ExternalChangeClassifier.UnfinishedCompile(modFolder) is { } unfinished
+            ? Warn(loadOrder, modFolder, unfinished)
+            : TrackedModSettledOutcome.NoQuestion;
+
+    // compile-plugin, Failure: no question opens.
+    private TrackedModSettledOutcome Warn(
+        LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.CompileUnfinished unfinished)
+    {
+        var origin = OriginOf(loadOrder, modFolder);
+        foreach (var plugin in unfinished.Plugins)
+            _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
+        return TrackedModSettledOutcome.CompileUnfinished;
     }
 
     private void Raise(LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.ExternalChange change)

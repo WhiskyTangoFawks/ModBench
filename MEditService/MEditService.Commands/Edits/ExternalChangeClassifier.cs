@@ -21,8 +21,7 @@ internal static class ExternalChangeClassifier
         if (CompileJournal.IsCompiling(modFolder)) return new ExternalChangeClassification.CompileRunning();
 
         // A marker means Modbench's own interrupted compile: a warning, never this dialog.
-        if (CompileJournal.UnfinishedBatch(modFolder) is { } unfinished)
-            return new ExternalChangeClassification.CompileUnfinished(unfinished.Unlanded);
+        if (UnfinishedCompile(modFolder) is { } unfinished) return unfinished;
 
         var trackedPlugins = TrackedPlugins(modFolder, plugins);
         var changedPlugins = ChangedAmong(modFolder, trackedPlugins);
@@ -48,6 +47,13 @@ internal static class ExternalChangeClassifier
             changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged,
             oldBaseline?.UpstreamVersion, meta.UpstreamVersion);
     }
+
+    /// <summary>The mark an interrupted compile left in a tracked mod, which needs none of its
+    /// plugins' bytes, or null.</summary>
+    public static ExternalChangeClassification.CompileUnfinished? UnfinishedCompile(string modFolder) =>
+        SourceRepository.IsTracked(modFolder) && CompileJournal.UnfinishedBatch(modFolder) is { } unfinished
+            ? new ExternalChangeClassification.CompileUnfinished(unfinished.Unlanded)
+            : null;
 
     /// <summary>The tracked plugins whose bytes differ from what Modbench last wrote, in the order
     /// given.</summary>

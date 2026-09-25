@@ -89,10 +89,8 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // compile-plugin, Failure: an interrupted compile warns and opens no question, so a question
-    // already open stands exactly as it was.
     [Fact]
-    public async Task Handle_PublishesCompileUnfinished_AndNoQuestion_ForAnInterruptedCompile()
+    public async Task Handle_PublishesCompileUnfinished_AndLeavesAnOpenQuestionAsItWas_ForAnInterruptedCompile()
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question already open before the crash");
         await Assert.ThrowsAnyAsync<Exception>(async () =>

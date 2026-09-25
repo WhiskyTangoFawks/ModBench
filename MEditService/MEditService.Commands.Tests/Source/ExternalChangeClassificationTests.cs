@@ -88,8 +88,6 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         Assert.Empty(TheQuestion().TrackedFiles);
     }
 
-    // ── An unfinished compile: a warning naming the plugin, never the external-change question. ──
-
     [Fact]
     public async Task ASettle_WarnsCompileUnfinished_AndOpensNoQuestion_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
     {
