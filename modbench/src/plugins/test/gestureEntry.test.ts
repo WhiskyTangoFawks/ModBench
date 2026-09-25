@@ -16,7 +16,7 @@ import {
   type GestureEntry,
 } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
-import { RecordNode, RecordTypeNode } from '../PluginTreeProvider';
+import { CellNode, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 
 const pluginRow = (name: string, origin?: string) => new PluginNode({ name, enabled: true }, origin);
@@ -164,51 +164,77 @@ describe('a singular Plugins gesture\'s Argument', () => {
   });
 });
 
-// commands.md, Where: a palette entry is handed no row, so its `when` reads what the Plugins
-// selection holds, and the gesture is absent where it would have nothing to act on.
-describe('what the Plugins palette entries read off the selection', () => {
+// commands.md, Where: a palette entry and a key are handed no row, so their `when` reads what the
+// Plugins selection holds, and the gesture is absent where it would have nothing to act on.
+describe('what the Plugins palette entries and keys read off the selection', () => {
+  const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
+    row.contextValue = contextValue;
+    return row;
+  };
   const alpha = pluginRow('Alpha.esp', 'ModA');
   const beta = pluginRow('Beta.esp', 'ModB');
-  const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA');
+  const untracked = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inMod untracked editable');
+  const alsoUntracked = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inMod untracked editable');
+  const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite'), 'plugin enabled inOverwrite untracked editable');
+  const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inMod tracked editable');
+  const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inMod tracked');
+  const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
+  const untrackedWeapons = new RecordTypeNode('Beta.esp', 'weap', 3, 'Weapon', 'ModB');
   const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
-  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true);
+  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true, true);
+  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB');
+  const cell = new CellNode('Alpha.esp', {
+    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+  }, 'ModA', { tracked: true, editable: true });
+  const enabledNow = (row: PluginNode) => row !== beta;
+  const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);
 
-  it('reveal sees exactly one selected plugin', () => {
-    expect(pluginsKeyContext([alpha]).singlePlugin).toBe(true);
-    expect(pluginsKeyContext([alpha, beta]).singlePlugin).toBe(false);
-    expect(pluginsKeyContext([lockedRow('Fallout4.esm')]).singlePlugin).toBe(false);
+  it('reveal sees exactly one selected plugin, a locked one too', () => {
+    expect(context([alpha]).singlePlugin).toBe(true);
+    expect(context([lockedRow('Fallout4.esm')]).singlePlugin).toBe(true);
+    expect(context([alpha, beta]).singlePlugin).toBe(false);
+    expect(context([weapons]).singlePlugin).toBe(false);
   });
 
   it('track sees a selection of untracked plugins in mods, every one', () => {
-    const untracked = pluginRow('Gamma.esp', 'ModC');
-    untracked.contextValue = 'plugin untrackedInMod';
-
-    const alsoUntracked = pluginRow('Zeta.esp', 'ModZ');
-    alsoUntracked.contextValue = 'plugin untrackedInMod';
-    expect(pluginsKeyContext([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
-    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ allUntrackedInMod: false });
-    expect(pluginsKeyContext([])).toMatchObject({ allUntrackedInMod: false });
+    expect(context([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
+    expect(context([untracked, compilable])).toMatchObject({ allUntrackedInMod: false });
+    expect(context([untracked, inOverwrite])).toMatchObject({ allUntrackedInMod: false });
+    expect(context([])).toMatchObject({ allUntrackedInMod: false });
   });
 
-  it('compile takes exactly one selected compilable plugin', () => {
-    const compilable = pluginRow('Eps.esp', 'ModE');
-    compilable.contextValue = 'plugin compilable';
-
+  it('compile takes exactly one selected tracked, editable plugin', () => {
     expect(compilableSelected([compilable])).toBe(compilable);
-    expect(compilableSelected([alpha])).toBeUndefined();
+    expect(compilableSelected([trackedReadOnly])).toBeUndefined();
+    expect(compilableSelected([untracked])).toBeUndefined();
     expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
-  it('create sees exactly one selected record type', () => {
-    expect(pluginsKeyContext([weapons]).singleRecordType).toBe(true);
-    expect(pluginsKeyContext([weapons, alpha]).singleRecordType).toBe(false);
+  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  it('create sees exactly one selected record type whose plugin is tracked and editable', () => {
+    expect(context([weapons]).singleEditableRecordType).toBe(true);
+    expect(context([untrackedWeapons]).singleEditableRecordType).toBe(false);
+    expect(context([weapons, alpha]).singleEditableRecordType).toBe(false);
   });
 
   // No item is sent that the gesture would refuse.
-  it('delete sees a selection of records their plugins all let it remove', () => {
-    expect(pluginsKeyContext([own]).allDeletableRecords).toBe(true);
-    expect(pluginsKeyContext([own, immutable]).allDeletableRecords).toBe(false);
-    expect(pluginsKeyContext([own, alpha]).allDeletableRecords).toBe(false);
-    expect(pluginsKeyContext([]).allDeletableRecords).toBe(false);
+  it('delete sees a selection of records, cells included, their plugins all let it remove', () => {
+    expect(context([own, cell]).allDeletableRecords).toBe(true);
+    expect(context([own, immutable]).allDeletableRecords).toBe(false);
+    expect(context([own, untrackedRecord]).allDeletableRecords).toBe(false);
+    expect(context([own, alpha]).allDeletableRecords).toBe(false);
+    expect(context([]).allDeletableRecords).toBe(false);
+  });
+
+  // mods.md, Menus and keys, story 3, which plugins.md story 5 follows: Space takes the focused
+  // row's direction, and a selection of one row stands for the focused row.
+  it('Space takes the first selected plugin\'s direction, as its line is now', () => {
+    expect(context([alpha, beta]).selectionToggle).toBe('disable');
+    expect(context([beta, alpha]).selectionToggle).toBe('enable');
+    expect(context([own, beta]).selectionToggle).toBe('enable');
+  });
+
+  it('Space does nothing over a selection with no plugin', () => {
+    expect(context([own, lockedRow('Fallout4.esm')]).selectionToggle).toBeUndefined();
   });
 });

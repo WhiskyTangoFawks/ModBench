@@ -2,8 +2,11 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { PluginsTreeProvider, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { onlySelected } from './gestureEntry';
+import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import {
+  PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
+} from './gestureEntry';
+import { CellNode, PlacedNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
 import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -16,13 +19,14 @@ export function registerRevealInExplorerCommand(
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.reveal', async (clicked: PluginListNode | undefined) => {
-    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
-    if (node?.kind !== 'plugin') return;
-    const name = node.plugin.name;
-    const filePath = await pluginsTree.resolvePluginPath(name);
+    const node = clicked ?? onlySelected(viewSelection(), ...PLUGIN_ROW_KINDS);
+    if (node?.kind !== 'plugin' && node?.kind !== 'implicitMaster') return;
+    const name = node.kind === 'plugin' ? node.plugin.name : node.name;
+    const filePath = await pluginsTree.resolvePluginPath(node);
     if (!filePath) {
+      const why = node.kind === 'plugin' ? 'no mod or Overwrite holds this file' : 'the game folder was not found';
       // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      reporter.report('error', `Could not resolve a file location for "${name}" — no mod or Overwrite holds this file.`);
+      reporter.report('error', `Could not resolve a file location for "${name}" — ${why}.`);
       return;
     }
     try {
@@ -31,6 +35,39 @@ export function registerRevealInExplorerCommand(
       reporter.report('error', `Failed to reveal "${name}" in Explorer.`, errorMessage(err));
     }
   });
+}
+
+type CopiedRow = PluginNode | ImplicitMasterNode | RecordNode | WorldspaceNode | CellNode | PlacedNode;
+
+function isCopiedRow(value: unknown): value is CopiedRow {
+  return value instanceof PluginNode || value instanceof ImplicitMasterNode || value instanceof RecordNode
+    || value instanceof WorldspaceNode || value instanceof CellNode || value instanceof PlacedNode;
+}
+
+// editor.md, The header: `EditorID [FormKey]`, or the FormKey alone when there is no EditorID.
+function copyValueLine(row: CopiedRow): string {
+  if (row.kind === 'plugin') return row.plugin.name;
+  if (row.kind === 'implicitMaster') return row.name;
+  const { formKey, editorId } = row.kind === 'record'
+    ? { formKey: row.record.formKey, editorId: row.record.editorId ?? undefined }
+    : row;
+  return editorId ? `${editorId} [${formKey}]` : formKey;
+}
+
+/** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 8).
+ *  `undefined` unless `clicked` is a Plugins row or the Plugins key's args, so another view's
+ *  invocation defers. */
+export function pluginsCopyValueText(
+  viewSelection: () => readonly PluginsTreeNode[],
+): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
+  const lines = (entry: GestureEntry) =>
+    selectionArgument(entry, ...PLUGIN_ROW_KINDS, ...RECORD_ROW_KINDS).map(copyValueLine).join('\n');
+  return (clicked, allSelected) => {
+    if (isPluginsKeyArgs(clicked)) return lines({ selection: viewSelection() });
+    if (!isCopiedRow(clicked)) return undefined;
+    const selected = allSelected?.length ? allSelected.filter(isCopiedRow) : undefined;
+    return lines(pluginsGestureEntry(clicked, selected, viewSelection));
+  };
 }
 
 async function pickPluginDestination(

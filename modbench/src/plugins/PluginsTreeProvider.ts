@@ -8,10 +8,11 @@ import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
-import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -95,9 +96,11 @@ export class PluginNode extends vscode.TreeItem {
     public readonly origin?: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'plugin';
+    this.contextValue = `plugin ${plugin.enabled ? 'enabled' : 'disabled'}`;
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
-    this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
+    // plugins.md, Menus and keys, story 4: the game loads no disabled plugin's records, so a click
+    // on its row only selects it.
+    if (plugin.enabled) this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -240,6 +243,14 @@ function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undef
   };
 }
 
+// Nothing until mEdit answers: an unknown is neither tracked nor untracked, nor editable.
+function factFlags(facts: PluginFacts | undefined): string[] {
+  const flags: string[] = [];
+  if (facts?.tracked !== undefined) flags.push(facts.tracked ? 'tracked' : 'untracked');
+  if (facts?.readOnly === false) flags.push('editable');
+  return flags;
+}
+
 function malformedStatus(diagnosisTexts: string[]): PluginStatus | undefined {
   if (diagnosisTexts.length === 0) return undefined;
   return { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
@@ -352,11 +363,12 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The winning plugin's own path, already resolved on the Instance value — undefined for a name
-   *  with no winning plugin. A synchronous lookup, `Promise`-wrapped only to keep the caller's
+  /** A plugin row's winning plugin, as the Instance value resolved it, or a locked row's copy in
+   *  the game folder (plugins.md, Menus and keys). `Promise`-wrapped only to keep the caller's
    *  `await` unchanged. */
-  resolvePluginPath(name: string): Promise<string | undefined> {
-    const folded = name.toLowerCase();
+  resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
+    if (row.kind === 'implicitMaster') return Promise.resolve(this.dataFolderFile(row.name));
+    const folded = row.plugin.name.toLowerCase();
     return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
   }
 
@@ -380,7 +392,7 @@ export class PluginsTreeProvider
       // Deliberately not the row's own `origin`: a stated origin means "the plugin the load order
       // does not name" downstream, which would make every record row read-only. The backend
       // resolves a load-order filename itself.
-      return this.records?.getPluginChildren(file) ?? noRecordBrowser();
+      return this.records?.getPluginChildren(file, undefined, this.conditionsOf(element, file)) ?? noRecordBrowser();
     }
     // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
     const failure = this.reachableFailureOf(element);
@@ -488,23 +500,31 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    row.contextValue = this.contextValueOf(file, joinedOrigin);
+    row.contextValue = this.contextValueOf(row, joinedOrigin);
   }
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
-  // tracked, editable one. None before mEdit answers.
-  private contextValueOf(file: string, joinedOrigin: string | undefined): string {
-    if (joinedOrigin === undefined || !this.inMod(joinedOrigin)) return 'plugin';
-    const facts = this.facts?.get(file, joinedOrigin);
-    if (facts?.tracked === undefined) return 'plugin';
-    if (!facts.tracked) return 'plugin untrackedInMod';
-    return this.compilable(file, joinedOrigin) ? 'plugin compilable' : 'plugin';
+  // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
+  // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
+  private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
+    const place = this.placeOf(row.origin);
+    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(row.plugin.name, joinedOrigin);
+    return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
+      .join(' ');
+  }
+
+  // What the rows beneath a plugin row state about it: its tracked and editable flags.
+  private conditionsOf(row: PluginListNode, file: string): PluginConditions {
+    const joinedOrigin = this.joinOrigin(file, row);
+    const facts = row.kind === 'plugin' && joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
+    return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
   // The instance value names each mod's folder, whatever the mod manager calls the others.
-  private inMod(origin: string): boolean {
+  private placeOf(origin: string | undefined): 'inMod' | 'inOverwrite' | undefined {
+    if (origin === undefined) return undefined;
+    if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
     const folded = origin.toLowerCase();
-    return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded);
+    return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded) ? 'inMod' : undefined;
   }
 
   /** Whether compile applies to any plugin, which compile's palette entry reads. */
@@ -512,9 +532,8 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // Compile applies to a tracked plugin in a mod that is not read-only for editing.
+  // plugins.md, Menus and keys, story 6: compile on a tracked, editable plugin.
   private compilable(file: string, origin: string): boolean {
-    if (!this.inMod(origin)) return false;
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;
   }

@@ -13,7 +13,9 @@ import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceA
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
-import { PluginsTreeProvider, type PluginFactsClient, type PluginListSource } from './plugins/PluginsTreeProvider';
+import {
+  PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginNode, type PluginsTreeNode,
+} from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -45,7 +47,7 @@ import {
   loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
-import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import { pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { pluginsKeyContext } from './plugins/gestureEntry';
 import { errorMessage } from './ports/errorMessage';
@@ -85,7 +87,7 @@ export interface ToolboxDeps {
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
   /** Referenced By's own text for the catalog's one copy value id (Editor's own adapter,
-   *  `referencedByCopyValueText`): copy value's Mods adapter is this file's own. */
+   *  `referencedByCopyValueText`): copy value's Mods and Plugins adapters are this file's own. */
   referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string;
 }
 
@@ -212,7 +214,9 @@ interface PluginListDeps {
 
 // ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
 // every badge from the facts the provider pulls itself.
-function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
+function registerPluginListView(
+  deps: PluginListDeps,
+): { pluginsTree: PluginsTreeProvider; pluginsSelection: () => readonly PluginsTreeNode[] } {
   const { own, session, outputChannel, reporterFor, instanceRoot, implicitMasters, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
@@ -236,8 +240,10 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
+  const isEnabled = (row: PluginNode) =>
+    instance.value.plugins.some((p) => p.winning && p.enabled && p.name === row.plugin.name && p.origin === row.origin);
   const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection))) {
+    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection, isEnabled))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
     void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', pluginsTree.anyCompilable());
@@ -256,7 +262,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
   ownAll(own, registerPluginEnableCommands(
     instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
-  return pluginsTree;
+  return { pluginsTree, pluginsSelection: () => pluginListView.selection };
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
@@ -437,9 +443,10 @@ interface Mo2Side {
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
-  // Copy value's Mods adapter reads this once an instance exists; createToolbox falls back to
-  // undefined selection outside one, the same posture as `modListProvider` and its siblings.
+  // Copy value's Mods and Plugins adapters read these once an instance exists; createToolbox falls
+  // back to undefined selection outside one, the same posture as `modListProvider` and its siblings.
   modListSelection: () => readonly ModlistNode[];
+  pluginsSelection: () => readonly PluginsTreeNode[];
 }
 
 function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
@@ -502,7 +509,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     return syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
   };
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
-  const pluginsTree = registerPluginListView({
+  const { pluginsTree, pluginsSelection } = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
@@ -570,7 +577,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
-    modListSelection: () => modListView.selection,
+    modListSelection: () => modListView.selection, pluginsSelection,
   };
 }
 
@@ -611,6 +618,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   own(registerCopyValueCommand(
     [
       { text: mo2 ? modsCopyValueText(() => mo2.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
+      { text: mo2 ? pluginsCopyValueText(() => mo2.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
       { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
     ],
     reporterFor,

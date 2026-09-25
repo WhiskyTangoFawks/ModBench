@@ -230,16 +230,12 @@ export function openRecordPanel(
     cspSource: panel.webview.cspSource,
   });
 }
-// Whichever of the three row shapes duck-types, resolved to the (formKey, label) pair
-// openRecordPanel needs. `'kind' in node` rather than `instanceof`, so a test can use plain
-// object literals shaped like the real tree nodes.
+// Read by shape rather than `instanceof`, so a test can use plain object literals shaped like the
+// real tree nodes.
 export function recordOpenIdentity(node: unknown): { formKey: string; label: string } | undefined {
   if (!node || typeof node !== 'object') return undefined;
-  const n = node as { kind?: string; record?: { formKey?: string }; placed?: { formKey?: string };
-    formKey?: string; label?: unknown };
-  const formKey = 'kind' in n
-    ? n.kind === 'record' ? n.record?.formKey : n.kind === 'placed' ? n.placed?.formKey : undefined
-    : n.formKey;
+  const n = node as { kind?: string; record?: { formKey?: string }; formKey?: string; label?: unknown };
+  const formKey = n.kind === 'record' ? n.record?.formKey : n.formKey;
   if (!formKey) return undefined;
   return { formKey, label: typeof n.label === 'string' ? n.label : formKey };
 }
