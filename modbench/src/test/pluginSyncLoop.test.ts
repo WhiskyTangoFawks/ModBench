@@ -14,6 +14,10 @@ import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../plugin
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
+import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
+import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
+import { registerModSync } from '../modSyncTrigger';
+import { syncMods, type ModSyncResult } from '../modlist/modlist';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -181,6 +185,57 @@ describe('plugin sync and the Instance close a loop that settles', () => {
   });
 });
 
+// common.md, States, story 5: the game folder not found is told once, the same way everywhere.
+// Every Instance-driven writer to the Output is wired onto one channel, as the root wires them.
+describe('the game folder not found, across the whole instance', () => {
+  // Rival: plugin sync refusing with its own reason, a second Output line for the same cause.
+  it('is exactly one Output line, however many values land after mEdit has attached', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'game-not-found-'));
+    roots.push(root);
+    await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
+    await mkdir(join(root, 'profiles', PROFILE), { recursive: true });
+    await writeFile(join(root, 'ModOrganizer.ini'), INI);
+    await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
+    await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
+    await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
+    // Every level of the one Output channel, in the order written.
+    const output: string[] = [];
+    const write = (line: string): void => { output.push(line); };
+    const channel = { error: write, warn: write, info: write };
+    const instance = new Instance({
+      instanceRoot: root, resolveGameDirectory: resolvesNotFound,
+      resolveDownloadsDirectory: downloadsDirectoryResolver(), log: write, logReadFailure: write,
+    });
+    instances.push(instance);
+    const runs: Promise<PluginSyncResult | ModSyncResult>[] = [];
+    const ran = <T extends PluginSyncResult | ModSyncResult>(run: Promise<T>): Promise<T> => {
+      runs.push(run);
+      return run;
+    };
+    logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
+    const pluginSync = registerPluginSync(instance, (profile, provided, inData) =>
+      ran(syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined))), channel);
+    registerModSync(instance, (profile, modFolders) => ran(syncMods(root, profile, modFolders)), channel);
+
+    await instance.refresh();
+    pluginSync.runOnConnect();
+    for (const glob of ['profiles/*/plugins.txt', 'mods/**', 'profiles/*/plugins.txt']) {
+      const before = instance.sequence;
+      watcherFor(glob).fireChange();
+      expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
+    }
+    await Promise.all(runs);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(output).toEqual([
+      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
+        "ModOrganizer.ini's gamePath: not set; the Steam install: the game is in no Steam library. " +
+        'Set modbench.mods.gameDirectory to the game folder to fix it.',
+    ]);
+    expect(pluginSync.message()).toBeUndefined();
+  });
+});
+
 // A gesture writes `profiles/<profile>/plugins.txt` for the profile the Instance last landed, so
 // a value that missed a switch would silently edit the profile the user just left.
 describe('a gesture writes the profile the Instance last landed', () => {
@@ -253,6 +308,9 @@ async function firedAttached(...outcomes: (() => Promise<PluginSyncResult>)[]) {
   return harness;
 }
 
+const DATA_UNLISTABLE = "the game's Data folder cannot be listed: EACCES";
+const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: false, toldAsInstanceState: true });
+
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
@@ -276,11 +334,11 @@ describe('registerPluginSync — outcome handling', () => {
   });
 
   it('says the command\'s own refusal in the Output and the Plugins view\'s message line', async () => {
-    const { channel, trigger, messageChanged, land } = await firedAttached(refused('the game folder is not found'));
+    const { channel, trigger, messageChanged, land } = await firedAttached(refused(DATA_UNLISTABLE));
     await land();
 
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('the game folder is not found'));
-    expect(trigger.message()).toBe('plugins.txt is not synced: the game folder is not found.');
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining(DATA_UNLISTABLE));
+    expect(trigger.message()).toBe(`plugins.txt is not synced: ${DATA_UNLISTABLE}.`);
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -305,11 +363,11 @@ describe('registerPluginSync — outcome handling', () => {
     expect(trigger.message()).toBeUndefined();
   });
 
-  // Rival: report only the first refusal, so a folder found after mEdit went quiet keeps showing
-  // the folder.
+  // Rival: report only the first refusal, so a Data folder listed after mEdit went quiet keeps
+  // showing the listing.
   it('reports again when the reason changes', async () => {
     const { channel, trigger, messageChanged, land } = await firedAttached(
-      refused('the game folder is not found'), refused('mEdit cannot say which plugins the game loads with no line'));
+      refused(DATA_UNLISTABLE), refused('mEdit cannot say which plugins the game loads with no line'));
     await land();
     await land();
 
@@ -317,6 +375,32 @@ describe('registerPluginSync — outcome handling', () => {
     expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining('mEdit cannot say'));
     expect(trigger.message()).toBe('plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.');
     expect(messageChanged).toHaveBeenCalledTimes(2);
+  });
+});
+
+// update-load-order-file, Refusals: a game folder that is not found writes nothing, and is told
+// once, as the instance's state (common.md, States, story 5).
+describe('registerPluginSync — the game folder not found', () => {
+  // Rival: report it as the command's own refusal, a second telling beside the instance's state.
+  it('reports nothing of its own: no Output line and no message line', async () => {
+    const { channel, trigger, messageChanged, land } = await firedAttached(toldAsInstanceState);
+    await land();
+
+    expect(channel.error).not.toHaveBeenCalled();
+    expect(channel.info).not.toHaveBeenCalled();
+    expect(trigger.message()).toBeUndefined();
+    expect(messageChanged).not.toHaveBeenCalled();
+  });
+
+  // Rival: leave the standing refusal alone, so the message line keeps a cause plugin sync no
+  // longer has beside the instance's own.
+  it('takes its own standing refusal off the message line', async () => {
+    const { trigger, land } = await firedAttached(refused(DATA_UNLISTABLE), toldAsInstanceState);
+    await land();
+
+    await land();
+
+    expect(trigger.message()).toBeUndefined();
   });
 });
 

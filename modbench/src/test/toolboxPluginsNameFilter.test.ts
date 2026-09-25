@@ -201,15 +201,15 @@ describe('the Plugins view, given the game folder not found', () => {
 });
 
 // plugins.md, States, story 5.
-describe('the Plugins view, given a record filter that matches nothing', () => {
-  function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
-    return {
-      name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, masters: [], recordCount: 0,
-      isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
-      winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
-    };
-  }
+function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
+  return {
+    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, masters: [], recordCount: 0,
+    isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
+    winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
+  };
+}
 
+describe('the Plugins view, given a record filter that matches nothing', () => {
   async function filteredView(testModMatches: boolean, source: string | null = 'armor.sql') {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', [held('Other.esp', false), held('TestMod.esp', testModMatches)]);
@@ -267,32 +267,38 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
 });
 
 describe('the Plugins view, given a plugin sync that refused', () => {
-  const SYNC_MESSAGE = 'plugins.txt is not synced: the game folder is not found.';
+  const SYNC_MESSAGE = 'plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.';
+  const NO_RECORD_MATCH = 'No records match armor.sql.';
 
-  async function refusedView(value: InstanceValue) {
-    const instance = new FakeInstance(value);
-    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+  async function refusedView(recordFilter?: string) {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [held('TestMod.esp', false)]);
+    client.setQueryAnswer('getDiagnoses', []);
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource(), client });
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
     const pluginSync = syncMessageDouble();
     registerPluginsNameFilter(view, provider, pluginSync);
+    provider.setRecordFilterSource(recordFilter);
+    await provider.refreshFacts();
     return { view, pluginSync };
   }
 
   // Rival: the sync's line replacing the view's own, or never reaching the line at all.
-  it('says it beside the game folder message, and drops only its own once the sync lands', async () => {
-    const { view, pluginSync } = await refusedView(notFoundValueOf([plugin('TestMod.esp')]));
+  it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
+    const { view, pluginSync } = await refusedView('armor.sql');
 
     pluginSync.say(SYNC_MESSAGE);
-    await waitForMessage(view, (m) => m === `${GAME_FOLDER_MESSAGE} ${SYNC_MESSAGE}`, 'both messages');
+    await waitForMessage(view, (m) => m === `${NO_RECORD_MATCH} ${SYNC_MESSAGE}`, 'both messages');
 
     pluginSync.say(undefined);
-    await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message alone');
-    expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+    await waitForMessage(view, (m) => m === NO_RECORD_MATCH, 'the view\'s own message alone');
+    expect(view.message).toBe(NO_RECORD_MATCH);
   });
 
   it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
-    const { view, pluginSync } = await refusedView(valueOf([plugin('TestMod.esp')]));
+    const { view, pluginSync } = await refusedView();
     pluginSync.say(SYNC_MESSAGE);
     await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message');
 

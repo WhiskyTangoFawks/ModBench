@@ -99,7 +99,8 @@ interface PluginLinesDelta {
 
 export type PluginSyncResult =
   | { applied: true; wrote: boolean; added: string[]; dropped: string[] }
-  | { applied: false; refusal: string };
+  | { applied: false; refusal: string }
+  | { applied: false; toldAsInstanceState: true };
 
 // `inData` is presence only, never a source of added lines.
 function pluginLinesDelta(
@@ -129,8 +130,9 @@ export async function syncPlugins(
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing or the implicit masters, a line for a Data plugin is
-  // dropped and a mod's copy of a vanilla master earns one (update-load-order-file, Refusals).
-  if (inData.kind === 'unresolved') return { applied: false, refusal: 'the game folder is not found' };
+  // dropped and a mod's copy of a vanilla master earns one (update-load-order-file, Refusals). A
+  // game folder not found is told once, as the instance's state (common.md, States, story 5).
+  if (inData.kind === 'unresolved') return { applied: false, toldAsInstanceState: true };
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }

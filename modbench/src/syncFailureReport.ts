@@ -1,6 +1,10 @@
 import { errorMessage } from './ports/errorMessage';
 
-type SyncOutcome = { applied: true } | { applied: false; refusal: string };
+type SyncOutcome =
+  | { applied: true }
+  | { applied: false; refusal: string }
+  // Wrote nothing for a cause the instance's state tells once, so the command has none of its own.
+  | { applied: false; toldAsInstanceState: true };
 
 /** A system command's part of its view's message line. */
 export interface SyncMessage {
@@ -45,7 +49,7 @@ export function reportSyncFailures(
       } catch (err) {
         outcome = { applied: false as const, refusal: errorMessage(err) };
       }
-      if (mine === latest) settle(outcome.applied ? undefined : outcome.refusal);
+      if (mine === latest) settle('refusal' in outcome ? outcome.refusal : undefined);
       return landed(outcome) ? outcome : undefined;
     },
   };
