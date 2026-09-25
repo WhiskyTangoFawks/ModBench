@@ -112,6 +112,7 @@ Commands names the cause. A refusal leaves the question open, so the other answe
 | A localized plugin's strings file is missing, naming the file and where Modbench looked | every destination | |
 | A changed record also has an uncommitted change, naming the records | the working tree | A concurrent change is preserved (ADR-0003, invariant 4). |
 | A changed tracked file is already staged from an earlier answer, naming it | the working tree | |
+| An earlier commit of the same answer failed, naming it | `main` | The run stops at the first failed commit; answering again finishes it. |
 
 ## Failure
 
@@ -122,7 +123,10 @@ No rollback beyond git's: each commit is its own unit (ruling: git handles it).
 - **The repository, when every plugin is refused.** Nothing is written: the repository is created
   only once the first plugin passes its check.
 - **`main`.** A commit that fails stops the run. The commits before it stand, and the question
-  stays open for the rest, so answering again finishes it.
+  stays open for the rest, so answering again finishes it. The answer names each plugin whose
+  baseline landed as applied, the plugin whose commit failed as refused, and each plugin the run
+  never reached as refused, naming the commit that stopped it. A failed commit of the changed
+  tracked files is its own item of the answer, beside the plugins.
 - **The working tree.** A failure stops the run and says so, naming what failed. The files written
   before it stay as uncommitted changes, for the user to keep or discard with git.
 

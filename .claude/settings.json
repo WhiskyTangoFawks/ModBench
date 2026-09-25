@@ -29,30 +29,12 @@
         ]
       }
     ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-watch.py\""
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/code-quality.py\""
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-watch.py\""
           }
         ]
       }
@@ -83,7 +65,6 @@
       "Bash(grep -n 'AddNew\\\\|create\\\\|$create\\\\|SaveAsync\\\\|RecordTableSchema\\\\|AddNew' MEditService/MEditService.Core/Edits/PluginWriter.cs)",
       "Bash(bash ../.claude/skills/mutation-test/run.sh)",
       "Bash(kill %1)",
-      "Bash(pkill -f \"MEditService.Api\")",
       "Bash(curl -s http://localhost:5172/swagger/v1/swagger.json)",
       "Bash(python3 -c \"import sys,json; paths=json.load\\(sys.stdin\\)['paths']; print\\([p for p in paths if 'copy' in p]\\)\")",
       "Bash(dotnet run *)",

@@ -4,8 +4,7 @@ settings and hooks that guard them, in any checkout or worktree. The main sessio
 to the `ask` rules in settings.json; its shell writes to a protected file, which those rules miss, are
 put to the maintainer.
 
-A shell command is read by its literal words, so a path it builds at runtime is not seen; the
-spec-watch Stop hook reports what gets through."""
+A shell command is read by its literal words, so a path it builds at runtime is not seen."""
 import json
 import os
 import re

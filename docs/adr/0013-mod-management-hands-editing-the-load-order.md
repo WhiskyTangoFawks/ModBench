@@ -13,7 +13,7 @@ it is handed and never reloads.
    an install or an uninstall. Editing registers what is new, indexing only what the record index
    has never seen, unregisters what is gone, updates slot and flags on what moved, then runs one
    winner sweep. A snapshot identical to the current state is a no-op.
-2. **The snapshot names every physical copy** ([ADR-0012](0012-every-plugin-copy-is-indexed.md)),
+2. **The snapshot names every physical copy** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)),
    each with the three facts Mod Management already computes: the name's `plugins.txt` slot or
    none, whether its line is enabled, and whether this copy is the one the Mod override order
    resolves the name to. The one fact the service derives itself is the set of forced names, the
