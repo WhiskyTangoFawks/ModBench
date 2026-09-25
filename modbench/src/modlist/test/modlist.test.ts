@@ -302,8 +302,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readFile(modlistPath(), 'utf8')).toBe('+Armor\r\n+Gear_separator\r\n+Gear\r\n+New Section_separator\r\n');
   });
 
-  // MO2 filters a separator's name as it filters every folder name under mods/
-  // (MOBase::fixDirectoryName), so no name reaches a folder outside mods/<name>_separator/.
   // MO2 keys separators by name without case (modinfo.cpp, FileNameComparator). Rivals: an exact
   // match, which lets a second separator take the same folder; or one that refuses a separator's
   // own name in another case, so a case-only rename is refused.
@@ -319,6 +317,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
   });
 
+  // MO2 filters a separator's name as it filters every folder name under mods/
+  // (MOBase::fixDirectoryName), so no name reaches a folder outside mods/<name>_separator/.
   describe('a separator name filtered as MO2 filters a folder name', () => {
     it('insertSeparator drops path separators, so ../x and A/B stay folders inside mods/', async () => {
       await insertSeparator(dir, 'Default', '../Escape', { kind: 'mod', name: 'ENBoost - 12k' });
