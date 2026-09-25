@@ -16,7 +16,7 @@ export function reportPutOutcome(
     deps.error(result.message);
     return;
   }
-  if (result.outcome !== 'applied' || result.status.refusalMessage !== undefined) return;
+  if (result.outcome !== 'applied' || result.status.refusal !== undefined) return;
   // Participation is derived — enabled AND winning AND listed — and the snapshot is every copy,
   // so a non-empty one can still have nothing that participates (ADR-0013).
   if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
