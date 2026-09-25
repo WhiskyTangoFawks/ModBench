@@ -93,6 +93,26 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
   });
 }
 
+// The first read binds the downloads watcher and arms one follow-up read for the gap before it
+// can fire; a refresh absorbs that armed read, so none lands behind a later step, however slowly
+// that step runs.
+async function readToRest(instance: Instance): Promise<void> {
+  await instance.refresh();
+  await instance.refresh();
+}
+
+// The Instance's settle waits run on a fake clock the test advances, while setImmediate stays
+// real, so the file system still answers and a test can yield to it.
+const fakeSettleClock = (): void => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+};
+
+// Yields until a settle wait is armed on the fake clock: the read has reached it, whatever the
+// machine's load.
+async function settleWaitArmed(): Promise<void> {
+  while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+}
+
 const TIMED_OUT = Symbol('timed out waiting for a recompute');
 
 // A missing trigger must fail on an explicit assertion, not the test runner's own timeout.
@@ -369,13 +389,20 @@ describe('Instance — built by watching', () => {
   // watcher event (never fired here) — only the rebind's own follow-up recompute can catch it.
   it('catches a file written in the gap before the just-bound downloads watcher can arm', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh(); // binds the downloads watcher for the first time
-    const before = instance.sequence;
+    fakeSettleClock();
+    try {
+      await instance.refresh(); // binds the downloads watcher for the first time
+      const before = instance.sequence;
 
-    await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
+      await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
+      const landing = pastSequence(instance, before);
+      await vi.advanceTimersByTimeAsync(1000);
 
-    const after = await pastSequence(instance, before);
-    expect(after.downloads.kind === 'listed' && after.downloads.rows.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
+      const after = await landing;
+      expect(after.downloads.kind === 'listed' && after.downloads.rows.some((d) => d.name === 'RaceCondition.7z')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a rebind that lands after dispose() creates no orphan downloads watcher', async () => {
@@ -459,7 +486,7 @@ describe('Instance — built by watching', () => {
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
     const before = instance.sequence;
 
@@ -472,7 +499,7 @@ describe('Instance — built by watching', () => {
 
   it('recomputes once for a burst of events across every watcher', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     watcherFor('mods/**').fireCreate(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'a.dds'));
@@ -493,7 +520,7 @@ describe('Instance — built by watching', () => {
 
   it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     vi.useFakeTimers();
@@ -512,7 +539,7 @@ describe('Instance — built by watching', () => {
 
   it('never recomputes for a write inside a tracked mod\'s git internals', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     vi.useFakeTimers();
@@ -531,7 +558,7 @@ describe('Instance — built by watching', () => {
 describe('Instance — a value that survives a bad read', () => {
   it('keeps the previous value and logs when a file is half-written', async () => {
     const { root, instance, readFailureLines } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
     const before = instance.sequence;
 
@@ -546,7 +573,7 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
     const { root, instance, readFailureLines } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
     const before = instance.sequence;
 
@@ -564,7 +591,7 @@ describe('Instance — a value that survives a bad read', () => {
     const nested = join(root, 'overwrite', 'SKSE');
     await mkdir(nested, { recursive: true });
     await writeFile(join(nested, 'skse.log'), '');
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
     const before = instance.sequence;
 
@@ -631,8 +658,9 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('reports a failure after a value has landed, keeping that value', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
+    const before = instance.sequence;
     const failures: (string | undefined)[] = [];
     instance.onReadFailure(() => failures.push(instance.readFailure));
 
@@ -640,25 +668,30 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(instance.value).toBe(value);
-    expect(instance.sequence).toBe(1);
+    expect(instance.sequence).toBe(before);
     expect(failures).toHaveLength(1);
     expect(instance.readFailure).toBe(failures[0]);
   });
 
   it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
     const { root, instance, logs } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.value.mods;
     const path = join(root, DEFAULT_MODLIST);
     const complete = await readFile(path, 'utf8');
 
-    await writeFile(path, ''); // MO2 has truncated the file and not yet written it
-    const recompute = instance.refresh();
-    // Inside the Instance's own 200 ms settle: the first read has already seen the truncation,
-    // and the write completes before the re-read that decides whether to believe it.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await writeFile(path, complete);
-    await recompute;
+    fakeSettleClock();
+    try {
+      await writeFile(path, ''); // MO2 has truncated the file and not yet written it
+      const recompute = instance.refresh();
+      // The first read has seen the truncation and waits to re-read before believing it.
+      await settleWaitArmed();
+      await writeFile(path, complete);
+      await vi.advanceTimersByTimeAsync(1000);
+      await recompute;
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(instance.value.mods).toEqual(before);
     expect(logs.filter((m) => m.includes('mid-write'))).toHaveLength(1);
@@ -666,7 +699,7 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     await writeFile(join(root, DEFAULT_MODLIST), ''); // every mod really is gone
@@ -694,7 +727,7 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('corrects the value on refresh after a watcher event that never arrived', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     await enableOutsideModbench(root, 'Harder VATS');
@@ -775,7 +808,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // off-profile folder's own unreadable meta.ini still fails the whole recompute.
   it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable', async () => {
     const { root, instance, readFailureLines } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
     const before = instance.sequence;
 
@@ -802,7 +835,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // value keeps naming the old profile until some unrelated file happens to change.
   it('follows a profile switch on its own watcher, with no refresh asked for', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
 
     await switchProfileOutsideModbench(root, 'Secondary');
@@ -817,7 +850,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // tolerated absence from a swallowed throw — the sequence bump proves the recompute landed.
   it('yields a value with no downloads, rather than a failure, when downloads/ is absent', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     expect(downloadsOf(instance.value).length).toBeGreaterThan(0); // the fixture starts with one
     const before = instance.sequence;
 
@@ -832,7 +865,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // recompute landed. Absent is not empty: mod sync would drop every line against an empty list.
   it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent', async () => {
     const { root, instance } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     expect(instance.value.modFolders?.length).toBeGreaterThan(0);
     const before = instance.sequence;
 
@@ -865,7 +898,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // gameName also leaves Steam nothing to go on for.
   it('fails the read, keeping the last value, when the configuration names no game', async () => {
     const { root, instance, readFailureLines } = await realInstance();
-    await instance.refresh();
+    await readToRest(instance);
     const before = instance.sequence;
     const ini = join(root, 'ModOrganizer.ini');
     await writeFile(ini, (await readFile(ini, 'utf8')).replace(/gameName=.*\r?\n/, ''));
@@ -1047,7 +1080,7 @@ describe('Instance — listing mods/', () => {
   it('keeps the value when mods/ is present but cannot be listed', async () => {
     const { root, instance, readFailureLines } = await minimalInstance();
     await separatorOnly(root);
-    await instance.refresh();
+    await readToRest(instance);
     const value = instance.value;
     const before = instance.sequence;
 
