@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
 import { dataFolderOf } from './instanceAdapter/gameDirectory';
-import { reportSyncFailures } from './syncFailureReport';
+import { reportSyncFailures, type SyncMessage } from './syncFailureReport';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
 // as the Plugins view's directory.
@@ -10,9 +10,8 @@ type PluginSyncOutcome =
   | { applied: true; added: readonly string[]; dropped: readonly string[] }
   | { applied: false; refusal: string };
 
-export interface PluginSyncTrigger extends vscode.Disposable {
-  /** The Plugins view's message line for a failed run, until a run lands. */
-  message(): string | undefined;
+/** Its message is the Plugins view's, for a failed run until a run lands. */
+export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage {
   /** Runs on the current value: mEdit answers which plugins load with no line, and the first
    *  value lands before it can. */
   runOnConnect(): void;
@@ -28,9 +27,8 @@ export function registerPluginSync(
     dataFolder: string | undefined, gameName: string,
   ) => Promise<PluginSyncOutcome>,
   channel: { error(msg: string): void; info(msg: string): void },
-  messageChanged: () => void,
 ): PluginSyncTrigger {
-  const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line), messageChanged);
+  const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line));
   const run = (value: InstanceValue): void => {
     void (async () => {
       const outcome = await failures.run(() => sync(
@@ -48,6 +46,7 @@ export function registerPluginSync(
   const subscription = instance.subscribe(run);
   return {
     message: () => failures.message(),
+    onMessageChanged: (listener) => failures.onMessageChanged(listener),
     runOnConnect: () => run(instance.value),
     dispose: () => { subscription.dispose(); },
   };

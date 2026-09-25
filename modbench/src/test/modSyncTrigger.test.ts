@@ -82,7 +82,7 @@ async function wiredInstance(): Promise<{
     const run = syncMods(root, profile, modFolders);
     syncs.push(run);
     return run;
-  }, channel, () => {});
+  }, channel);
   // The fixture ships "DragIn Manual Extract" unlisted and "[NODELETE] Radfall" folderless;
   // settle both before a test takes its own baseline, or the fixture's mismatch reads as the
   // test's effect.
@@ -201,7 +201,8 @@ function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
     const run = present(outcomes[calls.length], 'an outcome for this fire')();
     calls.push(run);
     return run;
-  }, channel, messageChanged);
+  }, channel);
+  trigger.onMessageChanged(messageChanged);
   const fire = async (): Promise<void> => {
     expect(() => instance.fire()).not.toThrow();
     await Promise.allSettled([calls[calls.length - 1]]);

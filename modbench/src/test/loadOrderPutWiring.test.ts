@@ -51,13 +51,13 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     },
   };
   const channel = { error: vi.fn() };
-  const connected = vi.fn();
+  const onConnect = vi.fn();
   const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
     (d) => { owned.push(d); return d; }, instance, client,
     (value) => loadOrderChanged(sender, ROOT, sourceOf(value)),
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
-    connected,
+    onConnect,
     channel,
   );
   // After the trigger, so the trigger hears a reopen before the sender does.
@@ -77,7 +77,7 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
       return plugins.map((p) => p.name).join(',');
     });
   const dispose = (): void => { for (const d of owned) d.dispose(); };
-  return { client, puts, land, sent, channel, connected, dispose };
+  return { client, puts, land, sent, channel, onConnect, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -216,27 +216,27 @@ describe('the load order is put on connect', () => {
 describe('a connect runs what waits on mEdit', () => {
   // Rival: a second attach detector of its own, which runs on an `attached` status alone.
   it('on the connect and on a stream reopen after it, never on a reopen before it', async () => {
-    const { client, puts, connected } = wired('attached', valueWith('A.esp'));
+    const { client, puts, onConnect } = wired('attached', valueWith('A.esp'));
     client.reconnected();
     await settled();
-    expect(connected).not.toHaveBeenCalled();
+    expect(onConnect).not.toHaveBeenCalled();
 
     await puts.putOnConnect();
-    expect(connected).toHaveBeenCalledTimes(1);
+    expect(onConnect).toHaveBeenCalledTimes(1);
 
     client.reconnected();
     await settled();
-    expect(connected).toHaveBeenCalledTimes(2);
+    expect(onConnect).toHaveBeenCalledTimes(2);
   });
 
   it('not on a status change alone', async () => {
-    const { client, puts, connected } = wired('attached', valueWith('A.esp'));
+    const { client, puts, onConnect } = wired('attached', valueWith('A.esp'));
     await puts.putOnConnect();
 
     client.setStatus('disconnected');
     client.setStatus('attached');
     await settled();
 
-    expect(connected).toHaveBeenCalledTimes(1);
+    expect(onConnect).toHaveBeenCalledTimes(1);
   });
 });

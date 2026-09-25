@@ -95,7 +95,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
     const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
     return run;
-  }, { error: () => {}, info: () => {} }, () => {});
+  }, { error: () => {}, info: () => {} });
 
   const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
   return { root, instance, syncs, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
@@ -219,7 +219,8 @@ function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
     const run = present(outcomes[calls.length], 'an outcome for this run')();
     calls.push(run);
     return run;
-  }, channel, messageChanged);
+  }, channel);
+  trigger.onMessageChanged(messageChanged);
   const settled = async (): Promise<void> => {
     await Promise.allSettled([calls[calls.length - 1]]);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -287,6 +288,20 @@ describe('registerPluginSync — outcome handling', () => {
 
     await land();
     expect(trigger.message()).toBeUndefined();
+  });
+
+  // Rival: report only the first refusal, so a folder found after mEdit went quiet keeps showing
+  // the folder.
+  it('reports again when the reason changes', async () => {
+    const { channel, trigger, messageChanged, land } = fired(
+      refused('the game folder is not found'), refused('mEdit cannot say which plugins the game loads with no line'));
+    await land();
+    await land();
+
+    expect(channel.error).toHaveBeenCalledTimes(2);
+    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining('mEdit cannot say'));
+    expect(trigger.message()).toBe('plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.');
+    expect(messageChanged).toHaveBeenCalledTimes(2);
   });
 });
 

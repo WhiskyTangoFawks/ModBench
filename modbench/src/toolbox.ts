@@ -27,6 +27,7 @@ import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { syncPlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource } from './pluginsCommands/plugins';
 import { syncMods } from './modlist/modlist';
+import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
 import { registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
@@ -108,7 +109,7 @@ export interface LoadOrderPuts {
   putOnConnect(): Promise<void>;
 }
 
-// update-load-order-file: put on change and on connect, running `connected` at each connect.
+// update-load-order-file: put on change and on connect, running `onConnect` at each connect.
 // Nothing is put while detached; a stream reopen is a connect, the process behind it perhaps
 // another.
 export function registerLoadOrderPut(
@@ -117,7 +118,7 @@ export function registerLoadOrderPut(
   client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
   changed: (value: InstanceValue) => boolean,
   put: () => Promise<void>,
-  connected: () => void,
+  onConnect: () => void,
   channel: { error(msg: string): void },
 ): LoadOrderPuts {
   let connectPutRan = false;
@@ -131,7 +132,7 @@ export function registerLoadOrderPut(
   own({ dispose: client.onReconnected(() => {
     void Promise.resolve().then(() => {
       if (!connectPutRan) return;
-      connected();
+      onConnect();
       putLogged();
     });
   }) });
@@ -141,7 +142,7 @@ export function registerLoadOrderPut(
   return {
     putOnConnect: () => {
       connectPutRan = true;
-      connected();
+      onConnect();
       return put();
     },
   };
@@ -209,7 +210,7 @@ interface PluginListDeps {
   /** The malformed-plugin scan's Problems-panel collection. */
   loadDiagnostics: vscode.DiagnosticCollection;
   /** Plugin sync's failure, for the view's message line. */
-  syncMessage: () => string | undefined;
+  pluginSync: SyncMessage;
 }
 
 // ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
@@ -237,7 +238,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
-  session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.syncMessage));
+  session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
   // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
   // against the tree's own implicitMasterNames() so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
@@ -252,15 +253,17 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
 // filter's axis over which records appear under an expanded row.
 export function registerPluginsNameFilter(
   view: { description?: string; message?: string }, provider: PluginsTreeProvider,
-  syncMessage: () => string | undefined,
+  pluginSync: SyncMessage,
 ): NameFilter {
-  return registerNameFilter({
+  const filter = registerNameFilter({
     view, object: 'modbench.plugin', placeholder: 'Filter plugins…',
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
-    viewMessage: () => messageLine(provider.viewMessage(), syncMessage()),
+    viewMessage: () => messageLine(provider.viewMessage(), pluginSync.message()),
     onRowsChanged: provider.onDidChangeTreeData,
   });
+  const subscription = pluginSync.onMessageChanged(() => filter.refresh());
+  return { ...filter, dispose: () => { subscription.dispose(); filter.dispose(); } };
 }
 
 
@@ -488,19 +491,17 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     profile: string, provided: ReadonlyMap<string, string>, inData: DataFolderPlugins,
     folder: string | undefined, gameName: string,
   ) => syncPlugins(instanceRoot, profile, provided, inData, () => implicitMastersIn(folder, gameName));
-  const pluginSync = own(registerPluginSync(
-    instance, runPluginSync, outputChannel, () => session.pluginsNameFilter?.refresh()));
+  const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporterFor, instanceRoot, dataFolder,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
-    instance, recordBrowser, pluginFacts, loadDiagnostics, syncMessage: () => pluginSync.message(),
+    instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });
   const runModSync = (profile: string, modFolders: readonly string[] | undefined) =>
     syncMods(instanceRoot, profile, modFolders);
-  // Its first run answers after this function returns, by which time the view below exists.
-  const modSync = own(registerModSync(instance, runModSync, outputChannel, () => modListMessage()));
-  const { modListView, refreshMessage: modListMessage } = createModListView(
-    own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), () => modSync.message());
+  const modSync = own(registerModSync(instance, runModSync, outputChannel));
+  const { modListView } = createModListView(
+    own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
   const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
     reportFailure(reporterFor(logLabel), failMessage, action);
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>

@@ -17,6 +17,7 @@ import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { messageLine, registerNameFilter } from './nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
+import type { SyncMessage } from './syncFailureReport';
 
 /** Tree, filter and count readout together, because the view's description and message line
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
@@ -25,8 +26,8 @@ export function createModListView(
   own: Own,
   modListProvider: ModListProvider,
   log: (line: string) => void,
-  syncMessage: () => string | undefined,
-): { modListView: vscode.TreeView<ModlistNode>; refreshMessage: () => void } {
+  modSync: SyncMessage,
+): { modListView: vscode.TreeView<ModlistNode> } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     canSelectMany: true,
@@ -42,12 +43,13 @@ export function createModListView(
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
-    viewMessage: () => messageLine(modListProvider.emptyListMessage(), syncMessage()),
+    viewMessage: () => messageLine(modListProvider.emptyListMessage(), modSync.message()),
     onRowsChanged: modListProvider.onDidChangeTreeData,
   }));
   const showCount = () => modListFilter.setBaseDescription(modListProvider.description());
   showCount();
   modListFilter.refresh();
+  own(modSync.onMessageChanged(() => modListFilter.refresh()));
   own(modListProvider.onDidChangeTreeData(showCount));
   const showKeyContext = () => {
     const context = modsKeyContext(modListView.selection, (row) => modListProvider.isEnabled(row));
@@ -61,7 +63,7 @@ export function createModListView(
   const expand = () => void expandFilteredSeparators(modListView, modListProvider, log);
   own(modListProvider.onDidChangeTreeData(expand));
   own(modListView.onDidChangeVisibility(expand));
-  return { modListView, refreshMessage: () => modListFilter.refresh() };
+  return { modListView };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's
