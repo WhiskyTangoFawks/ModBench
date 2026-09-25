@@ -108,6 +108,9 @@ export function moveSeparators(
     moveSeparatorsInText(text, found, place, end));
 }
 
+/** How MO2 compares mod and separator names: without case. */
+export { modNameKey };
+
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 
 /** Why `requested` cannot name a separator among `entries`, or `undefined` when it can. Its name
@@ -117,7 +120,9 @@ export function separatorNameRefusal(
 ): string | undefined {
   const name = mo2FolderName(requested);
   if (!name) return `Not a valid separator name: "${requested}"`;
-  const clashes = name !== own && entries.some((e) => e.kind === 'separator' && e.name === name);
+  const key = modNameKey(name);
+  const isOwn = own !== undefined && modNameKey(own) === key;
+  const clashes = !isOwn && entries.some((e) => e.kind === 'separator' && modNameKey(e.name) === key);
   return clashes ? SEPARATOR_NAME_CLASH : undefined;
 }
 
@@ -221,8 +226,9 @@ export async function renameSeparator(
   });
 }
 
-const entryNamesIn = (text: string, kind: EntryKind): ReadonlySet<string> =>
-  new Set(parseModlist(text).filter((e) => e.kind === kind).map((e) => e.name));
+// Each listed name by its key, so a name asked for in another case finds the line's own.
+const entryNamesIn = (text: string, kind: EntryKind): ReadonlyMap<string, string> =>
+  new Map(parseModlist(text).filter((e) => e.kind === kind).map((e) => [modNameKey(e.name), e.name]));
 
 /** A landed entry. `lineRefusal` is set when its folder reached the trash but its line then
  *  could not go — the part that failed, not a refusal (common.md, Reporting). */
@@ -244,18 +250,18 @@ async function trashThenUnlist(
   removeLine: (text: string, name: string) => string,
 ): Promise<TrashThenUnlistResult> {
   const noun = kind === 'mod' ? 'Mod' : 'Separator';
-  let listed: ReadonlySet<string>;
+  let listed: ReadonlyMap<string, string>;
   try {
     listed = entryNamesIn(await get(modlistFile(instanceRoot, profile)), kind);
   } catch (err) {
     return refuse(err);
   }
-  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !listed.has(name))
+  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !listed.has(modNameKey(name)))
     .map((name) => ({ item: { name }, reason: `${noun} not found in modlist: ${name}` }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
-  for (const name of names.filter((n) => listed.has(n))) {
-    const folder = folderOf(name);
+  for (const name of names.filter((n) => listed.has(modNameKey(n)))) {
+    const folder = folderOf(present(listed.get(modNameKey(name)), `the listed name of ${name}`));
     try {
       if (folder !== undefined && await exists(folder)) {
         await trash(folder);
@@ -268,7 +274,8 @@ async function trashThenUnlist(
   }
   const lines = await spliceModlist(instanceRoot, profile, (text) => {
     const stillListed = entryNamesIn(text, kind);
-    return toUnlist.filter((name) => stillListed.has(name)).reduce((acc, name) => removeLine(acc, name), text);
+    return toUnlist.flatMap((name) => stillListed.get(modNameKey(name)) ?? [])
+      .reduce((acc, listedName) => removeLine(acc, listedName), text);
   });
   if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => ({ name })), refused } };
   return {
@@ -381,14 +388,16 @@ function nameCollisionRefusal(name: string): string {
 export async function createEmptyMod(
   instanceRoot: string, profile: string, name: string, modFolders: readonly string[],
 ): Promise<CreateEmptyModResult> {
-  if (modFolders.includes(name)) {
+  const folder = modFolderName(name);
+  if (folder === undefined) return { applied: false, refusal: `Not a valid mod name: "${name}"` };
+  if (modFolders.some((f) => modNameKey(f) === modNameKey(folder))) {
     return { applied: false, refusal: nameCollisionRefusal(name) };
   }
-  await ensureDir(modDir(instanceRoot, name));
+  await ensureDir(modDir(instanceRoot, folder));
   // Read inside the write lock, so a line mod sync already added for this name is left alone
   // rather than doubled.
   const line = await spliceModlist(instanceRoot, profile, (text) => {
-    const alreadyListed = parseModlist(text).some((e) => e.kind === 'mod' && e.name === name);
+    const alreadyListed = parseModlist(text).some((e) => e.kind === 'mod' && modNameKey(e.name) === modNameKey(name));
     return alreadyListed ? text : insertModAtWinningEnd(text, name);
   });
   if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };

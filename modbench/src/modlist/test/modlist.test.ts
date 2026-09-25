@@ -43,6 +43,7 @@ import {
   moveMods,
   moveSeparators,
   renameSeparator,
+  separatorNameRefusal,
   setModsEnabled,
   syncMods,
   uninstallMods,
@@ -303,6 +304,21 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   // MO2 filters a separator's name as it filters every folder name under mods/
   // (MOBase::fixDirectoryName), so no name reaches a folder outside mods/<name>_separator/.
+  // MO2 keys separators by name without case (modinfo.cpp, FileNameComparator). Rivals: an exact
+  // match, which lets a second separator take the same folder; or one that refuses a separator's
+  // own name in another case, so a case-only rename is refused.
+  describe('a separator name clash, without case', () => {
+    const entries = [{ kind: 'separator' as const, name: 'Armor' }];
+
+    it('refuses a name another separator has in another case', () => {
+      expect(separatorNameRefusal(entries, 'armor')).toBe('A separator with this name already exists');
+    });
+
+    it('lets a separator be renamed to its own name in another case', () => {
+      expect(separatorNameRefusal(entries, 'ARMOR', 'Armor')).toBeUndefined();
+    });
+  });
+
   describe('a separator name filtered as MO2 filters a folder name', () => {
     it('insertSeparator drops path separators, so ../x and A/B stay folders inside mods/', async () => {
       await insertSeparator(dir, 'Default', '../Escape', { kind: 'mod', name: 'ENBoost - 12k' });
@@ -441,6 +457,15 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   describe('deleteSeparators', () => {
     const UNASSIGNED = 'Unassigned (Modlist Development)';
+    // Rival: an exact match, which refuses a separator its line names in another case.
+    it('deletes a separator named in another case than its line, trashing its folder', async () => {
+      const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED.toLowerCase()], trash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: UNASSIGNED.toLowerCase() }], refused: [] } });
+      expect(trashed).toEqual([join(dir, 'mods', `${UNASSIGNED}_separator`)]);
+      expect((await readModlist()).some((e) => e.kind === 'separator' && e.name === UNASSIGNED)).toBe(false);
+    });
+
     const RADFALL = 'Radfall - All-In-One Survival Overhaul';
     const unassignedFolder = () => join(dir, 'mods', `${UNASSIGNED}_separator`);
     // The system trash, as the Ports hand it in: the path leaves mods/.
@@ -883,6 +908,30 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   describe('createEmptyMod', () => {
+    // MO2 keys mods by name without case (modinfo.cpp, FileNameComparator), and a Windows folder
+    // answers to either case. Rival: an exact match, which joins onto the existing folder and
+    // writes a second line for it.
+    it('refuses a name a mod folder already has in another case', async () => {
+      assertRefusal(await createEmptyMod(dir, 'Default', 'harder vats', MOD_FOLDERS), 'already exists');
+    });
+
+    // Rival: an exact match against the lines, which doubles a line a mod sync already wrote.
+    it('leaves a line mod sync already wrote in another case, rather than doubling it', async () => {
+      await writeFile(modlistPath(), `-new mod\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+      await createEmptyMod(dir, 'Default', 'New Mod', MOD_FOLDERS);
+
+      expect((await readModlist()).filter((e) => e.name.toLowerCase() === 'new mod')).toHaveLength(1);
+    });
+
+    // Rival: joining the prompt's name onto mods/ raw, which makes a folder outside it.
+    it('refuses a name that would leave mods/, making no folder anywhere', async () => {
+      assertRefusal(await createEmptyMod(dir, 'Default', '../x', MOD_FOLDERS), 'Not a valid mod name');
+
+      expect(await readdir(dir)).not.toContain('x');
+      expect((await readModlist()).some((e) => e.name === '../x')).toBe(false);
+    });
+
     it('creates an empty folder under mods/ and a disabled modlist line', async () => {
       const outcome = await createEmptyMod(dir, 'Default', 'My New Mod', MOD_FOLDERS);
       expect(outcome).toEqual({ applied: true, wrote: true });
