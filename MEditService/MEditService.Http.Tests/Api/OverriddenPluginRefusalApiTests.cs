@@ -11,31 +11,31 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record's Refusals table: a losing copy is read-only (ADR-0012 invariant 5),
+/// <summary>edit-record's Refusals table: an overridden plugin is read-only (ADR-0012 invariant 5),
 /// refused through the real host before any source write. The same write against the winning
-/// copy of the same name lands.</summary>
+/// plugin of the same name lands.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class LosingCopyRefusalApiTests : HostedTests
+public sealed class OverriddenPluginRefusalApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";
     private const string WinningOrigin = "WinningMod";
-    private const string LosingOrigin = "LosingMod";
+    private const string OverriddenOrigin = "OverriddenMod";
 
     private async Task<ScatteredFixtureData> Loaded()
     {
-        var fx = new PluginFixtureBuilder("api-losing-copy")
+        var fx = new PluginFixtureBuilder("api-overridden-plugin")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("LosingNpc"), origin: LosingOrigin)
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
             .BuildScattered();
 
-        // BuildScattered gives every explicit copy Winning: true and its own slot; a losing copy of
-        // a listed name carries the winning one's own slot instead (PluginMetadata).
+        // BuildScattered gives every explicit copy Winning: true and its own slot; an overridden
+        // plugin of a listed name carries the winning one's own slot instead (PluginMetadata).
         var winningSlot = fx.Plugins.First(p => p.Origin == WinningOrigin).Slot;
-        var plugins = fx.Plugins.Select(p => p.Origin == LosingOrigin
+        var plugins = fx.Plugins.Select(p => p.Origin == OverriddenOrigin
             ? p with { Slot = winningSlot, Winning = false }
             : p).ToList();
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        (await Client.Track([(PluginName, WinningOrigin), (PluginName, LosingOrigin)])).EnsureSuccessStatusCode();
+        (await Client.Track([(PluginName, WinningOrigin), (PluginName, OverriddenOrigin)])).EnsureSuccessStatusCode();
         return fx;
     }
 
@@ -50,36 +50,36 @@ public sealed class LosingCopyRefusalApiTests : HostedTests
     }
 
     [Fact]
-    public async Task EditingTheLosingCopy_IsRefused_NamingThePluginItsOriginAndThatTheGameDoesNotLoadIt()
+    public async Task EditingTheOverriddenPlugin_IsRefused_NamingThePluginItsOriginAndThatTheGameDoesNotLoadIt()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(LosingOrigin);
+        var formKey = await FormKeyOf(OverriddenOrigin);
 
-        var response = await Client.Edit(formKey, PluginName, LosingOrigin, "HeightMax", 0.75);
+        var response = await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
-        Assert.Equal("LosingCopy", problem.GetProperty("refusal").GetString());
+        Assert.Equal("OverriddenPlugin", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(PluginName, detail, StringComparison.Ordinal);
-        Assert.Contains(LosingOrigin, detail, StringComparison.Ordinal);
+        Assert.Contains(OverriddenOrigin, detail, StringComparison.Ordinal);
         Assert.Contains("does not load", detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task EditingTheLosingCopy_WritesNothing()
+    public async Task EditingTheOverriddenPlugin_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await FormKeyOf(LosingOrigin);
-        var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, LosingOrigin));
+        var formKey = await FormKeyOf(OverriddenOrigin);
+        var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin));
 
-        await Client.Edit(formKey, PluginName, LosingOrigin, "HeightMax", 0.75);
+        await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
-        Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, LosingOrigin)));
+        Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin)));
     }
 
     [Fact]
-    public async Task EditingTheWinningCopy_OfTheSameName_Lands()
+    public async Task EditingTheWinningPlugin_OfTheSameName_Lands()
     {
         using var fx = await Loaded();
         var formKey = await FormKeyOf(WinningOrigin);
