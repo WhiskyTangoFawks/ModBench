@@ -16,9 +16,10 @@ which follows Vortex ([ADR-0020](0020-vortex-is-the-reference-for-deployment.md)
    at an MO2 folder and it works on that modlist: edits round-trip, and a user alternates between
    MO2 and Modbench on one instance with no conversion and no divergence.
 2. **Writes are byte-faithful surgical edits.** One read-modify-write of one MO2 file, with
-   separators, comments and metadata preserved verbatim. Each file's format lives in one kernel
-   module
-   ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)).
+   separators, comments and metadata preserved verbatim. Each file's format lives in one codec,
+   inside the Instance adapter's MO2 implementation
+   ([ADR-0014](0014-modules-are-layered-and-call-adjacent-layers-through-ports.md);
+   [ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)).
 3. **MO2's panels map onto native VS Code surfaces.** Mods, Plugins and Downloads are native tree
    views stacked in the `modbench` container the way Explorer stacks its sections: independently
    collapsible, resizable, simultaneously visible, with native checkbox, drag-reorder and keyboard

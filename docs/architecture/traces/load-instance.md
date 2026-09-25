@@ -24,7 +24,7 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
    `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
    folder's plugins. The Instance adapter finds the game folder: the setting first, then MO2's
    configuration, then Steam or Wine detection.
-3. One codec parses each file.
+3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
 5. The value goes to every view, and to instance commands. Instance commands derive the load order

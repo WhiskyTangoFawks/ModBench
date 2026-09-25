@@ -37,13 +37,13 @@ medit_core: "MEDIT · Core — the write side and the read side; each references
   commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ndecompile, compile, rebase, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nimplicit masters, the malformed-plugin diagnosis; the filter in\nforce\nhides: the Index's reads" {class: core}
 }
-modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes through the Instance adapter and forgets" {
+modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, sync mod lines\nhides: the splice of modlist.txt; an uninstall's mark on its\ndownloaded file" {class: core}
-  pluginscommands: "plugins commands\ninterface: enable, disable, move, sync plugin lines\nhides: the splice of plugins.txt" {class: core}
-  instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: the splice of ModOrganizer.ini" {class: core}
-  downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: the splice of a download's .meta" {class: core}
-  install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git; the installed mark\non the downloaded file" {class: core}
+  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, sync mod lines\nhides: an uninstall's mark on its downloaded file" {class: core}
+  pluginscommands: "plugins commands\ninterface: enable, disable, move, sync plugin lines\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
+  instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: nothing; the Instance adapter writes the profile" {class: core}
+  downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a download's\nrecord" {class: core}
+  install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nsource/; the installed mark on the downloaded file" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the value as an argument\nhides: which files to hardlink; writing the hardlinks and the\nmanifest into Game Data/" {class: core}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
@@ -56,7 +56,7 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
-  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini · a download's .meta\nhides: installedFiles in MO2's form" {class: kernel}
+  loadorderfilecodec: "Load-order file codec\ninterface: parse and byte-faithful splice of plugins.txt\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
   tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
   ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; a selection's outcome: what landed and each\nrefusal; the invariant lookup and the errno read; move a file to\nthe system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
@@ -73,8 +73,8 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a downloaded file's status; a parse failure\nkeeps the last value" {class: driven}
-  instanceadapter: "Instance adapter\ninterface: get, put, rename in mods/; put in downloads/; the\nload order and MO2's configuration; what to watch; which game\nand where it is\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the ini's game path, then Steam and\nWine detection" {class: driven}
+  instanceloader: "Instance loader\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
+  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files; changes: the lines to flip, move, add or\ndrop, a download's record; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
 }
 
 medit_data: "MEDIT · Systems of record" {

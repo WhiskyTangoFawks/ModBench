@@ -24,7 +24,7 @@ or an installed mod the user confirmed. Install never infers the target from dis
 4. It finds the mod's root: a `Data/` folder, or the level that holds the plugins and asset
    folders, below any single wrapper folder. A FOMOD installer is found and flagged. Its steps do
    not run, and its files stay as they are.
-5. It writes `meta.ini` through the codec: the game, the Nexus mod ID, the version, the installation
+5. It writes `meta.ini` through the Instance adapter: the game, the Nexus mod ID, the version, the installation
    file and the installed files. On an upgrade, a key the source does not know keeps its old value,
    so an unknown version never blanks a known one. Every key install does not own survives.
 6. The mod lands:
