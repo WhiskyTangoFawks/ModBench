@@ -14,8 +14,8 @@ namespace MEditService.Index.Tests.Records;
 /// data row, so every move of the load order moves the winner with no document re-read.</summary>
 public sealed class WinnersDerivedTableTests : IDisposable
 {
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "BaseMod");
-    private static readonly PluginCopyKey OverKey = new("Over.esp", "OverMod");
+    private static readonly PluginAddress BaseKey = new("Base.esm", "BaseMod");
+    private static readonly PluginAddress OverKey = new("Over.esp", "OverMod");
 
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderHolder _holder = new();
@@ -50,7 +50,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
 
     private IRecordReads Reads => _index.RequireReads();
 
-    private PluginCopyKey? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
+    private PluginAddress? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
 
     [Fact]
     public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKey()

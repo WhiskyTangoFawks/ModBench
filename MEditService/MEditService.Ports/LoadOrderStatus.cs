@@ -30,8 +30,8 @@ public enum LoadOrderState
     Failed,
 }
 
-/// <summary>Carries origin as well as filename because two copies of one filename can be held at
-/// once, and a bare name cannot say which one landed.</summary>
+/// <summary>Carries origin as well as filename because two plugins that share a filename can be
+/// held at once, and a bare name cannot say which one landed.</summary>
 public sealed record IndexedPlugin(string Name, string Origin);
 
 /// <summary>Exists so an absent conflict badge is never mistakable for "no conflict": a caller

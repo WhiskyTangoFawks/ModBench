@@ -37,7 +37,7 @@ public sealed class KeepExternalChangeHandler
         return Keep(mod.ModFolder, mod.Plugins, loadOrder.GameRelease);
     }
 
-    private ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
+    private ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredPlugin> plugins, GameRelease gameRelease)
     {
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' holds no repository, which TrackedOrigin.Resolve rules out.");
@@ -45,7 +45,7 @@ public sealed class KeepExternalChangeHandler
 
         var touchedByPlugin = new Dictionary<string, List<TouchedRecord>>(StringComparer.OrdinalIgnoreCase);
         foreach (var plugin in plugins)
-            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path, gameRelease, schemas);
+            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginAddress(plugin.Name, plugin.Origin), plugin.Path, gameRelease, schemas);
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         var stagedAlready = trackedFileChanges.Where(c => c.StagedAlready).ToList();
@@ -62,7 +62,7 @@ public sealed class KeepExternalChangeHandler
         var landed = new List<string>();
         foreach (var plugin in plugins)
         {
-            var pluginKey = new PluginCopyKey(plugin.Name, plugin.Origin);
+            var pluginKey = new PluginAddress(plugin.Name, plugin.Origin);
             foreach (var t in touchedByPlugin[plugin.Name])
             {
                 repository.Put(pluginKey, new SourceDocument(t.FormKey, t.At.RecordType, t.At.EditorId, t.IncomingText));
@@ -88,10 +88,10 @@ public sealed class KeepExternalChangeHandler
         return ExternalChangeLandResult.Success(landed);
     }
 
-    // The mod's own name travels on RegisteredCopy.Origin already (ADR-0009): every copy in
+    // The mod's own name travels on RegisteredPlugin.Origin already (ADR-0009): every plugin in
     // plugins shares it, so nothing here re-derives a name from the folder path.
     private static string CollisionMessage(
-        IReadOnlyList<RegisteredCopy> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
+        IReadOnlyList<RegisteredPlugin> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
     {
         var parts = new List<string>();
         if (colliding.Count > 0)
@@ -107,7 +107,7 @@ public sealed class KeepExternalChangeHandler
     // document wins a FormKey two claim — Compile refuses such a tree; refusing Keep over it too
     // would help nobody.
     private List<TouchedRecord> TouchedRecordsFor(
-        SourceRepository repository, PluginCopyKey plugin, string pluginPath, GameRelease gameRelease,
+        SourceRepository repository, PluginAddress plugin, string pluginPath, GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var pluginName = plugin.Name;

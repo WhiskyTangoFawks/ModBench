@@ -13,10 +13,10 @@ internal interface IRecordIndex : IDisposable
     /// escaped.</summary>
     IRecordReads At(RecordRef recordRef);
 
-    /// <summary>Where <see cref="IRecordReads.OpenedCopies"/> reads from. The store holds no header
-    /// flag, master list or record count, so the Indexer points it at the copies it holds
+    /// <summary>Where <see cref="IRecordReads.OpenedPlugins"/> reads from. The store holds no header
+    /// flag, master list or record count, so the Indexer points it at the plugins it holds
     /// open.</summary>
-    void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginCopyKey, PluginContent>> opened);
+    void ReadOpenedPluginsFrom(Func<IReadOnlyDictionary<PluginAddress, PluginContent>> opened);
 
     void Initialize(GameRelease release);
 
@@ -36,52 +36,52 @@ internal interface IRecordIndex : IDisposable
 
     /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
     /// hash and diagnosis (ADR-0009 invariant 4); a null path claims no file backs the rows.</summary>
-    void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath, DerivedFrom derivedFrom);
+    void Index(IPluginDocuments documents, Registration registration, PluginAddress key, string? filePath, DerivedFrom derivedFrom);
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
     /// index holds no validated rows for it. Independent of registration, so a returning profile
     /// switch is cheap (ADR-0009).</summary>
-    string? IndexedContentHash(PluginCopyKey key);
+    string? IndexedContentHash(PluginAddress key);
 
     /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009:
-    /// the file-gone verb — never the meaning of a copy leaving the load order, which is
+    /// the file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
-    void Unindex(PluginCopyKey key);
+    void Unindex(PluginAddress key);
 
     /// <summary>ADR-0009: registration is visibility. Writes <paramref name="key"/>'s
     /// <c>registrations</c> row so its already-indexed rows answer again with no re-index; an
     /// upsert. Winner state is stale until the next sweep.</summary>
-    void Register(PluginCopyKey key, Registration registration);
+    void Register(PluginAddress key, Registration registration);
 
-    /// <summary>ADR-0013: every copy the index currently registers — what a reconcile diffs the
+    /// <summary>ADR-0013: every plugin the index currently registers — what a reconcile diffs the
     /// incoming snapshot against, since a freshly opened file still carries the last run's
     /// registrations.</summary>
-    IReadOnlyList<PluginCopyKey> RegisteredPlugins();
+    IReadOnlyList<PluginAddress> RegisteredPlugins();
 
     /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows
     /// remain and answer nothing (unregistered answers nothing, ADR-0013). Winner state is stale until
     /// the next sweep.</summary>
-    void Unregister(PluginCopyKey key);
+    void Unregister(PluginAddress key);
 
     /// <summary>Rebuilds every ref's winners among <paramref name="participating"/>. ADR-0013: who
     /// competes is the load order value's answer, handed in here and remembered for the re-sweeps a
     /// working-tree write triggers.</summary>
-    void UpdateWinners(IReadOnlyList<RegisteredCopy> participating);
+    void UpdateWinners(IReadOnlyList<RegisteredPlugin> participating);
 
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
     /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0007). Records the
     /// plugin does not hold are skipped.</summary>
-    void SetCommittedBaseline(PluginCopyKey key, IReadOnlyList<(string FormKey, string Body)> baselines);
+    void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines);
 
     /// <summary>These already-ingested records exist at no committed ref. Needed because
     /// ingest-from-source seeds both refs from one whole-tree read, so an uncommitted record arrives
     /// looking committed. Idempotent; unknown records are skipped.</summary>
-    void MarkWorkingTreeOnly(PluginCopyKey key, IReadOnlyList<string> formKeys);
+    void MarkWorkingTreeOnly(PluginAddress key, IReadOnlyList<string> formKeys);
 
     /// <summary>Seeds a record at <c>HEAD</c> but not in the working tree, so the user can see and
     /// diff a deletion (ADR-0007). Writes no extracted rows: those track Effective. Skipped when
     /// held at either ref.</summary>
-    void SeedCommittedOnly(PluginCopyKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
+    void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the
     /// one door SQL crosses this seam through (ADR-0007). Throws if the SQL returns no
@@ -90,11 +90,11 @@ internal interface IRecordIndex : IDisposable
 
     /// <summary>ADR-0015 invariant 3: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
     /// both refs from the Source repository, idempotent by content. A key held at neither ref
-    /// re-derives the whole copy.</summary>
-    void RefreshByKeys(PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys);
+    /// re-derives the whole plugin.</summary>
+    void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0015 invariant 4: compares <paramref name="key"/>'s rows against the system of
     /// record they came from — source documents at both refs for a tracked
     /// <paramref name="modFolder"/>, the binary otherwise — and refreshes what differs.</summary>
-    ValidationReport Validate(PluginCopyKey key, string? modFolder);
+    ValidationReport Validate(PluginAddress key, string? modFolder);
 }

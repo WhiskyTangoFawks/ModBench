@@ -12,7 +12,7 @@ public sealed class ContinueRebaseEditBranchHandler
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal ContinueRebaseEditBranchHandler(LoadOrderHolder loadOrder) => _loadOrder = loadOrder;
 
-    /// <summary>Null when no registered copy carries the origin: there is no repository to name,
+    /// <summary>Null when no registered plugin carries the origin: there is no repository to name,
     /// which is an addressing failure rather than one of the three rebase outcomes.</summary>
     public RebaseResult? ContinueRebase(string origin) =>
         _loadOrder.Current.ModFolderOfOrigin(origin) is { } modFolder

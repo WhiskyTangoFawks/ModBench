@@ -12,7 +12,7 @@ namespace MEditService.Http.Tests.TestSupport;
 /// wrote through — the whole read model a fixture with no index has.</summary>
 internal static class TrackedTree
 {
-    internal static SourceDocument? Document(string modFolder, PluginCopyKey plugin, string formKey)
+    internal static SourceDocument? Document(string modFolder, PluginAddress plugin, string formKey)
     {
         if (SourceRepository.Open(modFolder, GameRelease.Fallout4) is not { } repository) return null;
         var identity = repository.IdentityOf(
@@ -23,7 +23,7 @@ internal static class TrackedTree
     /// <summary>The same question at a named ref: what the last commit holds, which a working-tree
     /// change does not alter.</summary>
     internal static SourceDocument? CommittedDocument(
-        string modFolder, PluginCopyKey plugin, RecordIdentity identity) =>
+        string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         SourceRepository.Open(modFolder, GameRelease.Fallout4)?.GetAt(plugin, identity, "HEAD");
 
     internal static bool IsPartialForm(this SourceDocument document)

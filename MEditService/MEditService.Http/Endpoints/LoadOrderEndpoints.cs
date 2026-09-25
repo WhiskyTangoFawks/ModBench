@@ -16,12 +16,12 @@ public static class LoadOrderEndpoints
             .WithName("PutLoadOrder")
             .WithTags(Tag)
             .WithDescription(
-                "Reconciles the load order against this snapshot (ADR-0013): every physical plugin " +
-                "copy in the instance — winning and losing, listed and unlisted — each with its " +
+                "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
+                "the instance — winning and overridden, listed and unlisted — each with its " +
                 "plugins.txt slot (null when no line names it), its * prefix and whether the Mod " +
-                "override order resolves the name to it. Copies new to the load order are opened " +
-                "and registered (indexed only if never seen), copies absent from the snapshot are " +
-                "unregistered, moved copies are re-registered SQL-only; then one winner sweep. " +
+                "override order resolves the name to it. Plugins new to the load order are opened " +
+                "and registered (indexed only if never seen), plugins absent from the snapshot are " +
+                "unregistered, moved plugins are re-registered SQL-only; then one winner sweep. " +
                 "Vanilla masters are prepended by the backend and need not be listed. Answers as " +
                 "soon as the snapshot is applied; the sweep runs after, reported on " +
                 "GET /load-order/status and the load-order-status notification.")
@@ -49,7 +49,7 @@ public static class LoadOrderEndpoints
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugin copies)", req.InstanceRoot, req.Plugins?.Count ?? 0);
+            logger.LogInformation("Received PutLoadOrder for {InstanceRoot} ({Count} plugins)", req.InstanceRoot, req.Plugins?.Count ?? 0);
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
@@ -62,7 +62,7 @@ public static class LoadOrderEndpoints
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
         // Every registration fact is Mod Management's to state, never defaulted here: a missing
-        // bool silently bound to false would make every copy non-participating.
+        // bool silently bound to false would make every plugin non-participating.
         if (req.Plugins is not { } plugins
             || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null))
         {

@@ -58,7 +58,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.RequireReads().GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress, observed from inside the load loop. A load publishing its count
@@ -83,7 +83,7 @@ public sealed class WarmReconcileTests
         Assert.Equal([0, 1, 2], observed);
     }
 
-    // Every copy's open, the step before its registration, is asked how much progress the load
+    // Every plugin's open, the step before its registration, is asked how much progress the load
     // order was reporting at that moment.
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
@@ -146,7 +146,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var documents = warm.RequireReads().GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.RequireReads().GetDocuments(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }

@@ -55,7 +55,7 @@ public sealed class BlockLevelNameParityTests
     private static string WorldspaceDirectoryAPutOfOneExteriorCellLeaves(string scratch)
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(scratch, "put")).FullName;
-        var key = new PluginCopyKey(Plugin, "DestinationMod");
+        var key = new PluginAddress(Plugin, "DestinationMod");
         var repository = SourceRepository.Over(modFolder, Release);
 
         repository.Put(key, new SourceDocument(WorldspaceFormKey, "wrld", null, Body(WorldspaceFormKey)));

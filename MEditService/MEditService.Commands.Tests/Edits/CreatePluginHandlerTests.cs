@@ -21,7 +21,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
 
     public CreatePluginHandlerTests() =>
-        _holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins)));
+        _holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(_data.Plugins)));
 
     public void Dispose() => _data.Dispose();
 
@@ -33,29 +33,29 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Handler.CreatePlugin(name, Path.Combine(modFolder, name), origin);
 
     [Fact]
-    public async Task CreatePlugin_WritesTheFileAtTheCopysPath()
+    public async Task CreatePlugin_WritesTheFileAtThePluginsPath()
     {
         var modFolder = ModFolder("StateMod");
 
         var result = await Create("NewPlugin.esp", modFolder, "StateMod");
 
         Assert.True(result.Applied);
-        Assert.Equal(Path.Combine(modFolder, "NewPlugin.esp"), result.Copy.Path);
-        Assert.True(File.Exists(result.Copy.Path));
+        Assert.Equal(Path.Combine(modFolder, "NewPlugin.esp"), result.Plugin.Path);
+        Assert.True(File.Exists(result.Plugin.Path));
     }
 
-    // A created plugin reaches every reader through this one snapshot change; a copy the
+    // A created plugin reaches every reader through this one snapshot change; a plugin the
     // reconcile cannot open is not a row, so the file comes first.
     [Fact]
-    public async Task CreatePlugin_RegistersTheCopy_OnlyOnceItsFileExists()
+    public async Task CreatePlugin_RegistersThePlugin_OnlyOnceItsFileExists()
     {
         var existedWhenApplied = new List<bool>();
         _holder.Changed += (snapshot, _) =>
-            existedWhenApplied.Add(snapshot.Copies.Where(c => c.Name == "Announced.esp").All(c => File.Exists(c.Path)));
+            existedWhenApplied.Add(snapshot.Plugins.Where(c => c.Name == "Announced.esp").All(c => File.Exists(c.Path)));
 
         var result = await Create("Announced.esp", ModFolder("AnnouncedMod"), "AnnouncedMod");
 
-        Assert.NotNull(_holder.Current.Copy(result.Copy.Key));
+        Assert.NotNull(_holder.Current.Plugin(result.Plugin.Key));
         Assert.Equal([true], existedWhenApplied);
         Assert.Equal(_holder.Version, result.Version);
     }
@@ -64,13 +64,13 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [Fact]
     public async Task CreatePlugin_TakesTheSlotPastTheHighestRegisteredOne()
     {
-        var highest = _holder.Current.Copies.Max(c => c.Slot ?? 0);
+        var highest = _holder.Current.Plugins.Max(c => c.Slot ?? 0);
 
         var result = await Create("Slotted.esp", ModFolder("SlottedMod"), "SlottedMod");
 
-        Assert.Equal(highest + 1, result.Copy.Slot);
-        Assert.True(result.Copy.Enabled);
-        Assert.True(result.Copy.Winning);
+        Assert.Equal(highest + 1, result.Plugin.Slot);
+        Assert.True(result.Plugin.Enabled);
+        Assert.True(result.Plugin.Winning);
     }
 
     // No file was created, so nothing is registered: the load order every reader holds is the one
@@ -102,7 +102,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Track.Require().Refusal);
         Assert.Same(before, _holder.Current);
-        Assert.Null(_holder.Current.Copy(result.Copy.Key));
+        Assert.Null(_holder.Current.Plugin(result.Plugin.Key));
     }
 
     [Fact]

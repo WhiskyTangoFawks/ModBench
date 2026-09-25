@@ -1,6 +1,6 @@
 import type { LoadOrderOutcome, LoadOrderPluginInput, MEditClient } from './MEditClient';
 
-/** One generation of ADR-0013's hand-off, whole: every physical plugin copy plus the three facts
+/** One generation of ADR-0013's hand-off, whole: every plugin file plus the three facts
  *  the PUT is keyed on. Built from one Instance value, so a snapshot never mixes generations. */
 export interface LoadOrderSnapshot {
   readonly plugins: LoadOrderPluginInput[];

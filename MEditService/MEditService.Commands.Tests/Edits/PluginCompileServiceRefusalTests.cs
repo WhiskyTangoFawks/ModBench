@@ -32,7 +32,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_OfAPluginTheArrivedLoadOrderDoesNotHold_RefusesNamingThePlugin()
     {
-        var stranger = new PluginCopyKey("Stranger.esp", CompileFixture.Origin);
+        var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);
 
         var result = await _mod.CompileService().CompileAsync(stranger, new CompileSource.WorkingTree());
 

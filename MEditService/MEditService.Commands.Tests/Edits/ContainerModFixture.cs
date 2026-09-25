@@ -33,7 +33,7 @@ public sealed class ContainerModFixture : IDisposable
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
-    public PluginCopyKey Plugin { get; } = new(PluginName, ModFolderOrigin);
+    public PluginAddress Plugin { get; } = new(PluginName, ModFolderOrigin);
 
     public const string NpcEditorId = "FixtureNpc";
     public FormKey Npc { get; }
@@ -137,7 +137,7 @@ public sealed class ContainerModFixture : IDisposable
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
 
         if (track) Track();
 

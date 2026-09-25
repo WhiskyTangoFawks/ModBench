@@ -112,17 +112,17 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal(nameof(CrashRepairReason.InterruptedCompile), pending.CrashRepairReason);
     }
 
-    // The rival this pins: naming the mod from the load-order copy that raised the question,
-    // which reads as "(in )" the moment a tracked-file-only change has no copy left to name it.
+    // The rival this pins: naming the mod from the load-order plugin that raised the question,
+    // which reads as "(in )" the moment a tracked-file-only change has no plugin left to name it.
     [Fact]
-    public void Handle_NamesTheModByItsFolder_ForATrackedFileOnlyChange_WithNoLoadOrderCopy()
+    public void Handle_NamesTheModByItsFolder_ForATrackedFileOnlyChange_WithNoLoadOrderPlugin()
     {
         using var mod = SourceEditFixture.TrackedEverything(
             folder => File.WriteAllText(Path.Combine(folder, "texture.dds"), "original"));
         File.WriteAllText(Path.Combine(mod.ModFolder, "texture.dds"), "changed-by-the-release");
-        var noCopies = new LoadOrderSnapshot(mod.GameDirectory, mod.InstanceRoot, GameRelease.Fallout4, []);
+        var noPlugins = new LoadOrderSnapshot(mod.GameDirectory, mod.InstanceRoot, GameRelease.Fallout4, []);
 
-        var outcome = Settled.Handle(noCopies, mod.ModFolder);
+        var outcome = Settled.Handle(noPlugins, mod.ModFolder);
 
         Assert.Equal(TrackedModSettledOutcome.QuestionOpened, outcome);
         var question = SourceRepository.UnansweredExternalChange(mod.ModFolder);

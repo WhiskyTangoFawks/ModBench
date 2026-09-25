@@ -35,20 +35,20 @@ public sealed class ExternalChangeClassificationTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // The plugin's bytes as the load order finds them: on disk, at the copy's path.
+    // The plugin's bytes as the load order finds them: on disk, at the plugin's path.
     private LoadOrderSnapshot WithPlugin(byte[] bytes)
     {
         var path = Path.Combine(ModFolder, PluginName);
         File.WriteAllBytes(path, bytes);
         return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredCopy(PluginName, Origin, path, 0, Enabled: true, Winning: true)]);
+            [new RegisteredPlugin(PluginName, Origin, path, 0, Enabled: true, Winning: true)]);
     }
 
     private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
     {
         foreach (var (name, bytes) in plugins) File.WriteAllBytes(Path.Combine(ModFolder, name), bytes);
         return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [.. plugins.Select((plugin, slot) => new RegisteredCopy(
+            [.. plugins.Select((plugin, slot) => new RegisteredPlugin(
                 plugin.Name, Origin, Path.Combine(ModFolder, plugin.Name), slot, Enabled: true, Winning: true))]);
     }
 

@@ -35,7 +35,7 @@ public interface IPluginAdapter
     /// Creation Club catalog. Claimed by both, named once.</summary>
     IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease);
 
-    /// <summary>What a copy's own binary says about itself, which is what the Index holds for it.
+    /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> is the throw that stopped a full walk: the count is a readout, not a
     /// gate.</summary>
     (PluginContent Content, Exception? Unreachable) ReadContent(

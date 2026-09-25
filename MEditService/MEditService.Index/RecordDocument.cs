@@ -6,7 +6,7 @@ namespace MEditService.Index;
 /// record's source file holds — for the header, the root <c>RecordData.json</c>.</summary>
 public record RecordDocument(
     string FormKey,
-    PluginCopyKey Plugin,
+    PluginAddress Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     string? EditorId,
@@ -23,7 +23,7 @@ public record RecordDocument(
 /// instance (an identity, not merely equal values); for a dirty one, Head is resolved separately
 /// from the committed baseline.</summary>
 public record OverrideStackEntry(
-    PluginCopyKey Plugin,
+    PluginAddress Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     RecordDocument Effective,

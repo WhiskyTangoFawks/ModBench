@@ -193,7 +193,7 @@ public sealed class EditRecordTraceTests : HostedTests
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
         var targetFolder = OtherTool.ModFolderOf(fx, Origin);
-        var target = new PluginCopyKey(Plugin, Origin);
+        var target = new PluginAddress(Plugin, Origin);
         var oldFormKey = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=race"))
             .GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey"))).Single();
         var targetBefore = TrackedTree.Document(targetFolder, target, oldFormKey).Require();

@@ -68,7 +68,7 @@ describe('no-leading-medit', () => {
   });
 
   it('passes the status bar item\'s text, whose prefix follows its icon', () => {
-    const messages = lint("setStatusText('$(plug) mEdit: Attached');\nsetStatusText(`$(check) mEdit: Ready (${n} plugin copies)`);\n");
+    const messages = lint("setStatusText('$(plug) mEdit: Attached');\nsetStatusText(`$(check) mEdit: Ready (${n} plugins)`);\n");
 
     expect(messages).toEqual([]);
   });

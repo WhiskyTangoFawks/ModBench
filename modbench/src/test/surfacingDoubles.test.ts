@@ -52,13 +52,13 @@ describe('the recording reporter', () => {
 describe('the recording reporter, given a selection\'s outcome', () => {
   beforeEach(() => { showErrorMessage.mockClear(); });
 
-  interface PluginCopy { origin: string; filename: string }
-  const nameOf = (p: PluginCopy) => `${p.origin}/${p.filename}`;
+  interface PluginAddress { origin: string; filename: string }
+  const nameOf = (p: PluginAddress) => `${p.origin}/${p.filename}`;
   const MESSAGE = 'Could not delete 1 record.';
-  const FULLY_LANDED: SelectionOutcome<PluginCopy> = {
+  const FULLY_LANDED: SelectionOutcome<PluginAddress> = {
     landed: [{ origin: 'ModA', filename: 'A.esp' }], refused: [],
   };
-  const ONE_REFUSED: SelectionOutcome<PluginCopy> = {
+  const ONE_REFUSED: SelectionOutcome<PluginAddress> = {
     landed: [{ origin: 'ModA', filename: 'A.esp' }],
     refused: [{ item: { origin: 'ModB', filename: 'A.esp' }, reason: 'gone from disk' }],
   };

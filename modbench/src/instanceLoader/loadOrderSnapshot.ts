@@ -1,5 +1,5 @@
-// Every physical plugin copy the enabled mods and overwrite/ provide, plus the Data-folder copy
-// of any plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
+// Every plugin file the enabled mods and overwrite/ provide, plus the Data-folder plugin of any
+// plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
 // prepended by the backend, never listed here.
 
 import { basename, dirname, join } from 'node:path';
@@ -8,7 +8,7 @@ import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import { fileInFolder, isInFolder, overwriteDir } from '../instanceAdapter/layout';
 import { isPluginFile } from '../instanceAdapter/pluginFile';
-import { findUnlistedPlugins } from './unlistedPlugins';
+import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
 import { listDir } from '../instanceAdapter/files';
 import type { GameFolder } from '../instanceAdapter/gameDirectory';
@@ -20,25 +20,25 @@ import { errorMessage } from '../ports/errorMessage';
 export const DATA_DIRECTORY_ORIGIN = 'Data';
 export const OVERWRITE_ORIGIN = OVERWRITE_DIR_NAME;
 
-/** One physical plugin copy in the snapshot — the boundary object (CONTEXT.md): a plugin file
+/** One plugin file in the snapshot — the boundary object (CONTEXT.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
 export interface LoadOrderPlugin {
   name: string;
   path: string;
-  /** The mod folder that provided this copy, or a reserved origin value above (ADR-0012). */
+  /** The mod folder that provided this plugin, or a reserved origin value above (ADR-0012). */
   origin: string;
-  /** The name's plugins.txt line index, or null when no line names it. A losing copy of a listed
-   *  name carries the same slot as the winning one. */
+  /** The name's plugins.txt line index, or null when no line names it. An overridden plugin of a
+   *  listed name carries the same slot as the winning one. */
   slot: number | null;
   /** The line's `*` prefix (ADR-0013); false when no line names the file. */
   enabled: boolean;
-  /** This copy is the one the Mod override order resolves the name to — overwrite/ first, then the
-   *  winning enabled mod. Editing derives participation (`enabled AND winning AND listed`) on its
-   *  side; nothing here decides it. */
+  /** This plugin is the one the Mod override order resolves the name to — overwrite/ first, then
+   *  the winning enabled mod. Editing derives participation (`enabled AND winning AND listed`) on
+   *  its side; nothing here decides it. */
   winning: boolean;
 }
 
-/** A plugins.txt line with no resolvable physical copy: no mod or overwrite/ provides it, and
+/** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
  *  there is no Data/ to fall back to. Existence, slot and enabled still come from plugins.txt. */
 export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
@@ -48,14 +48,14 @@ export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
  *  of its own. */
 export type OriginFolder = (origin: string) => string | undefined;
 
-/** The folder an origin's plugin copies sit in, read off the value's own rows: `overwrite` and
+/** The folder an origin's plugins sit in, read off the value's own rows: `overwrite` and
  *  `Data` are not folders under `mods/` (ADR-0012). `undefined` when no row for that origin
- *  has a copy on disk. */
+ *  has a plugin file on disk. */
 export function originFolder(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): string | undefined {
-  const copy = plugins.find((p) => p.path !== undefined && p.origin === origin);
-  return copy?.path === undefined ? undefined : dirname(copy.path);
+  const plugin = plugins.find((p) => p.path !== undefined && p.origin === origin);
+  return plugin?.path === undefined ? undefined : dirname(plugin.path);
 }
 
 /** The files inside one origin's folder, by the relative path a source tree names them with. */
@@ -69,7 +69,7 @@ export interface OriginFiles {
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
 /** The files of the folder `originFolder` answers, through the Instance adapter's path functions.
- *  `undefined` when no row for that origin has a copy on disk. */
+ *  `undefined` when no row for that origin has a plugin file on disk. */
 export function originFiles(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): OriginFiles | undefined {
@@ -78,16 +78,16 @@ export function originFiles(
   return { file: (relativePath) => fileInFolder(folder, relativePath), holds: (file) => isInFolder(folder, file) };
 }
 
-/** The plugin files this instance provides, keyed case-folded to the winning copy's on-disk
- *  name: the Mod override order's answer, overwrite/ included. A Data-folder copy is presence,
+/** The plugin files this instance provides, keyed case-folded to the winning plugin's on-disk
+ *  name: the Mod override order's answer, overwrite/ included. A Data-folder plugin is presence,
  *  not provision, and is left out. */
 export function providedPluginsOf(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path' | 'winning'>[],
 ): Map<string, string> {
   const provided = new Map<string, string>();
-  for (const copy of plugins) {
-    if (copy.path === undefined || !copy.winning || copy.origin === DATA_DIRECTORY_ORIGIN) continue;
-    const real = basename(copy.path);
+  for (const plugin of plugins) {
+    if (plugin.path === undefined || !plugin.winning || plugin.origin === DATA_DIRECTORY_ORIGIN) continue;
+    const real = basename(plugin.path);
     if (isPluginFile(real)) provided.set(foldPath(real), real);
   }
   return provided;
@@ -174,7 +174,7 @@ async function buildRows(
   const pathByName = resolvePluginPaths(names, index, dataFolder);
   const winnerModByName = rootLevelWinnerMods(index);
   // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
-  // and a case difference must not read as "disabled" or as "a second copy".
+  // and a case difference must not read as "disabled" or as "a second plugin".
   const enabledNames = new Set(enabled.map((n) => foldPath(n)));
   const slotByName = new Map<string, number>();
   for (const [name, slot] of pluginSlots(names)) slotByName.set(foldPath(name), slot);
@@ -196,18 +196,18 @@ async function buildRows(
   });
 
   // `winning` is the Mod override order's own answer, independent of listing: an unlisted
-  // file's sole provider is still the copy the name resolves to.
-  const isWinningCopy = (copy: { name: string; origin: string }) =>
-    !overwriteFiles.has(foldPath(copy.name))
-    && foldPath(winnerModByName.get(foldPath(copy.name)) ?? '') === foldPath(copy.origin);
-  const losers = findUnlistedPlugins(index, listed.map((p) => ({ name: p.name, origin: p.origin })))
-    .map((copy) => ({
-      name: copy.name,
-      path: copy.path,
-      origin: copy.origin,
-      slot: slotByName.get(foldPath(copy.name)) ?? null,
-      enabled: enabledNames.has(foldPath(copy.name)),
-      winning: isWinningCopy(copy),
+  // file's sole provider is still the plugin the name resolves to.
+  const isWinning = (plugin: { name: string; origin: string }) =>
+    !overwriteFiles.has(foldPath(plugin.name))
+    && foldPath(winnerModByName.get(foldPath(plugin.name)) ?? '') === foldPath(plugin.origin);
+  const outside = findPluginsOutsideLoadOrder(index, listed.map((p) => ({ name: p.name, origin: p.origin })))
+    .map((plugin) => ({
+      name: plugin.name,
+      path: plugin.path,
+      origin: plugin.origin,
+      slot: slotByName.get(foldPath(plugin.name)) ?? null,
+      enabled: enabledNames.has(foldPath(plugin.name)),
+      winning: isWinning(plugin),
     }));
 
   // overwrite/'s own unlisted plugins — winning-most, but no line names them.
@@ -217,13 +217,13 @@ async function buildRows(
       name: real, path: join(overwriteDir(instanceRoot), real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));
 
-  return [...listed, ...losers, ...strays];
+  return [...listed, ...outside, ...strays];
 }
 
 const defaultBuildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {});
 
 /** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name with no
- *  mod or overwrite/ copy still gets a row, its `path` undefined rather than a guess. */
+ *  mod or overwrite/ plugin file still gets a row, its `path` undefined rather than a guess. */
 export async function buildLoadOrderRows(
   source: Source,
   instanceRoot: string,

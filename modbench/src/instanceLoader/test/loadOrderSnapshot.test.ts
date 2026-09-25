@@ -39,7 +39,7 @@ describe('buildLoadOrderRows', () => {
   });
   const root = async () => (instanceRoot = await mkdtemp(join(tmpdir(), 'medit-load-order-snapshot-')));
 
-  it('a mod-provided listed plugin is the winning copy at its plugins.txt slot, with that mod as origin', async () => {
+  it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', async () => {
     const instanceDir = await root();
 
     const dataFolder = join(instanceDir, 'game', 'Data');
@@ -76,9 +76,10 @@ describe('buildLoadOrderRows', () => {
     ]);
   });
 
-  // ADR-0013: the losing copy is in the snapshot too — at the name's slot, carrying the line's
-  // own `*`, and not winning. Editing registers it beside the winner; only the winner participates.
-  it('a file-level loser of a listed name is sent at that slot, enabled as its line says, not winning', async () => {
+  // ADR-0013: the overridden plugin is in the snapshot too — at the name's slot, carrying the
+  // line's own `*`, and not winning. Editing registers it beside the winner; only the winner
+  // participates.
+  it('an overridden plugin of a listed name is sent at that slot, enabled as its line says, not winning', async () => {
     const instanceDir = await root();
 
     const dataFolder = join(instanceDir, 'game', 'Data');
@@ -113,12 +114,12 @@ describe('buildLoadOrderRows', () => {
     ]);
   });
 
-  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided copy, which is then sent as losing', async () => {
+  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', async () => {
     const instanceDir = await root();
 
     const dataFolder = join(instanceDir, 'game', 'Data');
     await mkdir(join(instanceDir, 'overwrite'));
-    await writeFile(join(instanceDir, 'overwrite', 'Foo.esp'), 'overwrite-copy');
+    await writeFile(join(instanceDir, 'overwrite', 'Foo.esp'), 'overwrite-plugin');
     const fakeIndex = index(
       { 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } },
       { A: [{ relativePath: 'Foo.esp', absolutePath: '/mods/A/Foo.esp' }] },
@@ -224,7 +225,7 @@ describe('originFiles', () => {
     ({ name: 'X.esp', path, origin, slot: null, enabled: false, winning: true });
   const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
 
-  it('names a file inside the folder the origin\'s copy sits in, and holds only what is beneath it', () => {
+  it('names a file inside the folder the origin\'s plugin sits in, and holds only what is beneath it', () => {
     const files = present(originFiles(rows, 'TS Mod'), 'the TS Mod origin\'s files');
 
     expect(files.file('source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'));
@@ -232,7 +233,7 @@ describe('originFiles', () => {
     expect(files.holds(join('/instance', 'mods', 'Other', 'x.json'))).toBe(false);
   });
 
-  it('answers nothing for an origin with no copy on disk', () => {
+  it('answers nothing for an origin with no plugin file on disk', () => {
     expect(originFiles(rows, 'Missing')).toBeUndefined();
   });
 });
@@ -241,7 +242,7 @@ describe('originFolder', () => {
   const row = (origin: string, path: string | undefined) =>
     ({ name: 'X.esp', path, origin, slot: null, enabled: false, winning: true });
 
-  it('answers a mod origin with the mod folder its copy sits in', () => {
+  it('answers a mod origin with the mod folder its plugin sits in', () => {
     const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
 
     expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
@@ -260,7 +261,7 @@ describe('originFolder', () => {
     expect(originFolder(rows, 'Data')).toBe(join('/game', 'Data'));
   });
 
-  it('answers undefined for an origin whose only rows are line-only, with no copy on disk', () => {
+  it('answers undefined for an origin whose only rows are line-only, with no plugin file on disk', () => {
     expect(originFolder([row('Ghost Mod', undefined)], 'Ghost Mod')).toBeUndefined();
   });
 
@@ -270,7 +271,7 @@ describe('originFolder', () => {
     expect(originFolder(rows, 'Other Mod')).toBeUndefined();
   });
 
-  it('skips a line-only row to reach the same origin’s row that has a copy', () => {
+  it('skips a line-only row to reach the same origin’s row that has a plugin file', () => {
     const rows = [row('TS Mod', undefined), row('TS Mod', join('/instance', 'mods', 'TS Mod', 'B.esp'))];
 
     expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
@@ -284,15 +285,15 @@ describe('providedPluginsOf', () => {
     name: string, origin: string, path: string | undefined, winning = true,
   ) => ({ name, path, origin, slot: null, enabled: false, winning });
 
-  it('keys each provided copy by its folded name, at the winning copy\u2019s own on-disk casing', () => {
+  it('keys each provided plugin by its folded name, at the winning plugin\u2019s own on-disk casing', () => {
     const rows = [row('ZETA.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'Zeta.esp'))];
 
     expect(providedPluginsOf(rows)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
   });
 
-  // The overwrite-wins rule is spelled once, where the rows are built: the losing mod copy of a
-  // name overwrite/ also provides must not be the name's answer here.
-  it('answers a contested name with the winning copy alone', () => {
+  // The overwrite-wins rule is spelled once, where the rows are built: the overridden mod plugin of
+  // a name overwrite/ also provides must not be the name's answer here.
+  it('answers a contested name with the winning plugin alone', () => {
     const rows = [
       row('A.esp', 'overwrite', join('/instance', 'overwrite', 'A.esp')),
       row('A.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'A.esp'), false),
@@ -302,7 +303,7 @@ describe('providedPluginsOf', () => {
   });
 
   // Data is presence, never provision: the instance did not supply it, so it is no append source.
-  it('leaves out a Data-folder copy and a line with no copy at all', () => {
+  it('leaves out a Data-folder plugin and a line with no plugin file at all', () => {
     const rows = [row('Fallout4.esm', 'Data', join('/game', 'Data', 'Fallout4.esm')), row('Ghost.esp', 'Data', undefined)];
 
     expect(providedPluginsOf(rows)).toEqual(new Map());

@@ -121,13 +121,13 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-stale-header-").FullName;
         public string PluginPath { get; }
-        public PluginCopyKey Plugin { get; }
+        public PluginAddress Plugin { get; }
 
         public TrackedScratch(string fileName)
         {
             PluginPath = Path.Combine(ModFolder, fileName);
             File.Copy(FixturePath(fileName), PluginPath);
-            Plugin = new PluginCopyKey(fileName, "FixtureMod");
+            Plugin = new PluginAddress(fileName, "FixtureMod");
 
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
@@ -142,7 +142,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotPlugins.Of(inputs));
             Holder.Apply(_loadOrder);
         }
 

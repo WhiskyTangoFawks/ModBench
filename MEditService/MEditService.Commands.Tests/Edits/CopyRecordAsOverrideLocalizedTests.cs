@@ -45,7 +45,7 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
 
         var loadOrder = new LoadOrderSnapshot(
             _gameDir, _gameDir, GameRelease.Fallout4,
-            SnapshotCopies.Of(
+            SnapshotPlugins.Of(
             [
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
@@ -68,10 +68,10 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_FromAnUntrackedLocalizedSource_CarriesItsTranslatedStrings()
     {
-        var destination = new PluginCopyKey(DestinationPluginName, DestinationOrigin);
+        var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
 
         var result = _handler.CopyRecordAsOverride(
-            new PluginCopyKey(SourcePluginName, SourceOrigin), _door.ToString(), destination);
+            new PluginAddress(SourcePluginName, SourceOrigin), _door.ToString(), destination);
 
         Assert.True(result.Applied, result.Message);
         var document = TrackedTree.Document(_destinationModFolder, destination, _door.ToString());

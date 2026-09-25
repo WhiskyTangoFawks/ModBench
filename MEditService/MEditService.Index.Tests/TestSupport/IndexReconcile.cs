@@ -23,5 +23,5 @@ internal static class IndexReconcile
     /// own subject is what runs off <see cref="LoadOrderHolder.Apply"/>, not this helper.</summary>
     internal static LoadOrderSnapshot Snapshot(
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
-        new(gameDirectory, instanceRoot, gameRelease, SnapshotCopies.Of(plugins));
+        new(gameDirectory, instanceRoot, gameRelease, SnapshotPlugins.Of(plugins));
 }

@@ -3,9 +3,9 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Watcher;
 
-/// <summary>A tracked mod the snapshot holds, with every copy it holds there: what the load-time
+/// <summary>A tracked mod the snapshot holds, with every plugin it holds there: what the load-time
 /// settle reads and classifies.</summary>
-internal sealed record TrackedMod(string ModFolder, IReadOnlyList<RegisteredCopy> Copies);
+internal sealed record TrackedMod(string ModFolder, IReadOnlyList<RegisteredPlugin> Plugins);
 
 /// <summary>Arming from the snapshot: one watch per folder the load order names, tracked or not,
 /// and none for a folder outside it. Re-armed whole on every change (ADR-0013 invariant 1).</summary>
@@ -45,7 +45,7 @@ internal sealed class WatchSet : IDisposable
             if (_armedVersion is { } armed && version <= armed) return null;
             _armedVersion = version;
 
-            // A watch must never outlive the load order that asked for it, or a copy outside the
+            // A watch must never outlive the load order that asked for it, or a plugin outside the
             // load order would keep settling into the Index and Commands.
             foreach (var folder in _mods.Keys.Where(f => !wanted.ContainsKey(f)).ToList())
             {
@@ -59,11 +59,11 @@ internal sealed class WatchSet : IDisposable
                 if (WatchOf(folder, recursive: isTracked, upgradable: mod.Trackable) is not { } watch) continue;
 
                 watch.ClearRegistrations();
-                foreach (var copy in mod.Copies) watch.Register(copy.Name, copy.Origin, copy.Path);
+                foreach (var plugin in mod.Plugins) watch.Register(plugin.Name, plugin.Origin, plugin.Path);
                 if (isTracked)
                 {
                     watch.EnsureRecursive();
-                    tracked.Add(new TrackedMod(folder, mod.Copies));
+                    tracked.Add(new TrackedMod(folder, mod.Plugins));
                 }
             }
         }
@@ -83,17 +83,17 @@ internal sealed class WatchSet : IDisposable
 
     // The game's own Data folder is never a tracked mod (Track does not apply there), and never
     // recursive: it can hold thousands of files and has no source tree or refs to answer for.
-    private static Dictionary<string, (bool Trackable, List<RegisteredCopy> Copies)> FoldersOf(LoadOrderSnapshot order)
+    private static Dictionary<string, (bool Trackable, List<RegisteredPlugin> Plugins)> FoldersOf(LoadOrderSnapshot order)
     {
-        var folders = new Dictionary<string, (bool Trackable, List<RegisteredCopy> Copies)>(StringComparer.Ordinal);
-        foreach (var copy in order.Copies)
+        var folders = new Dictionary<string, (bool Trackable, List<RegisteredPlugin> Plugins)>(StringComparer.Ordinal);
+        foreach (var plugin in order.Plugins)
         {
-            var modFolder = LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path);
-            var folder = modFolder ?? Path.GetDirectoryName(copy.Path)
-                ?? throw new ArgumentException($"'{copy.Path}' has no containing directory.", nameof(order));
+            var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
+            var folder = modFolder ?? Path.GetDirectoryName(plugin.Path)
+                ?? throw new ArgumentException($"'{plugin.Path}' has no containing directory.", nameof(order));
             if (!folders.TryGetValue(folder, out var entry))
                 folders[folder] = entry = (modFolder is not null, []);
-            entry.Copies.Add(copy);
+            entry.Plugins.Add(plugin);
         }
         return folders;
     }

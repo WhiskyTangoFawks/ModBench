@@ -57,7 +57,7 @@ public sealed class RegisteredPluginSpellingTests
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-spelling-game-").FullName;
 
         public string ModFolder { get; }
-        internal PluginCopyKey Plugin { get; } = new(PluginName, Origin);
+        internal PluginAddress Plugin { get; } = new(PluginName, Origin);
         internal LoadOrderSnapshot LoadOrder { get; }
 
         internal ModFolderScratch()
@@ -69,7 +69,7 @@ public sealed class RegisteredPluginSpellingTests
 
             LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _instanceRoot, Release,
-                SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         }
 
         internal string GitDirectory => Path.Combine(ModFolder, ".git");

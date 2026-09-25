@@ -45,7 +45,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
 
             // Positive control: the load really happened and really indexed the present plugin.
             var reads = manager.RequireReads();
-            Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("StillHere.esp", "ModA"))
+            Assert.Equal(1, reads.GetRecordTypeCounts(new PluginAddress("StillHere.esp", "ModA"))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
             Assert.True(Directory.Exists(orphanTree), "the orphaned source tree must survive the load");

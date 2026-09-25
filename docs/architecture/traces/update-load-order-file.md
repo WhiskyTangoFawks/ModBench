@@ -49,7 +49,7 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
 | downloaded file `delete` | downloads commands | The file goes to the trash, then its `.meta`. The mod it installed stays. |
 
 A plugin is provided when a plugin file sits at the root of an enabled mod, in `overwrite/`, or in
-the game folder. A plugin the game loads with no line never earns one, even when a mod ships a copy
+the game folder. A plugin the game loads with no line never earns one, even when a mod ships a plugin of that name
 (ADR-0013; ADR-0016). A disabled mod provides nothing, so disabling a mod drops its plugins' lines,
 and enabling it again adds them at the end: their place in plugin order is lost, as in MO2.
 

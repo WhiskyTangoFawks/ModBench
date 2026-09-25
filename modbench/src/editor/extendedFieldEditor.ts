@@ -4,7 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
-/** Which cell a tab edits: the record, the field and the plugin copy (ADR-0012). */
+/** Which cell a tab edits: the record, the field and the plugin (ADR-0012). */
 export interface ExtendedFieldIdentity {
   recordLabel: string;
   fieldName: string;

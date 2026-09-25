@@ -39,7 +39,7 @@ public sealed partial class SourceRepository
         /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
         /// this batch puts the file back. A record no document can hold throws before anything is
         /// recorded.</summary>
-        public void Put(SourceRepository repository, PluginCopyKey plugin, SourceDocument document)
+        public void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document)
         {
             var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
 
@@ -65,7 +65,7 @@ public sealed partial class SourceRepository
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>
-        public SourceRemoval Remove(SourceRepository repository, PluginCopyKey plugin, RecordIdentity identity)
+        public SourceRemoval Remove(SourceRepository repository, PluginAddress plugin, RecordIdentity identity)
         {
             if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
@@ -85,7 +85,7 @@ public sealed partial class SourceRepository
             }
         }
 
-        private static NotSupportedException NotRestorableCreate(PluginCopyKey plugin, RecordIdentity identity) =>
+        private static NotSupportedException NotRestorableCreate(PluginAddress plugin, RecordIdentity identity) =>
             new($"No document in {plugin.Name}'s tree holds {identity.FormKey} and its type has no file of its " +
                 "own, so putting it would create one and mint the levels above it. A batch holds one " +
                 "document's bytes per act, so it cannot put that back — put it outside the batch.");
@@ -119,7 +119,7 @@ public sealed partial class SourceRepository
 
         /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
         /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
-        public void Move(SourceRepository repository, PluginCopyKey plugin, RecordIdentity identity, string newFormKey)
+        public void Move(SourceRepository repository, PluginAddress plugin, RecordIdentity identity, string newFormKey)
         {
             if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
             _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));

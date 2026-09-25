@@ -21,7 +21,7 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 }
 
 // `immutableSet` says only that a column is immutable, which is ambiguous: a vanilla master is
-// immutable and named by the load order, while a copy the load order doesn't name (ADR-0012) is
+// immutable and named by the load order, while a plugin the load order doesn't name (ADR-0012) is
 // immutable *because* it isn't.
 export type ColumnStatus =
   'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
@@ -37,7 +37,7 @@ export function columnStatus(
   return isTracked ? 'tracked' : 'untracked';
 }
 
-// ADR-0012: origin appears inline in the header only when two copies share a filename — computed
+// ADR-0012: origin appears inline in the header only when two plugins share a filename — computed
 // from the overrides this compare response carries, never the load order's plugin list. Two rows
 // can never share both plugin and origin.
 export function collidingFilenames(overrides: CompareOverride[]): Set<string> {

@@ -69,7 +69,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
     }
 
     [Fact]
-    public async Task PutLoadOrder_UnlistedCopy_HasNoSlot_AndIsNotInTheLoadOrder()
+    public async Task PutLoadOrder_UnlistedPlugin_HasNoSlot_AndIsNotInTheLoadOrder()
     {
         using var fx = new PluginFixtureBuilder("api-reconcile-unlisted")
             .WithPlugin("Listed.esp")

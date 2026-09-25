@@ -8,7 +8,7 @@ import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 
-// The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
+// The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
   pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,

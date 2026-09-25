@@ -87,7 +87,7 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
-  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0013). A listed
+  /** Every plugin file, with origin, slot, enabled and winning (ADR-0013). A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
@@ -436,7 +436,7 @@ export class Instance implements vscode.Disposable {
       ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? [])
       : undefined;
     const gameName = readGameName(iniText);
-    // A game folder not found loses only the Data-folder copies' paths: every
+    // A game folder not found loses only the Data-folder plugins' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
     // itself (see `LoadOrderPluginLine`), not from the game directory.
     const plugins = await buildLoadOrderRows(

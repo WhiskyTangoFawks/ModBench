@@ -3,20 +3,21 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Watcher;
 
-/// <summary>Which projection the batch asks for: the named documents, or the whole copy when a ref
-/// moved, the operating system dropped events, or the burst was wider than one batch is worth.</summary>
+/// <summary>Which projection the batch asks for: the named documents, or the whole plugin when a
+/// ref moved, the operating system dropped events, or the burst was wider than one batch is
+/// worth.</summary>
 internal enum SourceChangeScope
 {
     Documents,
     WholePlugin,
 }
 
-/// <summary>ADR-0015 invariant 2: one settled batch of source changes to one plugin copy.</summary>
+/// <summary>ADR-0015 invariant 2: one settled batch of source changes to one plugin.</summary>
 internal sealed record SourceChangeEvent(
     string PluginName, string Origin, string ModFolder, SourceChangeScope Scope, IReadOnlyList<string> Paths);
 
 /// <summary>A registered plugin's own binary, touched in the window that just closed.</summary>
-internal sealed record TouchedBinary(PluginCopyKey Key, string Path);
+internal sealed record TouchedBinary(PluginAddress Key, string Path);
 
 /// <summary>Everything one mod folder's window collected before it closed: the source batch, the
 /// binaries touched, and whether any other path under the mod was.</summary>
@@ -34,7 +35,7 @@ internal sealed record SettledWindow(
 internal sealed class ModWatch : IDisposable
 {
     // Past this many documents in one window the batch is projected whole: one git listing for the
-    // copy costs less than asking git per named record.
+    // plugin costs less than asking git per named record.
     private const int CoalesceThreshold = 32;
 
     private readonly object _lock = new();
@@ -98,13 +99,13 @@ internal sealed class ModWatch : IDisposable
 
     public bool FolderExists => Directory.Exists(ModFolder);
 
-    /// <summary>Every registered copy, for the validation an overflow asks of each.</summary>
-    public IReadOnlyList<PluginCopyKey> RegisteredKeys
+    /// <summary>Every registered plugin, for the validation an overflow asks of each.</summary>
+    public IReadOnlyList<PluginAddress> RegisteredKeys
     {
-        get { lock (_lock) return [.. _plugins.Values.Select(p => new PluginCopyKey(p.Name, p.Origin))]; }
+        get { lock (_lock) return [.. _plugins.Values.Select(p => new PluginAddress(p.Name, p.Origin))]; }
     }
 
-    /// <summary>Registers a copy the snapshot holds in this folder: its binary path, and the source
+    /// <summary>Registers a plugin the snapshot holds in this folder: its binary path, and the source
     /// root the repository would give it, whether or not that root exists yet.</summary>
     public void Register(string name, string origin, string path)
     {
@@ -133,7 +134,7 @@ internal sealed class ModWatch : IDisposable
     }
 
     /// <summary>An operating-system overflow dropped events, so nothing this window saw can be
-    /// trusted: every copy is re-projected whole at the next settle.</summary>
+    /// trusted: every plugin is re-projected whole at the next settle.</summary>
     public void MarkEverythingTouched()
     {
         lock (_lock)
@@ -172,7 +173,7 @@ internal sealed class ModWatch : IDisposable
 
                 if (plugin.FileTouched)
                 {
-                    binaries.Add(new TouchedBinary(new PluginCopyKey(plugin.Name, plugin.Origin), plugin.Path));
+                    binaries.Add(new TouchedBinary(new PluginAddress(plugin.Name, plugin.Origin), plugin.Path));
                     plugin.FileTouched = false;
                 }
             }
@@ -195,7 +196,7 @@ internal sealed class ModWatch : IDisposable
             if (SourceTreeAppeared(fullPath))
             {
                 // Nothing the restart between the two watch shapes dropped can be named, so every
-                // copy is projected whole once the tree settles.
+                // plugin is projected whole once the tree settles.
                 _watcher.IncludeSubdirectories = true;
                 foreach (var plugin in _plugins.Values) plugin.WholePlugin = true;
             }

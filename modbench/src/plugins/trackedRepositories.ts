@@ -4,7 +4,7 @@ import type { PluginMetadata } from '../client';
  *  no door onto the instance of its own (ADR-0007). */
 export type IsTracked = (modFolder: string) => Promise<boolean>;
 
-/** The folder a plugin copy sits in. Injected: the Instance adapter owns every path function. */
+/** The folder a plugin sits in. Injected: the Instance adapter owns every path function. */
 export type PluginFolder = (pluginFile: string) => string;
 
 /** Distinct, not one per plugin: a folder can hold several plugins, and each must register with
@@ -36,11 +36,11 @@ export async function registerTrackedRepositories<T>(
 }
 
 /** ADR-0012 invariant 1: a plugin is `(origin, filename)` on every map key. */
-export function pluginCopyKey(name: string, origin: string): string {
-  return `${origin.toLowerCase()}|${name.toLowerCase()}`;
+export function pluginAddressKey(name: string, origin: string | undefined): string {
+  return `${(origin ?? '').toLowerCase()}|${name.toLowerCase()}`;
 }
 
-/** Reindexed by plugin copy because a field edit knows the plugin it edited, never the folder. */
+/** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
 export function pluginRepositoriesOf<T>(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin' | 'path'>[],
   folderRepositories: ReadonlyMap<string, T>,
@@ -49,7 +49,7 @@ export function pluginRepositoriesOf<T>(
   const byPlugin = new Map<string, T>();
   for (const plugin of plugins) {
     const repository = folderRepositories.get(pluginFolder(plugin.path));
-    if (repository) byPlugin.set(pluginCopyKey(plugin.name, plugin.origin), repository);
+    if (repository) byPlugin.set(pluginAddressKey(plugin.name, plugin.origin), repository);
   }
   return byPlugin;
 }

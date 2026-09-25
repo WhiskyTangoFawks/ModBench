@@ -22,7 +22,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
-    private readonly PluginCopyKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    private readonly PluginAddress _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
     {
@@ -30,7 +30,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
         var loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)

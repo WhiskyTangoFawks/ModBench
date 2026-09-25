@@ -15,7 +15,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 {
     /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
     /// write here is a put, and the repository decides where a document goes.</summary>
-    internal readonly record struct Destination(SourceRepository Repository, PluginCopyKey Plugin);
+    internal readonly record struct Destination(SourceRepository Repository, PluginAddress Plugin);
 
     /// <summary>Bare fields are xEdit parity; Partial Form is a deliberate mEdit divergence, so conflict
     /// detection ignores the ancestor's stub fields. Own fields only, like every plain Copy as Override:
@@ -113,7 +113,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     // A GRUP's element order is binary-format position, so a replace must land at the record's
     // exact slot; xEdit's copy-into never drops a child the destination's copy already carries.
     private RecordEditResult ReplaceEmbeddedChildInPlace(
-        PluginCopyKey sourcePlugin, RecordIdentity existing, SourceDocument replacement,
+        PluginAddress sourcePlugin, RecordIdentity existing, SourceDocument replacement,
         Destination destination, GameRelease release)
     {
         var existingDocument = destination.Repository.Get(destination.Plugin, existing)
@@ -240,7 +240,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
     // The destination's own IdentityOf named this FormKey, so a document ought to carry it; only a
     // concurrent external edit to the tree closes that gap.
-    private static InvalidOperationException NoDocumentCarries(PluginCopyKey plugin, string formKey) =>
+    private static InvalidOperationException NoDocumentCarries(PluginAddress plugin, string formKey) =>
         new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under

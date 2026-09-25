@@ -54,12 +54,12 @@ public sealed class RecordQueryServiceTests
         var plugins = _svc.GetPlugins();
 
         Assert.Single(plugins);
-        Assert.Equal(PluginName, plugins[0].Copy.Name);
+        Assert.Equal(PluginName, plugins[0].Plugin.Name);
         Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
-    // The plugin row's "has a failure below it" comes from the Index's own set of copies holding an
-    // unreadable record, so one copy carries the flag and its neighbour does not.
+    // The plugin row's "has a failure below it" comes from the Index's own set of plugins holding an
+    // unreadable record, so one plugin carries the flag and its neighbour does not.
     [Fact]
     public void GetPlugins_MarksOnlyThePluginHoldingAnUnreadableRecord()
     {
@@ -77,14 +77,14 @@ public sealed class RecordQueryServiceTests
 
         var plugins = svc.GetPlugins();
 
-        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).HasParseFailure);
-        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).HasParseFailure);
+        Assert.True(plugins.Single(p => p.Plugin.Name == PluginName).HasParseFailure);
+        Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).HasParseFailure);
     }
 
     // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
-    // from is the Index's answer. Keyed by copy, never by filename.
+    // from is the Index's answer. Keyed by plugin, never by filename.
     [Fact]
-    public void GetPlugins_MarksOnlyTheCopiesTheIndexDerivedFromASourceTree()
+    public void GetPlugins_MarksOnlyThePluginsTheIndexDerivedFromASourceTree()
     {
         const string otherPlugin = "Other.esp";
         var fixture = new FakeFixtureBuilder(Release)
@@ -93,13 +93,13 @@ public sealed class RecordQueryServiceTests
             .Build("Aggression");
         var (manager, svc) = Build(fixture);
         ((FakeReads)manager.RequireReads()).Tracked =
-            new HashSet<PluginCopyKey>(fixture.Copies.Where(c => c.Name == PluginName).Select(c => c.Key),
-                PluginCopyKey.Comparer);
+            new HashSet<PluginAddress>(fixture.Plugins.Where(c => c.Name == PluginName).Select(c => c.Key),
+                PluginAddress.Comparer);
 
         var plugins = svc.GetPlugins();
 
-        Assert.True(plugins.Single(p => p.Copy.Name == PluginName).IsTracked);
-        Assert.False(plugins.Single(p => p.Copy.Name == otherPlugin).IsTracked);
+        Assert.True(plugins.Single(p => p.Plugin.Name == PluginName).IsTracked);
+        Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).IsTracked);
     }
 
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
@@ -115,7 +115,7 @@ public sealed class RecordQueryServiceTests
 
         var plugins = svc.GetPlugins();
 
-        var patch = Assert.Single(plugins, p => p.Copy.Name == "Patch.esp");
+        var patch = Assert.Single(plugins, p => p.Plugin.Name == "Patch.esp");
         var issue = Assert.Single(patch.MasterIssues);
         Assert.Equal("Ghost.esm", issue.MasterName);
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
@@ -652,12 +652,12 @@ public sealed class RecordQueryServiceTests
 
     // --- GET /plugins/{plugin}/record-types ---
 
-    private static readonly PluginCopyKey PluginKey = new(PluginName, "Data");
+    private static readonly PluginAddress PluginKey = new(PluginName, "Data");
 
     [Fact]
     public void GetPluginRecordTypes_ReturnsCountsForPlugin()
     {
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
         };
@@ -674,7 +674,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
     {
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] =
             [
@@ -694,7 +694,7 @@ public sealed class RecordQueryServiceTests
     {
         // The signature ("npc_") stays the key; DisplayName is additive, sourced
         // from the same xEdit-parity lookup SchemaReflector uses.
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
         };
@@ -710,7 +710,7 @@ public sealed class RecordQueryServiceTests
     {
         // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
         // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
-        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginCopyKey, IReadOnlyList<RecordTypeCount>>
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] =
             [
@@ -769,12 +769,12 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
-        var copy = Assert.Single(_svc.GetPlugins(), p => p.Copy.Name == PluginName).Copy.Key;
+        var address = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
         _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer) { copy };
+        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { address };
 
         var plugins = _svc.GetPlugins();
-        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        var plugin = Assert.Single(plugins, p => p.Plugin.Name == PluginName);
         Assert.True(plugin.HasMatchingRecords);
     }
 
@@ -784,10 +784,10 @@ public sealed class RecordQueryServiceTests
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
-        _reads.MatchingPlugins = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
+        _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         var plugins = _svc.GetPlugins();
-        var plugin = Assert.Single(plugins, p => p.Copy.Name == PluginName);
+        var plugin = Assert.Single(plugins, p => p.Plugin.Name == PluginName);
         Assert.False(plugin.HasMatchingRecords);
     }
 
@@ -799,7 +799,7 @@ public sealed class RecordQueryServiceTests
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
-        Assert.Equal(PluginName, plugin.Copy.Name);
+        Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
 }

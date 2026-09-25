@@ -50,7 +50,7 @@ public sealed class TrackedProjectionTests : IDisposable
         _mod.HandEdit(_index.RequireReads().DocumentOf(formKey, _mod.KeyOf()), $"\"{from}\"", $"\"{to}\"");
 
     [Fact]
-    public async Task ATrackedCopyReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
+    public async Task ATrackedPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
         // Dirty, so the head reconcile has baselines to write: a clean tree short-circuits it and
         // would leave the multi-advance case untested.

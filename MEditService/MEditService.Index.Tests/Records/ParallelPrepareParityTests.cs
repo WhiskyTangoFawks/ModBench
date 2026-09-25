@@ -32,7 +32,7 @@ public class ParallelPrepareParityTests
             }, origin: "ModA")
             .BuildScattered();
         var entry = fixture.Plugins.Single();
-        var key = new PluginCopyKey(entry.Name, entry.Origin);
+        var key = new PluginAddress(entry.Name, entry.Origin);
         using var index = Indexes.Reconciled(fixture);
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 

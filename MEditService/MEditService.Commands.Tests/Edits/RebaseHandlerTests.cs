@@ -46,13 +46,13 @@ public sealed class RebaseHandlerTests : IDisposable
         Assert.Null(TestEditService.ContinueRebaseHandler(_holder).ContinueRebase("NoSuchOrigin"));
     }
 
-    // The game's own Data directory is nobody's mod folder, so a copy loaded from it names no
+    // The game's own Data directory is nobody's mod folder, so a plugin loaded from it names no
     // repository to rebase.
     [Fact]
     public void RebaseEditBranch_DataDirectoryOrigin_IsNull()
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(_mod.LoadOrder.With(new RegisteredCopy(
+        holder.Apply(_mod.LoadOrder.With(new RegisteredPlugin(
             SourceEditFixture.PluginName, PluginOrigin.DataDirectory,
             Path.Combine(_mod.GameDirectory, SourceEditFixture.PluginName), Slot: 1, Enabled: true, Winning: true)));
 

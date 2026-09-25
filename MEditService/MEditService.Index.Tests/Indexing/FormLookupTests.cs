@@ -36,7 +36,7 @@ public class FormLookupTests
         Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
         Assert.Null(header.Value.EditorId);
         // One lookup per document, the header among them.
-        Assert.Equal(3, reads.GetDocuments(new PluginCopyKey("Lookup.esp", "Data")).Count);
+        Assert.Equal(3, reads.GetDocuments(new PluginAddress("Lookup.esp", "Data")).Count);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class FormLookupTests
             .WithPlugin("Reindex.esp", mod => npcFormKey = mod.Npcs.AddNew("TestNPC01").FormKey)
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginCopyKey("Reindex.esp", "Data");
+        var key = new PluginAddress("Reindex.esp", "Data");
         var reads = index.RequireReads();
         var before = reads.GetDocuments(key).Count;
 

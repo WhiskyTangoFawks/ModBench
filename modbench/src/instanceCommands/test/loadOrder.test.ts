@@ -70,7 +70,7 @@ describe('load order changed', () => {
     expect(loadOrderChanged(sender, '/instance', rebuilt)).toBe(false);
   });
 
-  it('has changed when a copy moved, though every name is the same', async () => {
+  it('has changed when a plugin moved, though every name is the same', async () => {
     const sender = createLoadOrderSender(attachedClient());
     await putLoadOrder(sender, '/instance', VALUE);
 
@@ -85,7 +85,7 @@ describe('load order changed', () => {
 });
 
 describe('refresh', () => {
-  // load-instance, refresh step 2: mEdit reads every copy again against the load order it holds.
+  // load-instance, refresh step 2: mEdit reads every plugin again against the load order it holds.
   it('rebuilds the index for the instance and sends nothing', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });

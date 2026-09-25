@@ -16,7 +16,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 {
     private const string Origin = "Unofficial Patch";
     private const string Plugin = "UFO4P.esp";
-    private static readonly PluginCopyKey Key = new(Plugin, Origin);
+    private static readonly PluginAddress Key = new(Plugin, Origin);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"medit-instances-{Guid.NewGuid():N}");
 

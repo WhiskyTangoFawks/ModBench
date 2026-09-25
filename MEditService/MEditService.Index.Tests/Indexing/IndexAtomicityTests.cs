@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// A plugin whose ingest throws partway lands no row at all: the copy is a failure on the status,
+// A plugin whose ingest throws partway lands no row at all: the plugin is a failure on the status,
 // and every read answers as if it were never indexed.
 public class IndexAtomicityTests
 {
@@ -25,7 +25,7 @@ public class IndexAtomicityTests
                 mod.Npcs.AddNew("AtomicNPC3");
             })
             .Build();
-        var key = new PluginCopyKey("Atomic.esp", "Data");
+        var key = new PluginAddress("Atomic.esp", "Data");
         using var index = Indexes.Reconciled(fixture, adapter: new ThrowingPartwayAdapter(afterRecords: 2));
         var reads = index.RequireReads();
 

@@ -39,19 +39,19 @@ public sealed class PutLoadOrderHandler
 
     // A sent entry naming a forced plugin is dropped, so one file never registers twice; what a
     // forced row is stays the kernel's.
-    private IReadOnlyList<RegisteredCopy> WithForcedFirst(
+    private IReadOnlyList<RegisteredPlugin> WithForcedFirst(
         string dataFolder, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
     {
         var names = _adapter.ImplicitPluginsIn(dataFolder, gameRelease);
         var forcedNames = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
-        var forced = names.Select((name, slot) => RegisteredCopy.Forced(dataFolder, name, slot)).ToList();
+        var forced = names.Select((name, slot) => RegisteredPlugin.Forced(dataFolder, name, slot)).ToList();
 
         return
         [
             .. forced,
             .. entries
                 .Where(e => !forcedNames.Contains(e.Name))
-                .Select(e => RegisteredCopy.Of(e, slotOffset: forced.Count)),
+                .Select(e => RegisteredPlugin.Of(e, slotOffset: forced.Count)),
         ];
     }
 }

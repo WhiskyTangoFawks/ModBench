@@ -21,8 +21,8 @@ public sealed class PartialFormCompareTests
     // agree.
     private const float OverrideOwnWaterHeight = 999f;
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginCopyKey BasePlugin = new("Base.esm", "Data");
-    private static readonly PluginCopyKey OverridePlugin = new("Partial.esp", "Data");
+    private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
+    private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
 
     private readonly FormKey _cellKey;
     private readonly FormKey _refKey;
@@ -48,17 +48,17 @@ public sealed class PartialFormCompareTests
             new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", ["WaterHeight"])),
             new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(refr, OverridePlugin, 1, isWinner: true, Release, "refr", [])),
         };
-        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 1),
             [OverridePlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),
         };
-        var copies = new[]
+        var plugins = new[]
         {
-            new RegisteredCopy("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
-            new RegisteredCopy("Partial.esp", "Data", "Partial.esp", 1, Enabled: true, Winning: true),
+            new RegisteredPlugin("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
+            new RegisteredPlugin("Partial.esp", "Data", "Partial.esp", 1, Enabled: true, Winning: true),
         };
-        var holder = FakeLoadOrder.Of(Release, copies);
+        var holder = FakeLoadOrder.Of(Release, plugins);
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 

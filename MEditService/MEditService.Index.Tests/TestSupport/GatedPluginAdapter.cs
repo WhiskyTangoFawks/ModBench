@@ -75,7 +75,7 @@ internal sealed class GatedPluginAdapter(
     private readonly Lock _gate = new();
     private bool _parkedOnce;
 
-    /// <summary>Every plugin whose documents the Index asked for, in order; a copy registered warm
+    /// <summary>Every plugin whose documents the Index asked for, in order; a plugin registered warm
     /// is absent.</summary>
     public List<string> Opened { get; } = [];
 

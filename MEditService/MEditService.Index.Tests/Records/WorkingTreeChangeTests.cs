@@ -15,7 +15,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
-    private readonly PluginCopyKey _baseKey;
+    private readonly PluginAddress _baseKey;
     private readonly string _formKey;
 
     public WorkingTreeChangeTests()

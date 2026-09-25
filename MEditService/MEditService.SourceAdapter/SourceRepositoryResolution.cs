@@ -47,7 +47,7 @@ public sealed partial class SourceRepository
 
     /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
     /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
-    public HoldingUnit? UnitHolding(PluginCopyKey plugin, RecordIdentity identity) =>
+    public HoldingUnit? UnitHolding(PluginAddress plugin, RecordIdentity identity) =>
         Locate(plugin, identity) is { } unit
             ? new HoldingUnit(
                 unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
@@ -56,15 +56,15 @@ public sealed partial class SourceRepository
 
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
     /// record's. The one place an identity becomes a path, which is why it stays here.</summary>
-    internal SourceUnit? Locate(PluginCopyKey plugin, RecordIdentity identity) => Resolve(plugin, identity, byText: true);
+    internal SourceUnit? Locate(PluginAddress plugin, RecordIdentity identity) => Resolve(plugin, identity, byText: true);
 
     /// <summary><see cref="Locate"/> for a write: a document found by its
     /// text earlier in this operation still answers, and no other document is read, so a record no
     /// document holds is placed from its identity alone.</summary>
-    internal SourceUnit? LocateToPlace(PluginCopyKey plugin, RecordIdentity identity) =>
+    internal SourceUnit? LocateToPlace(PluginAddress plugin, RecordIdentity identity) =>
         Resolve(plugin, identity, byText: false);
 
-    private SourceUnit? Resolve(PluginCopyKey plugin, RecordIdentity identity, bool byText)
+    private SourceUnit? Resolve(PluginAddress plugin, RecordIdentity identity, bool byText)
     {
         if (identity.RecordType == PluginHeader.RecordType)
         {
@@ -99,7 +99,7 @@ public sealed partial class SourceRepository
     /// <summary>Which record the tree holds at <paramref name="formKey"/> — one with a document of
     /// its own, an embedded child, or the header — or null when nothing carries it.</summary>
     public RecordIdentity? IdentityOf(
-        PluginCopyKey plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         // A malformed FormKey is a caller's raw input, not a broken tree: it names nothing and throws
         // nothing.
@@ -135,7 +135,7 @@ public sealed partial class SourceRepository
 
     /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
     /// and whose text is not one; null when the tree names no such document.</summary>
-    public string? UnreadableDocumentFor(PluginCopyKey plugin, string formKey)
+    public string? UnreadableDocumentFor(PluginAddress plugin, string formKey)
     {
         if (!FormKey.TryFactory(formKey, out var parsed)) return null;
         var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
@@ -222,7 +222,7 @@ public sealed partial class SourceRepository
         return identified;
     }
 
-    private string? ComputedFlatPath(PluginCopyKey plugin, RecordIdentity identity)
+    private string? ComputedFlatPath(PluginAddress plugin, RecordIdentity identity)
     {
         try
         {
@@ -281,19 +281,19 @@ public sealed partial class SourceRepository
     /// <summary>True when another record's document in this plugin's tree carries
     /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
     /// needs no name and will not pay the codec read one costs.</summary>
-    internal bool CarriesEmbedded(PluginCopyKey plugin, string formKey) =>
+    internal bool CarriesEmbedded(PluginAddress plugin, string formKey) =>
         ScanOf(Path.Combine(_modFolder, RootFor(plugin.Name)))
             .DocumentHolding(formKey) is not null;
 
     /// <summary>True when this plugin's tree holds <paramref name="formKey"/> at the working tree or
     /// at HEAD. Both, because a working-tree deletion does not free the ID until the next
     /// compile.</summary>
-    public bool HoldsAtEitherRef(PluginCopyKey plugin, string formKey) =>
+    public bool HoldsAtEitherRef(PluginAddress plugin, string formKey) =>
         HoldsNow(plugin, formKey) || HoldsAtRef(plugin, formKey, "HEAD");
 
     // Its own document is found as Locate finds it and has to declare the key; otherwise another
     // record's document carries it inline, which the tree scan answers.
-    private bool HoldsNow(PluginCopyKey plugin, string formKey)
+    private bool HoldsNow(PluginAddress plugin, string formKey)
     {
         if (!FormKey.TryFactory(formKey, out var parsed)) return false;
         var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
@@ -318,7 +318,7 @@ public sealed partial class SourceRepository
 
     // The committed set, read the same way the allocator reads it: a document's own FormKey, plus
     // every child inlined in it.
-    private bool HoldsAtRef(PluginCopyKey plugin, string formKey, string gitRef) =>
+    private bool HoldsAtRef(PluginAddress plugin, string formKey, string gitRef) =>
         ReadAll(plugin, gitRef).Any(document =>
             document.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)
             || FormKeysIn(System.Text.Encoding.UTF8.GetBytes(document.Body))
@@ -327,7 +327,7 @@ public sealed partial class SourceRepository
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. The block levels are directories, which is why only the repository reads them back
     /// (ADR-0014 invariant 5).</summary>
-    public CellPlacement? CellPlacementOf(PluginCopyKey plugin, RecordIdentity identity)
+    public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
 

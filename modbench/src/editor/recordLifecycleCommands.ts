@@ -60,8 +60,8 @@ function makeResolveOriginOrReport(
   };
 }
 
-// The plugin and its origin as well as the record: the same FormKey can sit in two copies of one
-// plugin (ADR-0012), and the question must say which.
+// The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
+// share a filename (ADR-0012), and the question must say which.
 function recordLabel(record: RecordIdentity): string {
   const named = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
   const where = record.origin ? `${record.plugin} (${record.origin})` : record.plugin;

@@ -40,15 +40,15 @@ public sealed class ProgressiveIndexingTests
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
         // fully queryable — not published only after the whole load order has been indexed and swept.
         var reads = manager.RequireReads();
-        Assert.Equal(1, reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, reads.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, reads.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(0, reads.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await load;
 
         var readsAfterLoad = manager.RequireReads();
-        Assert.Equal(1, readsAfterLoad.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, readsAfterLoad.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class ProgressiveIndexingTests
         // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
         // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
         var reads = manager.RequireReads();
-        var opened = reads.OpenedCopies;
+        var opened = reads.OpenedPlugins;
         using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
 
@@ -255,14 +255,14 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(manager.Status.ConflictsComputed);
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
-    public async Task ANewCopyInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
+    public async Task ANewPluginInASnapshotArrivingMidReconcile_IsIndexed_AndTheParkedWorkSurvives()
     {
         var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("sm-progressive-arriving-copy")
+        using var fx = new PluginFixtureBuilder("sm-progressive-arriving-plugin")
             .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
@@ -278,18 +278,18 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
         var readsWhileParked = manager.RequireReads();
 
-        // ADR-0007: a create registers its copy on the holder before the Index hears of it, so the
-        // arriving snapshot names a copy the parked reconcile never knew about.
+        // ADR-0007: a create registers its plugin on the holder before the Index hears of it, so the
+        // arriving snapshot names a plugin the parked reconcile never knew about.
         var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
-        // The five-copy snapshot reaches the holder before the gate opens, so the second reconcile
+        // The five-plugin snapshot reaches the holder before the gate opens, so the second reconcile
         // is genuinely mid-flight rather than a sequential third act the release let through.
         Assert.True(
-            await Waits.Until(() => holder.Current.Copies.Count == 5),
+            await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
-        // Caught in flight: the holder already names five copies while the parked Index still
+        // Caught in flight: the holder already names five plugins while the parked Index still
         // answers for four, which is the instant this test exists to cover.
         Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
-        Assert.Equal(0, readsWhileParked.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(0, readsWhileParked.CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         // Superseded or run to completion: once the gate opens, either ordering is the Indexer's
@@ -303,11 +303,11 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(
             ["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
             manager.Status.IndexedPlugins.Select(p => p.Name));
-        // Opened once each across both reconciles: the arriving snapshot adds a copy to the scope
+        // Opened once each across both reconciles: the arriving snapshot adds a plugin to the scope
         // rather than restarting it.
         Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
-        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -324,7 +324,7 @@ public sealed class ProgressiveIndexingTests
 
         // A load holding the load order lock end to end returns nothing at all until the whole load order
         // is indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
-        var read = Task.Run(() => manager.RequireReads().CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        var read = Task.Run(() => manager.RequireReads().CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(read, finished); // timed out = a read is blocked behind the load again

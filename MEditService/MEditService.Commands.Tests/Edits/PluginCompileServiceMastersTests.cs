@@ -24,7 +24,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _plugin = new(PluginName, "MastersMod");
+    private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
     private readonly FormKey _charlieKeyword;
@@ -72,7 +72,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
                 new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),
@@ -139,7 +139,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
     }
 
-    // The Index answered this from its global lookup; the link cache answers it from the copy the
+    // The Index answered this from its global lookup; the link cache answers it from the plugin the
     // load order loads, so what the author sees in the Problems panel is unchanged.
     [Fact]
     public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()

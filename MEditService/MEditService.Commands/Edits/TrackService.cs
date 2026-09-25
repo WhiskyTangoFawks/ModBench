@@ -23,16 +23,16 @@ public sealed class TrackService(
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a copy whose file
+    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a plugin whose file
     // cannot be read has no bytes to deep-parse, so Track refuses that plugin and goes on with the
     // rest.
-    private bool Readable(RegisteredCopy copy) => adapter.CanRead(copy);
+    private bool Readable(RegisteredPlugin plugin) => adapter.CanRead(plugin);
 
     /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
     /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
     public async Task<TrackSelectionResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
-        IReadOnlyList<PluginCopyKey> plugins,
+        IReadOnlyList<PluginAddress> plugins,
         SourcePreset preset,
         CancellationToken cancel = default)
     {
@@ -45,7 +45,7 @@ public sealed class TrackService(
             return TrackSelectionResult.WholeSelectionRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
 
-        var selection = plugins.Distinct(PluginCopyKey.Comparer).ToList();
+        var selection = plugins.Distinct(PluginAddress.Comparer).ToList();
         var refused = new List<TrackRefused>();
         var verified = new List<VerifiedPlugin>();
         try
@@ -63,7 +63,7 @@ public sealed class TrackService(
             }
 
             SetProgress(verified.FirstOrDefault()?.Plugin.Origin, TrackPhase.Committing, selection.Count, selection.Count);
-            var landed = new List<PluginCopyKey>();
+            var landed = new List<PluginAddress>();
             foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
                 Commit(mod.Key, preset, [.. mod], landed, refused);
 
@@ -76,18 +76,18 @@ public sealed class TrackService(
             SetProgress(null, TrackPhase.Idle, 0, 0);
         }
 
-        List<T> InSelectionOrder<T>(IEnumerable<T> items, Func<T, PluginCopyKey> keyOf) =>
-            [.. items.OrderBy(item => selection.FindIndex(p => PluginCopyKey.Comparer.Equals(p, keyOf(item))))];
+        List<T> InSelectionOrder<T>(IEnumerable<T> items, Func<T, PluginAddress> keyOf) =>
+            [.. items.OrderBy(item => selection.FindIndex(p => PluginAddress.Comparer.Equals(p, keyOf(item))))];
     }
 
-    private sealed record VerifiedPlugin(PluginCopyKey Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, string BinarySha256);
+    private sealed record VerifiedPlugin(PluginAddress Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, string BinarySha256);
 
     private sealed record Verification(VerifiedPlugin? Verified, TrackRefused? Refused);
 
     // One repository per mod folder: the plugins that passed their gate, committed one at a time.
     private void Commit(
         string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
-        List<PluginCopyKey> landed, List<TrackRefused> refused)
+        List<PluginAddress> landed, List<TrackRefused> refused)
     {
         var meta = SourceRepository.MetaFactsIn(modFolder);
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
@@ -132,11 +132,11 @@ public sealed class TrackService(
 
     // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006 decision 2).
     private async Task<Verification> VerifyAsync(
-        LoadOrderSnapshot loadOrder, PluginCopyKey key, Action onParsed, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginAddress key, Action onParsed, CancellationToken cancel)
     {
         Verification Refuse(TrackRefusal refusal, string message) => new(null, new TrackRefused(key, refusal, message));
 
-        if (loadOrder.Copy(key) is not { } plugin)
+        if (loadOrder.Plugin(key) is not { } plugin)
         {
             return Refuse(TrackRefusal.PluginNotLoaded,
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");

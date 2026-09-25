@@ -15,8 +15,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
-    private readonly PluginCopyKey _baseKey;
-    private readonly PluginCopyKey _winnerKey;
+    private readonly PluginAddress _baseKey;
+    private readonly PluginAddress _winnerKey;
     private readonly string _keptNpc;
     private readonly string _droppedNpc;
 

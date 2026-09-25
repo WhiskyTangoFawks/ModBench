@@ -11,7 +11,7 @@ public sealed class IndexedBinaryWatchTests
 {
     private const string Origin = "Untracked";
     private const string PluginName = "Mirrored.esp";
-    private static readonly PluginCopyKey Copy = new(PluginName, Origin);
+    private static readonly PluginAddress Address = new(PluginName, Origin);
 
     // Untracked, so the load order arms the indexed-binary route for it, and seeded as a prior
     // reconcile would have left it: already indexed at the bytes on disk now.
@@ -20,7 +20,7 @@ public sealed class IndexedBinaryWatchTests
         var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName, "original"u8.ToArray());
         var pluginPath = WatchedTree.PluginPath(modFolder, PluginName);
-        if (seeded) tree.Index.SeedIndexed(Copy, WatchedTree.ContentHashOf(pluginPath));
+        if (seeded) tree.Index.SeedIndexed(Address, WatchedTree.ContentHashOf(pluginPath));
         await tree.ApplyLoadOrder();
         return (tree, pluginPath);
     }
@@ -35,7 +35,7 @@ public sealed class IndexedBinaryWatchTests
 
         tree.AdvancePastBothWindows();
 
-        Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
+        Assert.Equal(Address, Assert.Single(tree.Index.Of("reindex")).Plugin);
         Assert.Empty(tree.Index.Of("unindex"));
     }
 
@@ -51,11 +51,11 @@ public sealed class IndexedBinaryWatchTests
 
         tree.AdvancePastBothWindows();
 
-        Assert.Equal((Copy, pluginPath), Assert.Single(tree.Index.BinaryPokes));
+        Assert.Equal((Address, pluginPath), Assert.Single(tree.Index.BinaryPokes));
         Assert.Empty(tree.Notifications.Published);
     }
 
-    // A deletion is its own verb: the Index must forget the copy, not re-read a file that is gone.
+    // A deletion is its own verb: the Index must forget the plugin, not re-read a file that is gone.
     [Fact]
     public async Task AnIndexedBinaryThatIsDeleted_IsUnindexed()
     {
@@ -67,11 +67,11 @@ public sealed class IndexedBinaryWatchTests
 
         tree.AdvancePastBothWindows();
 
-        Assert.Equal(Copy, Assert.Single(tree.Index.Of("unindex")).Plugin);
+        Assert.Equal(Address, Assert.Single(tree.Index.Of("unindex")).Plugin);
         Assert.Empty(tree.Index.Of("reindex"));
     }
 
-    // A reinstall or a file verify puts the copy back, and the watch follows the disk both ways.
+    // A reinstall or a file verify puts the plugin back, and the watch follows the disk both ways.
     [Fact]
     public async Task AnIndexedBinaryThatComesBack_IsReindexed()
     {
@@ -88,10 +88,10 @@ public sealed class IndexedBinaryWatchTests
         Assert.Equal(["unindex", "reindex"], tree.Index.Projections.Select(p => p.Verb));
     }
 
-    // ADR-0003: a copy the Index has never indexed is armed all the same, so its first change
+    // ADR-0003: a plugin the Index has never indexed is armed all the same, so its first change
     // reaches the Index with no reconcile in between.
     [Fact]
-    public async Task ACopyTheIndexHasNeverIndexed_IsArmedAnyway()
+    public async Task APluginTheIndexHasNeverIndexed_IsArmedAnyway()
     {
         var (tree, pluginPath) = await Watching(seeded: false);
         using var _ = tree;
@@ -100,22 +100,22 @@ public sealed class IndexedBinaryWatchTests
 
         tree.AdvancePastBothWindows();
 
-        Assert.Equal(Copy, Assert.Single(tree.Index.Of("reindex")).Plugin);
+        Assert.Equal(Address, Assert.Single(tree.Index.Of("reindex")).Plugin);
     }
 
-    // The copy beside it keeps the folder watched, so the dropped copy's own write is observed and
-    // settles all the same.
+    // The plugin beside it keeps the folder watched, so the dropped plugin's own write is observed
+    // and settles all the same.
     [Fact]
-    public async Task ACopyTheLoadOrderHasDropped_StopsReachingTheIndex()
+    public async Task APluginTheLoadOrderHasDropped_StopsReachingTheIndex()
     {
         using var tree = new WatchedTree();
         var modFolder = tree.AddMod(Origin, PluginName, "original"u8.ToArray());
-        tree.AddCopy(Origin, modFolder, "Kept.esp", "kept"u8.ToArray());
+        tree.AddPlugin(Origin, modFolder, "Kept.esp", "kept"u8.ToArray());
         var pluginPath = WatchedTree.PluginPath(modFolder, PluginName);
-        tree.Index.SeedIndexed(Copy, WatchedTree.ContentHashOf(pluginPath));
+        tree.Index.SeedIndexed(Address, WatchedTree.ContentHashOf(pluginPath));
         await tree.ApplyLoadOrder();
 
-        tree.RemoveCopy(PluginName);
+        tree.RemovePlugin(PluginName);
         await tree.ApplyLoadOrder();
 
         await tree.Observes(() => tree.WriteFile(pluginPath, "dropped-then-changed"u8.ToArray()));
@@ -142,11 +142,11 @@ public sealed class IndexedBinaryWatchTests
         tree.AdvancePastBothWindows();
 
         Assert.Equal(2, tree.Index.Of("reindex").Count);
-        Assert.All(tree.Index.Of("reindex"), r => Assert.Equal(Copy, r.Plugin));
+        Assert.All(tree.Index.Of("reindex"), r => Assert.Equal(Address, r.Plugin));
     }
 
-    // A tracked copy's rows come from its source tree, so re-reading the binary would overwrite the
-    // working tree with the compiled artifact: it is a question for the user, never a re-index.
+    // A tracked plugin's rows come from its source tree, so re-reading the binary would overwrite
+    // the working tree with the compiled artifact: it is a question for the user, never a re-index.
     [Fact]
     public async Task ATrackedPluginWhoseBinaryChanges_IsNeverSilentlyReindexed()
     {

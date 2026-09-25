@@ -19,7 +19,7 @@ internal sealed class SourceModFixture : IDisposable
 
     public string ModFolder { get; }
     internal string GameDirectory { get; }
-    internal PluginCopyKey Plugin { get; }
+    internal PluginAddress Plugin { get; }
     internal LoadOrderSnapshot LoadOrder { get; }
     internal EditRecordHandler EditHandler { get; }
     internal DeleteRecordHandler DeleteHandler { get; }
@@ -27,7 +27,7 @@ internal sealed class SourceModFixture : IDisposable
     private SourceModFixture(string pluginName, string origin, Action<Fallout4Mod> build)
     {
         var holder = new LoadOrderHolder();
-        Plugin = new PluginCopyKey(pluginName, origin);
+        Plugin = new PluginAddress(pluginName, origin);
         _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
         var tracked = origin != PluginOrigin.DataDirectory;
@@ -44,7 +44,7 @@ internal sealed class SourceModFixture : IDisposable
 
         LoadOrder = new LoadOrderSnapshot(
             GameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]));
+            SnapshotPlugins.Of([new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]));
 
         if (tracked)
         {
@@ -62,7 +62,7 @@ internal sealed class SourceModFixture : IDisposable
         new(pluginName, origin, build);
 
     /// <summary>A master in the game's Data folder holding one NPC: registered and loaded, with no
-    /// mod folder at all, which is a different refusal from an untracked copy.</summary>
+    /// mod folder at all, which is a different refusal from an untracked plugin.</summary>
     internal static SourceModFixture VanillaMaster(out FormKey npc)
     {
         var formKey = FormKey.Null;

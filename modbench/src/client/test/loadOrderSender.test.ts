@@ -67,7 +67,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
     expect(sentNames(client)).toEqual(['A.esp']);
   });
 
-  it('passes the snapshot whole — copies, game directory, instance root and release', async () => {
+  it('passes the snapshot whole — plugins, game directory, instance root and release', async () => {
     const client = attached();
     const sender = createLoadOrderSender(client);
 

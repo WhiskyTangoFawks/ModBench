@@ -231,7 +231,7 @@ public sealed class LoadOrderChangeSettleTests
         WatchedTree.Track(keptFolder, "Kept.esp");
         await tree.ApplyLoadOrder();
 
-        tree.RemoveCopy(PluginName);
+        tree.RemovePlugin(PluginName);
         await tree.ApplyLoadOrder();
 
         // The reconcile this load order recorded comes after its re-arm, so the folder's watch is

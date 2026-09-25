@@ -12,18 +12,18 @@ namespace MEditService.Queries.Tests.Query;
 // public door: classification is Queries' own internal.
 public class MasterResolutionTests
 {
-    private static (PluginCopyKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
-        (new PluginCopyKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
+    private static (PluginAddress Key, PluginContent Content) Plugin(string name, params string[] masters) =>
+        (new PluginAddress(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
 
     private static IReadOnlyList<PluginRow> GetPlugins(
-        (PluginCopyKey Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
+        (PluginAddress Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
         params PluginLoadFailure[] failures)
     {
-        var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer);
-        var copies = plugins
-            .Select((p, slot) => new RegisteredCopy(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
+        var opened = plugins.ToDictionary(p => p.Key, p => p.Content, PluginAddress.Comparer);
+        var registered = plugins
+            .Select((p, slot) => new RegisteredPlugin(p.Key.Name, p.Key.Origin, p.Key.Name, slot, Enabled: true, Winning: true))
             .ToList();
-        var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. copies]);
+        var holder = FakeLoadOrder.Of(GameRelease.Fallout4, [.. registered]);
         var status = new LoadOrderStatus(state, plugins.Length, [], ConflictsComputed: state == LoadOrderState.Ready, failures);
         var svc = new RecordQueryService(
             new FakeIndex(new FakeReads(opened, []), status), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -32,10 +32,10 @@ public class MasterResolutionTests
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
-        (PluginCopyKey Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
+        (PluginAddress Key, PluginContent Content)[] plugins, params PluginLoadFailure[] failures) =>
         GetPlugins(plugins, LoadOrderState.Ready, failures)
             .Where(row => row.MasterIssues.Count > 0)
-            .ToDictionary(row => row.Copy.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(row => row.Plugin.Name, row => row.MasterIssues, StringComparer.OrdinalIgnoreCase);
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()
@@ -47,19 +47,19 @@ public class MasterResolutionTests
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — each copy answers for its own masters.
+    // ADR-0012 invariant 1: a filename is not an identity — each plugin answers for its own masters.
     [Fact]
-    public void GetPlugins_TwoCopiesOfOneName_EachCarriesItsOwnMasterIssues()
+    public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
     {
-        var missingAMaster = (new PluginCopyKey("Patch.esp", "WinningMod"),
+        var missingAMaster = (new PluginAddress("Patch.esp", "WinningMod"),
             new PluginContent(IsLight: false, IsMaster: false, ["Ghost.esm"], RecordCount: 0));
-        var complete = (new PluginCopyKey("Patch.esp", "LosingMod"),
+        var complete = (new PluginAddress("Patch.esp", "LosingMod"),
             new PluginContent(IsLight: false, IsMaster: false, [], RecordCount: 0));
 
         var rows = GetPlugins([missingAMaster, complete]);
 
-        Assert.Equal("Ghost.esm", Assert.Single(rows.Single(r => r.Copy.Origin == "WinningMod").MasterIssues).MasterName);
-        Assert.Empty(rows.Single(r => r.Copy.Origin == "LosingMod").MasterIssues);
+        Assert.Equal("Ghost.esm", Assert.Single(rows.Single(r => r.Plugin.Origin == "WinningMod").MasterIssues).MasterName);
+        Assert.Empty(rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class MasterResolutionTests
     {
         var midLoad = GetPlugins([Plugin("A.esp", "Later.esm")], LoadOrderState.Reconciling);
 
-        var a = Assert.Single(midLoad, p => p.Copy.Name == "A.esp");
+        var a = Assert.Single(midLoad, p => p.Plugin.Name == "A.esp");
         Assert.Empty(a.MasterIssues);
     }
 }

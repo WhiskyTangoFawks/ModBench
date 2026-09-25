@@ -89,7 +89,7 @@ public sealed class ParseFailedRecordTests
 
         Assert.Equal([ColumnKey.Of(Fixture, Origin)], flagged.Order(StringComparer.Ordinal));
         // The stub masters really are indexed beside it, so "only" has something to exclude.
-        Assert.True(scratch.Reads.OpenedCopies.Count > 1);
+        Assert.True(scratch.Reads.OpenedPlugins.Count > 1);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class ParseFailedRecordTests
 
         public Indexer Index { get; }
         public IRecordReads Reads => Index.Projected();
-        public PluginCopyKey Plugin { get; }
+        public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 
         public Scratch(string fixtureFileName, bool corruptWholeFile = false)
@@ -216,7 +216,7 @@ public sealed class ParseFailedRecordTests
 
         public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false)
         {
-            Plugin = new PluginCopyKey(fixtureFileName, Origin);
+            Plugin = new PluginAddress(fixtureFileName, Origin);
             var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
             File.Copy(sourcePath, pluginPath);
 

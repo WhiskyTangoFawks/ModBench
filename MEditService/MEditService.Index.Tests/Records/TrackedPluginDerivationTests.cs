@@ -6,10 +6,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Which truth a copy's rows came from changes under the Index (ADR-0007 invariant 3), so
-/// tracked-ness moves with it: an indexed copy gains a repository, a tracked copy loses one
+/// <summary>Which truth a plugin's rows came from changes under the Index (ADR-0007 invariant 3), so
+/// tracked-ness moves with it: an indexed plugin gains a repository, a tracked plugin loses one
 /// (ADR-0003).</summary>
-public sealed class TrackedCopyDerivationTests : IDisposable
+public sealed class TrackedPluginDerivationTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -20,10 +20,10 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     private readonly LoadOrderEntry _mod;
     private readonly string _npc;
 
-    public TrackedCopyDerivationTests()
+    public TrackedPluginDerivationTests()
     {
         FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("tracked-copy-derivation")
+        _fixture = new PluginFixtureBuilder("tracked-plugin-derivation")
             .WithPlugin(PluginName, mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: Origin)
             .BuildScattered();
         _mod = _fixture.Plugins.Single();
@@ -41,12 +41,12 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     private void Reconcile() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsTracked() => _index.RequireReads().GetTrackedCopies().Contains(_mod.KeyOf());
+    private bool ReadsAsTracked() => _index.RequireReads().GetTrackedPlugins().Contains(_mod.KeyOf());
 
     // Track's documents carry the bytes the binary already gave, so the settled Source batch below
-    // moves no row: what it moves is which truth answers for the copy.
+    // moves no row: what it moves is which truth answers for the plugin.
     [Fact]
-    public void ACopyTrackedAfterItWasIndexed_ReadsAsTracked_OnceASourceRefreshLands()
+    public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_OnceASourceRefreshLands()
     {
         Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
@@ -57,7 +57,7 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     }
 
     [Fact]
-    public void ACopyTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextValidate()
+    public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextValidate()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
@@ -67,9 +67,9 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     }
 
     // The snapshot is the one it already holds: nothing in the load order moved, only which truth
-    // the copy's folder offers.
+    // the plugin's folder offers.
     [Fact]
-    public void ACopyTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextSnapshot()
+    public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextSnapshot()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
@@ -79,7 +79,7 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     }
 
     [Fact]
-    public void ATrackedCopyWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextSnapshot()
+    public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextSnapshot()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
         _index.ValidateIndex(_mod.KeyOf());
@@ -92,7 +92,7 @@ public sealed class TrackedCopyDerivationTests : IDisposable
     }
 
     [Fact]
-    public void ATrackedCopyWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextValidate()
+    public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextValidate()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
         _index.ValidateIndex(_mod.KeyOf());

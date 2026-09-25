@@ -14,7 +14,7 @@ namespace MEditService.Index.Tests.Indexing;
 // exercised on both null and non-null columns.
 public class PlacementIndexingTests
 {
-    private static readonly PluginCopyKey Key = new("TestWorld.esp", "Data");
+    private static readonly PluginAddress Key = new("TestWorld.esp", "Data");
 
     private sealed class Built : IDisposable
     {
@@ -127,7 +127,7 @@ public class PlacementIndexingTests
     {
         using var fixture = OneWorldspaceCell("placement-overlay", "OverlayWorld.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginCopyKey("OverlayWorld.esp", "Data");
+        var key = new PluginAddress("OverlayWorld.esp", "Data");
         var reads = index.RequireReads();
 
         var placement = reads.GetPlacement(placed.ToString(), key);
@@ -148,7 +148,7 @@ public class PlacementIndexingTests
     {
         using var fixture = OneWorldspaceCell("placement-reindex", "ReindexPlacement.esp", out var cell, out var placed, out var wrld);
         using var index = Indexes.Reconciled(fixture);
-        var key = new PluginCopyKey("ReindexPlacement.esp", "Data");
+        var key = new PluginAddress("ReindexPlacement.esp", "Data");
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
         Assert.True(await index.RefreshBinary(key, fixture.Plugins.Single().Path));
@@ -319,9 +319,9 @@ public class PlacementIndexingTests
         var reads = index.RequireReads();
 
         var formKey = barrel.ToString();
-        Assert.NotNull(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModA")));
-        Assert.NotNull(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModB")));
-        Assert.Null(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModC")));
+        Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModA")));
+        Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModB")));
+        Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModC")));
     }
 
     // ADR-0012: one plugin held twice under the same filename at two real origins. A worldspace tree
@@ -374,9 +374,9 @@ public class PlacementIndexingTests
         }
     }
 
-    private static readonly PluginCopyKey SharedA = new("SharedWorld.esp", "ModA");
-    private static readonly PluginCopyKey SharedB = new("SharedWorld.esp", "ModB");
-    private static readonly PluginCopyKey SharedC = new("SharedWorld.esp", "ModC");
+    private static readonly PluginAddress SharedA = new("SharedWorld.esp", "ModA");
+    private static readonly PluginAddress SharedB = new("SharedWorld.esp", "ModB");
+    private static readonly PluginAddress SharedC = new("SharedWorld.esp", "ModC");
 
     [Fact]
     public void GetWorldspaceCells_SameFilenameDifferentOrigin_ScopesToOrigin()
@@ -451,7 +451,7 @@ public class PlacementIndexingTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
-        var plugin = new PluginCopyKey("DupCells.esp", "Data");
+        var plugin = new PluginAddress("DupCells.esp", "Data");
 
         var full = reads.GetInteriorCells(plugin, 100, 0);
         Assert.Equal(total, full.Total);

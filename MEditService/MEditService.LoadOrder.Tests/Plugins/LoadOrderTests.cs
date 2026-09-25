@@ -10,78 +10,78 @@ public sealed class LoadOrderTests
     private const string Data = @"C:\Games\Fallout4\Data";
     private const string Instance = @"C:\MO2\Fallout4";
 
-    private static RegisteredCopy Copy(
+    private static RegisteredPlugin Registered(
         string name, string origin, int? slot, bool enabled = true, bool winning = true) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), slot, enabled, winning);
 
-    private static LoadOrderSnapshot Order(params RegisteredCopy[] copies) =>
-        new(Data, Instance, GameRelease.Fallout4, copies);
+    private static LoadOrderSnapshot Order(params RegisteredPlugin[] plugins) =>
+        new(Data, Instance, GameRelease.Fallout4, plugins);
 
     [Fact]
-    public void DisabledCopy_DoesNotParticipate_AndIsStillRegistered()
+    public void DisabledPlugin_DoesNotParticipate_AndIsStillRegistered()
     {
-        var order = Order(Copy("A.esp", "ModA", slot: 0, enabled: false));
+        var order = Order(Registered("A.esp", "ModA", slot: 0, enabled: false));
 
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "ModA")));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "ModA")));
         Assert.Empty(order.Participating);
-        Assert.Equal(new Registration(0, Enabled: false, Winning: true), order.Registration(new PluginCopyKey("A.esp", "ModA")));
+        Assert.Equal(new Registration(0, Enabled: false, Winning: true), order.Registration(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]
-    public void CopyThatLostTheOverrideOrder_DoesNotParticipate_AndWinningCopyNamesTheOther()
+    public void OverriddenPlugin_DoesNotParticipate_AndWinningPluginNamesTheOther()
     {
-        var winner = Copy("A.esp", "HighPriorityMod", slot: 0);
-        var loser = Copy("A.esp", "LowPriorityMod", slot: 0, winning: false);
-        // The loser first, so snapshot order cannot stand in for the override order.
-        var order = Order(loser, winner);
+        var winner = Registered("A.esp", "HighPriorityMod", slot: 0);
+        var overridden = Registered("A.esp", "LowPriorityMod", slot: 0, winning: false);
+        // The overridden plugin first, so snapshot order cannot stand in for the override order.
+        var order = Order(overridden, winner);
 
-        Assert.False(order.Participates(loser.Key));
+        Assert.False(order.Participates(overridden.Key));
         Assert.True(order.Participates(winner.Key));
-        Assert.Equal(winner, order.WinningCopy("A.esp"));
+        Assert.Equal(winner, order.WinningPlugin("A.esp"));
         Assert.Equal([winner], order.Participating);
     }
 
     [Fact]
-    public void CopyWithNoPluginsTxtLine_DoesNotParticipate()
+    public void PluginWithNoPluginsTxtLine_DoesNotParticipate()
     {
-        var unlisted = Copy("Unlisted.esp", "ModU", slot: null);
-        var order = Order(unlisted, Copy("Listed.esp", "ModL", slot: 0));
+        var unlisted = Registered("Unlisted.esp", "ModU", slot: null);
+        var order = Order(unlisted, Registered("Listed.esp", "ModL", slot: 0));
 
         Assert.False(order.Participates(unlisted.Key));
-        Assert.Equal(unlisted, order.WinningCopy("Unlisted.esp"));
+        Assert.Equal(unlisted, order.WinningPlugin("Unlisted.esp"));
         Assert.Equal(["Listed.esp"], order.Participating.Select(c => c.Name));
     }
 
     [Fact]
     public void Participating_IsInSlotOrder_NotSnapshotOrder()
     {
-        var third = Copy("C.esp", "ModC", slot: 2);
-        var first = Copy("A.esp", "ModA", slot: 0);
-        var second = Copy("B.esp", "ModB", slot: 1);
+        var third = Registered("C.esp", "ModC", slot: 2);
+        var first = Registered("A.esp", "ModA", slot: 0);
+        var second = Registered("B.esp", "ModB", slot: 1);
 
         Assert.Equal([first, second, third], Order(third, first, second).Participating);
     }
 
     [Fact]
-    public void EmptySnapshot_YieldsNoParticipants_AndKnowsNoCopy()
+    public void EmptySnapshot_YieldsNoParticipants_AndKnowsNoPlugin()
     {
         var order = Order();
 
         Assert.Empty(order.Participating);
-        Assert.Null(order.WinningCopy("A.esp"));
-        Assert.Null(order.Registration(new PluginCopyKey("A.esp", "ModA")));
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "ModA")));
+        Assert.Null(order.WinningPlugin("A.esp"));
+        Assert.Null(order.Registration(new PluginAddress("A.esp", "ModA")));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "ModA")));
     }
 
     [Fact]
     public void ApplyingTheSameSnapshotTwice_KeepsTheValueHeld()
     {
         var holder = new LoadOrderHolder();
-        var copies = () => new[] { Copy("A.esp", "ModA", slot: 0), Copy("B.esp", "ModB", slot: 1, winning: false) };
+        var plugins = () => new[] { Registered("A.esp", "ModA", slot: 0), Registered("B.esp", "ModB", slot: 1, winning: false) };
 
-        holder.Apply(Order(copies()));
+        holder.Apply(Order(plugins()));
         var first = holder.Current;
-        holder.Apply(Order(copies()));
+        holder.Apply(Order(plugins()));
 
         Assert.Same(first, holder.Current);
     }
@@ -92,57 +92,57 @@ public sealed class LoadOrderTests
         var holder = new LoadOrderHolder();
         Assert.Equal(LoadOrderSnapshot.Empty, holder.Current);
 
-        holder.Apply(Order(Copy("A.esp", "ModA", slot: 0)));
+        holder.Apply(Order(Registered("A.esp", "ModA", slot: 0)));
         Assert.Equal(["A.esp"], holder.Current.Participating.Select(c => c.Name));
 
-        holder.Apply(Order(Copy("A.esp", "ModA", slot: 0, enabled: false)));
+        holder.Apply(Order(Registered("A.esp", "ModA", slot: 0, enabled: false)));
         Assert.Empty(holder.Current.Participating);
     }
 
     [Fact]
     public void EqualValues_HashAlike_WhenTheirPathsDifferOnlyInCase()
     {
-        var copy = Copy("A.esp", "ModA", slot: 0);
-        var lower = new LoadOrderSnapshot(Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [copy]);
+        var plugin = Registered("A.esp", "ModA", slot: 0);
+        var lower = new LoadOrderSnapshot(Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin]);
 
-        Assert.Equal(Order(copy), lower);
-        Assert.Equal(Order(copy).GetHashCode(), lower.GetHashCode());
+        Assert.Equal(Order(plugin), lower);
+        Assert.Equal(Order(plugin).GetHashCode(), lower.GetHashCode());
     }
 
     [Fact]
     public void TheCallersList_IsCopiedOnConstruction_SoTheValueCannotChangeBehindIt()
     {
-        var copies = new List<RegisteredCopy> { Copy("A.esp", "ModA", slot: 0) };
-        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, copies);
+        var plugins = new List<RegisteredPlugin> { Registered("A.esp", "ModA", slot: 0) };
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins);
 
-        copies.Add(Copy("B.esp", "ModB", slot: 1));
+        plugins.Add(Registered("B.esp", "ModB", slot: 1));
 
-        Assert.Equal(["A.esp"], order.Copies.Select(c => c.Name));
+        Assert.Equal(["A.esp"], order.Plugins.Select(c => c.Name));
     }
 
     // ADR-0007: created before any plugins.txt line names it, so the gesture that follows sees it.
     [Fact]
-    public void With_AddsACreatedCopy_AndReplacesTheOneAlreadyUnderThatIdentity()
+    public void With_AddsACreatedPlugin_AndReplacesTheOneAlreadyUnderThatIdentity()
     {
-        var added = Order(Copy("A.esp", "ModA", slot: 0)).With(Copy("New.esp", "ModA", slot: 1));
-        Assert.Equal(["A.esp", "New.esp"], added.Copies.Select(c => c.Name));
+        var added = Order(Registered("A.esp", "ModA", slot: 0)).With(Registered("New.esp", "ModA", slot: 1));
+        Assert.Equal(["A.esp", "New.esp"], added.Plugins.Select(c => c.Name));
 
-        var replaced = added.With(Copy("New.esp", "ModA", slot: 1, enabled: false));
-        Assert.Equal(["A.esp", "New.esp"], replaced.Copies.Select(c => c.Name));
-        Assert.False(replaced.Participates(new PluginCopyKey("New.esp", "ModA")));
+        var replaced = added.With(Registered("New.esp", "ModA", slot: 1, enabled: false));
+        Assert.Equal(["A.esp", "New.esp"], replaced.Plugins.Select(c => c.Name));
+        Assert.False(replaced.Participates(new PluginAddress("New.esp", "ModA")));
     }
 
     // ADR-0007's counterpart: a create that could not write its file takes its registration back,
-    // and only that one — two copies of one filename are two identities (ADR-0012).
+    // and only that one — two plugins that share a filename are two identities (ADR-0012).
     [Fact]
-    public void Without_RemovesOnlyTheCopyUnderThatIdentity()
+    public void Without_RemovesOnlyThePluginUnderThatIdentity()
     {
-        var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 1));
+        var order = Order(Registered("A.esp", "ModA", slot: 0), Registered("A.esp", "ModB", slot: 1));
 
-        var left = order.Without(new PluginCopyKey("A.esp", "ModB"));
+        var left = order.Without(new PluginAddress("A.esp", "ModB"));
 
-        Assert.Equal(["ModA"], left.Copies.Select(c => c.Origin));
-        Assert.Equal(order.Copies, order.Without(new PluginCopyKey("Absent.esp", "ModA")).Copies);
+        Assert.Equal(["ModA"], left.Plugins.Select(c => c.Origin));
+        Assert.Equal(order.Plugins, order.Without(new PluginAddress("Absent.esp", "ModA")).Plugins);
     }
 
     // The entries are the whole of the snapshot: the path they carry names no directory that
@@ -156,27 +156,27 @@ public sealed class LoadOrderTests
         LoadOrderEntry[] entries = [Entry("LowPriorityMod", winning: false), Entry("HighPriorityMod", winning: true)];
 
         var order = new LoadOrderSnapshot(
-            absent, null, GameRelease.Fallout4, [.. entries.Select(entry => RegisteredCopy.Of(entry))]);
+            absent, null, GameRelease.Fallout4, [.. entries.Select(entry => RegisteredPlugin.Of(entry))]);
 
         Assert.False(Directory.Exists(absent));
-        var winner = order.WinningCopy("A.esp");
+        var winner = order.WinningPlugin("A.esp");
         Assert.NotNull(winner);
         Assert.Equal("HighPriorityMod", winner.Origin);
-        Assert.Equal([new PluginCopyKey("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
-        Assert.False(order.Participates(new PluginCopyKey("A.esp", "LowPriorityMod")));
+        Assert.Equal([new PluginAddress("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
+        Assert.False(order.Participates(new PluginAddress("A.esp", "LowPriorityMod")));
     }
 
     [Fact]
-    public void ACopyIsIdentifiedByOriginAndName_NotByNameAlone()
+    public void APluginIsIdentifiedByOriginAndName_NotByNameAlone()
     {
-        var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 0, winning: false));
+        var order = Order(Registered("A.esp", "ModA", slot: 0), Registered("A.esp", "ModB", slot: 0, winning: false));
 
-        var copyA = order.Copy(new PluginCopyKey("A.esp", "ModA"));
-        Assert.NotNull(copyA);
-        Assert.Equal("ModA", copyA.Origin);
-        var copyB = order.Copy(new PluginCopyKey("A.esp", "ModB"));
-        Assert.NotNull(copyB);
-        Assert.Equal("ModB", copyB.Origin);
-        Assert.Null(order.Copy(new PluginCopyKey("A.esp", "ModC")));
+        var pluginA = order.Plugin(new PluginAddress("A.esp", "ModA"));
+        Assert.NotNull(pluginA);
+        Assert.Equal("ModA", pluginA.Origin);
+        var pluginB = order.Plugin(new PluginAddress("A.esp", "ModB"));
+        Assert.NotNull(pluginB);
+        Assert.Equal("ModB", pluginB.Origin);
+        Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModC")));
     }
 }

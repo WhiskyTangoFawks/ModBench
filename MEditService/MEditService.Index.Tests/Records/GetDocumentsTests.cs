@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Index.Tests.Records;
 
 // Point-reading one document per record costs two DuckDB round trips each, so the seam carries a
-// bulk read: every document one plugin's copy holds, in one query.
+// bulk read: every document one plugin holds, in one query.
 public class GetDocumentsTests
 {
     [Fact]
@@ -29,7 +29,7 @@ public class GetDocumentsTests
             }, origin: "ModA")
             .BuildScattered();
         var entry = fixture.Plugins.Single();
-        var key = new PluginCopyKey(entry.Name, entry.Origin);
+        var key = new PluginAddress(entry.Name, entry.Origin);
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
         using var onDisk = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
@@ -78,11 +78,11 @@ public class GetDocumentsTests
         using var index = Indexes.Reconciled(fixture);
         var reads = index.RequireReads();
 
-        // Records only: each copy also carries its own header document, which is scoped
+        // Records only: each plugin also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
-        var fromA = reads.GetDocuments(new PluginCopyKey("Shared.esp", "ModA"));
-        var fromB = reads.GetDocuments(new PluginCopyKey("Shared.esp", "ModB"));
+        var fromA = reads.GetDocuments(new PluginAddress("Shared.esp", "ModA"));
+        var fromB = reads.GetDocuments(new PluginAddress("Shared.esp", "ModB"));
         var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
 
@@ -92,8 +92,8 @@ public class GetDocumentsTests
         Assert.Equal(2, recordsFromB.Count);
         Assert.All(recordsFromB, d => Assert.Equal("ModB", d.Plugin.Origin));
 
-        // ADR-0012: the header is per-copy too — one each, each carrying its own origin, never one
-        // shared row keyed on the filename the two copies have in common.
+        // ADR-0012: the header is per-plugin too — one each, each carrying its own origin, never one
+        // shared row keyed on the filename the two plugins have in common.
         Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
         Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
     }

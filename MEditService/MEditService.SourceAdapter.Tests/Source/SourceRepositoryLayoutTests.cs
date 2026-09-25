@@ -41,7 +41,7 @@ public sealed class SourceRepositoryLayoutTests
                 modFolder, SourcePreset.Edits, []);
             var repository = SourceRepository.Open(modFolder, Release)
                 ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
-            var plugin = new PluginCopyKey(pluginFileName, "LayoutMod");
+            var plugin = new PluginAddress(pluginFileName, "LayoutMod");
             repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
             var path = Path.GetRelativePath(

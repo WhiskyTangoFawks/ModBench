@@ -1,7 +1,7 @@
 namespace MEditService.Ports;
 
-/// <summary>A copy that could not be opened is a row in an error state (ADR-0013): the rest of the
-/// load order is unaffected, and the reason is reported here rather than as a failed
+/// <summary>A plugin that could not be opened is a row in an error state (ADR-0013): the rest of
+/// the load order is unaffected, and the reason is reported here rather than as a failed
 /// reconcile.</summary>
 public record PluginLoadFailure(string Name, string Origin, string Reason)
 {

@@ -21,7 +21,7 @@ public sealed partial class SourceRepository
     /// <summary>Every record the tree's dirt moves, by identity and text. Dirt is git status, never a
     /// content-hash compare: the hash is of the codec's canonical form, so any other tree would read
     /// as wholly dirty.</summary>
-    public WorkingTreeDirt DirtOf(PluginCopyKey plugin)
+    public WorkingTreeDirt DirtOf(PluginAddress plugin)
     {
         var documents = new List<DirtyDocument>();
         var needsStructuralPass = false;
@@ -90,13 +90,13 @@ public sealed partial class SourceRepository
     /// <summary>The plugin's tree as the documents it holds right now, each record's own. The caller
     /// disposes it; nothing is deserialized into a mod.</summary>
     public IPluginDocuments OpenDocuments(
-        PluginCopyKey plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
         new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
 
     /// <summary>The same documents as <paramref name="gitRef"/> committed them, a container's embedded
     /// children among them. Straight from the object store: no checkout, no second working tree.</summary>
     public IEnumerable<PluginDocument> DocumentsAt(
-        PluginCopyKey plugin, string gitRef, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        PluginAddress plugin, string gitRef, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         using var tree = new SourceTreeDocuments(_modFolder, plugin.Name, _release, schemas);
         foreach (var document in ReadAll(plugin, gitRef))

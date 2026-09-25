@@ -76,7 +76,7 @@ internal static class Wire
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
     /// <summary>Track's write reaches the answers through the watch it armed (ADR-0015 invariant 2),
-    /// on the watcher's own thread, so the answer is polled until it reports the copy tracked.
+    /// on the watcher's own thread, so the answer is polled until it reports the plugin tracked.
     /// </summary>
     internal static async Task PluginReportsTracked(this HttpClient client, string name)
     {

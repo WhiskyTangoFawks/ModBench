@@ -267,17 +267,17 @@ public sealed class TrackCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private static PluginCopyKey Key(string plugin) => new(plugin, ModName);
+    private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 
     private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
     {
-        var copies = Directory.GetFiles(_modFolder, "*.esp")
+        var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
             .Select((path, slot) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, slot, Enabled: true, Winning: true))
             .ToList();
-        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotCopies.Of(copies));
+        var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(entries));
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
             .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits);
     }

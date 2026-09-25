@@ -125,6 +125,6 @@ public sealed class ReconcileDoorTests
         index.Reconcile(snapshot, holder.Apply(snapshot));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 }

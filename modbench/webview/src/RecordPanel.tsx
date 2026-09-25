@@ -50,7 +50,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0013: a copy the load order doesn't name drives the header's dimming and tooltip wording
+  // ADR-0013: a plugin the load order doesn't name drives the header's dimming and tooltip wording
   // independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
   // ADR-0007: starts empty and stays empty until a load says otherwise — fail-closed, so a panel
@@ -80,8 +80,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     && !o.isPartialForm && o.parseDiagnosis == null),
     [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
-  // ADR-0013/ADR-0012: one definition of "this column renders at reduced weight" — a copy the load
-  // order does not name, or a Partial Form record — so the header and the cells cannot disagree.
+  // ADR-0013/ADR-0012: one definition of "this column renders at reduced weight" — a plugin the
+  // load order does not name, or a Partial Form record — so the header and the cells cannot
+  // disagree.
   const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
     notInLoadOrderSet.has(key) || o.isPartialForm),
     [result, notInLoadOrderSet]);
@@ -230,7 +231,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
 
-  // ADR-0012: origin appears inline in the header only when two copies share a filename —
+  // ADR-0012: origin appears inline in the header only when two plugins share a filename —
   // computed from this response's own overrides, never the load order's plugin list.
   const collidingPluginNames = useMemo(
     () => collidingFilenames(result?.overrides ?? []),
@@ -378,7 +379,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   const isImmutable = immutableSet.has(col.key);
                   // ADR-0013: the column's own load-order membership drives both the header's
                   // reason wording and the dimming that carries down through every cell in this
-                  // column — "non-participating copies render dimmed".
+                  // column — "non-participating plugins render dimmed".
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);
                   return (
                     <th

@@ -63,7 +63,7 @@ export type LoadOrderProgress = LoadOrderStatus;
 
 /** Restated rather than imported from Mod Management's own snapshot type: this module belongs
  *  to Editing, which imports nothing from Mod Management. `slot` is null when no plugins.txt
- *  line names this copy. */
+ *  line names this plugin. */
 export interface LoadOrderPluginInput {
   name: string;
   path: string;

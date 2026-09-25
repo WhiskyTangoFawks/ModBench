@@ -47,7 +47,7 @@ internal static class TrackedMods
             Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry)),
             release);
 
-    internal static PluginCopyKey KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
+    internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 
     internal static string ModFolderOf(this LoadOrderEntry entry) =>
         Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry));
@@ -140,7 +140,7 @@ internal static class TrackedMods
     internal static string BodyOf(this RecordDocument document) =>
         document.Body ?? throw new InvalidOperationException($"Expected document '{document.FormKey}' to carry a body.");
 
-    internal static RecordDocument DocumentOf(this IRecordReads reads, string formKey, PluginCopyKey plugin) =>
+    internal static RecordDocument DocumentOf(this IRecordReads reads, string formKey, PluginAddress plugin) =>
         reads.GetDocument(formKey, plugin)
             ?? throw new InvalidOperationException($"Expected a document for '{formKey}' in {plugin.Name} ({plugin.Origin}).");
 }

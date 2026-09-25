@@ -17,7 +17,7 @@ public sealed class CommittedOnlyReadPathTests
     private const string PluginName = "TestPlugin.esp";
     private const string Origin = "Data";
     private static readonly GameRelease Release = GameRelease.Fallout4;
-    private static readonly PluginCopyKey Plugin = new(PluginName, Origin);
+    private static readonly PluginAddress Plugin = new(PluginName, Origin);
 
     private static FakeRow Row(Fallout4Mod mod, string editorId) =>
         new(Plugin, LoadOrderIndex: 0, IsWinner: true,
@@ -25,11 +25,11 @@ public sealed class CommittedOnlyReadPathTests
 
     private static RecordQueryService Service(params FakeRow[] rows)
     {
-        var opened = new Dictionary<PluginCopyKey, PluginContent>
+        var opened = new Dictionary<PluginAddress, PluginContent>
         {
             [Plugin] = new(IsLight: false, IsMaster: false, Masters: [], RecordCount: rows.Length),
         };
-        var holder = FakeLoadOrder.Of(Release, new RegisteredCopy(PluginName, Origin, PluginName, 0, Enabled: true, Winning: true));
+        var holder = FakeLoadOrder.Of(Release, new RegisteredPlugin(PluginName, Origin, PluginName, 0, Enabled: true, Winning: true));
         return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 

@@ -72,10 +72,10 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
 
     private static JsonElement StatusOf(JsonElement frame) => frame.GetProperty("loadOrderStatus");
 
-    // A binary has no smaller unit than itself, so the copy the reconcile names is re-derived whole
+    // A binary has no smaller unit than itself, so the plugin the reconcile names is re-derived whole
     // rather than by key.
     [Fact]
-    public async Task ReconcilingOnePlugin_RederivesTheCopyWhoseBytesMoved_AndTheAnswerFollows()
+    public async Task ReconcilingOnePlugin_RederivesThePluginWhoseBytesMoved_AndTheAnswerFollows()
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -103,7 +103,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
             .GetProperty("value").GetDouble();
 
     [Fact]
-    public async Task ReconcilingEveryPlugin_ReportsHowManyCopiesItCheckedAndHowManyRowsChanged()
+    public async Task ReconcilingEveryPlugin_ReportsHowManyPluginsItCheckedAndHowManyRowsChanged()
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -118,7 +118,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task ReconcilingACopyTheLoadOrderDoesNotHold_Is404()
+    public async Task ReconcilingAPluginTheLoadOrderDoesNotHold_Is404()
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();

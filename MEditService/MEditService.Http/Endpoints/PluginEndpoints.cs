@@ -18,9 +18,9 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        // Every mutable copy in the load order, diagnosed off its original bytes — the session-load
-        // complement of Track's refusal. With no load order applied the refusal is a 503, never an
-        // unmapped 500.
+        // Every mutable plugin in the load order, diagnosed off its original bytes — the
+        // session-load complement of Track's refusal. With no load order applied the refusal is a
+        // 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -163,8 +163,8 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            var copy = result.Copy;
-            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, result.Version));
+            var plugin = result.Plugin;
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Path, plugin.Origin, plugin.Slot, result.Version));
         }
         catch (NoLoadOrderException ex)
         {
@@ -218,7 +218,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await trackHandler.TrackAsync([.. plugins.Select(p => new PluginCopyKey(p.Name, p.Origin))], preset);
+            var result = await trackHandler.TrackAsync(plugins, preset);
             if (result.SelectionRefusal is { } selectionRefusal)
             {
                 logger.LogWarning("Refused to track {Count} plugin(s): {Refusal} — {Message}",
@@ -232,8 +232,8 @@ public static class PluginEndpoints
                     refused.Plugin.Name, refused.Plugin.Origin, refused.Refusal, refused.Message);
             }
             return Results.Ok(new TrackResponse(
-                [.. result.Landed.Select(Addressed)],
-                [.. result.Refused.Select(r => new PluginAddressRefusal(Addressed(r.Plugin), r.Refusal, r.Message))]));
+                result.Landed,
+                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))]));
         }
         catch (NoLoadOrderException ex)
         {
@@ -241,8 +241,6 @@ public static class PluginEndpoints
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
-
-    private static PluginAddress Addressed(PluginCopyKey plugin) => new(plugin.Name, plugin.Origin);
 
     // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
     // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
@@ -258,7 +256,7 @@ public static class PluginEndpoints
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = await compileHandler.CompileAsync(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), source);
+            var result = await compileHandler.CompileAsync(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), source);
             return Results.Ok(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -286,7 +284,7 @@ public static class PluginEndpoints
                     return Results.Problem("A record type is required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
+            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)),
             onWriteFailure: ex =>
             {
@@ -322,8 +320,8 @@ public static class PluginEndpoints
             if (result.AnswerRefusal is { } answerRefusal)
                 return WriteEndpointMapping.Refusal(answerRefusal);
             return Results.Ok(new TrackResponse(
-                [.. result.Landed.Select(Addressed)],
-                [.. result.Refused.Select(r => new PluginAddressRefusal(Addressed(r.Plugin), r.Refusal, r.Message))],
+                result.Landed,
+                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
                 result.TrackedFilesRefusal));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -383,7 +381,7 @@ public static class PluginEndpoints
             handler.ContinueRebase(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
     }
 
-    // An origin no registered copy carries names no repository, which is a 404 rather than one of
+    // An origin no registered plugin carries names no repository, which is a 404 rather than one of
     // the three outcomes a rebase reports.
     private static IResult Rebased(RebaseResult? result, string origin, ILogger logger)
     {
@@ -403,12 +401,8 @@ public static class PluginEndpoints
 public record CreatePluginRequest(string Name, string Path, string Origin);
 
 // What the create gesture wrote and registered, not a plugin row: masters, flags and record count
-// are the Index's to state, and it has not seen this copy yet. Slot is 0 off a bare load order.
+// are the Index's to state, and it has not seen this plugin yet. Slot is 0 off a bare load order.
 public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
-
-/// <summary>A plugin named by file name and origin (ADR-0012 invariant 1): one file name can be in
-/// two mods.</summary>
-public record PluginAddress(string Name, string Origin);
 
 /// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the
 /// message naming the way out.</summary>

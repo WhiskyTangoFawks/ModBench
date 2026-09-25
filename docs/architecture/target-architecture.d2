@@ -50,7 +50,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
-  loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: kernel}
+  loadorder: "Load order state\ninterface: the snapshot; which plugin wins each filename; who participates\nhides: the winner and participation rules" {class: kernel}
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
   ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default · untracked plugins in a tracked mod\n· compile unfinished\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
 }

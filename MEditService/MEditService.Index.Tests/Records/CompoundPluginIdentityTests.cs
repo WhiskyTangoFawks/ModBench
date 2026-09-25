@@ -14,8 +14,8 @@ namespace MEditService.Index.Tests.Records;
 // plugins share a filename, each in its own mod folder.
 public class CompoundPluginIdentityTests
 {
-    private static readonly PluginCopyKey ModA = new("Shared.esp", "ModA");
-    private static readonly PluginCopyKey ModB = new("Shared.esp", "ModB");
+    private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
+    private static readonly PluginAddress ModB = new("Shared.esp", "ModB");
 
     // Both mods share ModKey "Shared.esp" and each adds one NPC first, so deterministic FormID
     // assignment lands them on the identical FormKey: the collision at its sharpest, differing only

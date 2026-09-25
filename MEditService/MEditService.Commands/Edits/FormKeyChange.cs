@@ -25,7 +25,7 @@ internal sealed class FormKeyChange(
     /// <summary>A delete+create pair in source terms, written through a
     /// <see cref="SourceRepository.SourceTransaction"/> that restores the tree on failure.</summary>
     internal RecordEditResult Change(
-        PluginCopyKey plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
+        PluginAddress plugin, string formKey, WriteTargets.EditTarget editTarget, JsonElement? value)
     {
         var (release, identity, unit, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
@@ -152,7 +152,7 @@ internal sealed class FormKeyChange(
 
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
-        PluginCopyKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
+        PluginAddress plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
         string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget? target)
     {
         target = null;
@@ -196,7 +196,7 @@ internal sealed class FormKeyChange(
     }
 
     private static void WriteTargetRewrite(
-        SourceRepository.SourceTransaction transaction, PluginCopyKey plugin, ComputedTarget target, string newFormKey)
+        SourceRepository.SourceTransaction transaction, PluginAddress plugin, ComputedTarget target, string newFormKey)
     {
         var (repository, unit, written, held, text) = target;
 

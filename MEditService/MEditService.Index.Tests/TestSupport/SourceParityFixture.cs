@@ -20,7 +20,7 @@ public sealed class SourceParityFixture : IDisposable
     private readonly string _binaryInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
     private readonly string _sourceInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
 
-    public PluginCopyKey Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
+    public PluginAddress Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
 

@@ -32,8 +32,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private readonly string _hostFolder;
     private readonly string _targetFolder;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginCopyKey _host = new(HostName, HostOrigin);
-    private readonly PluginCopyKey _target = new(TargetName, TargetOrigin);
+    private readonly PluginAddress _host = new(HostName, HostOrigin);
+    private readonly PluginAddress _target = new(TargetName, TargetOrigin);
     private readonly FormKey _npc;
     private readonly FormKey _targetKeyword;
 
@@ -59,7 +59,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
         _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotCopies.Of([
+            SnapshotPlugins.Of([
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));

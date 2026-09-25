@@ -14,7 +14,7 @@ public sealed class ProjectionSequenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _base;
-    private readonly PluginCopyKey _baseKey;
+    private readonly PluginAddress _baseKey;
     private readonly FormKey _npc1;
     private readonly FormKey _npc2;
     private readonly LoadOrderHolder _holder = new();
@@ -85,7 +85,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACopyLeaving_AdvancesTheSequence()
+    public void Reconcile_APluginLeaving_AdvancesTheSequence()
     {
         Reconcile(_fixture.Plugins);
         var before = _index.Sequence;

@@ -4,7 +4,7 @@ using MEditService.TestSupport;
 namespace MEditService.Http.Tests.Api;
 
 /// <summary>The committed cut-down Fallout 4 plugin, loaded through the real host exactly as a
-/// game-directory copy: an empty temp game folder standing in for one, the plugin itself the
+/// game-directory plugin: an empty temp game folder standing in for one, the plugin itself the
 /// already-committed <see cref="RealDataPlugin"/> file.</summary>
 public sealed class CutDownPluginApiFixture : IApiPluginFixture<CutDownPluginApiFixture>
 {

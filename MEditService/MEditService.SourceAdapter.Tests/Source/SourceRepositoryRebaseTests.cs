@@ -21,7 +21,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     private const string NpcEditorId = "FixtureNpc";
     private const float BaselineHeightMax = 0.5f;
 
-    private static readonly PluginCopyKey Plugin = new(PluginName, "RebaseMod");
+    private static readonly PluginAddress Plugin = new(PluginName, "RebaseMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-rebase-").FullName;

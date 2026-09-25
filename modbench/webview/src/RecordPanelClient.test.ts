@@ -77,7 +77,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
-  // ADR-0012: a copy the load order does not name is both immutable and absent from it, and
+  // ADR-0012: a plugin the load order does not name is both immutable and absent from it, and
   // PluginHeader needs the second fact independently — a vanilla master is only the first.
   it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {
     fetchMock.mockImplementation((input: Request | string) => {

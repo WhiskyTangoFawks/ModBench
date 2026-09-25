@@ -64,19 +64,19 @@ public sealed class AbsorbExternalChangeHandler
 
     // Static because none of it reads this handler's state beyond the port it is handed.
     private static async Task<AbsorbResult> Run(
-        IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrderSnapshot loadOrder)
+        IPluginAdapter adapter, string origin, string modFolder, IReadOnlyList<RegisteredPlugin> plugins, LoadOrderSnapshot loadOrder)
     {
         var observed = new List<(string PluginName, byte[] ObservedBytes)>();
-        foreach (var copy in ExternalChangeClassifier.CopiesIn(loadOrder, modFolder))
+        foreach (var plugin in ExternalChangeClassifier.PluginsIn(loadOrder, modFolder))
         {
             try
             {
-                observed.Add((copy.Name, await PluginBinaryHash.ExactBytesOfFileAsync(copy.Path)));
+                observed.Add((plugin.Name, await PluginBinaryHash.ExactBytesOfFileAsync(plugin.Path)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return AbsorbResult.WholeAnswerRefused(
-                    TrackRefusal.RoundTripFailed, $"{copy.Name} ({copy.Origin}) could not be read: {ex.Message}");
+                    TrackRefusal.RoundTripFailed, $"{plugin.Name} ({plugin.Origin}) could not be read: {ex.Message}");
             }
         }
 
@@ -124,7 +124,7 @@ public sealed class AbsorbExternalChangeHandler
             return AbsorbResult.WholeAnswerRefused(TrackRefusal.GitUnavailable, ex.Message);
         }
 
-        IReadOnlyList<PluginCopyKey> landed = [.. trailers.Select(b => Addressed(origin, b))];
+        IReadOnlyList<PluginAddress> landed = [.. trailers.Select(b => Addressed(origin, b))];
         if (SourceRepository.CommitTrackedFilesToMain(modFolder, trackedFileChanges) is { } failed)
             return AbsorbResult.PerPlugin(landed, [], $"'{failed.Subject}' {failed.Reason}.");
 
@@ -163,5 +163,5 @@ public sealed class AbsorbExternalChangeHandler
         return AbsorbResult.PerPlugin([.. baselines.Take(at).Select(b => Addressed(origin, b))], refused, trackedFilesRefusal);
     }
 
-    private static PluginCopyKey Addressed(string origin, BaselineTrailers baseline) => new(baseline.Plugin, origin);
+    private static PluginAddress Addressed(string origin, BaselineTrailers baseline) => new(baseline.Plugin, origin);
 }
