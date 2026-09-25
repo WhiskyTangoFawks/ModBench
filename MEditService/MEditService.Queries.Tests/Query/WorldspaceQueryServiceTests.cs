@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.Queries;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;

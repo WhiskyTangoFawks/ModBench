@@ -1,9 +1,7 @@
 using System.Text.Json;
-using MEditService.Http.Endpoints;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.Index;
 using MEditService.Ports;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

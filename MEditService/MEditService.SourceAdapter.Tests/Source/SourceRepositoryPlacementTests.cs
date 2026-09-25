@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;

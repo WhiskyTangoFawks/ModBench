@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using MEditService.LoadOrder;
-using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.TestSupport;
 

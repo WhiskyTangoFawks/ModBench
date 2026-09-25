@@ -1,5 +1,3 @@
-using MEditService.LoadOrder;
-
 namespace MEditService.LoadOrder.Tests.Plugins;
 
 public sealed class PluginNameTests

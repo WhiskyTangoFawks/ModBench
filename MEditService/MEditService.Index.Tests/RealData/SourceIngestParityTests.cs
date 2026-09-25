@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
-using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;

@@ -1,13 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 

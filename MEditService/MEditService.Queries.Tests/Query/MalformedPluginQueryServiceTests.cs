@@ -2,7 +2,6 @@ using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.Queries;
 using MEditService.Queries.Tests.TestSupport;
 using Mutagen.Bethesda;
 

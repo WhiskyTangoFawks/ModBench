@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;

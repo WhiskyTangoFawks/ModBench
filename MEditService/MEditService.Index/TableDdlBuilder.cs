@@ -1,9 +1,6 @@
-using System.Globalization;
-using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;
