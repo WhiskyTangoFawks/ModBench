@@ -408,11 +408,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.rebaseEditBranch",
-        "title": "Rebase Mod Edit Branch",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.record.create",
         "title": "Add",
         "category": "Modbench"
@@ -537,10 +532,6 @@
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
-          "when": "false"
-        },
-        {
-          "command": "modbench.mod.rebaseEditBranch",
           "when": "false"
         },
         {
@@ -902,11 +893,6 @@
           "command": "modbench.pluginListTree.compileAtMain",
           "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@4"
-        },
-        {
-          "command": "modbench.mod.rebaseEditBranch",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
-          "group": "pluginActions@5"
         },
         {
           "command": "modbench.record.create",

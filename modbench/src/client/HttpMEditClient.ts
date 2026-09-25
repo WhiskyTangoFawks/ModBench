@@ -11,7 +11,7 @@ import {
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
-  type RebaseResult, type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
+  type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -423,27 +423,6 @@ export class HttpMEditClient implements MEditClient {
       op: `keepAsMyEdit(${origin})`,
       failMsg: `Could not keep "${origin}" as your own edit`,
       post: () => this.apiClient.POST('/plugins/external-change/keep', { body: { origin } }),
-    });
-  }
-
-  /** Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. */
-  async rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined> {
-    return this.postRebase('/plugins/rebase', origin, 'rebaseOntoMain');
-  }
-
-  /** Resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome, after
-   *  the user hand-resolves the conflicted source file(s) in the native merge editor. */
-  async continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined> {
-    return this.postRebase('/plugins/rebase/continue', origin, 'continueRebase');
-  }
-
-  private async postRebase(
-    path: '/plugins/rebase' | '/plugins/rebase/continue', origin: string, opName: string,
-  ): Promise<RebaseResult | WriteRefused | undefined> {
-    return this.mutate<RebaseResult>({
-      op: `${opName}(${origin})`,
-      failMsg: `Could not rebase "${origin}"`,
-      post: () => this.apiClient.POST(path, { body: { origin } }),
     });
   }
 

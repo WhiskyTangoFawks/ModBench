@@ -8,8 +8,6 @@ import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnap
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
 } from './trackedRepositories';
-import { runRebase } from './externalChangeGestures';
-import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import { pluralArgument, registerPluginsGesture } from './gestureEntry';
@@ -98,40 +96,6 @@ export function registerTrackCommand(
       if (outcome.refused.length > 0) report(outcome);
       else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);
     });
-  });
-}
-
-// Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. Also the
-// *re-runnable* form — {@link SourceRepository.RebaseEditBranch}'s resumption-aware design means
-// this same command both starts a rebase and resumes one left conflicted.
-export function registerRebaseCommand(
-  client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
-  outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-  treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
-  originFiles: OriginFilesOf,
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (node?: PluginListNode) => {
-    if (node?.kind !== 'plugin') return;
-    const name = node.plugin.name;
-    const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-    if (!origin) {
-      reporter.report('error', `Could not resolve which mod "${name}" belongs to.`);
-      return;
-    }
-
-    const result = await runRebase({
-      client, openMergeEditor: makeMergeEditorOpener(originFiles, outputChannel, reporter),
-      reporter,
-      refreshTree: () => treeProvider.refresh(),
-      refreshMatchingPlugins,
-    }, origin);
-    if (!result) return; // transport failure or refusal already surfaced by runRebase
-
-    if (result.outcome === 'Refused') {
-      reporter.report('warning', result.refusalReason ?? 'mEdit gave no reason.');
-    } else if (result.outcome === 'Conflicted' && result.refusalReason) {
-      reporter.report('warning', result.refusalReason);
-    }
   });
 }
 

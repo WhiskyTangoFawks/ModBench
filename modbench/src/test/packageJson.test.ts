@@ -564,9 +564,6 @@ describe('package.json command titles and categories', () => {
     // plugin in hand isn't a gesture worth a QuickPick-over-QuickPick (unlike modbench.saveAndCompile
     // itself, which falls back to one and stays palette-visible).
     'modbench.pluginListTree.compileAtMain',
-    // Needs the clicked row's plugin name to resolve which mod folder (origin) to rebase —
-    // same posture as Track/compileAtMain, no ambient fallback worth a QuickPick.
-    'modbench.mod.rebaseEditBranch',
     // Each needs the clicked row's own identity (recordType node's plugin/recordType, or a
     // record row's own FormKey/plugin) — no ambient fallback worth a QuickPick-over-QuickPick,
     // same posture as the tree-row-gated commands above.
@@ -579,7 +576,7 @@ describe('package.json command titles and categories', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(22);
+    expect(PALETTE_GATED).toHaveLength(21);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter(
@@ -649,7 +646,6 @@ describe('package.json plugin-row context menu', () => {
       ['modbench.plugin.track', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
-      ['modbench.mod.rebaseEditBranch', 'view == modbench.pluginListTree && viewItem == plugin'],
     ]);
   });
 });

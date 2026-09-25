@@ -60,11 +60,6 @@ export interface CrashRepairOffer {
  *  same posture {@link CompileResult} uses. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
-/** The outcomes of `rebase edit branch`. `conflictedPaths` is the extension's cue to open each path
- *  in VS Code's native merge editor. */
-export type RebaseOutcome = Schemas['RebaseOutcome'];
-export type RebaseResult = Schemas['RebaseResponse'];
-
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every
  *  consumer must remember), and leaves room for a future 'Deleted' without a wire reshape. */
 export type WorkingTreeState = Schemas['WorkingTreeState'];

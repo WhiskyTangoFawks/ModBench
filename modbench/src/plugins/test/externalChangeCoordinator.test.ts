@@ -16,7 +16,7 @@ function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationE
   };
 }
 
-// Every test's own `client` scripts `keepAsMyEdit`/`absorbUpstreamUpdate`/`rebaseOntoMain`
+// Every test's own `client` scripts `keepAsMyEdit`/`absorbUpstreamUpdate`
 // before this runs; a call the test never scripted rejects loudly (InMemoryMEditClient's own
 // contract), so a forgotten script fails the test rather than silently no-oping.
 function makeDeps(
@@ -25,7 +25,6 @@ function makeDeps(
   return {
     client,
     showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
-    openMergeEditor: vi.fn().mockResolvedValue(undefined),
     reporter: recordingReporter(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
@@ -68,9 +67,8 @@ describe('subscribeQuestionOpen', () => {
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
-  it('dispatches Absorb; a landed Absorb is silent, and neither rebases the edit branch nor opens the merge editor', async () => {
+  it('dispatches Absorb, and a landed Absorb is silent', async () => {
     const client = clientScriptedForKeepAndAbsorb();
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] });
     const reporter = recordingReporter();
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON), reporter });
     subscribeQuestionOpen(deps, client);
@@ -79,9 +77,7 @@ describe('subscribeQuestionOpen', () => {
     await flush();
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
-    expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
     expect(reporter.reports).toEqual([]);
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
@@ -96,35 +92,6 @@ describe('subscribeQuestionOpen', () => {
     // `subscribe` itself is the one call `subscribeQuestionOpen` makes up front;
     // a deferred answer dispatches neither Keep nor Absorb on top of it.
     expect(client.calls.filter((c) => c.method !== 'subscribe')).toEqual([]);
-  });
-
-  it('a failed Absorb never opens the merge editor', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', { refused: true, message: 'Could not absorb the upstream update for "ModA" — socket hang up' });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeQuestionOpen(deps, client);
-
-    client.emit(pendingEvent());
-    await flush();
-
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
-  });
-
-  it('a refused Absorb never opens the merge editor', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('absorbUpstreamUpdate', {
-      landed: [], refused: [{ item: { name: 'Fixture.esp', origin: 'ModA' }, reason: "'Update Fixture.esp' could not be committed to main." }],
-      trackedFilesRefusal: null,
-    });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeQuestionOpen(deps, client);
-
-    client.emit(pendingEvent());
-    await flush();
-
-    // The client has already surfaced the reason; nothing landed, so there is no new baseline
-    // to rebase onto.
-    expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });
 
   it('a rejected dispatch logs rather than throwing', async () => {
