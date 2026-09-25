@@ -110,6 +110,40 @@ public sealed class TrackedModSettledTests : IDisposable
             unfinished);
     }
 
+    [Fact]
+    public async Task Handle_PublishesNothing_AndOpensNoQuestion_WhileACompileOfTheModRuns()
+    {
+        var outcome = TrackedModSettledOutcome.QuestionOpened;
+
+        await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName, () =>
+        {
+            WriteExternalBinaryChange(_mod, 0.9f);
+            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
+            return Task.FromResult(false);
+        });
+
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
+        Assert.Empty(_notifications.Notifications);
+        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
+    }
+
+    [Fact]
+    public async Task Handle_StillWarnsOfAnInterruptedCompile_WhileACompileOfAnotherModRuns()
+    {
+        using var other = SourceEditFixture.Tracked();
+        await Assert.ThrowsAnyAsync<Exception>(() => CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName,
+            () => throw new InvalidOperationException("simulated crash")));
+        var outcome = TrackedModSettledOutcome.NoQuestion;
+
+        await CompileJournal.RunAsync(other.ModFolder, SourceEditFixture.PluginName, () =>
+        {
+            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
+            return Task.FromResult(false);
+        });
+
+        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
+    }
+
     // The rival this pins: naming the mod from the load-order plugin that raised the question,
     // which reads as "(in )" the moment a tracked-file-only change has no plugin left to name it.
     [Fact]

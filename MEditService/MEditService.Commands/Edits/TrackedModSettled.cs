@@ -48,6 +48,10 @@ public sealed class TrackedModSettled
                     _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
                 return TrackedModSettledOutcome.CompileUnfinished;
 
+            // The compile that is writing the bytes settles the mod again when it lands.
+            case ExternalChangeClassification.CompileRunning:
+                return TrackedModSettledOutcome.NoQuestion;
+
             default:
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return TrackedModSettledOutcome.NoQuestion;

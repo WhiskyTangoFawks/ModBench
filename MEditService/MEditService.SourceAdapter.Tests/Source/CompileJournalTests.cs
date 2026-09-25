@@ -60,6 +60,22 @@ public sealed class CompileJournalTests : IDisposable
     }
 
     [Fact]
+    public async Task TheMod_IsCompiling_OnlyWhileACompileRuns()
+    {
+        var whileRunning = false;
+
+        await CompileJournal.RunAsync(_modFolder, "A.esp", () =>
+        {
+            whileRunning = CompileJournal.IsCompiling(_modFolder);
+            return Task.FromResult(true);
+        });
+        await Crashes("B.esp");
+
+        Assert.True(whileRunning);
+        Assert.False(CompileJournal.IsCompiling(_modFolder));
+    }
+
+    [Fact]
     public async Task ARefusedCompile_WroteNothing_SoLeavesNoMark()
     {
         Assert.False(await IsRefused("A.esp"));

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace MEditService.SourceAdapter;
@@ -8,26 +9,44 @@ public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
 
+    // The mod folders a compile of this process is writing into, each with how many are running.
+    private static readonly ConcurrentDictionary<string, int> Running = new(StringComparer.Ordinal);
+
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
+
+    private static string RunningKey(string modFolder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(modFolder));
+
+    /// <summary>Whether a compile is writing into the mod right now: its mark is then no interrupted
+    /// compile, and its bytes are no one else's change.</summary>
+    public static bool IsCompiling(string modFolder) => Running.ContainsKey(RunningKey(modFolder));
 
     /// <summary>Marks <paramref name="plugin"/> while <paramref name="compile"/> runs, and clears it
     /// once it lands. False from it is a refusal that wrote nothing, which puts the mark back as it
     /// was; a throw leaves the plugin marked.</summary>
     public static async Task<bool> RunAsync(string modFolder, string plugin, Func<Task<bool>> compile)
     {
-        var earlier = UnfinishedBatch(modFolder);
-        var named = (earlier?.Plugins ?? []).Union([plugin], StringComparer.Ordinal).ToList();
-        var landedBefore = (earlier?.Landed ?? []).Where(p => !string.Equals(p, plugin, StringComparison.Ordinal)).ToList();
-        WriteMarker(modFolder, new CompileJournalState(named, landedBefore));
-
-        if (!await compile())
+        var key = RunningKey(modFolder);
+        Running.AddOrUpdate(key, 1, (_, count) => count + 1);
+        try
         {
-            Settle(modFolder, earlier);
-            return false;
-        }
+            var earlier = UnfinishedBatch(modFolder);
+            var named = (earlier?.Plugins ?? []).Union([plugin], StringComparer.Ordinal).ToList();
+            var landedBefore = (earlier?.Landed ?? []).Where(p => !string.Equals(p, plugin, StringComparison.Ordinal)).ToList();
+            WriteMarker(modFolder, new CompileJournalState(named, landedBefore));
 
-        Settle(modFolder, new CompileJournalState(named, [.. landedBefore, plugin]));
-        return true;
+            if (!await compile())
+            {
+                Settle(modFolder, earlier);
+                return false;
+            }
+
+            Settle(modFolder, new CompileJournalState(named, [.. landedBefore, plugin]));
+            return true;
+        }
+        finally
+        {
+            if (Running.AddOrUpdate(key, 0, (_, count) => count - 1) == 0) Running.TryRemove(key, out _);
+        }
     }
 
     // A mark with nothing unlanded is deleted, so its file exists only while it means something.
