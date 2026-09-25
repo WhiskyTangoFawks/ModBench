@@ -82,6 +82,10 @@ export function onlySelected<K extends ArgumentKind>(selection: readonly Plugins
 
 const flagsOf = (row: PluginsTreeNode | undefined): string[] => (row?.contextValue ?? '').split(' ');
 
+// A palette gesture sends no item it would refuse, so it needs every selected row to qualify.
+const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTreeNode) => boolean): boolean =>
+  selection.length > 0 && selection.every(qualifies);
+
 /** The one selected plugin compile applies to: compile's Argument from the palette. */
 export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf<'plugin'> | undefined {
   const only = onlySelected(selection, 'plugin');
@@ -92,18 +96,18 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
  *  handed no row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
-  readonly holdsUntrackedInMod: boolean;
+  readonly allUntrackedInMod: boolean;
   readonly singleRebasable: boolean;
   readonly singleRecordType: boolean;
-  readonly holdsDeletableRecord: boolean;
+  readonly allDeletableRecords: boolean;
 }
 
 export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): PluginsKeyContext {
   return {
     singlePlugin: onlySelected(selection, 'plugin') !== undefined,
-    holdsUntrackedInMod: selection.some((row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
+    allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
     singleRebasable: flagsOf(onlySelected(selection, 'plugin')).includes('rebasable'),
     singleRecordType: onlySelected(selection, 'recordType') !== undefined,
-    holdsDeletableRecord: selection.some((row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
+    allDeletableRecords: every(selection, (row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
   };
 }

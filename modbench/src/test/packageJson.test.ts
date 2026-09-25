@@ -818,10 +818,10 @@ describe('package.json compile\'s palette entry', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
-    ['modbench.plugin.track', 'modbench.plugin.holdsUntrackedInMod'],
+    ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
     ['modbench.mod.rebaseEditBranch', 'modbench.plugin.singleRebasable'],
     ['modbench.record.create', 'modbench.plugin.singleRecordType'],
-    ['modbench.record.delete', 'modbench.plugin.holdsDeletableRecord'],
+    ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
   ] as const;
 
   it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {

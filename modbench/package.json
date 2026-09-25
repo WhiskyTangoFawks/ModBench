@@ -532,7 +532,7 @@
         },
         {
           "command": "modbench.plugin.track",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsUntrackedInMod"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
@@ -552,7 +552,7 @@
         },
         {
           "command": "modbench.record.delete",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.holdsDeletableRecord"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allDeletableRecords"
         },
         {
           "command": "modbench.record.copyAsOverride",

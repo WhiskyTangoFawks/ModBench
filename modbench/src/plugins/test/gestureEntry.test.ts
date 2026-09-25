@@ -179,15 +179,18 @@ describe('what the Plugins palette entries read off the selection', () => {
     expect(pluginsKeyContext([lockedRow('Fallout4.esm')]).singlePlugin).toBe(false);
   });
 
-  it('track sees a selected untracked plugin in a mod, and rebase exactly one rebasable plugin', () => {
+  it('track sees a selection of untracked plugins in mods, every one, and rebase exactly one rebasable plugin', () => {
     const untracked = pluginRow('Gamma.esp', 'ModC');
     untracked.contextValue = 'plugin untrackedInMod';
     const rebasable = pluginRow('Delta.esp', 'ModD');
     rebasable.contextValue = 'plugin rebasable';
 
-    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ holdsUntrackedInMod: true, singleRebasable: false });
-    expect(pluginsKeyContext([alpha])).toMatchObject({ holdsUntrackedInMod: false, singleRebasable: false });
-    expect(pluginsKeyContext([rebasable])).toMatchObject({ holdsUntrackedInMod: false, singleRebasable: true });
+    const alsoUntracked = pluginRow('Zeta.esp', 'ModZ');
+    alsoUntracked.contextValue = 'plugin untrackedInMod';
+    expect(pluginsKeyContext([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
+    expect(pluginsKeyContext([alpha, untracked])).toMatchObject({ allUntrackedInMod: false, singleRebasable: false });
+    expect(pluginsKeyContext([])).toMatchObject({ allUntrackedInMod: false });
+    expect(pluginsKeyContext([rebasable])).toMatchObject({ allUntrackedInMod: false, singleRebasable: true });
     expect(pluginsKeyContext([rebasable, alpha]).singleRebasable).toBe(false);
   });
 
@@ -205,9 +208,11 @@ describe('what the Plugins palette entries read off the selection', () => {
     expect(pluginsKeyContext([weapons, alpha]).singleRecordType).toBe(false);
   });
 
-  it('delete sees a selected record its plugin lets it remove', () => {
-    expect(pluginsKeyContext([own, immutable]).holdsDeletableRecord).toBe(true);
-    expect(pluginsKeyContext([immutable]).holdsDeletableRecord).toBe(false);
-    expect(pluginsKeyContext([alpha]).holdsDeletableRecord).toBe(false);
+  // No item is sent that the gesture would refuse.
+  it('delete sees a selection of records their plugins all let it remove', () => {
+    expect(pluginsKeyContext([own]).allDeletableRecords).toBe(true);
+    expect(pluginsKeyContext([own, immutable]).allDeletableRecords).toBe(false);
+    expect(pluginsKeyContext([own, alpha]).allDeletableRecords).toBe(false);
+    expect(pluginsKeyContext([]).allDeletableRecords).toBe(false);
   });
 });
