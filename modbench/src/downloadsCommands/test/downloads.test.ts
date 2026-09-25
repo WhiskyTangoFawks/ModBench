@@ -6,8 +6,8 @@ import {
   deleteDownloads, excludeDownload, excludeDownloads, includeDownload, includeDownloads,
   type DownloadsCommandResult,
 } from '../downloads';
-import { markDownloadInstalled } from '../../install/installedMark';
-import { parseDownloadMeta } from '../../mo2Codecs/downloads';
+import { spliceDownloadMeta } from '../../instanceAdapter/downloadMeta';
+import { parseDownloadMeta, setInstalledInText } from '../../mo2Codecs/downloads';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 // expect.stringContaining's type is `any`, so this checks the refusal by hand instead of
@@ -178,15 +178,17 @@ describe('excludeDownload / includeDownload', () => {
   });
 });
 
-describe('excludeDownload beside install', () => {
-  // Two verbs read-modify-write the same sidecar; interleaved, the second would splice the text
-  // the first read, dropping the first key.
-  it('an exclude racing install’s installed mark leaves both keys set', async () => {
+describe('excludeDownload beside another writer of the same .meta', () => {
+  // Install's installed mark splices the same sidecar; interleaved, the second writer would splice
+  // the text the first read, dropping the first key.
+  it('an exclude racing an installed mark leaves both keys set', async () => {
     const downloadsDir = await makeDownloadsDir();
     await writeArchive(downloadsDir, 'foo.7z');
     await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\n');
 
-    await Promise.all([excludeDownload(downloadsDir, 'foo.7z'), markDownloadInstalled(downloadsDir, 'foo.7z')]);
+    await Promise.all([
+      excludeDownload(downloadsDir, 'foo.7z'), spliceDownloadMeta(downloadsDir, 'foo.7z', setInstalledInText),
+    ]);
 
     expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: true, status: 'Installed' });
   });
