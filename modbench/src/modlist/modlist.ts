@@ -376,18 +376,27 @@ export async function syncMods(
   if (modFolders === undefined) {
     return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist` };
   }
+  const folders = new Set(modFolders);
+  const goneFrom = (text: string) => parseModlist(text).flatMap((entry) => {
+    const folder = listedFolderOf(entry);
+    return folder !== undefined && !folders.has(folder) ? [{ entry, folder }] : [];
+  });
+  // The value lags the disk, so a folder it misses is dropped only once it is gone from disk too.
+  let goneOnDisk: ReadonlySet<string>;
+  try {
+    const candidates = goneFrom(await get(modlistFile(instanceRoot, profile)));
+    const onDisk = await Promise.all(candidates.map(({ folder }) => exists(modDir(instanceRoot, folder))));
+    goneOnDisk = new Set(candidates.filter((_, i) => !onDisk[i]).map(({ folder }) => folder));
+  } catch (err) {
+    return refuse(err);
+  }
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, (text) => {
     // Read inside the write lock: two values can hand over the same folders before the first
     // write comes back, and only the text about to be spliced says what is still to do.
-    const entries = parseModlist(text);
-    const folders = new Set(modFolders);
-    added = unlistedModNames([...modFolders], entries);
-    const gone = entries.flatMap((entry) => {
-      const folder = listedFolderOf(entry);
-      return folder !== undefined && !folders.has(folder) ? [{ entry, folder }] : [];
-    });
+    added = unlistedModNames([...modFolders], parseModlist(text));
+    const gone = goneFrom(text).filter(({ folder }) => goneOnDisk.has(folder));
     dropped = gone.map(({ folder }) => folder);
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so
     // inserting in reverse order leaves the batch ascending top-to-bottom on disk.

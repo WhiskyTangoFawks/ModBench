@@ -1009,6 +1009,19 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
+  // The value lags the disk: its folders were listed before a folder and its line landed, and the
+  // sync splices the text as it is now. Rival: dropping by the handed list alone, which loses the
+  // new line for good.
+  it('keeps a line whose folder the handed list misses but that is on disk at write time', async () => {
+    const lagging = MOD_FOLDERS.filter((f) => f !== 'Harder VATS' && f !== 'Unassigned (Modlist Development)_separator');
+
+    const outcome = await sync(lagging);
+
+    expect(outcome.applied && outcome.dropped).toEqual(['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator']);
+    const names = (await readModlist()).map((e) => `${e.kind}:${e.name}`);
+    expect(names).toEqual(expect.arrayContaining(['mod:Harder VATS', 'separator:Unassigned (Modlist Development)']));
+  });
+
   // A name MO2 never gives a folder, as another tool may write one. Rival: reading its folder as
   // the name plus `_separator`, which no folder in mods/ can ever be, so its line always goes.
   it('keeps a separator whose name MO2 never gives a folder', async () => {
