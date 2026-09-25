@@ -7,8 +7,6 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
-codecs: @../target-architecture.modbench_kernel.codecs
-codecs.label: MO2 file codecs
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
@@ -19,13 +17,10 @@ surfaces -> cmds: "the gesture, with its argument" {class: loadorder}
 instanceloader -> cmds: "a system command: the value as an argument" {class: loadorder}
 cmds -> client: "which plugins load with no line? · for a move, their masters" {class: query}
 client -> cmds: the set, or unreachable {class: query}
-cmds -> codecs: "the lines to flip, move, add or drop" {class: loadorder}
-codecs -> cmds: bytes {class: loadorder}
-cmds -> instanceadapter: "put the file · the folder to make, rename or remove" {class: loadorder}
+cmds -> instanceadapter: "the lines to flip, move, add or drop · the folder to make, rename or remove" {class: loadorder}
+instanceadapter."under one lock per file: read, splice through the file's codec, write whole"
 uninstall: "an uninstall, from a downloaded file" {
-  cmds -> codecs: "the download's .meta: uninstalled" {class: loadorder}
-  codecs -> cmds: bytes {class: loadorder}
-  cmds -> instanceadapter: "put the .meta in downloads/" {class: loadorder}
+  cmds -> instanceadapter: "the download's .meta: uninstalled" {class: loadorder}
   cmds."a failed mark is a line in the Output, and the uninstall still applied"
 }
 instanceadapter -> mo2: bytes, then forget {class: loadorder}
