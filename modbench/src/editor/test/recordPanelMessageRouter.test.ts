@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, normalizeFormKeyQuery,
+  routeRecordPanelMessage, normalizeFormKeyQuery, routerDepsForPanel,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
@@ -265,6 +265,28 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
     expect(followRecord).toHaveBeenCalledWith('000800:Mod.esp', '000900:Mod.esp');
+  });
+
+  // ADR-0012 invariant 1: two copies of Mod.esp, in two mods, each shown in a tab of its own under
+  // one FormKey. The edit lands on the copy its own tab's column names, and only that tab follows.
+  it('follows only the tab the edit came from, not a tab showing the other copy of the plugin', async () => {
+    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
+    const formKeys = new Map<unknown, string>();
+    const tracker = {
+      setFormKey(panel: unknown, formKey: string) { formKeys.set(panel, formKey); },
+      formKeyOf(panel: unknown) { return formKeys.get(panel); },
+    };
+    const tabOf = (title: string) => ({ title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } });
+    const editedCopy = tabOf('Mod.esp (SomeMod)');
+    const otherCopy = tabOf('Mod.esp (OtherMod)');
+    tracker.setFormKey(editedCopy, '000800:Mod.esp');
+    tracker.setFormKey(otherCopy, '000800:Mod.esp');
+
+    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedCopy, tracker));
+
+    expect(tracker.formKeyOf(editedCopy)).toBe('000900:Mod.esp');
+    expect(tracker.formKeyOf(otherCopy)).toBe('000800:Mod.esp');
+    expect(otherCopy.webview.postMessage).not.toHaveBeenCalled();
   });
 
   it('follows nothing after an edit that leaves the FormKey as it was', async () => {

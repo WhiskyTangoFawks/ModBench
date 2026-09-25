@@ -526,7 +526,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        while (reader.Read()) hashes[reader.GetString(0)] = reader.IsDBNull(1) ? "" : reader.GetString(1);
+        while (reader.Read()) hashes[reader.GetString(0)] = reader.GetString(1);
         return hashes;
     }
 

@@ -3,12 +3,11 @@ import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
-import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
+import { routeRecordPanelMessage, routerDepsForPanel, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
-import { followRecordInPanels } from './followRecord';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
@@ -57,8 +56,6 @@ function recordPanelWriteDeps(
       () => { deps.refreshMatchingPlugins(); },
       (plugin, origin) => deps.refreshSourceControlFor(plugin, origin),
     ),
-    followRecord: (formKey, newFormKey) =>
-      followRecordInPanels(deps.recordPanels, deps.activeRecordTracker, formKey, newFormKey),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),
   };
@@ -74,10 +71,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
   const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
-  // `formKeyPicker` is a placeholder here and rebuilt per panel below, since its reply must reach
-  // the one panel that asked.
+  // `formKeyPicker` and `followRecord` are placeholders here, rebuilt per panel below, since each
+  // must reach the one panel that asked.
   const routerDeps: RouteRecordPanelMessageDeps = {
-    ...writeDeps, meditClient, channel: outputChannel, formKeyPicker: undefined,
+    ...writeDeps, meditClient, channel: outputChannel, formKeyPicker: undefined, followRecord: undefined,
   };
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
@@ -185,13 +182,9 @@ export function openRecordPanel(
   panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // A reply must reach the one panel that asked, never a broadcast; `routerDeps` is shared
-    // across panels, so this per-panel field is rebuilt with the panel this closure holds.
-    const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
-    void routeRecordPanelMessage(msg, {
-      ...routerDeps,
-      formKeyPicker: { meditClient: routerDeps.meditClient, reply },
-    });
+    // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
+    // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
+    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, activeRecordTracker));
   });
 
   const scriptUri = panel.webview.asWebviewUri(

@@ -728,9 +728,11 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // A record set that moved is a whole-plugin re-derivation, which is the Indexer's to
-            // run: it holds the mod and knows which truth this copy reads (ADR-0007 invariant 3).
-            if (report.NeedsRebuild) ReindexHeldCopy(key);
+            // A record set that moved is re-derived whole. A tree that gained records is refreshed
+            // by their keys, so the rows that moved are named (edit-record.md, Hand-off).
+            if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && order.ModFolderOf(key) is { } modFolder)
+                index.RefreshByKeys(key, modFolder, report.ChangedKeys);
+            else if (report.NeedsRebuild) ReindexHeldCopy(key);
             reports.Add(report);
         }
 

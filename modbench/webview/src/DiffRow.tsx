@@ -6,7 +6,6 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
-import { formKeyLabel } from './FormKeyLink';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
@@ -94,8 +93,6 @@ function renderCell(
       // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
       editable={onCommit != null && !meta.readOnly}
       onCommit={onCommit}
-      // A FormKey typed as text, as the record's own FormID is, reads as the record it names.
-      displayOverride={resolution && typeof value === 'string' ? formKeyLabel(value, resolution) : undefined}
     />
   );
 }
@@ -259,10 +256,10 @@ export function DiffRow({
         const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column.
         const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
-        // ADR-0018: a text cell has its menu even when immutable, as a read-only tab is the only
-        // way to read a long value whole. A string that resolves to a record is a reference.
-        const isTextField = meta.type === 'string' && diff.resolutions?.[key] == null;
-        const offersMenu = arrayEditable || isTextField;
+        // ADR-0018: a `string` cell always carries its own right-click context, mutable or
+        // immutable alike — a read-only tab is still the only way to read a long immutable
+        // value in full.
+        const offersMenu = arrayEditable || meta.type === 'string';
         const arrayOps = arrayEditable ? {
           add: isArrayParentRow ? () => onArrayOp(key, 'add') : undefined,
           remove: isArrayElementRow ? () => onArrayOp(key, 'remove') : undefined,
@@ -286,7 +283,7 @@ export function DiffRow({
           isArrayElementRow
             ? arrayElementContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
-          isTextField
+          meta.type === 'string'
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
                 modelValue(diff.values[key], meta), !cellEditable, hops,

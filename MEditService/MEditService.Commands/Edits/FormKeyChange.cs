@@ -16,7 +16,7 @@ internal sealed class FormKeyChange(
     WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
     /// <summary>The document member a record's FormID is, which the edit's path names.</summary>
-    internal const string Member = "FormKey";
+    internal const string Member = RecordMembers.FormKey;
 
     /// <summary>Whether the envelope sets the record's FormID rather than a field of its document.</summary>
     internal static bool IsFormIdEdit(RecordEditEnvelope envelope) =>
