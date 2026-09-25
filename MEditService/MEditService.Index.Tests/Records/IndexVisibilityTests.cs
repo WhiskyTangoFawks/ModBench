@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using MEditService.Index;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;

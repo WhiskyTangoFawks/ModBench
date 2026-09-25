@@ -21,8 +21,6 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/{plugin}/records", "CreateRecord"),
         ("POST /plugins/external-change/absorb", "AbsorbExternalChange"),
         ("POST /plugins/external-change/keep", "KeepExternalChange"),
-        ("POST /plugins/rebase", "Rebase"),
-        ("POST /plugins/rebase/continue", "ContinueRebase"),
         ("PUT /load-order", "PutLoadOrder"),
     ];
 
@@ -113,8 +111,6 @@ public sealed class WriteRouteSeamTests
             });
     }
 
-    // Rebase/ContinueRebase delegate through a shared private helper (Rebased) instead of naming
-    // WriteEndpointMapping inline, so the seam must be found one hop away.
     [Fact]
     public void TheScan_FollowsASiblingMethodTheRouteCalls()
     {

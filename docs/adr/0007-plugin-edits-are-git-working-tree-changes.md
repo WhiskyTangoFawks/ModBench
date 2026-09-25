@@ -32,7 +32,9 @@ the binary is a build artifact that compile regenerates from it.
    ([ADR-0006](0006-decompilation-is-provably-faithful.md)). Commit is
    git's own gesture, ungated; history may hold states that do not build.
 5. **The native git UI is the review surface.** One Source Control group per tracked mod, native
-   diffs, native commit. Git on PATH is a product requirement.
+   diffs, native commit. Git on PATH is a product requirement. Modbench does not rebuild a git gesture VS Code
+   already offers: branching, rebasing and merging, the edit branch included, happen in Source
+   Control.
 6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine
    upstream state on `main` and is edited on the edit branch, so `git diff main <branch>` is
    everything the user changed and compiling `main` restores the pristine plugin. An authored mod

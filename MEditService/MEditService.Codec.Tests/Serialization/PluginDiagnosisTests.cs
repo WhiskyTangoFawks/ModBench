@@ -3,7 +3,6 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Exceptions;
 using Mutagen.Bethesda.Plugins.Masters;
-using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.Codec.Tests.Serialization;

@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;

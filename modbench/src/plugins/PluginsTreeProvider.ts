@@ -81,8 +81,6 @@ export interface PluginsTreeProviderOptions {
   /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
    *  could not be reached — renders no implicit row rather than a guessed one. */
   implicitMasters?: ImplicitMasterSource;
-  /** Whether the mod holding this plugin is mid-rebase, as its repository says. Absent: none is. */
-  rebaseInProgress?: (plugin: string, origin: string) => boolean;
 }
 
 
@@ -282,15 +280,12 @@ export class PluginsTreeProvider
   private cache?: { rows: PluginListNode[] };
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
-  private readonly rebaseInProgress: (plugin: string, origin: string) => boolean;
-
   constructor(options: PluginsTreeProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
     this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
-    this.rebaseInProgress = options.rebaseInProgress ?? (() => false);
     this.instance = options.instance;
     this.records = options.records;
     this.client = options.client;
@@ -496,17 +491,14 @@ export class PluginsTreeProvider
     row.contextValue = this.contextValueOf(file, joinedOrigin);
   }
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, rebase on a tracked
-  // one's mod while none is in progress, compile on a tracked, editable one. None before mEdit answers.
+  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
+  // tracked, editable one. None before mEdit answers.
   private contextValueOf(file: string, joinedOrigin: string | undefined): string {
     if (joinedOrigin === undefined || !this.inMod(joinedOrigin)) return 'plugin';
     const facts = this.facts?.get(file, joinedOrigin);
     if (facts?.tracked === undefined) return 'plugin';
     if (!facts.tracked) return 'plugin untrackedInMod';
-    const flags = ['plugin'];
-    if (!this.rebaseInProgress(file, joinedOrigin)) flags.push('rebasable');
-    if (this.compilable(file, joinedOrigin)) flags.push('compilable');
-    return flags.join(' ');
+    return this.compilable(file, joinedOrigin) ? 'plugin compilable' : 'plugin';
   }
 
   // The instance value names each mod's folder, whatever the mod manager calls the others.

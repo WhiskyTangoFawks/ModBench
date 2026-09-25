@@ -8,11 +8,9 @@ import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnap
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
 } from './trackedRepositories';
-import { runRebase } from './externalChangeGestures';
-import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
-import { compilableSelected, onlySelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
+import { compilableSelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -98,41 +96,6 @@ export function registerTrackCommand(
       if (outcome.refused.length > 0) report(outcome);
       else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);
     });
-  });
-}
-
-// Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. Also the
-// *re-runnable* form — {@link SourceRepository.RebaseEditBranch}'s resumption-aware design means
-// this same command both starts a rebase and resumes one left conflicted.
-export function registerRebaseCommand(
-  client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
-  outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-  treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
-  originFiles: OriginFilesOf, viewSelection: () => readonly PluginsTreeNode[],
-): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.mod.rebaseEditBranch', async (clicked?: PluginListNode) => {
-    const node = clicked ?? onlySelected(viewSelection(), 'plugin');
-    if (node?.kind !== 'plugin') return;
-    const name = node.plugin.name;
-    const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-    if (!origin) {
-      reporter.report('error', `Could not resolve which mod "${name}" belongs to.`);
-      return;
-    }
-
-    const result = await runRebase({
-      client, openMergeEditor: makeMergeEditorOpener(originFiles, outputChannel, reporter),
-      reporter,
-      refreshTree: () => treeProvider.refresh(),
-      refreshMatchingPlugins,
-    }, origin);
-    if (!result) return; // transport failure or refusal already surfaced by runRebase
-
-    if (result.outcome === 'Refused') {
-      reporter.report('warning', result.refusalReason ?? 'mEdit gave no reason.');
-    } else if (result.outcome === 'Conflicted' && result.refusalReason) {
-      reporter.report('warning', result.refusalReason);
-    }
   });
 }
 
@@ -286,29 +249,9 @@ export function publishCompileDiagnostics(
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** The shape this extension needs from a `vscode.git` `Repository`: `status()`, the SCM panel's
- *  own Refresh, and the state's rebase commit, set while a rebase is in progress. */
+/** The one shape this extension needs from a `vscode.git` `Repository`: `status()`. */
 export interface MinimalRepository {
   status(): Thenable<unknown>;
-  readonly state: {
-    readonly rebaseCommit: unknown;
-    onDidChange(listener: () => void): vscode.Disposable;
-  };
-}
-
-/** Whether the plugin's mod is mid-rebase, as its repository says; a plugin with none is not. */
-export function rebaseInProgressIn(
-  pluginRepositories: ReadonlyMap<string, MinimalRepository> | undefined, plugin: string, origin: string,
-): boolean {
-  return pluginRepositories?.get(pluginAddressKey(plugin, origin))?.state.rebaseCommit !== undefined;
-}
-
-/** Hears every repository's state change, a rebase starting or ending among them. */
-export function watchRepositoryStates(
-  pluginRepositories: ReadonlyMap<string, MinimalRepository>, onChange: () => void,
-): vscode.Disposable {
-  const subscriptions = [...new Set(pluginRepositories.values())].map((repo) => repo.state.onDidChange(onChange));
-  return { dispose: () => { for (const s of subscriptions) s.dispose(); } };
 }
 // Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can
 // drift against an API this extension otherwise never touches. `openRepository` resolves `null`

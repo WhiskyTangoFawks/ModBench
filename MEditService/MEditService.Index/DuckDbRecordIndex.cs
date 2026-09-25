@@ -1,8 +1,5 @@
 using System.Data;
 using System.Diagnostics;
-using System.Globalization;
-using System.Runtime.ExceptionServices;
-using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;

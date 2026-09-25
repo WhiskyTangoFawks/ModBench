@@ -1,4 +1,3 @@
-using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder.Tests.Plugins;

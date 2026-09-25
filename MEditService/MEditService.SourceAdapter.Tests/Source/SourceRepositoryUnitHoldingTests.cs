@@ -1,7 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;

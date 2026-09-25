@@ -1,9 +1,8 @@
 # decompile-plugin: contract
 
 Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod and under
-Plugin, `rebase edit branch` under Mod, and the system command `decompile plugin`, in
-[commands.md](../commands.md). What the user picks and answers is in
-[plugins.md](../surfaces/plugins.md): Track, External change and Rebase edit branch. Governed by
+Plugin, and the system command `decompile plugin`, in [commands.md](../commands.md). What the
+user picks and answers is in [plugins.md](../surfaces/plugins.md): Track and External change. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
@@ -62,8 +61,8 @@ serving the last state.
      deletions included, so the same bytes do not open the question again.
 6. Commands records each plugin's bytes as what Modbench last wrote.
 7. After the last plugin, in a repository this run created, the Source adapter creates the edit
-   branch at `main` and checks it out. Otherwise the edit branch does not move: the user replays it
-   onto the new baselines with `rebase edit branch`.
+   branch at `main` and checks it out. Otherwise the edit branch does not move: the user rebases it
+   onto the new baselines with git, in VS Code's Source Control (ADR-0007, invariant 5).
 8. For the system trigger, Commands ends the question.
 9. Commands answers applied or the refusal, per plugin.
 
@@ -79,12 +78,6 @@ manager does not record is left out of the subject and the trailers.
 Both presets ignore `meta.ini` (ADR-0007, invariant 7). Track writes the `.gitignore` once, and
 then the user owns it.
 
-## rebase edit branch
-
-The gesture replays the edit branch onto `main`, and carries changed tracked files outside
-`source/` through the rebase. It is the only thing that rebases the edit branch. It ends clean,
-refused, or conflicted, and a conflicted rebase is git's to finish.
-
 ## Hand-off
 
 This flow waits for no hand-off.
@@ -92,8 +85,6 @@ This flow waits for no hand-off.
 - The Mod watcher sees the source change, and the Indexer refreshes the keys. Once a plugin is
   tracked, the Indexer reads its documents, not its bytes
   ([index-load-order](index-load-order.d2)).
-- A conflicted rebase is git's to finish, in the native merge editor and Source Control (ADR-0007,
-  invariant 5).
 
 ## Refusals
 
@@ -102,11 +93,9 @@ Commands names the cause. A refusal leaves the question open, so the other answe
 | Refusal | Where | Why |
 |---|---|---|
 | Git is not on the PATH | every destination, once for the whole selection | No plugin can escape it. |
-| A question is open on the mod | the repository, `rebase edit branch` | ADR-0003, invariant 3. |
+| A question is open on the mod | the repository | ADR-0003, invariant 3. |
 | The plugin is in no mod: the game folder or Overwrite | the repository | A repository lives in a mod's folder. The refusal points at a patch plugin. |
 | The plugin is already tracked | the repository | |
-| The mod has uncommitted changes in `source/`, naming the paths | `rebase edit branch` | Git's own rule. |
-| A rebase is already in progress | `rebase edit branch` | Git's Source Control finishes it (ADR-0007, invariant 5). |
 | The bytes cannot be read or parsed | every destination | Diagnosed, never repaired (ADR-0006, invariant 7). |
 | A record fails the round trip, naming the record and what was lost | every destination | ADR-0006, invariant 2. |
 | A localized plugin's strings file is missing, naming the file and where Modbench looked | every destination | |
@@ -146,4 +135,3 @@ Exceptions to the principles:
 - **Commands:** given the plugins, a destination, a preset and the repository, the documents,
   commits, messages, refs and staged files written, or the refusal and nothing of that plugin
   written.
-- **`rebase edit branch`:** given the repository, the rebase outcome, or the refusal.

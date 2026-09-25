@@ -1,5 +1,3 @@
-using MEditService.SourceAdapter;
-
 namespace MEditService.SourceAdapter.Tests.Source;
 
 /// <summary>Multi-plugin compile is atomic under a crash injected between writes: the marker always

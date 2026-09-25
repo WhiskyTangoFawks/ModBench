@@ -5,7 +5,6 @@ using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 

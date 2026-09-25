@@ -1,13 +1,11 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Queries.Tests.Query;
 

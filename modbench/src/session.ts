@@ -26,8 +26,6 @@ export interface ExtensionSession {
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
-  /** The watch on those repositories' states, replaced with them. */
-  pluginRepositoryStates?: vscode.Disposable;
   /** The record filter's single writer: `makeShowRecordFilter`. */
   showRecordFilter?: (filter: RecordFilter | null) => void;
   /** The malformed-plugin scan's Problems entries, replaced wholesale by each reconcile. */

@@ -1,7 +1,5 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

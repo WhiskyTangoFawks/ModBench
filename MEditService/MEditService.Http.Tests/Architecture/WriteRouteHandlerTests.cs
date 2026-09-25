@@ -1,8 +1,6 @@
 using System.Reflection;
 using MEditService.Commands;
-using MEditService.Http.Tests.Api;
 using MEditService.Http.Tests.TestSupport;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,8 +27,6 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/{plugin}/records", typeof(CreateRecordHandler)),
         ("POST", "/plugins/external-change/absorb", typeof(AbsorbExternalChangeHandler)),
         ("POST", "/plugins/external-change/keep", typeof(KeepExternalChangeHandler)),
-        ("POST", "/plugins/rebase", typeof(RebaseEditBranchHandler)),
-        ("POST", "/plugins/rebase/continue", typeof(ContinueRebaseEditBranchHandler)),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
     ];
 

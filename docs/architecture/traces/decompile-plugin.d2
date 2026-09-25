@@ -58,17 +58,6 @@ source -> watcher: source changed {class: signal}
 watcher -> indexer: source changed {class: signal}
 sourceadapter -> indexer: documents (tracked) {class: query}
 
-rebase: "rebase edit branch" {
-  plugins -> client: rebase edit branch {class: edit}
-  client -> http: envelope {class: edit}
-  http -> commands: envelope {class: edit}
-  commands -> sourceadapter: "rebase the edit branch onto main" {class: edit}
-  sourceadapter -> commands: "clean · refused (paths) · conflicted (files)" {class: edit}
-  commands -> http: the outcome {class: edit}
-  http -> client: the outcome {class: edit}
-  client -> plugins: the outcome {class: edit}
-  plugins."refused: the paths · conflict: the native merge editor"
-}
 
 refused: "refused, nothing of that plugin written" {
   commands -> http: "git not on the PATH · a plugin in no mod · the bytes cannot be parsed · a record fails the round trip, naming it · a missing strings file · a record already changed, naming the records" {class: edit}

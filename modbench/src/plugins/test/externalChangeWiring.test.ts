@@ -34,7 +34,6 @@ function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockR
   const reporter = recordingReporter();
   wireQuestionOpen({
     client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, presentCrashRepair, reporter,
-    originFiles: () => undefined,
   });
   return {
     outputChannel, reporter,

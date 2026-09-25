@@ -5,7 +5,7 @@ export type {
   RecordCopyAsOverrideResponse, RecordCopyAsNewRecordResponse, ReferenceResult, RecordFilter,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
-  PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult, ExternalChangeActionResult, LoadOrderStatus,
+  PlacedSummary, ContainerChildSummary, CompileResult, ExternalChangeActionResult, LoadOrderStatus,
   LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';

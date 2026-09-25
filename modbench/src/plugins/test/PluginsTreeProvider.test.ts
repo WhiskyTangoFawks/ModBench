@@ -171,7 +171,6 @@ function makeTree(
     dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
-    rebaseInProgress: (plugin: string, origin: string) => boolean;
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
@@ -186,7 +185,6 @@ function makeTree(
     dataFolderFile: extra.dataFolderFile,
     implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
-    rebaseInProgress: extra.rebaseInProgress,
   });
   return { tree, client, records, instance, source, logged };
 }
@@ -1730,27 +1728,20 @@ function expectString(value: unknown): string {
   return value;
 }
 
-// plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and rebase edit
-// branch on a tracked plugin's mod while no rebase is in progress, each offered only there.
-describe('PluginsTreeProvider — the row states where track, rebase edit branch and compile apply', () => {
+// plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and compile on a
+// tracked, editable plugin, each offered only there.
+describe('PluginsTreeProvider — the row states where track and compile apply', () => {
   const flags = async (h: Harness): Promise<string[]> => String((await rowItem(h)).contextValue).split(' ');
 
-  it('offers track on an untracked plugin in a mod, and not rebase', async () => {
+  it('offers track on an untracked plugin in a mod', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
 
     expect(await flags(h)).toEqual(['plugin', 'untrackedInMod']);
   });
 
-  it('offers rebase and compile on a tracked, editable plugin in a mod, and not track', async () => {
+  it('offers compile on a tracked, editable plugin in a mod, and not track', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { isTracked: true })]);
-
-    expect(await flags(h)).toEqual(['plugin', 'rebasable', 'compilable']);
-  });
-
-  it('offers no rebase while the mod\'s rebase is in progress', async () => {
-    const h = makeTree([A_ROW()], { rebaseInProgress: (plugin, origin) => plugin === 'A.esp' && origin === 'SomeMod' });
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
     expect(await flags(h)).toEqual(['plugin', 'compilable']);
@@ -1761,7 +1752,7 @@ describe('PluginsTreeProvider — the row states where track, rebase edit branch
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'rebasable']);
+    expect(await flags(h)).toEqual(['plugin']);
   });
 
   it('offers neither on a plugin in no mod: Data or Overwrite', async () => {
@@ -2217,7 +2208,7 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
 });
 
 // A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0013),
-// so a healthy row's contextValue says only its kind and where track and rebase apply.
+// so a healthy row's contextValue says only its kind and where track and compile apply.
 describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
   it('renders every plugin row plainly, whatever the load order state', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);

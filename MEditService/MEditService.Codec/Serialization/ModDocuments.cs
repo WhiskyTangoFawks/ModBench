@@ -6,7 +6,6 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
