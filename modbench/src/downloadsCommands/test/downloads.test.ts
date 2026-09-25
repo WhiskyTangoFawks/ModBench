@@ -58,7 +58,7 @@ describe('excludeDownload / includeDownload', () => {
 
     expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: true });
 
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ hidden: true, modID: '123', version: '1.2' });
+    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: true, modID: '123', version: '1.2' });
     expect(await readFile(sidecarPath(downloadsDir, 'foo.7z'), 'utf8')).toContain('removed=true');
   });
 
@@ -69,7 +69,7 @@ describe('excludeDownload / includeDownload', () => {
 
     expect(await includeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: true });
 
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ hidden: false });
+    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: false });
     expect(await readFile(sidecarPath(downloadsDir, 'foo.7z'), 'utf8')).toContain('removed=false');
   });
 
@@ -79,7 +79,7 @@ describe('excludeDownload / includeDownload', () => {
 
     expect(await excludeDownload(downloadsDir, 'manual.7z')).toEqual({ applied: true, wrote: true });
 
-    expect(await sidecarOf(downloadsDir, 'manual.7z')).toMatchObject({ hidden: true });
+    expect(await sidecarOf(downloadsDir, 'manual.7z')).toMatchObject({ excluded: true });
   });
 
   it('excluding an already excluded download is applied, not a refusal', async () => {
@@ -88,7 +88,7 @@ describe('excludeDownload / includeDownload', () => {
     await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
     expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ hidden: true });
+    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: true });
   });
 
   it('including a metaless archive writes it no sidecar — visible is already its default', async () => {
@@ -162,7 +162,7 @@ describe('excludeDownload / includeDownload', () => {
     const outcome = await includeDownload(downloadsDir, 'foo.7z');
 
     assertRefusal(outcome, 'foo.7z');
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ hidden: true });
+    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: true });
   });
 
   it('refuses, never throws, when the sidecar cannot be written', async () => {
@@ -188,7 +188,7 @@ describe('excludeDownload beside install', () => {
 
     await Promise.all([excludeDownload(downloadsDir, 'foo.7z'), markDownloadInstalled(downloadsDir, 'foo.7z')]);
 
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ hidden: true, status: 'Installed' });
+    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ excluded: true, status: 'Installed' });
   });
 });
 
@@ -205,8 +205,8 @@ describe('excludeDownloads / includeDownloads — over a selection', () => {
       landed: ['a.7z', 'b.7z'],
       refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
     });
-    expect(await sidecarOf(downloadsDir, 'a.7z')).toMatchObject({ hidden: true });
-    expect(await sidecarOf(downloadsDir, 'b.7z')).toMatchObject({ hidden: true });
+    expect(await sidecarOf(downloadsDir, 'a.7z')).toMatchObject({ excluded: true });
+    expect(await sidecarOf(downloadsDir, 'b.7z')).toMatchObject({ excluded: true });
   });
 
   it('includes every landing name and refuses the one gone from disk, by name', async () => {
@@ -222,8 +222,8 @@ describe('excludeDownloads / includeDownloads — over a selection', () => {
       landed: ['a.7z', 'b.7z'],
       refused: [{ item: 'gone.7z', reasonContains: 'gone.7z' }],
     });
-    expect(await sidecarOf(downloadsDir, 'a.7z')).toMatchObject({ hidden: false });
-    expect(await sidecarOf(downloadsDir, 'b.7z')).toMatchObject({ hidden: false });
+    expect(await sidecarOf(downloadsDir, 'a.7z')).toMatchObject({ excluded: false });
+    expect(await sidecarOf(downloadsDir, 'b.7z')).toMatchObject({ excluded: false });
   });
 });
 

@@ -697,11 +697,11 @@ describe('package.json Downloads row menu order', () => {
   });
 
   // Ties the two halves together, as Mods' own enable/disable test does. Exclude's own clause
-  // negates (`!(...hidden...)`), unlike enable/disable, so satisfies() reads the sign, not just
+  // negates (`!(...excluded...)`), unlike enable/disable, so satisfies() reads the sign, not just
   // the flag name.
   it('an excluded row satisfies include\'s when-clause, and not exclude\'s — and vice versa', () => {
-    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { hidden: true }));
-    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { hidden: false }));
+    const excludedRow = new DownloadNode(downloadRowFixture('foo.7z', { excluded: true }));
+    const includedRow = new DownloadNode(downloadRowFixture('bar.7z', { excluded: false }));
     const exclude = present(
       downloadRowMenu().find((e) => e.command === 'modbench.downloadedFile.exclude'),
       'a modbench.downloadedFile.exclude row-menu entry',

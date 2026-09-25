@@ -32,17 +32,17 @@ async function selectionOutcomeOf<T>(
   return { landed, refused };
 }
 
-// The transform returns `text` untouched when `hidden` already matches, so `putIfChanged` sees no
+// The transform returns `text` untouched when `excluded` already matches, so `putIfChanged` sees no
 // change and writes nothing — no `.meta` for a row already at rest. A missing archive is refused
 // first, so a stale row never writes a lone `.meta`.
-async function spliceHidden(downloadsDir: string, name: string, hidden: boolean): Promise<DownloadsCommandResult> {
+async function spliceExcluded(downloadsDir: string, name: string, excluded: boolean): Promise<DownloadsCommandResult> {
   try {
     if (!(await exists(downloadFile(downloadsDir, name)))) {
       return { applied: false, refusal: `"${name}" is gone from disk.` };
     }
     const { wrote } = await putIfChanged(
       downloadSidecarFile(downloadsDir, name),
-      (text) => (parseDownloadMeta(text).hidden === hidden ? text : setHiddenInText(text, hidden)),
+      (text) => (parseDownloadMeta(text).excluded === excluded ? text : setHiddenInText(text, excluded)),
       { ifMissing: '' },
     );
     return { applied: true, wrote };
@@ -54,11 +54,11 @@ async function spliceHidden(downloadsDir: string, name: string, hidden: boolean)
 /** Excluded is MO2's `removed` key — a separate axis from Status, so this says nothing about
  *  whether the download was ever installed. */
 export function excludeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceHidden(downloadsDir, name, true);
+  return spliceExcluded(downloadsDir, name, true);
 }
 
 export function includeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceHidden(downloadsDir, name, false);
+  return spliceExcluded(downloadsDir, name, false);
 }
 
 const bareName = (name: string): string => name;

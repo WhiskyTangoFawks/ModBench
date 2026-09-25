@@ -42,13 +42,13 @@ describe('downloads commands corpus', () => {
     return row;
   }
 
-  it('exclude writes one sidecar and nothing else, and the row reads back hidden', async () => {
+  it('exclude writes one sidecar and nothing else, and the row reads back excluded', async () => {
     const before = await snapshotTree(dir);
 
     expect(await excludeDownload(downloadsDir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await rowFor(NAME)).hidden).toBe(true);
+    expect((await rowFor(NAME)).excluded).toBe(true);
   });
 
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
@@ -57,7 +57,7 @@ describe('downloads commands corpus', () => {
     expect(await excludeDownload(downloadsDir, MANUAL)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
-    expect((await rowFor(MANUAL)).hidden).toBe(true);
+    expect((await rowFor(MANUAL)).excluded).toBe(true);
   });
 
   it('include writes one sidecar and nothing else, and the row reads back visible', async () => {
@@ -67,7 +67,7 @@ describe('downloads commands corpus', () => {
     expect(await includeDownload(downloadsDir, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await rowFor(NAME)).hidden).toBe(false);
+    expect((await rowFor(NAME)).excluded).toBe(false);
   });
 
   it('including a metaless archive touches nothing — visible is already its default', async () => {
@@ -76,7 +76,7 @@ describe('downloads commands corpus', () => {
     expect(await includeDownload(downloadsDir, MANUAL)).toEqual({ applied: true, wrote: false });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
-    expect((await rowFor(MANUAL)).hidden).toBe(false);
+    expect((await rowFor(MANUAL)).excluded).toBe(false);
   });
 
   it('excluding an already excluded download touches nothing', async () => {
@@ -108,8 +108,8 @@ describe('downloads commands corpus', () => {
       refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
     });
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
-    expect((await rowFor(NAME)).hidden).toBe(true);
-    expect((await rowFor(MANUAL)).hidden).toBe(true);
+    expect((await rowFor(NAME)).excluded).toBe(true);
+    expect((await rowFor(MANUAL)).excluded).toBe(true);
   });
 
   it('includeDownloads includes every landing name and refuses the one gone from disk, by name', async () => {
@@ -124,15 +124,15 @@ describe('downloads commands corpus', () => {
       refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
     });
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
-    expect((await rowFor(NAME)).hidden).toBe(false);
-    expect((await rowFor(MANUAL)).hidden).toBe(false);
+    expect((await rowFor(NAME)).excluded).toBe(false);
+    expect((await rowFor(MANUAL)).excluded).toBe(false);
   });
 
-  // The other direction of the same key: MO2 hides a download, Modbench shows it hidden.
-  it('a sidecar hidden by MO2 itself reads back hidden', async () => {
+  // The other direction of the same key: MO2 hides a download, Modbench shows it excluded.
+  it('a sidecar hidden by MO2 itself reads back excluded', async () => {
     await writeFile(join(dir, MANUAL_META), '[General]\r\nremoved=true\r\n');
 
-    expect((await rowFor(MANUAL)).hidden).toBe(true);
+    expect((await rowFor(MANUAL)).excluded).toBe(true);
   });
 
   it('delete trashes the archive and then the sidecar, and nothing else', async () => {

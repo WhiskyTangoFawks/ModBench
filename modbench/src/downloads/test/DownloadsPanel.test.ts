@@ -43,7 +43,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  registerDownloadsHiddenToggleCommands,
+  registerDownloadsExcludedToggleCommands,
   registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
@@ -86,8 +86,8 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
 
 const fakeDownloadsProvider = (
   currentSort: ReturnType<DownloadsProvider['currentSort']> = { column: 'mtimeMs', descending: true },
-): Pick<DownloadsProvider, 'setSort' | 'setShowHidden' | 'currentSort'> => ({
-  setSort: vi.fn(), setShowHidden: vi.fn(), currentSort: vi.fn(() => currentSort),
+): Pick<DownloadsProvider, 'setSort' | 'setShowExcluded' | 'currentSort'> => ({
+  setSort: vi.fn(), setShowExcluded: vi.fn(), currentSort: vi.fn(() => currentSort),
 });
 
 // The composition root's answers, doubled: a new mod keeps the name install proposed, the FOMOD
@@ -646,15 +646,15 @@ describe('registerDownloadsMultiRowCommands', () => {
     });
   });
 
-  it('is idempotent over a mixed hidden/visible selection — hide leaves both hidden, no error', async () => {
+  it('is idempotent over a mixed excluded/included selection — exclude leaves both excluded, no error', async () => {
     const root = await makeInstanceRoot();
-    await writeArchive(root, 'already-hidden.7z');
+    await writeArchive(root, 'already-excluded.7z');
     await writeArchive(root, 'visible.7z');
-    const already = await writeMeta(root, 'already-hidden.7z', '[General]\r\nremoved=true\r\n');
+    const already = await writeMeta(root, 'already-excluded.7z', '[General]\r\nremoved=true\r\n');
     const visible = await writeMeta(root, 'visible.7z');
 
     registerDownloadsMultiRowCommands(downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    invoke('modbench.downloadedFile.exclude', node(root, 'visible.7z'), [node(root, 'already-hidden.7z'), node(root, 'visible.7z')]);
+    invoke('modbench.downloadedFile.exclude', node(root, 'visible.7z'), [node(root, 'already-excluded.7z'), node(root, 'visible.7z')]);
 
     await vi.waitFor(async () => {
       expect(await readFile(already, 'utf8')).toContain('removed=true');
@@ -665,15 +665,15 @@ describe('registerDownloadsMultiRowCommands', () => {
 
   it('is idempotent over a mixed selection for unhide too — both end up visible, no error, the already-visible one untouched', async () => {
     const root = await makeInstanceRoot();
-    await writeArchive(root, 'hidden.7z');
+    await writeArchive(root, 'excluded.7z');
     await writeArchive(root, 'already-visible.7z');
-    const hidden = await writeMeta(root, 'hidden.7z', '[General]\r\nremoved=true\r\n');
+    const excluded = await writeMeta(root, 'excluded.7z', '[General]\r\nremoved=true\r\n');
     const already = await writeMeta(root, 'already-visible.7z');
 
     registerDownloadsMultiRowCommands(downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.include', node(root, 'hidden.7z'), [node(root, 'hidden.7z'), node(root, 'already-visible.7z')]);
+    await invoke('modbench.downloadedFile.include', node(root, 'excluded.7z'), [node(root, 'excluded.7z'), node(root, 'already-visible.7z')]);
 
-    expect(await readFile(hidden, 'utf8')).toContain('removed=false');
+    expect(await readFile(excluded, 'utf8')).toContain('removed=false');
     // Already visible by default: nothing to clear, so its `.meta` gains no `removed` line.
     expect(await readFile(already, 'utf8')).toBe('[General]\r\n');
     expect(showErrorMessage).not.toHaveBeenCalled();
@@ -1063,13 +1063,13 @@ describe('registerDownloadsSortCommand', () => {
   });
 });
 
-// ── registerDownloadsHiddenToggleCommands ────────────────────────────────────
+// ── registerDownloadsExcludedToggleCommands ────────────────────────────────────
 
-describe('registerDownloadsHiddenToggleCommands', () => {
+describe('registerDownloadsExcludedToggleCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('registers modbench.downloadedFile.showExcluded and .hideExcluded', () => {
-    registerDownloadsHiddenToggleCommands(fakeDownloadsProvider());
+    registerDownloadsExcludedToggleCommands(fakeDownloadsProvider());
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining([
       'modbench.downloadedFile.showExcluded',
       'modbench.downloadedFile.hideExcluded',
@@ -1078,21 +1078,21 @@ describe('registerDownloadsHiddenToggleCommands', () => {
 
   it('showExcluded turns excluded rows on and sets the context key true', () => {
     const provider = fakeDownloadsProvider();
-    registerDownloadsHiddenToggleCommands(provider);
+    registerDownloadsExcludedToggleCommands(provider);
 
     invoke('modbench.downloadedFile.showExcluded');
 
-    expect(provider.setShowHidden).toHaveBeenCalledWith(true);
+    expect(provider.setShowExcluded).toHaveBeenCalledWith(true);
     expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', true);
   });
 
   it('hideExcluded turns excluded rows off and sets the context key false', () => {
     const provider = fakeDownloadsProvider();
-    registerDownloadsHiddenToggleCommands(provider);
+    registerDownloadsExcludedToggleCommands(provider);
 
     invoke('modbench.downloadedFile.hideExcluded');
 
-    expect(provider.setShowHidden).toHaveBeenCalledWith(false);
+    expect(provider.setShowExcluded).toHaveBeenCalledWith(false);
     expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', false);
   });
 });

@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { ModListProvider, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';
 import { errorMessage } from './ports/errorMessage';
 import {
-  registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands,
+  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
 import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
@@ -137,7 +137,7 @@ export function registerDownloadsView(
   own(downloadsView.onDidChangeSelection(updateSingleNexusFileContext));
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
-    ...registerDownloadsHiddenToggleCommands(downloadsProvider),
+    ...registerDownloadsExcludedToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
     ...registerDownloadsMultiRowCommands(
       instance, reporter, ask, trash, install.log,

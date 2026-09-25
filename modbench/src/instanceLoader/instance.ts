@@ -91,7 +91,7 @@ export interface InstanceValue {
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  /** downloads/ rows, `.meta` sidecars folded in — status and hidden included; or the reason
+  /** downloads/ rows, `.meta` sidecars folded in — status and excluded included; or the reason
    *  MO2's configured folder could not be resolved. */
   readonly downloads: DownloadsResult;
   /** ModOrganizer.ini's `selected_profile`. */

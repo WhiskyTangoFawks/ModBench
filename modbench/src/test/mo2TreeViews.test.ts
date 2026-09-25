@@ -12,7 +12,7 @@ import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
 } from './nameFilterViewHarness';
 
-// A mod or a download landing on disk is a row change with no keystroke; Show hidden changes
+// A mod or a download landing on disk is a row change with no keystroke; Show excluded changes
 // rows with no new Instance value either. Real Instance and provider over the corpus fixture.
 
 // `../mo2TreeViews` reaches `vscode` before this file's own top-level code runs, so the state
@@ -345,7 +345,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 });
 
 describe('the Downloads filter follows a toggle with no new instance value', () => {
-  it('recomputes the no-match message off Show hidden, in both directions', async () => {
+  it('recomputes the no-match message off Show excluded, in both directions', async () => {
     const root = await cloneCorpusFixture();
     const archivePath = join(root, 'downloads', 'zzznomatch.7z');
     await writeFile(archivePath, '');
@@ -359,15 +359,15 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
 
     await command('modbench.downloadedFile.filter')();
     currentBox().type('zzznomatch');
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the hidden download excluded');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the excluded download left out');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
     await command('modbench.downloadedFile.showExcluded')();
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the hidden download counts');
+    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the excluded download counts');
     expect(downloadsView.message).toBeUndefined();
 
     await command('modbench.downloadedFile.hideExcluded')();
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once hidden rows are excluded again');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once excluded rows are left out again');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
   });
 });

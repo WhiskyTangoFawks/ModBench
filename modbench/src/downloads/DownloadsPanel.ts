@@ -243,7 +243,7 @@ export function registerDownloadsMultiRowCommands(
   ];
 }
 
-// Sorting and hidden-row filtering already happen inside DownloadsProvider's load(), so these
+// Sorting and excluded-row filtering already happen inside DownloadsProvider's load(), so these
 // take the provider rather than the instance root as the per-archive commands above do.
 
 // Filetime descending, last, is the default DownloadsProvider already starts at, so leaving it
@@ -300,16 +300,16 @@ export function registerDownloadsSortCommand(
 
 /** Two commands over one context key, as the Mods tree's sort-direction toggle does: state
  *  lives on the provider, the handler owns the key package.json's `when` clauses gate on. */
-export function registerDownloadsHiddenToggleCommands(
-  downloadsProvider: Pick<DownloadsProvider, 'setShowHidden'>,
+export function registerDownloadsExcludedToggleCommands(
+  downloadsProvider: Pick<DownloadsProvider, 'setShowExcluded'>,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.showExcluded', () => {
-      downloadsProvider.setShowHidden(true);
+      downloadsProvider.setShowExcluded(true);
       void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', true);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.hideExcluded', () => {
-      downloadsProvider.setShowHidden(false);
+      downloadsProvider.setShowExcluded(false);
       void vscode.commands.executeCommand('setContext', 'modbench.downloadedFile.excludedShown', false);
     }),
   ];

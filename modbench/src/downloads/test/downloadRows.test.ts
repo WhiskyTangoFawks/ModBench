@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { downloadContextValue, filterArchiveRows, filterHiddenRows, sortDownloadRows } from '../downloadRows';
+import { downloadContextValue, filterArchiveRows, filterExcludedRows, sortDownloadRows } from '../downloadRows';
 import type { DownloadRow } from '../../instanceLoader/instance';
 
-const row = (name: string, mtimeMs: number, hidden = false): DownloadRow => ({
+const row = (name: string, mtimeMs: number, excluded = false): DownloadRow => ({
   name,
   displayName: name,
   status: 'Downloaded',
   size: 0,
   mtimeMs,
   hasMeta: false,
-  hidden,
+  excluded,
 });
 
 describe('sortDownloadRows', () => {
@@ -75,17 +75,17 @@ describe('sortDownloadRows', () => {
   });
 });
 
-describe('filterHiddenRows', () => {
-  const rows = [row('visible.zip', 1, false), row('hidden.zip', 2, true)];
+describe('filterExcludedRows', () => {
+  const rows = [row('visible.zip', 1, false), row('excluded.zip', 2, true)];
 
-  it('excludes hidden rows by default (show-hidden off)', () => {
-    expect(filterHiddenRows(rows, false).map((r) => r.name)).toEqual(['visible.zip']);
+  it('excludes excluded rows by default (show-excluded off)', () => {
+    expect(filterExcludedRows(rows, false).map((r) => r.name)).toEqual(['visible.zip']);
   });
 
-  it('includes hidden rows when show-hidden is on, leaving the hidden flag intact', () => {
-    const shown = filterHiddenRows(rows, true);
-    expect(shown.map((r) => r.name)).toEqual(['visible.zip', 'hidden.zip']);
-    expect(shown.find((r) => r.name === 'hidden.zip')?.hidden).toBe(true);
+  it('includes excluded rows when show-excluded is on, leaving the excluded flag intact', () => {
+    const shown = filterExcludedRows(rows, true);
+    expect(shown.map((r) => r.name)).toEqual(['visible.zip', 'excluded.zip']);
+    expect(shown.find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
   });
 });
 
@@ -112,15 +112,15 @@ describe('filterArchiveRows', () => {
 // gated by this space-separated `contextValue` flag string and `viewItem =~ /\bflag\b/` `when`
 // clauses.
 describe('downloadContextValue', () => {
-  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
+  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false };
 
   it('is the base "download" token alone when no optional flag applies', () => {
     expect(downloadContextValue(plain)).toBe('download');
   });
 
-  it('appends hasModID, hasMeta and hidden, in that order, when all three are set', () => {
-    const row: DownloadRow = { ...plain, hasMeta: true, hidden: true, modID: '12345' };
-    expect(downloadContextValue(row)).toBe('download hasModID hasMeta hidden');
+  it('appends hasModID, hasMeta and excluded, in that order, when all three are set', () => {
+    const row: DownloadRow = { ...plain, hasMeta: true, excluded: true, modID: '12345' };
+    expect(downloadContextValue(row)).toBe('download hasModID hasMeta excluded');
   });
 
   it('appends only hasModID when just modID is present', () => {
@@ -131,8 +131,8 @@ describe('downloadContextValue', () => {
     expect(downloadContextValue({ ...plain, hasMeta: true })).toBe('download hasMeta');
   });
 
-  it('appends only hidden when just hidden is set', () => {
-    expect(downloadContextValue({ ...plain, hidden: true })).toBe('download hidden');
+  it('appends only excluded when just excluded is set', () => {
+    expect(downloadContextValue({ ...plain, excluded: true })).toBe('download excluded');
   });
 });
 

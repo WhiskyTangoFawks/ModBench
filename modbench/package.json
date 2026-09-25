@@ -870,12 +870,12 @@
         },
         {
           "command": "modbench.downloadedFile.exclude",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bhidden\\b/)",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bexcluded\\b/)",
           "group": "downloadActions@5"
         },
         {
           "command": "modbench.downloadedFile.include",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhidden\\b/",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bexcluded\\b/",
           "group": "downloadActions@5"
         },
         {

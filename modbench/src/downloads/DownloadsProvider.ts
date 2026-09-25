@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import {
-  downloadContextValue, filterArchiveRows, filterHiddenRows, sortDownloadRows, type DownloadSortColumn,
+  downloadContextValue, filterArchiveRows, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
 import type {
   DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
@@ -89,9 +89,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private cache?: DownloadNode[];
 
   // Transient view state — never persisted, matching the Mods tree's Sort Direction
-  // toggle: a fresh activation always starts back at the spec's defaults (hidden excluded,
+  // toggle: a fresh activation always starts back at the spec's defaults (excluded rows hidden,
   // Filetime descending).
-  private showHidden = false;
+  private showExcluded = false;
   private sortColumn: DownloadSortColumn = 'mtimeMs';
   private sortDescending = true;
   private filterLower = '';
@@ -120,10 +120,10 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Additive, not an exclusive filter, matching MO2's own Show-hidden. The command handler,
+  /** Additive, not an exclusive filter, matching MO2's own Show Hidden. The command handler,
    *  not this, owns the `modbench.downloadedFile.excludedShown` context key. */
-  setShowHidden(show: boolean): void {
-    this.showHidden = show;
+  setShowExcluded(show: boolean): void {
+    this.showExcluded = show;
     this.invalidate();
   }
 
@@ -142,9 +142,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   /** The all-excluded empty state (downloads.md, States, story 2), distinct from the name
    *  filter's own no-match state. */
   allExcluded(): boolean {
-    if (this.showHidden || this.instanceValue.downloads.kind !== 'listed') return false;
+    if (this.showExcluded || this.instanceValue.downloads.kind !== 'listed') return false;
     const archives = filterArchiveRows(this.instanceValue.downloads.rows);
-    return archives.length > 0 && archives.every((row) => row.hidden);
+    return archives.length > 0 && archives.every((row) => row.excluded);
   }
 
   /** Render-only: a filter keystroke narrows already-built rows and never re-pulls the Instance
@@ -157,7 +157,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   /** Empty before the first render, and whenever Show excluded is off, because excluded rows
    *  are then already absent from the cache. */
   excludedNames(): ReadonlySet<string> {
-    const excluded = (this.cache ?? []).filter((n) => n.row.hidden);
+    const excluded = (this.cache ?? []).filter((n) => n.row.excluded);
     return new Set(excluded.map((n) => n.row.name));
   }
 
@@ -179,9 +179,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
 
   private build(downloads: readonly DownloadFile[]): DownloadNode[] {
     // Archive-filtering applies first — a non-archive is never a row, toggle or not — then
-    // hidden-filtering, then sort — the acceptance criterion the three compose by.
+    // excluded-filtering, then sort — the acceptance criterion the three compose by.
     const archives = filterArchiveRows(downloads);
-    const filtered = filterHiddenRows(archives, this.showHidden);
+    const filtered = filterExcludedRows(archives, this.showExcluded);
     const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row));
   }

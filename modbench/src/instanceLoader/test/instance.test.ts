@@ -724,7 +724,7 @@ describe('Instance — downloads, profile and game directory', () => {
       expect.objectContaining({
         name: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
         status: 'Installed',
-        hidden: false,
+        excluded: false,
       }),
     );
     expect(instance.value.activeProfile).toBe('Default');
