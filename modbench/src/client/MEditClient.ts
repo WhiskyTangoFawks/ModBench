@@ -33,21 +33,19 @@ export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
 
-/** The wire's six kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
- *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
-export type NotificationKind =
-  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'question-open'
-  | 'compile-unfinished';
-
-const NOTIFICATION_KINDS = new Set<string>([
+const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'question-open',
   'compile-unfinished',
-]);
+] as const;
 
-/** Whether `kind` is one of the six the wire defines — the one place `NotificationEvent.kind`
- *  (the schema's honest `string`) is narrowed to `NotificationKind` for dispatch. */
+/** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
+ *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
+export type NotificationKind = typeof NOTIFICATION_KINDS[number];
+
+/** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
+ *  `string`) is narrowed to `NotificationKind` for dispatch. */
 export function isNotificationKind(kind: string): kind is NotificationKind {
-  return NOTIFICATION_KINDS.has(kind);
+  return (NOTIFICATION_KINDS as readonly string[]).includes(kind);
 }
 
 /** Re-exported under its own name because it is a callback contract, not merely a query return
