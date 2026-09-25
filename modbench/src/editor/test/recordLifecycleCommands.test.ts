@@ -68,6 +68,13 @@ describe('recordTypeIdentity / recordIdentity — structural, not node-typed', (
     expect(recordIdentity(RECORD_IDENTITY)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
   });
 
+  // plugins.md, Menus and keys: delete and copy are on worldspace, cell and placed-reference rows,
+  // each of which states its record's FormKey and EditorID beside its plugin.
+  it.each(['worldspace', 'cell', 'placed'])('reads a %s row that states its record', (kind) => {
+    expect(recordIdentity({ kind, formKey: '000802:MyPatch.esp', editorId: 'Here', plugin: 'MyPatch.esp', origin: 'ModA' }))
+      .toEqual({ formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: 'Here' });
+  });
+
   it('is undefined for neither shape', () => {
     expect(recordIdentity({ nothing: true })).toBeUndefined();
     expect(recordTypeIdentity(undefined)).toBeUndefined();
@@ -137,7 +144,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
-    expect(reporter.landings).toEqual(['Added 000900:MyPatch.esp.']);
+    expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
     expect(treeSync.refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
@@ -280,10 +287,10 @@ describe('registerRecordLifecycleCommands', () => {
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
 
-      expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not remove 1 of 3 records.', outcome }]);
+      expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not delete 1 of 3 records.', outcome }]);
       expect(reporter.reports).toEqual([{
         severity: 'error',
-        message: 'Could not remove 1 of 3 records.',
+        message: 'Could not delete 1 of 3 records.',
         detail: '"000900:Other.esp in Other.esp (ModB)" (Other.esp is not tracked, so it is read-only.)',
       }]);
       expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -335,7 +342,7 @@ describe('registerRecordLifecycleCommands', () => {
       expect(deleteCalls(client)).toEqual([[[FIRST]]]);
       expect(reporter.reports).toEqual([{
         severity: 'error',
-        message: 'Could not remove 1 of 2 records.',
+        message: 'Could not delete 1 of 2 records.',
         detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to)',
       }]);
     });

@@ -408,12 +408,12 @@
       },
       {
         "command": "modbench.record.create",
-        "title": "Add",
+        "title": "Create Record",
         "category": "Modbench"
       },
       {
         "command": "modbench.record.delete",
-        "title": "Remove",
+        "title": "Delete Record",
         "category": "Modbench"
       },
       {
@@ -539,7 +539,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleRecordType"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleEditableRecordType"
         },
         {
           "command": "modbench.record.delete",
@@ -873,47 +873,77 @@
         {
           "command": "modbench.plugin.reveal",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
-          "group": "pluginActions@1"
+          "group": "1_open@1"
+        },
+        {
+          "command": "modbench.plugin.enable",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bdisabled\\b/",
+          "group": "2_change@1"
+        },
+        {
+          "command": "modbench.plugin.disable",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\benabled\\b/",
+          "group": "2_change@1"
         },
         {
           "command": "modbench.plugin.track",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\buntrackedInMod\\b/",
-          "group": "pluginActions@2"
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\buntracked\\b/ && viewItem =~ /\\binMod\\b/",
+          "group": "4_sourceControl@1"
         },
         {
           "command": "modbench.saveAndCompile",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
-          "group": "pluginActions@3"
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "group": "4_sourceControl@2"
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bcompilable\\b/",
-          "group": "pluginActions@4"
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "group": "4_sourceControl@3"
+        },
+        {
+          "command": "modbench.record.copyValue",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "modbench.plugin.reveal",
+          "when": "view == modbench.pluginListTree && viewItem == pluginImplicit",
+          "group": "1_open@1"
+        },
+        {
+          "command": "modbench.record.copyValue",
+          "when": "view == modbench.pluginListTree && viewItem == pluginImplicit",
+          "group": "5_copy@1"
         },
         {
           "command": "modbench.record.create",
-          "when": "view == modbench.pluginListTree && viewItem == recordType",
-          "group": "recordTypeActions@1"
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\brecordType\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "group": "3_create@1"
         },
         {
           "command": "modbench.openEditorBeside",
-          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.record.delete",
-          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride)",
-          "group": "recordActions@1"
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "group": "1_open@1"
         },
         {
           "command": "modbench.record.copyAsOverride",
-          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@2"
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "group": "5_copy@1"
         },
         {
           "command": "modbench.record.copyAsNewRecord",
-          "when": "view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked || viewItem == recordOverride || viewItem == recordImmutable)",
-          "group": "recordActions@3"
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "group": "5_copy@2"
+        },
+        {
+          "command": "modbench.record.copyValue",
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
+          "group": "5_copy@3"
+        },
+        {
+          "command": "modbench.record.delete",
+          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "group": "6_destroy@1"
         }
       ],
       "webview/context": [
@@ -1008,6 +1038,31 @@
         "key": "ctrl+c",
         "mac": "cmd+c",
         "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus"
+      },
+      {
+        "command": "modbench.plugin.enable",
+        "key": "space",
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.selectionToggle == enable"
+      },
+      {
+        "command": "modbench.plugin.disable",
+        "key": "space",
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.selectionToggle == disable"
+      },
+      {
+        "command": "modbench.record.delete",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.allDeletableRecords"
+      },
+      {
+        "command": "modbench.record.copyValue",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance",
+        "args": {
+          "view": "modbench.pluginListTree"
+        }
       }
     ]
   },

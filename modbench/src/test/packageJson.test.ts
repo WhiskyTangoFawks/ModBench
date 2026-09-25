@@ -8,6 +8,15 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
 } from './vscodeMock';
 
+const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
+const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
+// VS Code draws the navigation group first, then the other groups by name, each by its order.
+const rank = (group: string): string => (group === 'navigation' ? '' : group);
+const placed = (entries: readonly MenuEntry[]): [string, string][] =>
+  [...entries]
+    .sort((a, b) => rank(groupOf(a)).localeCompare(rank(groupOf(b))) || orderOf(a) - orderOf(b))
+    .map((e) => [e.command, groupOf(e)]);
+
 // Only the Mods and Downloads row menus' own contextValue-vs-when tests below need a live
 // ModNode, SeparatorNode, OverwriteNode or DownloadNode.
 vi.mock('vscode', () => ({
@@ -17,6 +26,7 @@ vi.mock('vscode', () => ({
 
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
+import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -600,68 +610,115 @@ describe('package.json command titles and categories', () => {
   });
 });
 
-// Which record rows offer each gesture are contextValue facts the row states for itself.
-describe('package.json record-row context menu', () => {
-  const contextMenus = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  const whenOf = (command: string) =>
-    present(contextMenus().find((e) => e.command === command), `a view/item/context entry for ${command}`).when;
+// plugins.md, Menus and keys: the placement table, in VS Code's groups (open, change, create,
+// source control, copy, then destroy), each item where its row's conditions hold.
+describe('package.json Plugins menus, keys and palette follow plugins.md', () => {
+  const PLUGINS_VIEW = 'view == modbench.pluginListTree';
+  const inPluginsView = (menu: string): MenuEntry[] =>
+    present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, PLUGINS_VIEW));
+  // The menu VS Code draws for a row: every entry whose `when` holds for the row's contextValue.
+  const menuOf = (contextValue: string): [string, string][] => placed(
+    inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue })));
 
-  it('offers Remove on override and untracked rows too', () => {
-    expect(whenOf('modbench.record.delete')).toContain('recordOverride');
-    expect(whenOf('modbench.record.delete')).toContain('recordUntracked');
-  });
-
-  it('offers both copy gestures on override and untracked rows too', () => {
-    for (const command of ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord']) {
-      expect(whenOf(command)).toContain('recordOverride');
-      expect(whenOf(command)).toContain('recordUntracked');
-    }
-  });
-
-  // Open Editor to the Side has a second entry on the Referenced By tree, so `whenOf`'s first-match
-  // lookup cannot read it; it is pinned by exact equality below.
-});
-
-// Origin drift is absorbed automatically by the reconcile verb (ADR-0013) — there is nothing for
-// a plugin row to be, or offer, beyond the two contextValues `PluginsTreeProvider` itself produces
-// (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
-describe('package.json plugin-row context menu', () => {
-  const contextMenus = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  // Every contextValue a plugin row can carry, so a menu entry any of them opens is on the plugin
-  // menu, whatever flag it asks for. Open Header has no entries: it opens via row click.
-  const PLUGIN_ROWS = ['plugin', 'plugin untrackedInMod', 'plugin compilable'];
-  const forPluginRows = () => contextMenus().filter((e) =>
-    PLUGIN_ROWS.some((viewItem) => holds(e.when, { view: 'modbench.pluginListTree', viewItem })));
-
-  // Each plugin-menu command, with the row flag it needs.
-  it('every plugin-row command states exactly which plugin rows it applies to', () => {
-    const ON = 'view == modbench.pluginListTree && viewItem =~ ';
-    expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
-      ['modbench.plugin.reveal', String.raw`${ON}/\bplugin\b/`],
-      ['modbench.plugin.track', String.raw`${ON}/\buntrackedInMod\b/`],
-      ['modbench.saveAndCompile', String.raw`${ON}/\bcompilable\b/`],
-      ['modbench.pluginListTree.compileAtMain', String.raw`${ON}/\bcompilable\b/`],
+  it('plugin menu: reveal, enable or disable, track, compile, compile from main, copy value', () => {
+    expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.enable', '2_change'],
+      ['modbench.plugin.track', '4_sourceControl'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+    expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.disable', '2_change'],
+      ['modbench.saveAndCompile', '4_sourceControl'],
+      ['modbench.pluginListTree.compileAtMain', '4_sourceControl'],
+      ['modbench.record.copyValue', '5_copy'],
     ]);
   });
 
-  // plugins.md, Menus and keys, story 6: offered only where the catalog's condition holds.
-  it('offers track and compile only where the catalog\'s condition holds', () => {
-    const offered = (command: string, contextValue: string) => {
-      const entry = present(forPluginRows().find((e) => e.command === command), command);
-      const pattern = present(/viewItem =~ \/(.*)\/$/.exec(entry.when)?.[1], `the viewItem pattern of ${command}`);
-      return new RegExp(pattern).test(contextValue);
-    };
-    expect(offered('modbench.plugin.track', 'plugin untrackedInMod')).toBe(true);
-    expect(offered('modbench.plugin.track', 'plugin compilable')).toBe(false);
-    expect(offered('modbench.plugin.track', 'plugin')).toBe(false);
-    expect(offered('modbench.plugin.reveal', 'pluginImplicit')).toBe(false);
-    for (const compile of ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain']) {
-      expect(offered(compile, 'plugin compilable')).toBe(true);
-      expect(offered(compile, 'plugin')).toBe(false);
-      expect(offered(compile, 'plugin untrackedInMod')).toBe(false);
-    }
+  it('plugin menu: enable and disable share one slot', () => {
+    const slotOf = (command: string) =>
+      present(inPluginsView('view/item/context').find((e) => e.command === command), command).group;
+    expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
+  });
+
+  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
+  // tracked, editable plugin.
+  it.each([
+    ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
+    ['in the game folder', 'plugin enabled untracked editable'],
+    ['tracked but read-only', 'plugin enabled inMod tracked'],
+    ['not yet described by mEdit', 'plugin enabled inMod'],
+  ])('plugin menu on a plugin %s: neither track nor compile', (_what, contextValue) => {
+    expect(menuOf(contextValue)).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.disable', '2_change'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
+  it('the locked row: reveal and copy value', () => {
+    expect(menuOf('pluginImplicit')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
+  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  it('record-type group menu: create record, only where its plugin is tracked and editable', () => {
+    expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
+    expect(menuOf('recordType untracked editable')).toEqual([]);
+    expect(menuOf('recordType tracked')).toEqual([]);
+  });
+
+  it.each(['record', 'worldspace', 'cell', 'placed'])(
+    'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
+      expect(menuOf(`${kind} tracked editable`)).toEqual([
+        ['modbench.openEditorBeside', '1_open'],
+        ['modbench.record.copyAsOverride', '5_copy'],
+        ['modbench.record.copyAsNewRecord', '5_copy'],
+        ['modbench.record.copyValue', '5_copy'],
+        ['modbench.record.delete', '6_destroy'],
+      ]);
+    });
+
+  it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
+    expect(menuOf(`record ${conditions}`)).toEqual([
+      ['modbench.openEditorBeside', '1_open'],
+      ['modbench.record.copyAsOverride', '5_copy'],
+      ['modbench.record.copyAsNewRecord', '5_copy'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
+  it.each(['recordType tracked editable', 'worldspaces', 'block', 'subBlock', 'interiorCells', 'placedGroup-persistent', 'indexing', 'error'])(
+    'offers no record gesture on a row that stands for no record: %s', (contextValue) => {
+      const recordGestures = menuOf(contextValue).filter(([command]) => command !== 'modbench.record.create');
+      expect(recordGestures).toEqual([]);
+    });
+
+  // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
+  const ON_THE_TREE = `focusedView == modbench.pluginListTree && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
+
+  // Enter is left to VS Code's own `list.select`, which opens the focused row as a click does.
+  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code', () => {
+    const pluginsKeys = pkg.contributes.keybindings
+      .filter((k) => k.when.startsWith('focusedView == modbench.pluginListTree'))
+      .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
+    expect(pluginsKeys).toEqual([
+      { command: 'modbench.plugin.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == enable`, args: undefined },
+      { command: 'modbench.plugin.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == disable`, args: undefined },
+      { command: 'modbench.record.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
+      { command: 'modbench.record.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
+    ]);
+  });
+
+  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0007: "deliberate friction"),
+  // not a quick inline action.
+  it('never offers track as an inline or title icon', () => {
+    const icons = [...inPluginsView('view/item/context'), ...inPluginsView('view/title')]
+      .filter((e) => e.command === 'modbench.plugin.track' && (e.group === 'inline' || e.group?.startsWith('navigation')));
+    expect(icons).toEqual([]);
   });
 });
 
@@ -829,7 +886,7 @@ describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
     ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
-    ['modbench.record.create', 'modbench.plugin.singleRecordType'],
+    ['modbench.record.create', 'modbench.plugin.singleEditableRecordType'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
   ] as const;
 
@@ -971,14 +1028,6 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   const MODS_VIEW = 'view == modbench.modList';
   const inModsView = (menu: string): MenuEntry[] =>
     present(pkg.contributes.menus[menu], `contributes.menus['${menu}']`).filter((e) => requires(e.when, MODS_VIEW));
-  const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
-  const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
-  // VS Code draws the navigation group first, then the other groups by name, each by its order.
-  const rank = (group: string): string => (group === 'navigation' ? '' : group);
-  const placed = (entries: readonly MenuEntry[]): [string, string][] =>
-    [...entries]
-      .sort((a, b) => rank(groupOf(a)).localeCompare(rank(groupOf(b))) || orderOf(a) - orderOf(b))
-      .map((e) => [e.command, groupOf(e)]);
   const rowMenu = (row: string): MenuEntry[] => inModsView('view/item/context').filter((e) => e.when.includes(row));
   const MOD_ROW = String.raw`viewItem =~ /\bmod\b/`;
 
@@ -1086,45 +1135,10 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 });
 
-// ADR-0007: the Track gesture's own menu contribution.
-describe('package.json per-plugin Track', () => {
+// "Open Editor to the Side" is reachable from the Referenced By tree's group rows too.
+describe('package.json "Open Editor to the Side" on Referenced By', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-
-  it('sits below the other row actions in the same row-action group', () => {
-    const entry = present(
-      contextMenus().find((e) => e.command === 'modbench.plugin.track'),
-      'the modbench.plugin.track context-menu entry',
-    );
-    expect(entry.group).toBe('pluginActions@2');
-  });
-
-  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0007: "deliberate friction"),
-  // not a quick inline action.
-  it('never appears as an inline or navigation icon', () => {
-    const inline = contextMenus().filter((e) => e.command === 'modbench.plugin.track' && e.group === 'inline');
-    const trackTitleMenus = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']");
-    const title = trackTitleMenus.filter((e) => e.command === 'modbench.plugin.track');
-    expect([...inline, ...title]).toEqual([]);
-  });
-});
-
-// "Open Editor to the Side" is reachable from the Referenced By tree's group rows and from
-// the Plugins tree's record and placed-reference rows — single or multi-selected.
-describe('package.json "Open Editor to the Side" reachable from Plugins tree record rows', () => {
-  const contextMenus = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-
-  it('offers modbench.openEditorBeside on every record and placed-reference row', () => {
-    const entry = present(
-      contextMenus().find((e) =>
-        e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree')),
-      'a modbench.openEditorBeside entry on the Plugins tree',
-    );
-    expect(entry.when).toBe(
-      'view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked'
-      + ' || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
-  });
 
   it('leaves the Referenced By group row\'s own existing entry untouched', () => {
     const entry = present(
@@ -1250,9 +1264,6 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 });
 
-// The Plugins PRD retitles the record lifecycle menus, so their titles are its to set.
-const TITLES_SET_ELSEWHERE = new Set(['modbench.record.create', 'modbench.record.delete']);
-
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
 function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, title: string): void {
@@ -1267,7 +1278,7 @@ function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, 
 }
 
 describe('package.json palette titles are the verb and the object', () => {
-  const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command) && !TITLES_SET_ELSEWHERE.has(c.command));
+  const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command));
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
     expectTitleNamesVerbAndObject(id, id, title);

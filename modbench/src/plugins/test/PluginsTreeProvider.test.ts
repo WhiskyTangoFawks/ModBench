@@ -378,7 +378,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
   it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
     const { tree } = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, path: undefined })]);
-    expect(await tree.resolvePluginPath('Fallout4.esm')).toBeUndefined();
+    expect(await tree.resolvePluginPath(new PluginNode({ name: 'Fallout4.esm', enabled: true }, 'SomeMod'))).toBeUndefined();
   });
 
   // Rival: subscribe but drop the callback, or never subscribe — rows would stay at the value
@@ -790,22 +790,37 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
 });
 
 describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () => {
-  it('resolves a plugin name to the path of its winning plugin', async () => {
+  const row = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
+
+  it('resolves a plugin row to the path of its winning plugin', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0, path: '/data/mods/Winner/Base.esp', winning: true }),
       plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
     ]);
-    expect(await tree.resolvePluginPath('Base.esp')).toBe('/data/mods/Winner/Base.esp');
+    expect(await tree.resolvePluginPath(row('Base.esp'))).toBe('/data/mods/Winner/Base.esp');
   });
 
   it('returns undefined for a name with no winning plugin', async () => {
     const { tree } = makeTree([plugin({ name: 'Base.esp', slot: 0, winning: false })]);
-    expect(await tree.resolvePluginPath('Base.esp')).toBeUndefined();
+    expect(await tree.resolvePluginPath(row('Base.esp'))).toBeUndefined();
   });
 
   it('returns undefined for an unknown name', async () => {
     const { tree } = makeTree([plugin({ name: 'Base.esp', slot: 0 })]);
-    expect(await tree.resolvePluginPath('NoSuchPlugin.esp')).toBeUndefined();
+    expect(await tree.resolvePluginPath(row('NoSuchPlugin.esp'))).toBeUndefined();
+  });
+
+  // plugins.md, Menus and keys: the locked row's reveal opens the game folder's copy.
+  it('resolves a locked row to the game folder\'s copy, even where a mod provides the name', async () => {
+    const { tree } = makeTree(
+      [plugin({ name: 'Fallout4.esm', slot: 0, path: '/data/mods/SomeMod/Fallout4.esm', winning: true })],
+      { dataFolderFile: (name) => `/game/Data/${name}` });
+    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm'))).toBe('/game/Data/Fallout4.esm');
+  });
+
+  it('resolves a locked row to nothing while the game folder is not found', async () => {
+    const { tree } = makeTree([], { dataFolderFile: () => undefined });
+    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm'))).toBeUndefined();
   });
 });
 
@@ -1178,22 +1193,24 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
   });
 
   // ADR-0012 invariant 1: two plugins that share a filename are never one plugin.
-  it("never marks a plugin's records read-only or tracked for another plugin of the same name", async () => {
+  // Both orders of mEdit's answer, so neither plugin's facts can win by arriving last.
+  it.each([
+    ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }), held('Shared.esp', { origin: 'ModB' })]],
+    ['before', [held('Shared.esp', { origin: 'ModB' }), held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true })]],
+  ])("never marks a plugin's records read-only or tracked for another plugin of the same name, listed %s it", async (_order, answer) => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
     });
     const h = makeTree([plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' })], { client });
-    await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }),
-      held('Shared.esp', { origin: 'ModB' }),
-    ]);
+    await reconcile(h, answer);
 
     const [row] = await h.tree.getChildren();
     const [group] = await h.tree.getChildren(present(row, 'the Shared.esp row'));
     const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
 
-    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('recordUntracked');
+    expect(expectInstanceOf(record, RecordNode).contextValue).toBe('record untracked editable');
+    expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked editable');
   });
 });
 
@@ -1728,48 +1745,68 @@ function expectString(value: unknown): string {
   return value;
 }
 
-// plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, and compile on a
-// tracked, editable plugin, each offered only there.
-describe('PluginsTreeProvider — the row states where track and compile apply', () => {
-  const flags = async (h: Harness): Promise<string[]> => String((await rowItem(h)).contextValue).split(' ');
+// plugins.md, Menus and keys: a plugin row states whether its line is enabled, whether it is in a
+// mod or in Overwrite, whether it is tracked and whether it is editable, which every menu
+// condition reads.
+describe('PluginsTreeProvider — the row states its conditions', () => {
+  const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 
-  it('offers track on an untracked plugin in a mod', async () => {
+  it('states an untracked, editable plugin in a mod', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
 
-    expect(await flags(h)).toEqual(['plugin', 'untrackedInMod']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'untracked', 'editable']);
   });
 
-  it('offers compile on a tracked, editable plugin in a mod, and not track', async () => {
+  it('states a tracked, editable plugin in a mod', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'compilable']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'tracked', 'editable']);
   });
 
-  // mEdit's `isImmutable`: read-only for editing, as an overridden or unlisted plugin is.
-  it('offers no compile on a tracked plugin that is read-only for editing', async () => {
+  // mEdit's `isImmutable`: read-only for editing, as an unlisted plugin is.
+  it('states a tracked plugin that is read-only for editing', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
 
-    expect(await flags(h)).toEqual(['plugin']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'tracked']);
   });
 
-  it('offers neither on a plugin in no mod: Data or Overwrite', async () => {
-    for (const origin of ['Data', 'overwrite']) {
-      const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin })]);
-      await reconcile(h, [held('A.esp', { origin })]);
+  it('states a plugin in Overwrite', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'overwrite' })]);
+    await reconcile(h, [held('A.esp', { origin: 'overwrite' })]);
 
-      expect(await flags(h)).toEqual(['plugin']);
-    }
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inOverwrite', 'untracked', 'editable']);
+  });
+
+  it('states neither a mod nor Overwrite for a plugin in the game folder', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'Data' })]);
+    await reconcile(h, [held('A.esp', { origin: 'Data' })]);
+
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'untracked', 'editable']);
   });
 
   // Generalize across mod managers: which origins are mods is the instance value's answer.
-  it('offers neither on a plugin whose origin the instance value names no mod folder for', async () => {
+  it('states no mod for an origin the instance value names no mod folder for', async () => {
     const h = makeTree([A_ROW()], { instance: new FakeInstance(instanceValueFixture({ plugins: [A_ROW()] })) });
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
-    expect(await flags(h)).toEqual(['plugin']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'tracked', 'editable']);
+  });
+
+  it('states a disabled line', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
+    await reconcile(h, [held('A.esp', { enabled: false })]);
+
+    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inMod', 'untracked', 'editable']);
+  });
+
+  // The enabled flag and where the plugin lives are the instance value's, so they need no mEdit.
+  it('states neither tracked nor editable before mEdit answers', async () => {
+    const h = makeTree([A_ROW()]);
+
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod']);
   });
 
   it('says whether any plugin compiles, which compile\'s palette entry reads', async () => {
@@ -1782,11 +1819,21 @@ describe('PluginsTreeProvider — the row states where track and compile apply',
     await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp')]);
     expect(h.tree.anyCompilable()).toBe(true);
   });
+});
 
-  it('offers neither before mEdit says whether the plugin is tracked', async () => {
+// plugins.md, Menus and keys, story 4: a click on an enabled plugin row opens its header, and a
+// click on a disabled one only selects it.
+describe('PluginsTreeProvider — a plugin row\'s click', () => {
+  it('opens the header of an enabled plugin', async () => {
     const h = makeTree([A_ROW()]);
 
-    expect(await flags(h)).toEqual(['plugin']);
+    expect((await rowItem(h)).command?.command).toBe('modbench.openHeader');
+  });
+
+  it('does nothing on a disabled plugin but select it', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
+
+    expect((await rowItem(h)).command).toBeUndefined();
   });
 });
 
@@ -2217,7 +2264,7 @@ describe('PluginsTreeProvider applies no decoration of its own to a healthy plug
     const names = ['A.esp', 'B.esp'];
     for (const index of [0, 1]) {
       const item = await rowItem(h, index);
-      expect(item.contextValue).toBe('plugin untrackedInMod');
+      expect(item.contextValue).toBe('plugin enabled inMod untracked editable');
       expect(item.description).toBeUndefined();
       expect(item.tooltip).toBe(`${names[index]}\nSomeMod`);
     }

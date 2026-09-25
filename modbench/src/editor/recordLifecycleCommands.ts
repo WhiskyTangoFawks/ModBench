@@ -109,8 +109,7 @@ type RecordLifecycleClient = Pick<MEditClient,
   // of its own.
   | 'editRecord'>;
 
-/** ADR-0018: xEdit hosts Add and Remove in its tree's context menu, not the grid, and the titles
- *  match its captions exactly. */
+/** ADR-0018: xEdit hosts its Add and Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
@@ -140,7 +139,7 @@ export function registerRecordLifecycleCommands(
       if (!result) return; // the ESL prompt was declined — nothing happened
       if (isRefused(result)) { reporter.report('error', result.message); return; }
       onWritten();
-      reporter.landed(`Added ${result.formKey}.`);
+      reporter.landed(`Created ${result.formKey}.`);
     }),
 
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
@@ -159,7 +158,7 @@ export function registerRecordLifecycleCommands(
         landed: answer.landed, refused: [...unaddressed, ...answer.refused],
       };
       reporter.selectionOutcome(
-        `Could not remove ${outcome.refused.length} of ${identities.length} records.`, outcome, recordLabel);
+        `Could not delete ${outcome.refused.length} of ${identities.length} records.`, outcome, recordLabel);
     }),
   ];
 }

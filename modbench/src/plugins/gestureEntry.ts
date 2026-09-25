@@ -12,6 +12,10 @@ export interface GestureEntry {
  *  Plugins view's. */
 export const PLUGINS_KEY_ARGS = { view: 'modbench.pluginListTree' } as const;
 
+export function isPluginsKeyArgs(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && 'view' in value && value.view === PLUGINS_KEY_ARGS.view;
+}
+
 function isRow(value: unknown): value is PluginsTreeNode {
   return value instanceof vscode.TreeItem;
 }
@@ -71,16 +75,23 @@ export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, .
   return entry.selection.filter(isOf(kinds));
 }
 
-// The record rows the row menu offers delete on: a record its own plugin can have removed.
-const DELETABLE_RECORD = new Set(['recordTracked', 'recordUntracked', 'recordOverride']);
+/** The rows that stand for a record: the record menu's rows (plugins.md, Menus and keys). */
+export const RECORD_ROW_KINDS = ['record', 'worldspace', 'cell', 'placed'] as const;
+
+/** The rows that stand for a plugin file: a plugins.txt line, or a plugin the game loads with
+ *  none. */
+export const PLUGIN_ROW_KINDS = ['plugin', 'implicitMaster'] as const;
 
 /** The one selected row, when it is of `kind`: a singular gesture's Argument from the palette. */
-export function onlySelected<K extends ArgumentKind>(selection: readonly PluginsTreeNode[], kind: K): RowOf<K> | undefined {
+export function onlySelected<K extends ArgumentKind>(selection: readonly PluginsTreeNode[], ...kinds: K[]): RowOf<K> | undefined {
   const [only, ...rest] = selection;
-  return rest.length === 0 && only !== undefined && isOf([kind])(only) ? only : undefined;
+  return rest.length === 0 && only !== undefined && isOf(kinds)(only) ? only : undefined;
 }
 
-const flagsOf = (row: PluginsTreeNode | undefined): string[] => (row?.contextValue ?? '').split(' ');
+const hasFlags = (row: PluginsTreeNode | undefined, ...flags: string[]): boolean => {
+  const own = new Set((row?.contextValue ?? '').split(' '));
+  return flags.every((flag) => own.has(flag));
+};
 
 // A palette gesture sends no item it would refuse, so it needs every selected row to qualify.
 const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTreeNode) => boolean): boolean =>
@@ -89,23 +100,29 @@ const every = (selection: readonly PluginsTreeNode[], qualifies: (row: PluginsTr
 /** The one selected plugin compile applies to: compile's Argument from the palette. */
 export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf<'plugin'> | undefined {
   const only = onlySelected(selection, 'plugin');
-  return flagsOf(only).includes('compilable') ? only : undefined;
+  return hasFlags(only, 'tracked', 'editable') ? only : undefined;
 }
 
-/** What the Plugins palette entries' `when` clauses read off the selection, since the palette is
- *  handed no row. */
+/** What the Plugins palette entries' and keys' `when` clauses read off the selection, since
+ *  neither is handed a row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
   readonly allUntrackedInMod: boolean;
-  readonly singleRecordType: boolean;
+  readonly singleEditableRecordType: boolean;
   readonly allDeletableRecords: boolean;
+  readonly selectionToggle?: 'enable' | 'disable';
 }
 
-export function pluginsKeyContext(selection: readonly PluginsTreeNode[]): PluginsKeyContext {
+/** `isEnabled` reads the plugin's line as it is now, not as the row was built. */
+export function pluginsKeyContext(
+  selection: readonly PluginsTreeNode[], isEnabled: (row: RowOf<'plugin'>) => boolean,
+): PluginsKeyContext {
+  const firstPlugin = selection.find(isOf(['plugin']));
   return {
-    singlePlugin: onlySelected(selection, 'plugin') !== undefined,
-    allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && flagsOf(row).includes('untrackedInMod')),
-    singleRecordType: onlySelected(selection, 'recordType') !== undefined,
-    allDeletableRecords: every(selection, (row) => row.kind === 'record' && DELETABLE_RECORD.has(String(row.contextValue))),
+    singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
+    allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
+    singleEditableRecordType: hasFlags(onlySelected(selection, 'recordType'), 'tracked', 'editable'),
+    allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
+    selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),
   };
 }
