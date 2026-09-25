@@ -67,10 +67,12 @@ public interface IRecordReads
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin);
 
-    // Worldspace tree reads (ADR-0005) (from the placement / cell_location side tables).
+    // Worldspace tree reads (ADR-0005) (from the placement / cell_location side tables), in the
+    // order xEdit's navigator lists them.
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey);
-    PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int limit, int offset);
+    IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin);
     CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey);
+    IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin);
 
     /// <summary>A placed ref's structural parentage (cell, persistent/temporary, position). Null
     /// when not placed.</summary>
@@ -81,7 +83,7 @@ public interface IRecordReads
     CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey);
 
     /// <summary><paramref name="parentFormKey"/>'s children among the relationships the placement
-    /// reads don't carry (see <see cref="ContainerChildRow"/>), in slot order; empty when it has
+    /// reads don't carry (see <see cref="ContainerChildRow"/>), in FormID order; empty when it has
     /// none. Ref-invariant by construction.</summary>
     IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginAddress plugin, string parentFormKey);
 

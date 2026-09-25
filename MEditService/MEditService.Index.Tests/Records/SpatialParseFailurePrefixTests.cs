@@ -31,6 +31,20 @@ public sealed class SpatialParseFailurePrefixTests
             world.WorldspaceFormKey, world.Reads.GetWorldspacesWithFailuresBelow(SpatialWorld.Plugin));
     }
 
+    // The exterior cell holding it lists beneath its worldspace, so the Cell group, which lists the
+    // interior cells, holds no failure.
+    [Fact]
+    public void AnUnreadablePlacedReference_MarksTheGroupOfTheRecordItSitsBeneath_AndNoOther()
+    {
+        using var world = new SpatialWorld();
+        world.MarkUnreadable(world.PlacedFormKey);
+
+        var groups = world.Reads.GetRecordTypeCounts(SpatialWorld.Plugin).ToDictionary(g => g.Type, g => g.HasParseFailure);
+
+        Assert.True(groups["wrld"]);
+        Assert.False(groups["cell"]);
+    }
+
     [Fact]
     public void AnUnreadablePlacedReference_CarriesItsReason_AndItsCellCarriesNone()
     {
@@ -90,9 +104,9 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.InteriorCellFormKey);
 
-        var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin, 50, 0);
+        var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin);
 
-        var interior = interiors.Items.Single(c => c.FormKey == world.InteriorCellFormKey);
+        var interior = interiors.Single(c => c.FormKey == world.InteriorCellFormKey);
         Assert.True(interior.HasParseFailure);
         Assert.Equal("could not be read", interior.ParseDiagnosis);
     }

@@ -89,8 +89,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
             WorldspaceCells = worldspaces.ToDictionary(
                 fk => fk, fk => _repo.GetWorldspaceCells(new PluginAddress(TestPluginName, Origin), fk)
                     .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList()),
-            InteriorCells = _repo.GetInteriorCells(new PluginAddress(TestPluginName, Origin), WholeType, 0)
-                .Items.OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
+            InteriorCells = _repo.GetInteriorCells(new PluginAddress(TestPluginName, Origin))
+                .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
             CellReferences = cells.ToDictionary(
                 fk => fk, fk =>
                 {

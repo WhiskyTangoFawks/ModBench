@@ -184,7 +184,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true, true);
   const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB');
   const cell = new CellNode('Alpha.esp', {
-    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
   }, 'ModA', { tracked: true, editable: true });
   const enabledNow = (row: PluginNode) => row !== beta;
   const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);

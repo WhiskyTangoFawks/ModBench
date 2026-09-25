@@ -318,34 +318,46 @@
   },
   "InteriorCells": [
     {
+      "BlockX": 0,
+      "BlockY": null,
       "CellX": null,
       "CellY": null,
       "EditorId": "CroupManor01",
       "FormKey": "03C0F0:Fallout4.esm",
       "FullName": null,
+      "HasChildren": true,
       "HasParseFailure": false,
-      "IsPersistentWorldspaceCell": false,
-      "ParseDiagnosis": null
+      "ParseDiagnosis": null,
+      "SubX": 0,
+      "SubY": null
     },
     {
+      "BlockX": 0,
+      "BlockY": null,
       "CellX": null,
       "CellY": null,
       "EditorId": "MinutemenHoldingCell",
       "FormKey": "0782A8:Fallout4.esm",
       "FullName": null,
+      "HasChildren": true,
       "HasParseFailure": false,
-      "IsPersistentWorldspaceCell": false,
-      "ParseDiagnosis": null
+      "ParseDiagnosis": null,
+      "SubX": 0,
+      "SubY": null
     },
     {
+      "BlockX": 0,
+      "BlockY": null,
       "CellX": null,
       "CellY": null,
       "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
       "FormKey": "092A18:Fallout4.esm",
       "FullName": null,
+      "HasChildren": true,
       "HasParseFailure": false,
-      "IsPersistentWorldspaceCell": false,
-      "ParseDiagnosis": null
+      "ParseDiagnosis": null,
+      "SubX": 0,
+      "SubY": null
     }
   ],
   "Placements": {
@@ -384,6 +396,7 @@
         "EditorId": null,
         "FormKey": "00DB41:Fallout4.esm",
         "FullName": null,
+        "HasChildren": true,
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
@@ -397,6 +410,7 @@
         "EditorId": null,
         "FormKey": "00DB42:Fallout4.esm",
         "FullName": null,
+        "HasChildren": true,
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
@@ -410,6 +424,7 @@
         "EditorId": null,
         "FormKey": "00DB43:Fallout4.esm",
         "FullName": null,
+        "HasChildren": true,
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": 0,
@@ -423,6 +438,7 @@
         "EditorId": null,
         "FormKey": "018AA2:Fallout4.esm",
         "FullName": null,
+        "HasChildren": true,
         "HasParseFailure": false,
         "ParseDiagnosis": null,
         "SubX": null,

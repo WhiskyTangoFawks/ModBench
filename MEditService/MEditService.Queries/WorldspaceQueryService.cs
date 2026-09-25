@@ -12,7 +12,7 @@ public interface IWorldspaceQueryService
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
     CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null);
-    PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null);
+    IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string? origin = null);
 }
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
@@ -37,9 +37,11 @@ public sealed class WorldspaceQueryService(
         // Search answers "on it or below it" through the container relation, which a worldspace's
         // cells are not part of, so the cell side is a second read rather than a walk from here.
         var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginAddress(plugin, origin));
+        var holdingCells = repo.GetWorldspacesHoldingCells(new PluginAddress(plugin, origin));
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
-                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName, r.ParseDiagnosis))];
+                r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey), r.FullName, r.ParseDiagnosis,
+                holdingCells.Contains(r.FormKey)))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
@@ -59,9 +61,7 @@ public sealed class WorldspaceQueryService(
                 worldspaceFormKey, plugin, origin, topCellRows.Count);
         }
         var topCells = topCellRows
-            .Select((c, i) => new CellSummary(
-                c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0,
-                FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis))
+            .Select((c, i) => CellOf(c) with { IsPersistentWorldspaceCell = i == 0 })
             .ToList();
 
         // A block and a sub-block are grouping nodes with no record of their own, so their failure
@@ -79,9 +79,7 @@ public sealed class WorldspaceQueryService(
                     .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
                     .Select(subGroup => new WorldspaceSubBlockDto(
                         subGroup.Key.X, subGroup.Key.Y,
-                        [.. subGroup.Select(c => new CellSummary(
-                            c.FormKey, c.EditorId, c.CellX, c.CellY,
-                            FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis))],
+                        [.. subGroup.Select(CellOf)],
                         subGroup.Any(c => c.HasParseFailure)))
                     .ToList();
                 return new WorldspaceBlockDto(
@@ -98,11 +96,26 @@ public sealed class WorldspaceQueryService(
         return _index.RequireReads().GetCellReferences(new PluginAddress(plugin, origin), cellFormKey);
     }
 
-    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null)
+    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string? origin = null)
     {
         var pluginKey = new PluginAddress(plugin, origin ?? ResolveOrigin(plugin));
-        return _index.RequireReads().GetInteriorCells(pluginKey, limit, offset);
+        return [.. _index.RequireReads().GetInteriorCells(pluginKey)
+            .GroupBy(c => c.BlockX ?? 0)
+            .Select(block =>
+            {
+                var subBlocks = block
+                    .GroupBy(c => c.SubX ?? 0)
+                    .Select(subBlock => new InteriorCellSubBlock(
+                        subBlock.Key, [.. subBlock.Select(CellOf)], subBlock.Any(c => c.HasParseFailure)))
+                    .ToList();
+                return new InteriorCellBlock(block.Key, subBlocks, subBlocks.Exists(s => s.HasParseFailure));
+            })];
     }
+
+    private static CellSummary CellOf(CellLocationSummary c) =>
+        new(c.FormKey, c.EditorId, c.CellX, c.CellY,
+            FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis,
+            HasChildren: c.HasChildren);
 
     // An ordinary load-order row has no origin to give, so this stays the fallback; callers that
     // do know (a tree row built from a specific plugin) pass an explicit origin instead.

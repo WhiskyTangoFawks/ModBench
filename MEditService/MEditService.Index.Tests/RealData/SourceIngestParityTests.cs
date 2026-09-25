@@ -173,8 +173,10 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];
 
+    // A record's own query, not its group's count: a record another record holds lists beneath it.
     private int CountOf(Indexer index, string recordType) =>
-        index.RequireReads().CountOf(fixture.Plugin, recordType);
+        index.RequireReads().Search(new RecordQuery(
+            RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
 
     private Dictionary<string, RecordDocument> DocumentsByFormKey(Indexer index) =>
         index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);

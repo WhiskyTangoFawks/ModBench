@@ -17,15 +17,15 @@ public sealed class ContainerChildQueryService(
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // xEdit's presentation order (wbVWDAsQuestChildren: DIAL, DLBR, SCEN; INFO flat), not the
-    // table's alphabetical slot order. A Cell/Worldspace slot isn't here, so a call against one
-    // answers empty rather than guessing.
-    private static readonly Dictionary<string, (int Order, string RecordType)> SlotOrder = new(StringComparer.Ordinal)
+    // The children xEdit nests under a quest (wbVWDAsQuestChildren: DIAL, DLBR, SCEN) and a topic
+    // (INFO). A Cell/Worldspace slot isn't here, so a call against one answers empty rather than
+    // guessing.
+    private static readonly Dictionary<string, string> SlotRecordTypes = new(StringComparer.Ordinal)
     {
-        ["DialogTopics"] = (0, "dial"),
-        ["DialogBranches"] = (1, "dlbr"),
-        ["Scenes"] = (2, "scen"),
-        ["Responses"] = (0, "info"),
+        ["DialogTopics"] = "dial",
+        ["DialogBranches"] = "dlbr",
+        ["Scenes"] = "scen",
+        ["Responses"] = "info",
     };
 
     // ADR-0012: origin — a caller that already knows which plugin named `plugin` it's browsing
@@ -37,15 +37,13 @@ public sealed class ContainerChildQueryService(
         var pluginKey = new PluginAddress(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
-            .Where(r => SlotOrder.ContainsKey(r.SlotName))
-            .OrderBy(r => SlotOrder[r.SlotName].Order)
-            .ThenBy(r => r.SlotIndex)
+            .Where(r => SlotRecordTypes.ContainsKey(r.SlotName))
             .ToList();
         if (rows.Count == 0) return [];
 
         // One Search per record type present, so hydration shares every other listing's derivation.
         var byFormKey = new Dictionary<string, RecordSummary>(StringComparer.Ordinal);
-        foreach (var recordType in rows.Select(r => SlotOrder[r.SlotName].RecordType).Distinct(StringComparer.Ordinal))
+        foreach (var recordType in rows.Select(r => SlotRecordTypes[r.SlotName]).Distinct(StringComparer.Ordinal))
         {
             var page = repo.Search(new RecordQuery(
                 RecordTypes: [recordType], Plugin: pluginKey.Name, Origin: pluginKey.Origin, Limit: UnlimitedRecords, Offset: 0));
@@ -63,12 +61,12 @@ public sealed class ContainerChildQueryService(
                 _logger.LogWarning(
                     "Container child {ChildFormKey} of {ParentFormKey} in {Plugin} ({Origin}) is indexed in " +
                     "container_child but Search({RecordType}) did not return it; omitting.",
-                    row.ChildFormKey, parentFormKey, plugin, origin, SlotOrder[row.SlotName].RecordType);
+                    row.ChildFormKey, parentFormKey, plugin, origin, SlotRecordTypes[row.SlotName]);
                 continue;
             }
             result.Add(new ContainerChildSummary(
                 record.FormKey, record.EditorId, record.Plugin, record.Origin,
-                record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotOrder[row.SlotName].RecordType,
+                record.LoadOrderIndex, record.IsWinner, record.WorkingTreeState, SlotRecordTypes[row.SlotName],
                 record.HasContainerChildren, record.ParseDiagnosis, record.HasParseFailure, record.FullName));
         }
         return result;

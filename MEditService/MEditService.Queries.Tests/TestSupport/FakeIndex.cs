@@ -81,7 +81,8 @@ internal sealed class FakeReads(
     public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress plugin) => new HashSet<string>();
     public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
-    public PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int limit, int offset) => new([], 0);
+    public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
+    public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
     public CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey) => new([], []);
     public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
     public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
