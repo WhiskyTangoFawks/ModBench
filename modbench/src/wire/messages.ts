@@ -26,6 +26,10 @@ export const WEBVIEW_TO_EXTENSION = {
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
+  // commands.md, Record: a field gesture from the palette acts on the focused cell, which only the
+  // panel knows. `context` is the cell's own `data-vscode-context`, merged as VS Code merges it for
+  // a right-click; `null` is no focused cell.
+  FOCUS_CELL: 'focusCell',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -43,7 +47,8 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null };
 
 // A `data-vscode-context` payload VS Code hands the invoked command, never a `postMessage` — hence
 // beside the message unions. `path` is the envelope's own wire path, resolved cell-side
@@ -153,7 +158,7 @@ function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
-  requestId?: unknown; seed?: unknown; validTypes?: unknown;
+  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown;
 };
 
 function parseOpenRecord(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -191,6 +196,16 @@ function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtensio
   return { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: w.requestId, seed: w.seed, validTypes: w.validTypes };
 }
 
+function isContextObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (w.context === null) return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null };
+  if (!isContextObject(w.context)) throw new Error('Expected "focusCell" to carry a context object or null.');
+  return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context };
+}
+
 /** The webview message router's one entry point for data crossing `postMessage`: every
  *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
  *  Throws when the discriminant or a required field doesn't match what the type demands. */
@@ -205,6 +220,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return parseCopyToClipboard(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
+    case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     default:
       throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
   }

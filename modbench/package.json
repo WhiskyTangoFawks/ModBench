@@ -441,23 +441,23 @@
         },
         {
           "command": "modbench.record.addElement",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
         },
         {
           "command": "modbench.record.removeElement",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
         },
         {
           "command": "modbench.record.moveElementUp",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
         },
         {
           "command": "modbench.record.moveElementDown",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
         },
         {
           "command": "modbench.record.openFieldValue",
-          "when": "false"
+          "when": "activeWebviewPanelId == 'modbench' && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
         },
         {
           "command": "modbench.downloads.install",

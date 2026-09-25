@@ -1519,6 +1519,24 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
+  // commands.md, Record: a field gesture from the palette acts on the focused cell, so the panel
+  // tells the host which cell that is, as the context its right-click hands the command.
+  it('tells the host the focused cell\'s context when a cell takes the focus', async () => {
+    renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Readable Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(screen.getByText('Readable Name'));
+
+    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+    const toldContexts = (): unknown[] => vi.mocked(vscode.postMessage).mock.calls
+      .map(([m]: unknown[]) => m)
+      .filter((m): m is { type: string; context: unknown } => isRecord(m) && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL)
+      .map((m) => m.context);
+    await waitFor(() => expect(toldContexts().some((c) =>
+      isRecord(c) && c.plugin === 'Good.esp' && String(c.webviewSection).split(' ').includes('stringValue'))).toBe(true));
+  });
+
   // The array gestures are host commands gated on the row's own data-vscode-context, so a column
   // that offers no array section offers no Add/Remove/Move at all.
   it('offers no array right-click commands, where the readable column offers them', async () => {

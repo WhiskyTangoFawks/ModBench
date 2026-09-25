@@ -5,6 +5,7 @@ import type { EditsInFlight } from './followRecord';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
+import { FocusedCells, focusedCellKeys } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
@@ -75,6 +76,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
   const panelsById = new Map<string, vscode.WebviewPanel>();
+  const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
+    for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
+      void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
+    }
+  });
   const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
   // The picker and the edit gate are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
@@ -93,6 +99,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
           // The panel the menu came from has closed, so no panel's reads wait on this write.
           : async (address, write) => { await write(address.formKey); };
       },
+      focusedCell: () => focusedCells.current(),
     }),
     // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
@@ -103,7 +110,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, outputChannel, deps.reporterFor('recordCopy'), treeSync, refreshMatchingPlugins),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton: true });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),
     // A named "Open to the Side" (ADR-0018), not a right-click side effect. `item`/`allSelected`
     // mirror VS Code's view/item/context invocation shape, falling back to the tree's current
@@ -117,11 +124,11 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         const identities = nodes.map(recordOpenIdentity)
           .filter((i): i is { formKey: string; label: string } => i !== undefined);
         if (identities.length === 0) return;
-        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight });
+        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells });
       }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
-        { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton: true });
+        { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
@@ -142,6 +149,7 @@ export interface OpenRecordPanelDeps {
   // view's whole input.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
+  focusedCells: FocusedCells<vscode.WebviewPanel>;
   // Each open panel by the id its webview context names it by, for its right-click menus.
   panelsById: Map<string, vscode.WebviewPanel>;
   // Deliberately independent of `viewColumn`: a batched Beside open's 2nd..Nth panel needs a
@@ -156,7 +164,7 @@ export function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn,
-  { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, singleton }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton }: OpenRecordPanelDeps,
 ): void {
   if (singleton) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -170,6 +178,7 @@ export function openRecordPanel(
         activeRecordTracker.setFormKey(existing, formKey);
       }
       activeRecordTracker.setActivePanel(existing);
+      focusedCells.setActivePanel(existing);
       return;
     }
   }
@@ -195,15 +204,21 @@ export function openRecordPanel(
   // focus: losing it is another panel's event, or removePanel's job.
   if (formKey) activeRecordTracker.setFormKey(panel, formKey);
   activeRecordTracker.setActivePanel(panel);
+  focusedCells.setActivePanel(panel);
   panel.onDidChangeViewState(() => {
-    if (panel.active) activeRecordTracker.setActivePanel(panel);
+    if (!panel.active) return;
+    activeRecordTracker.setActivePanel(panel);
+    focusedCells.setActivePanel(panel);
   });
-  panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
+  panel.onDidDispose(() => {
+    activeRecordTracker.removePanel(panel);
+    focusedCells.removePanel(panel);
+  });
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
     // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, editsInFlight));
+    void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, editsInFlight, focusedCells));
   });
 
   const scriptUri = panel.webview.asWebviewUri(

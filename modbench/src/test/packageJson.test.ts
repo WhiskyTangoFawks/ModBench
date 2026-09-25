@@ -547,18 +547,7 @@ describe('package.json command titles and categories', () => {
     'modbench.record.copyAsNewRecord',
   ] as const;
 
-  // commands.md, Where: every gesture is also in the command palette, unless it is internal. Each
-  // line is a catalog gesture the palette still hides, a defect against that rule; a fix deletes
-  // its line.
-  const CATALOG_GESTURES_HIDDEN_FROM_THE_PALETTE = [
-    'modbench.record.addElement',
-    'modbench.record.removeElement',
-    'modbench.record.moveElementUp',
-    'modbench.record.moveElementDown',
-    'modbench.record.openFieldValue',
-  ] as const;
-
-  const PALETTE_GATED: readonly string[] = [...LEGACY_PALETTE_GATED, ...CATALOG_GESTURES_HIDDEN_FROM_THE_PALETTE];
+  const PALETTE_GATED: readonly string[] = LEGACY_PALETTE_GATED;
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
   it('gates exactly the listed commands out of the palette', () => {
@@ -570,13 +559,13 @@ describe('package.json command titles and categories', () => {
     expect(unexpectedGate).toEqual([]);
   });
 
-  it('offers every catalog gesture in the palette, save the listed defects', () => {
+  it('offers every catalog gesture in the palette', () => {
     const gestureIds = catalogCommandIds(commandsMarkdown.slice(0, commandsMarkdown.indexOf('## System commands')));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id)).sort();
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
     expect(
       hidden,
       'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
-    ).toEqual([...CATALOG_GESTURES_HIDDEN_FROM_THE_PALETTE].sort());
+    ).toEqual([]);
   });
 
   // System commands (commands.md): Modbench runs each on its own trigger — no gesture, no entry
@@ -756,6 +745,25 @@ describe('package.json Downloads delete key', () => {
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
     expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+  });
+});
+
+// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
+// in focus, and is in the palette only while one has focus, on the cell its menu is offered on.
+describe('package.json field gestures\' palette entries', () => {
+  const ON_A_RECORD_TAB = "activeWebviewPanelId == 'modbench'";
+  const FIELD_PALETTE = [
+    ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
+    ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],
+    ['modbench.record.moveElementUp', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveUp`],
+    ['modbench.record.moveElementDown', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveDown`],
+    ['modbench.record.openFieldValue', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
+  ] as const;
+
+  it.each(FIELD_PALETTE)('%s is in the palette only while a record tab has focus on a cell that holds: %s', (command, holds) => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === command);
+    expect(entries.map((e) => e.when)).toEqual([`${ON_A_RECORD_TAB} && ${holds}`]);
   });
 });
 

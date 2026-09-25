@@ -47,6 +47,7 @@ export function DiskCell({
       tabIndex={0}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       data-vscode-context={vscodeContext}
+      data-focused-cell={isFocused || undefined}
       onClick={onFocusCell}
       onKeyDown={e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {

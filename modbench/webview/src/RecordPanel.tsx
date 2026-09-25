@@ -15,7 +15,7 @@ import type {
 } from './types';
 import { columnKey } from './columnKey';
 import { vscode } from './vscode';
-import { editField } from './nativeBridge';
+import { editField, focusCell, focusedCellContext } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
@@ -69,6 +69,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   function handleFocusCell(rowKey: string, plugin: ColumnKey) {
     setFocusedCell({ rowKey, plugin });
   }
+  // Read off the rendered grid after every render, since a re-read or a move changes what the
+  // focused cell's menu would offer without a new focus.
+  const toldFocusedCell = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const context = focusedCellContext(document);
+    const told = JSON.stringify(context);
+    if (told === toldFocusedCell.current) return;
+    toldFocusedCell.current = told;
+    focusCell(context);
+  });
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
