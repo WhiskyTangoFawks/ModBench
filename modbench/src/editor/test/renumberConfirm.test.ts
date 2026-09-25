@@ -1,33 +1,68 @@
 import { describe, it, expect } from 'vitest';
-import { renumberConfirmMessage } from '../renumberConfirm';
+import { danglingReferencers, renumberConfirmMessage } from '../renumberConfirm';
+import { referenceResultFixture } from '../../client/test/fixtures';
 
-// When every referencer is tracked, the cascade is automatic behind one up-front confirm
-// stating the blast radius — "updates N references across M plugins". No referencers means
-// no confirm at all.
+describe('danglingReferencers', () => {
+  const A = { formKey: '000800:A.esp', plugin: 'A.esp', origin: 'ModA' };
+  const B = { formKey: '000801:A.esp', plugin: 'A.esp', origin: 'ModA' };
+
+  it('counts a record once however many of its fields hold the reference', () => {
+    expect(danglingReferencers([[A, [
+      referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB', fieldPath: 'F' }),
+      referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB', fieldPath: 'G' }),
+      referenceResultFixture({ formKey: '000002:C.esp', plugin: 'C.esp', origin: 'ModC' }),
+    ]]])).toBe(2);
+  });
+
+  it('counts each copy of a plugin as its own referencing record', () => {
+    expect(danglingReferencers([[A, [
+      referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB' }),
+      referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'OtherModB' }),
+    ]]])).toBe(2);
+  });
+
+  it('counts a record referencing several of the selection once', () => {
+    const referencer = referenceResultFixture({ formKey: '000001:B.esp', plugin: 'B.esp', origin: 'ModB' });
+    expect(danglingReferencers([[A, [referencer]], [B, [referencer]]])).toBe(1);
+  });
+
+  it('leaves out a record\'s reference to itself', () => {
+    expect(danglingReferencers([[A, [referenceResultFixture({ ...A })]]])).toBe(0);
+  });
+
+  it('counts a selected record that references another selected record', () => {
+    expect(danglingReferencers([[A, []], [B, [referenceResultFixture({ ...A })]]])).toBe(1);
+  });
+});
+
 describe('renumberConfirmMessage', () => {
-  const ref = (formKey: string, plugin: string, fieldPath = 'F') =>
-    ({ formKey, plugin, fieldPath, recordType: 'weap', editorId: null, origin: 'Data' });
-
-  it('is null when nothing references the record', () => {
-    expect(renumberConfirmMessage('000800:A.esp', '000900:A.esp', [])).toBeNull();
+  it('asks nothing when no record references the ones renumbered', () => {
+    expect(renumberConfirmMessage(['NpcA [000800:A.esp] in A.esp (ModA)'], 0)).toBeNull();
+    expect(renumberConfirmMessage(['000800:A.esp in A.esp', '000801:A.esp in A.esp'], 0)).toBeNull();
   });
 
-  it('states the new FormKey and the distinct record/plugin counts', () => {
-    const message = renumberConfirmMessage('000800:A.esp', '000900:A.esp', [
-      ref('000001:B.esp', 'B.esp'),
-      ref('000001:B.esp', 'B.esp', 'G'), // same record via a second field — one reference record
-      ref('000002:C.esp', 'C.esp'),
-    ]);
-    expect(message).toContain('000900:A.esp');
-    expect(message).toContain('2 referencing record(s)');
-    expect(message).toContain('2 plugin(s)');
+  it('says how many records will point at nothing until they are updated', () => {
+    expect(renumberConfirmMessage(['NpcA [000800:A.esp] in A.esp (ModA)'], 2)).toBe(
+      'Renumber NpcA [000800:A.esp] in A.esp (ModA)? '
+      + '2 records that reference it will point at nothing until they are updated.');
   });
 
-  it('counts plugins case-insensitively', () => {
-    const message = renumberConfirmMessage('000800:A.esp', '000900:A.esp', [
-      ref('000001:B.esp', 'B.esp'),
-      ref('000002:B.esp', 'b.ESP'),
-    ]);
-    expect(message).toContain('1 plugin(s)');
+  it('speaks of one record in the singular', () => {
+    expect(renumberConfirmMessage(['000800:A.esp in A.esp'], 1)).toBe(
+      'Renumber 000800:A.esp in A.esp? 1 record that references it will point at nothing until it is updated.');
+  });
+
+  it('totals the references across a selection', () => {
+    expect(renumberConfirmMessage(['000800:A.esp in A.esp', '000801:A.esp in A.esp', '000802:A.esp in A.esp'], 5)).toBe(
+      'Renumber 3 records? 5 records that reference them will point at nothing until they are updated.');
+  });
+
+  it('still asks, saying so, when the references could not be counted', () => {
+    expect(renumberConfirmMessage(['000800:A.esp in A.esp'], undefined)).toBe(
+      'Renumber 000800:A.esp in A.esp? Its references could not be counted: '
+      + 'any record that references it will point at nothing until it is updated.');
+    expect(renumberConfirmMessage(['000800:A.esp in A.esp', '000801:A.esp in A.esp'], undefined)).toBe(
+      'Renumber 2 records? Their references could not be counted: '
+      + 'any record that references them will point at nothing until it is updated.');
   });
 });
