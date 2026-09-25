@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import { FOLDER_KEY, INSTANCE_READ_KEY } from '../folderContext';
-import { IN_AN_INSTANCE, isRecord, requires } from './manifest';
+import { IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, uriFile,
 } from './vscodeMock';
@@ -203,6 +203,16 @@ describe('package.json outside an instance', () => {
     expect(requires(`(view == a || ${IN_AN_INSTANCE}) && view == b`, IN_AN_INSTANCE)).toBe(false);
     expect(requires(`!(${IN_AN_INSTANCE}) && view == a`, IN_AN_INSTANCE)).toBe(false);
     expect(requires(String.raw`${IN_AN_INSTANCE} && !(viewItem =~ /\b(a|b)\b/)`, IN_AN_INSTANCE)).toBe(true);
+  });
+
+  it('evaluates a clause against the context it is given', () => {
+    const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
+    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
+    expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\buntrackedInMod\b/`, on)).toBe(false);
+    expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
+    expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
+    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
+    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
   });
 
   it('refuses a clause it cannot read, rather than reading it as ungated', () => {
@@ -619,14 +629,11 @@ describe('package.json record-row context menu', () => {
 describe('package.json plugin-row context menu', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-  // plugins.md, Menus and keys: the plugin menu. Open Header has no entries: it opens via row
-  // click, not a menu entry.
-  const PLUGIN_MENU = [
-    'modbench.plugin.reveal', 'modbench.plugin.track', 'modbench.saveAndCompile',
-    'modbench.pluginListTree.compileAtMain', 'modbench.mod.rebaseEditBranch',
-  ];
-  const forPluginRows = () => contextMenus()
-    .filter((e) => PLUGIN_MENU.includes(e.command) && requires(e.when, 'view == modbench.pluginListTree'));
+  // Every contextValue a plugin row can carry, so a menu entry any of them opens is on the plugin
+  // menu, whatever flag it asks for. Open Header has no entries: it opens via row click.
+  const PLUGIN_ROWS = ['plugin', 'plugin untrackedInMod', 'plugin compilable', 'plugin rebasable', 'plugin rebasable compilable'];
+  const forPluginRows = () => contextMenus().filter((e) =>
+    PLUGIN_ROWS.some((viewItem) => holds(e.when, { view: 'modbench.pluginListTree', viewItem })));
 
   // Each plugin-menu command, with the row flag it needs.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {

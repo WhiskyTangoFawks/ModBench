@@ -90,3 +90,28 @@ function holdsOnlyWhile(clause: Clause, term: string): boolean {
 export function requires(when: string | undefined, term: string): boolean {
   return when !== undefined && holdsOnlyWhile(parseClause(when), term);
 }
+
+/** Whether `when` holds in `context`: a term is `key == value`, `key != value`, `key =~ /re/`, or a
+ *  key, true when set and not `false`. */
+export function holds(when: string, context: Readonly<Record<string, string | boolean | undefined>>): boolean {
+  const termHolds = (text: string): boolean => {
+    const match = /^([\w.]+)\s*(==|!=|=~)\s*(.+)$/.exec(text);
+    if (!match) return Boolean(context[text]);
+    const [, key = '', op, operand = ''] = match;
+    const value = String(context[key] ?? '');
+    if (op === '==') return value === operand.replace(/^'(.*)'$/, '$1');
+    if (op === '!=') return value !== operand.replace(/^'(.*)'$/, '$1');
+    const regex = /^\/(.*)\/([a-z]*)$/.exec(operand);
+    if (!regex) throw new Error(`A when clause this scan cannot read: "${operand}" is no regex in "${when}".`);
+    return new RegExp(regex[1] ?? '', regex[2]).test(value);
+  };
+  const evaluate = (clause: Clause): boolean => {
+    switch (clause.kind) {
+      case 'term': return termHolds(clause.text);
+      case 'not': return !evaluate(clause.operand);
+      case 'and': return clause.operands.every(evaluate);
+      case 'or': return clause.operands.some(evaluate);
+    }
+  };
+  return evaluate(parseClause(when));
+}
