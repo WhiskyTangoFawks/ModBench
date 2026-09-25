@@ -22,7 +22,7 @@ architecture on both sides of the HTTP boundary is worth more than either side's
    reconcile and on watcher overflow, and is idempotent by hash, so a duplicate signal is
    harmless.
 5. **The write side's inputs are the source text, the load order and the schema.** It reads the
-   load order for which copy a record lives in and the Source adapter for whether a mod is
+   load order for which plugin a record lives in and the Source adapter for whether a mod is
    tracked. Parse status comes from the codec at edit time. A document is never taken from the
    read model, and a missing file is a refusal.
 6. **The instance value is whole and immutable.** Replaced whole by each recompute, with no

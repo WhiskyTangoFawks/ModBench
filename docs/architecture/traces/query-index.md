@@ -26,9 +26,9 @@ nothing.
 | Question | Asked by | Answer |
 |---|---|---|
 | A plugin's record types and counts, a group's records, a container's children | Plugins | The rows, narrowed by the record filter. |
-| The plugin list | Plugins | Each copy's statuses: master issues, parse failures, tracked or not, and whether the record filter leaves it a record. |
-| A record's comparison | the Editor | One column for each copy the game loads (ADR-0013, invariant 3), with each field's value and its conflict states ([editor-conflicts.md](../surfaces/editor-conflicts.md)). |
-| The references to a record | Referenced By | Each referring record, and the loaded copies that hold the reference, with the fields that hold it. A copy the game does not load holds no reference, and neither does a condition parameter its function does not use (ADR-0005, invariant 7). |
+| The plugin list | Plugins | Each plugin's statuses: master issues, parse failures, tracked or not, and whether the record filter leaves it a record. |
+| A record's comparison | the Editor | One column for each plugin the game loads (ADR-0013, invariant 3), with each field's value and its conflict states ([editor-conflicts.md](../surfaces/editor-conflicts.md)). |
+| The references to a record | Referenced By | Each referring record, and the loaded plugins that hold the reference, with the fields that hold it. A plugin the game does not load holds no reference, and neither does a condition parameter its function does not use (ADR-0005, invariant 7). |
 | A search by FormID or EditorID | the record picker | The matching records. |
 | A malformed plugin's diagnosis | Plugins | The reasons ingest recorded. |
 
@@ -46,9 +46,9 @@ The filter lives in mEdit, so it survives a reload ([plugins.md](../surfaces/plu
 
 | Index status | What a query answers |
 |---|---|
-| reconciling | The copies indexed so far. The status says the conflicts are not final ([editor.md](../surfaces/editor.md), States, story 3). |
+| reconciling | The plugins indexed so far. The status says the conflicts are not final ([editor.md](../surfaces/editor.md), States, story 3). |
 | none, held elsewhere, or failed | No answer. The view shows its error row, with the status's reason. |
-| ready, and no copy holds the record | Not found ([editor.md](../surfaces/editor.md), States, story 4). |
+| ready, and no plugin holds the record | Not found ([editor.md](../surfaces/editor.md), States, story 4). |
 
 ## Hand-off
 

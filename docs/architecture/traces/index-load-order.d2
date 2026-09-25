@@ -39,12 +39,12 @@ http -> client: the version {class: loadorder}
 loadorder -> watcher: the load order changed {class: signal}
 watcher."arm one watch per mod folder"
 watcher -> indexer: "reconcile: validate by hash" {class: signal}
-indexer."a copy that left or moved: its registration only · read only content the index has not seen"
+indexer."a plugin that left or moved: its registration only · read only content the index has not seen"
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
 indexer -> store: rows {class: query}
-loadorder -> indexer: the participating copies {class: query}
+loadorder -> indexer: the participating plugins {class: query}
 indexer."winners and conflicts, once"
 indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}

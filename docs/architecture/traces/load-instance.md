@@ -28,7 +28,7 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
 5. The value goes to every view, and to instance commands. Instance commands derive the load order
-   snapshot from it, every physical copy (ADR-0012), and send it to mEdit
+   snapshot from it, every plugin file in the instance (ADR-0012), and send it to mEdit
    ([index-load-order](index-load-order.md)).
 
 ## refresh
@@ -38,7 +38,7 @@ change normally arrives.
 
 1. The Toolbox fires `refresh`. Instance commands ask mEdit, through the mEdit client, to drop and
    rebuild the index.
-2. Once the rebuild lands, mEdit reads every copy again against the load order it holds, as a cold
+2. Once the rebuild lands, mEdit reads every plugin again against the load order it holds, as a cold
    load does ([ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md), invariant 5).
    Nothing is sent.
 3. The Toolbox then asks the Instance loader to read every file again, as flow step 2 does.
