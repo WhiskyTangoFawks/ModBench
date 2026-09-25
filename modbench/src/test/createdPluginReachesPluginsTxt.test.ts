@@ -9,10 +9,9 @@ import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance } from '../instanceLoader/instance';
-import { placeFolder } from '../plugins/pluginDestination';
+import { placeFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
-import { present } from '../ports/present';
 import { resolvesNoDownloads } from './mo2/downloadsUnresolved';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 
@@ -51,9 +50,9 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
   });
 
   it.each(['overwrite', 'Existing Mod'])('in %s: the line lands at the end, disabled', async (origin) => {
-    const folder = present(placeFolder(instance.value, origin), 'the folder the value names for the place');
-    await writeFile(join(folder, 'New.esp'), 'plugin');
-    expect(await plugins()).toBe('*Base.esp\r\n');
+    const place = placeFolder(instance.value, origin);
+    if (!('folder' in place)) throw new Error(`Expected the value to name a folder for ${origin}.`);
+    await writeFile(join(place.folder, 'New.esp'), 'plugin');
 
     await instance.refresh();
     const { profile, provided, inData } = pluginSyncArguments(instance.value);

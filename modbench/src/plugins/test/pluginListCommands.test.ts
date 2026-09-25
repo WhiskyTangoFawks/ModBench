@@ -179,6 +179,24 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
+  it('refuses a mod that was disabled between the pick and the answer, saying so, and creates nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const mo2 = makeMo2();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockImplementation((places: Place[]) => {
+      mo2.instance.value = { ...mo2.instance.value, mods: [{ kind: 'mod', name: 'Winning Mod', enabled: false }] };
+      return Promise.resolve(places.find((p) => p.origin === 'Winning Mod'));
+    });
+
+    const { run, reporter } = invoke(client, mo2);
+    await run();
+
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.', detail: undefined },
+    ]);
+  });
+
   it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });

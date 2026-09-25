@@ -58,17 +58,20 @@ public sealed class CreatePluginTraceTests : HostedTests
         Assert.Empty(written.ModHeader.MasterReferences);
     }
 
-    [Fact]
-    public async Task CreatingAPlugin_ChangesNothingElseOnDiskOrInTheHeldSnapshot()
+    [Theory]
+    [InlineData("Created.esp")]
+    [InlineData("Created.esm")]
+    [InlineData("Created.esl")]
+    public async Task CreatingAPlugin_ChangesNothingElseOnDiskOrInTheHeldSnapshot(string name)
     {
         var fx = Owned(await Loaded());
         var folder = OtherTool.ModFolderOf(fx, Origin);
         var disk = TreeSnapshot.Of(fx.Root);
         var held = Held();
 
-        (await Create(Client, "Created.esp", folder)).EnsureSuccessStatusCode();
+        (await Create(Client, name, folder)).EnsureSuccessStatusCode();
 
-        var created = Path.GetRelativePath(fx.Root, Path.Combine(folder, "Created.esp")).Replace('\\', '/');
+        var created = Path.GetRelativePath(fx.Root, Path.Combine(folder, name)).Replace('\\', '/');
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root).Where(line => !line.StartsWith($"file {created} ", StringComparison.Ordinal)));
         Assert.Equal(held, Held());
     }

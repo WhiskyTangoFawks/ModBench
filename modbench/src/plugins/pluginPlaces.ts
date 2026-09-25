@@ -24,9 +24,13 @@ export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, nam
   ].filter((place) => !holds(place.origin));
 }
 
-/** `undefined` for a mod the value does not list as enabled, or names no folder for: one that
- *  vanished between the pick and the answer. */
-export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): string | undefined {
-  if (origin === OVERWRITE_ORIGIN) return value.paths.overwriteDir;
-  return enabledModNames(value).includes(origin) ? value.paths.modDirs.get(origin) : undefined;
+/** The place's folder, or what became of a mod between the pick and the answer. */
+export type PlaceFolder = { readonly folder: string } | { readonly lost: 'gone' | 'disabled' };
+
+export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): PlaceFolder {
+  if (origin === OVERWRITE_ORIGIN) return { folder: value.paths.overwriteDir };
+  const mod = value.mods.find((entry) => entry.kind === 'mod' && entry.name === origin);
+  const folder = value.paths.modDirs.get(origin);
+  if (mod === undefined || folder === undefined) return { lost: 'gone' };
+  return mod.enabled ? { folder } : { lost: 'disabled' };
 }

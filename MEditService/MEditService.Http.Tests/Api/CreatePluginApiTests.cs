@@ -179,8 +179,6 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.False((await Client.Plugin(Held)).GetProperty("isTracked").GetBoolean());
     }
 
-    // The rival is the retired create, which parked the new binary as a compile of its own and so
-    // moved a ref in the mod's repository.
     [Fact]
     public async Task CreatingIntoATrackedMod_LeavesItsRepositoryAsItWas()
     {

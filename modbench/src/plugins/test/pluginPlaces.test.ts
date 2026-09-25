@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { pluginPlaces, placeFolder } from '../pluginDestination';
+import { pluginPlaces, placeFolder } from '../pluginPlaces';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -44,13 +44,16 @@ describe('pluginPlaces', () => {
 
 describe('placeFolder', () => {
   it("answers Overwrite's folder and an enabled mod's folder as the value names them", () => {
-    expect(placeFolder(value, 'overwrite')).toBe(join('/instance', 'overwrite'));
-    expect(placeFolder(value, 'Winning Mod')).toBe(join('/instance', 'mods', 'Winning Mod'));
+    expect(placeFolder(value, 'overwrite')).toEqual({ folder: join('/instance', 'overwrite') });
+    expect(placeFolder(value, 'Winning Mod')).toEqual({ folder: join('/instance', 'mods', 'Winning Mod') });
   });
 
   // Rival: joining mods/<name> here, which answers a folder for a mod the value does not list.
-  it('answers nothing for a mod the value does not list, or does not enable', () => {
-    expect(placeFolder(value, 'Uninstalled')).toBeUndefined();
-    expect(placeFolder(value, 'Disabled Mod')).toBeUndefined();
+  it('answers a mod the value does not list as gone', () => {
+    expect(placeFolder(value, 'Uninstalled')).toEqual({ lost: 'gone' });
+  });
+
+  it('answers a mod the value lists but does not enable as disabled', () => {
+    expect(placeFolder(value, 'Disabled Mod')).toEqual({ lost: 'disabled' });
   });
 });

@@ -6,7 +6,7 @@ import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
 import { CellNode, PlacedNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
-import { placeFolder, pluginPlaces } from './pluginDestination';
+import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -103,13 +103,14 @@ export function registerCreatePluginCommand(
     const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
     if (!picked) return;
 
-    const folder = placeFolder(mo2.instance.value, picked.origin);
-    if (folder === undefined) {
-      reporter.report('error', `The mod "${picked.origin}" is gone, so "${name}" was not created.`);
+    const place = placeFolder(mo2.instance.value, picked.origin);
+    if ('lost' in place) {
+      const became = place.lost === 'gone' ? 'is gone' : 'was disabled';
+      reporter.report('error', `The mod "${picked.origin}" ${became}, so "${name}" was not created.`);
       return;
     }
 
-    const result = await client.createPlugin({ name, origin: picked.origin }, folder);
+    const result = await client.createPlugin({ name, origin: picked.origin }, place.folder);
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     reporter.landed(`Created "${result.name}" in ${picked.label}.`);
   });
