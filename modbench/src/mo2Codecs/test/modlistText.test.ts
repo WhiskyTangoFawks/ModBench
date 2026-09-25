@@ -574,6 +574,12 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     expect(unlistedModNames(['Textures'], entries)).toEqual(['Textures']);
   });
 
+  // MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator).
+  it('treats a folder as listed when a line names it in another case', () => {
+    const entries = parseModlist('+harder vats\r\n-textures_separator\r\n');
+    expect(unlistedModNames(['Harder VATS', 'Textures_separator', 'OVERWRITE'], entries)).toEqual([]);
+  });
+
   it('returns multiple new folders sorted', () => {
     expect(unlistedModNames(['Zeta Mod', 'Alpha Mod'], [])).toEqual(['Alpha Mod', 'Zeta Mod']);
   });

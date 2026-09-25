@@ -162,7 +162,10 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
   });
 }
 
-const RESERVED_DIR_NAMES = new Set([OVERWRITE_DIR_NAME]);
+/** MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator). */
+export const modNameKey = (name: string): string => name.toLowerCase();
+
+const RESERVED_DIR_NAMES = new Set([modNameKey(OVERWRITE_DIR_NAME)]);
 
 /** The folders under `mods/` no line names: a mod's by its name, a separator's by its
  *  `<name>_separator` folder. Excludes `overwrite`. Sorted, for a deterministic registration order. */
@@ -170,10 +173,10 @@ export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): s
   // A separator registers its folder, never its bare name: users name separators after what they
   // group, so a real `mods/<name>/` folder sharing that name still needs a line.
   const registered = new Set(
-    entries.map((e) => (e.kind === 'separator' ? separatorModName(e.name) : e.name)),
+    entries.map((e) => modNameKey(e.kind === 'separator' ? separatorModName(e.name) : e.name)),
   );
   return dirNames
-    .filter((name) => !RESERVED_DIR_NAMES.has(name) && !registered.has(name))
+    .filter((name) => !RESERVED_DIR_NAMES.has(modNameKey(name)) && !registered.has(modNameKey(name)))
     .sort((a, b) => a.localeCompare(b));
 }
 

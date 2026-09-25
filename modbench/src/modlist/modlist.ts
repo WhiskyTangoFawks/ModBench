@@ -5,6 +5,7 @@
 import {
   deleteSeparatorInText,
   insertModAtWinningEnd,
+  modNameKey,
   insertSeparatorAtIndexInText,
   moveModsInText,
   moveSeparatorsInText,
@@ -131,9 +132,12 @@ const folderOfFiltered = (instanceRoot: string, name: string): string =>
 // A separator gesture writes its line, then makes or renames its folder. Until it is done, mod
 // sync leaves the folders it names alone: it neither drops their lines nor adds lines for them.
 const foldersInGesture = new Map<string, number>();
+const gestureKey = (instanceRoot: string, folder: string): string => modDir(instanceRoot, modNameKey(folder));
 
-async function whileInGesture<T>(folders: readonly (string | undefined)[], gesture: () => Promise<T>): Promise<T> {
-  const held = folders.filter((f): f is string => f !== undefined);
+async function whileInGesture<T>(
+  instanceRoot: string, folders: readonly (string | undefined)[], gesture: () => Promise<T>,
+): Promise<T> {
+  const held = folders.filter((f): f is string => f !== undefined).map((f) => gestureKey(instanceRoot, f));
   for (const f of held) foldersInGesture.set(f, (foldersInGesture.get(f) ?? 0) + 1);
   try {
     return await gesture();
@@ -152,7 +156,7 @@ export async function insertSeparator(
   instanceRoot: string, profile: string, requested: string, anchor: Pick<ModlistEntry, 'kind' | 'name'>,
 ): Promise<ModlistCommandResult> {
   const name = mo2FolderName(requested);
-  return whileInGesture([separatorDir(instanceRoot, name)], () =>
+  return whileInGesture(instanceRoot, [separatorFolderName(name)], () =>
     insertSeparatorLineThenFolder(instanceRoot, profile, requested, name, anchor));
 }
 
@@ -204,7 +208,7 @@ export async function renameSeparator(
 ): Promise<ModlistCommandResult> {
   const newName = mo2FolderName(requested);
   const oldFolder = separatorDir(instanceRoot, oldName);
-  return whileInGesture([oldFolder, separatorDir(instanceRoot, newName)], async () => {
+  return whileInGesture(instanceRoot, [separatorFolderName(oldName), separatorFolderName(newName)], async () => {
     const line = await spliceModlist(instanceRoot, profile, (text) => {
       refuseSeparatorName(text, requested, oldName);
       return renameSeparatorInText(text, oldName, newName);
@@ -414,8 +418,8 @@ export async function syncMods(
   if (modFolders === undefined) {
     return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist` };
   }
-  const listed = new Set(modFolders);
-  const inGesture = (folder: string) => foldersInGesture.has(modDir(instanceRoot, folder));
+  const listed = new Set(modFolders.map(modNameKey));
+  const inGesture = (folder: string) => foldersInGesture.has(gestureKey(instanceRoot, folder));
   const onDisk = (folder: string) => exists(modDir(instanceRoot, folder));
   let added: string[] = [];
   let dropped: string[] = [];
@@ -427,7 +431,7 @@ export async function syncMods(
     const gone = await keepWhere(entries, async (entry) => {
       const folder = listedFolderOf(entry);
       if (folder === undefined) return true;
-      return !listed.has(folder) && !inGesture(folder) && !(await onDisk(folder));
+      return !listed.has(modNameKey(folder)) && !inGesture(folder) && !(await onDisk(folder));
     });
     added = await keepWhere(unlistedModNames([...modFolders], entries),
       async (folder) => !inGesture(folder) && onDisk(folder));

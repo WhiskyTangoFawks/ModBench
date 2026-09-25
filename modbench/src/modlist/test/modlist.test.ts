@@ -1046,6 +1046,19 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(vi.mocked(access).mock.calls.map(([path]) => String(path)).filter((p) => p.includes('Weapons'))).toEqual([]);
   });
 
+  // MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator), and a
+  // Windows folder answers to either case. Rival: comparing with case, which drops both lines and
+  // adds a duplicate of each, the separator's as an orphan.
+  it('matches a line to its folder without case', async () => {
+    await writeFile(modlistPath(), '+harder vats\r\n-unassigned (modlist development)_separator\r\n');
+
+    const outcome = await sync(MOD_FOLDERS);
+
+    expect(outcome.applied && outcome.dropped).toEqual([]);
+    expect(outcome.applied && outcome.added).not.toEqual(expect.arrayContaining(['Harder VATS']));
+    expect(outcome.applied && outcome.added).not.toEqual(expect.arrayContaining(['Unassigned (Modlist Development)_separator']));
+  });
+
   it('adds a disabled separator line at the winning end for a separator folder with none', async () => {
     await mkdir(join(dir, 'mods', 'Orphan_separator'));
 
