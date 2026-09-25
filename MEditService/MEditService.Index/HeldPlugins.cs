@@ -216,9 +216,15 @@ internal sealed class HeldPlugins
         }
     }
 
-    internal bool HasFailure(PluginCopyKey key)
+    /// <summary>Held, and its last read failed: a copy the open itself failed on is not held, and has
+    /// nothing to read again.</summary>
+    internal bool IsHeldWithAFailure(PluginCopyKey key)
     {
-        lock (_mutation) return _loadFailures.ContainsKey(key);
+        lock (_mutation)
+        {
+            return _loadFailures.ContainsKey(key)
+                   && _plugins.Exists(p => PluginCopyKey.Comparer.Equals(p.Key, key));
+        }
     }
 
     private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredCopy plugin) =>

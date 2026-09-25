@@ -195,6 +195,25 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
+    [Theory]
+    [InlineData("Backup/{0}")]
+    [InlineData("Backup/copy.json")]
+    public async Task ABackupCopyDeletedByHand_LiftsTheDiagnosis(string copiedTo)
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        using var stream = await Client.NotificationStream();
+        OtherTool.CopiesASourceDocument(original, copiedTo);
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
+
+        OtherTool.DeletesTheFile(OtherTool.Beside(original, copiedTo));
+
+        await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
+        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
     private static string? FailureOf(JsonElement loadOrderStatus) =>
         loadOrderStatus.GetProperty("loadOrderStatus").GetProperty("failures").EnumerateArray()
             .Where(f => f.GetProperty("name").GetString() == Plugin)

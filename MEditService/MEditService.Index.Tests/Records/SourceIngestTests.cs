@@ -298,6 +298,16 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
+    public void ACopyWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
+    {
+        File.WriteAllText(_entry.Path, "this is not a plugin");
+        using var index = Opened();
+        Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
+
+        index.RefreshKeys(Plugin, [_npc]);
+    }
+
+    [Fact]
     public void APartialReconcileThenBinaryFallback_LeavesExactlyOneEntry_NotTwo()
     {
         var sourceRoot = Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));

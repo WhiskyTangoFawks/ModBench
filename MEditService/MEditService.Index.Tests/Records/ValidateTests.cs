@@ -61,12 +61,38 @@ public sealed class ValidateTests : IDisposable
         var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
         File.WriteAllText(backup, File.ReadAllText(document).Replace("\"FixtureNpc\"", "\"BackupNpc\"", StringComparison.Ordinal));
 
-        Assert.Throws<UnreadableSourceDocumentException>(() => _index.ValidateIndex(_mod.KeyOf()));
+        Assert.NotEmpty(Validate().Failures);
 
         Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         var failure = Assert.Single(_index.Status.Failures);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), document), failure.Reason, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), backup), failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ValidatingEveryCopy_WhenOneCopysTreeCannotBeRead_StillValidatesTheOthers()
+    {
+        FormKey other = default;
+        using var fixture = new PluginFixtureBuilder("validate-two-tracked")
+            .WithPlugin("Broken.esp", mod => mod.Npcs.AddNew("BrokenNpc"), origin: "BrokenMod")
+            .WithPlugin("Sound.esp", mod => other = mod.Npcs.AddNew("SoundNpc").FormKey, origin: "SoundMod")
+            .BuildScattered()
+            .Tracked();
+        using var index = Indexes.Reconciled(fixture);
+        var broken = fixture.Plugins.Single(p => p.Name == "Broken.esp");
+        var sound = fixture.Plugins.Single(p => p.Name == "Sound.esp");
+        var brokenDocument = broken.SourceFileOf(index.RequireReads().DocumentOf(
+            index.RequireReads().Search(new RecordQuery(Plugin: broken.Name, Origin: broken.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single().FormKey,
+            broken.KeyOf()));
+        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(brokenDocument).Require(), "Backup")).FullName, Path.GetFileName(brokenDocument));
+        File.Copy(brokenDocument, backup);
+        sound.HandEdit(index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()), "\"SoundNpc\"", "\"EditedSoundNpc\"");
+
+        var reports = index.ValidateIndex(null);
+
+        Assert.Equal(2, reports.Count);
+        Assert.Equal("EditedSoundNpc", index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()).EditorId);
+        Assert.Contains(index.Status.Failures, f => f.Name == "Broken.esp");
     }
 
     [Fact]
