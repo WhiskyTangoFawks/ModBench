@@ -6,7 +6,7 @@ import {
 import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import type { EditsInFlight, FollowedPanel } from './followRecord';
+import type { EditGate, EditsInFlight, FollowedPanel } from './followRecord';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
@@ -25,13 +25,16 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   formKeyPicker: FormKeyPickerDeps | undefined;
   // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
   // that tab along: its column names the plugin copy the edit landed on (ADR-0012).
-  editInFlight: ((formKey: string, write: () => Promise<string | undefined>) => Promise<void>) | undefined;
+  editInFlight: EditGate;
 }
+
+/** What every panel's messages share: the rest is the panel's own. */
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight'>;
 
 /** The router's bundle for one panel's messages: the picker replies to it, and its edits are
  *  held in flight for it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
-  shared: RouteRecordPanelMessageDeps,
+  shared: SharedRecordPanelDeps,
   panel: Panel,
   edits: EditsInFlight<Panel>,
 ): RouteRecordPanelMessageDeps {
@@ -189,7 +192,5 @@ async function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  const write = () => applyRecordEdit(deps, m.formKey, m.plugin, m.origin, m.envelope);
-  if (deps.editInFlight) await deps.editInFlight(m.formKey, write);
-  else await write();
+  await deps.editInFlight(m.formKey, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
 }

@@ -15,6 +15,11 @@ export class ActiveRecordTracker<TPanel = unknown> {
     return this.lastFired;
   }
 
+  /** The panel the user is in, whose menus and keys a gesture came from. */
+  activePanelNow(): TPanel | undefined {
+    return this.activePanel;
+  }
+
   /** Any tracked panel's own FormKey, active or not — the notification subscription's per-panel
    *  match key. */
   formKeyOf(panel: TPanel): string | undefined {

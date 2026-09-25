@@ -3,11 +3,14 @@ import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type S
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import type { EditGate } from './followRecord';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
   // Load order-static: the same field files and channel every panel's tabs would get.
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   log: (msg: string) => void;
+  // A right-click lands on the active record panel, and its edits are that panel's, through its gate.
+  editGateOfActivePanel: () => EditGate;
 }
 
 interface ContextCommand {
@@ -46,7 +49,8 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
     run: async (deps, raw) => {
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw);
-      if (envelope) await applyRecordEdit(deps, raw.formKey, raw.plugin, raw.origin, envelope);
+      if (!envelope) return;
+      await deps.editGateOfActivePanel()(raw.formKey, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
     },
   };
 }
@@ -54,6 +58,8 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
 // ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
+  // Taken when the menu is used, not at a save, when another panel may be active.
+  const gate = deps.editGateOfActivePanel();
   return openExtendedFieldEditor(
     {
       value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,
@@ -63,7 +69,8 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
       fieldFile: deps.fieldFile,
       log: deps.log,
       reporter: deps.reporter,
-      onCommit: async value => { await applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value }); },
+      onCommit: value => gate(ctx.formKey, formKey =>
+        applyRecordEdit(deps, formKey, ctx.plugin, ctx.origin, { op: 'set', path: ctx.path, value })),
     },
   );
 }

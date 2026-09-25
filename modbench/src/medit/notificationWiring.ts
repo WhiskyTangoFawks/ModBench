@@ -18,15 +18,27 @@ export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pi
   client: Pick<MEditClient, 'subscribe'>,
   recordPanels: Set<Panel>,
   activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
-  heldReads?: { holds(panel: Panel, keys: readonly string[]): boolean },
+  heldReads: { holds(panel: Panel, keys: readonly string[]): boolean },
 ): () => void {
   return client.subscribe('rows-changed', (event) => {
     for (const panel of recordPanels) {
-      if (heldReads?.holds(panel, event.keys)) continue;
+      if (heldReads.holds(panel, event.keys)) continue;
       const formKey = activeRecordTracker.formKeyOf(panel);
       if (formKey && event.keys.includes(formKey)) {
         void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
       }
     }
   });
+}
+
+/** A completed reconcile or a landed Track: every record panel refreshes its comparison, except
+ *  one whose read `heldReads` holds, which refreshes when its hold ends. */
+export function announceConflictsComputed<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
+  recordPanels: Set<Panel>,
+  heldReads: { holdsRefresh(panel: Panel): boolean },
+): void {
+  for (const panel of recordPanels) {
+    if (heldReads.holdsRefresh(panel)) continue;
+    void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } satisfies ExtensionToWebview);
+  }
 }

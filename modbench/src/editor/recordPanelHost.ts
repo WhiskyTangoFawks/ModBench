@@ -4,7 +4,7 @@ import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditsInFlight } from './followRecord';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
-import { routeRecordPanelMessage, routerDepsForPanel, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
+import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
@@ -75,10 +75,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(
     (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
   const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
-  // `formKeyPicker` and `editInFlight` are placeholders here, rebuilt per panel below, since each
-  // must reach the one panel that asked.
-  const routerDeps: RouteRecordPanelMessageDeps = {
-    ...writeDeps, meditClient, channel: outputChannel, formKeyPicker: undefined, editInFlight: undefined,
+  // The picker and the edit gate are each panel's own, added per panel below.
+  const routerDeps: SharedRecordPanelDeps = {
+    ...writeDeps, meditClient, channel: outputChannel,
   };
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
@@ -86,6 +85,13 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
       ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
+      editGateOfActivePanel: () => {
+        const panel = activeRecordTracker.activePanelNow();
+        return panel
+          ? (formKey, write) => editsInFlight.edit(panel, formKey, write)
+          // No record panel is active, so no panel's reads wait on this write.
+          : async (formKey, write) => { await write(formKey); };
+      },
     }),
     // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
@@ -127,7 +133,7 @@ export const RECORD_PANEL_KEY = '__record_view__';
 // `recordPanels` is every open panel, main and Beside alike: broadcasts post to all and let each
 // self-filter rather than picking "the right one".
 export interface OpenRecordPanelDeps {
-  routerDeps: RouteRecordPanelMessageDeps;
+  routerDeps: SharedRecordPanelDeps;
   recordPanels: Set<vscode.WebviewPanel>;
   // Kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input.

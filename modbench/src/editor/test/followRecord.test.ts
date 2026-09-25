@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EditsInFlight } from '../followRecord';
-import { subscribeRecordPanelsToNotifications } from '../../medit/notificationWiring';
+import { announceConflictsComputed, subscribeRecordPanelsToNotifications } from '../../medit/notificationWiring';
 import { InMemoryMEditClient } from '../../client';
 
 function fakePanel(title: string) {
@@ -95,6 +95,36 @@ describe('EditsInFlight', () => {
 
     expect(loadsOf(other)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
     expect(tracker.formKeyOf(other)).toBe('000800:Mod.esp');
+  });
+
+  // Between the answer and the report, the Index does not hold the new key yet and the old one is
+  // gone, so the tab's refresh waits for the read the report brings.
+  it('holds a refresh of the comparison between the answer and the report, which then reads the new FormKey', async () => {
+    const { client, panel, edits } = openOn('000800:Mod.esp');
+
+    await edits.edit(panel, '000800:Mod.esp', () => Promise.resolve('000900:Mod.esp'));
+    announceConflictsComputed(new Set([panel]), edits);
+    expect(loadsOf(panel)).toEqual([]);
+    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
+    announceConflictsComputed(new Set([panel]), edits);
+
+    expect(loadsOf(panel)).toEqual([
+      { type: 'loadRecord', formKey: '000900:Mod.esp' },
+      { type: 'conflictsComputed' },
+    ]);
+  });
+
+  it('refreshes the comparison after the answer when it was announced while an edit was in flight', async () => {
+    const { panel, edits } = openOn('000800:Mod.esp');
+    const { write, answer } = pendingAnswer();
+
+    const editing = edits.edit(panel, '000800:Mod.esp', write);
+    announceConflictsComputed(new Set([panel]), edits);
+    expect(loadsOf(panel)).toEqual([]);
+    answer(undefined);
+    await editing;
+
+    expect(loadsOf(panel)).toEqual([{ type: 'conflictsComputed' }]);
   });
 
   it('retitles a tab titled with the old FormKey, and leaves one titled with the EditorID', async () => {
