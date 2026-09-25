@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Multi-plugin compile is atomic under a crash injected between writes: the marker always
-/// tells a reader which plugins landed.</summary>
+/// <summary>compile-plugin, steps 5 and 7: the mark a compile leaves in the mod's repository names
+/// every plugin whose compile began and did not finish, until that plugin compiles.</summary>
 public sealed class CompileJournalTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-journal-").FullName;
@@ -14,104 +14,120 @@ public sealed class CompileJournalTests : IDisposable
         catch (IOException) { /* scratch, best-effort */ }
     }
 
-    [Fact]
-    public async Task RunBatch_WhenEveryPluginLands_ClearsTheMarker()
-    {
-        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp"], _ => Task.FromResult(true));
+    private Task<bool> Lands(string plugin) => CompileJournal.RunAsync(_modFolder, plugin, () => Task.FromResult(true));
 
-        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
+    private Task<bool> IsRefused(string plugin) => CompileJournal.RunAsync(_modFolder, plugin, () => Task.FromResult(false));
+
+    private Task Crashes(string plugin) => Assert.ThrowsAsync<InvalidOperationException>(() =>
+        CompileJournal.RunAsync(_modFolder, plugin, () => throw new InvalidOperationException("simulated crash")));
+
+    private IReadOnlyList<string>? Unlanded() => CompileJournal.UnfinishedBatch(_modFolder)?.Unlanded;
+
+    [Fact]
+    public void NothingEverCompiled_LeavesNoMark()
+    {
+        Assert.Null(Unlanded());
     }
 
     [Fact]
-    public void RunBatch_WhenNothingIsInFlight_ReportsNoUnfinishedBatch()
+    public async Task ACompileThatLands_LeavesNoMark()
     {
-        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
-    }
+        Assert.True(await Lands("A.esp"));
 
-    // A crash between two plugins' writes, reproduced by a compileOne that throws for the second. The
-    // marker file is asserted directly rather than through RunBatch's return value, so it is honest
-    // about what a restarted process would see.
-    [Fact]
-    public async Task RunBatch_CrashBetweenTwoPluginsWrites_LeavesAMarkerNamingExactlyWhatLanded()
-    {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin =>
-                plugin == "B.esp" ? throw new InvalidOperationException("simulated crash") : Task.FromResult(true)));
-
-        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
-        Assert.NotNull(recovery);
-        Assert.Equal(["A.esp", "B.esp", "C.esp"], recovery.Plugins);
-        Assert.Equal(["A.esp"], recovery.Landed);
-        Assert.Equal(["B.esp", "C.esp"], recovery.Unlanded);
+        Assert.Null(Unlanded());
     }
 
     [Fact]
-    public async Task RunBatch_APluginThatRefuses_StopsTheBatch_AndLeavesItInTheUnlandedSet()
+    public async Task ACompileThatCrashes_LeavesAMarkNamingThePlugin()
     {
-        var landed = await CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp", "C.esp"], plugin => Task.FromResult(plugin != "B.esp"));
+        await Crashes("A.esp");
 
-        Assert.Equal(["A.esp"], landed);
-        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
-        Assert.NotNull(recovery);
-        Assert.Equal(["B.esp", "C.esp"], recovery.Unlanded);
+        Assert.Equal(["A.esp"], Unlanded());
     }
 
     [Fact]
-    public async Task RunBatch_OfAnotherPluginOfTheMod_KeepsAnInterruptedPluginMarkedUnlanded()
+    public async Task TheMark_NamesThePlugin_WhileItsCompileRuns()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => throw new InvalidOperationException("simulated crash")));
+        IReadOnlyList<string>? whileRunning = null;
 
-        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => Task.FromResult(true));
+        await CompileJournal.RunAsync(_modFolder, "A.esp", () =>
+        {
+            whileRunning = Unlanded();
+            return Task.FromResult(true);
+        });
 
-        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
-        Assert.NotNull(recovery);
-        Assert.Equal(["B.esp"], recovery.Unlanded);
+        Assert.Equal(["A.esp"], whileRunning);
     }
 
     [Fact]
-    public async Task RunBatch_OfTheInterruptedPlugin_ClearsTheMarker_OnceItLands()
+    public async Task ARefusedCompile_WroteNothing_SoLeavesNoMark()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => throw new InvalidOperationException("simulated crash")));
-        await CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => Task.FromResult(true));
+        Assert.False(await IsRefused("A.esp"));
 
-        await CompileJournal.RunBatchAsync(_modFolder, ["B.esp"], _ => Task.FromResult(true));
-
-        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
+        Assert.Null(Unlanded());
     }
 
     [Fact]
-    public async Task RunBatch_OfAPluginThatLandedBefore_MarksItUnlandedAgain_WhenThisCompileIsInterrupted()
+    public async Task ARefusedCompile_OfAPluginAnEarlierCrashLeftUnfinished_KeepsItMarked()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CompileJournal.RunBatchAsync(_modFolder, ["A.esp", "B.esp"], plugin =>
-                plugin == "B.esp" ? throw new InvalidOperationException("simulated crash") : Task.FromResult(true)));
+        await Crashes("B.esp");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CompileJournal.RunBatchAsync(_modFolder, ["A.esp"], _ => throw new InvalidOperationException("simulated crash")));
+        await IsRefused("B.esp");
 
-        var recovery = CompileJournal.UnfinishedBatch(_modFolder);
-        Assert.NotNull(recovery);
-        Assert.Equal(["A.esp", "B.esp"], recovery.Unlanded);
+        Assert.Equal(["B.esp"], Unlanded());
     }
 
-    // No public door leaves this marker: only a crash between the last rewrite and the delete does,
-    // so the marker is laid down as that crash leaves it.
     [Fact]
-    public void UnfinishedBatch_OfAMarkerWhoseEveryPluginLanded_IsNone()
+    public async Task ACompileOfAnotherPluginOfTheMod_KeepsAnInterruptedPluginMarked()
+    {
+        await Crashes("B.esp");
+
+        await Lands("A.esp");
+
+        Assert.Equal(["B.esp"], Unlanded());
+    }
+
+    [Fact]
+    public async Task ARefusedCompileOfAnotherPluginOfTheMod_KeepsAnInterruptedPluginMarked()
+    {
+        await Crashes("B.esp");
+
+        await IsRefused("A.esp");
+
+        Assert.Equal(["B.esp"], Unlanded());
+    }
+
+    [Fact]
+    public async Task TheInterruptedPluginCompilingAgain_ClearsTheMark()
+    {
+        await Crashes("B.esp");
+        await Lands("A.esp");
+
+        await Lands("B.esp");
+
+        Assert.Null(Unlanded());
+        Assert.False(File.Exists(Path.Combine(_modFolder, ".git", "MEDIT_COMPILE_JOURNAL")));
+    }
+
+    [Fact]
+    public async Task APluginThatLandedSinceTheMarkWasLeft_IsMarkedAgain_WhenItsNextCompileCrashes()
+    {
+        await Crashes("B.esp");
+        await Lands("A.esp");
+
+        await Crashes("A.esp");
+
+        Assert.Equal(["B.esp", "A.esp"], Unlanded());
+    }
+
+    // No door leaves this mark: only a crash between a compile landing and the mark's deletion does,
+    // so the mark is laid down as that crash leaves it.
+    [Fact]
+    public void AMarkWhoseEveryPluginLanded_NamesNoUnfinishedCompile()
     {
         File.WriteAllText(
             Path.Combine(_modFolder, ".git", "MEDIT_COMPILE_JOURNAL"),
             """{"plugins":["A.esp","B.esp"],"landed":["A.esp","B.esp"]}""");
-
-        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
-    }
-
-    [Fact]
-    public async Task RunBatch_OfOnePlugin_BehavesTheSameAsAnyOtherBatch()
-    {
-        await CompileJournal.RunBatchAsync(_modFolder, ["Solo.esp"], _ => Task.FromResult(true));
 
         Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
     }

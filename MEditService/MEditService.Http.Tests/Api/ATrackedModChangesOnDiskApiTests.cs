@@ -308,8 +308,8 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
 
     // The mark step 5 of compile-plugin leaves when the write never finishes.
     private static Task InterruptACompile(string modFolder) =>
-        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunBatchAsync(modFolder, [Plugin],
-            _ => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
+        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunAsync(modFolder, Plugin,
+            () => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
 
     private static void AssertNamesThePlugin(JsonElement unfinished)
     {

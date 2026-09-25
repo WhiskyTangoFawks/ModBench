@@ -2,42 +2,40 @@ using System.Text.Json;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Journals a compile batch so a crash cannot leave it silently half-done; a single plugin's
-/// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch is one
-/// mod folder — naming every plugin not landed since a compile of it began, whichever batch began it.</summary>
+/// <summary>compile-plugin, steps 5 and 7: the mark that a compile has begun, so an interrupted one
+/// is never read as another program's change. A marker file inside <c>.git</c>, one per repo, naming
+/// every plugin of the mod whose compile began and has not landed since.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
 
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
-    /// <summary>The marker is written before the first compile, rewritten after each landed plugin, and
-    /// deleted only once every plugin it names has landed, an earlier batch's unlanded ones included. A
-    /// refusal stops the batch and leaves the rest unlanded — deliberately indistinguishable from a
-    /// crash.</summary>
-    public static async Task<IReadOnlyList<string>> RunBatchAsync(
-        string modFolder, IReadOnlyList<string> plugins, Func<string, Task<bool>> compileOne)
+    /// <summary>Marks <paramref name="plugin"/> before <paramref name="compile"/> runs, and clears it
+    /// once it lands. <paramref name="compile"/> answers false for a refusal that wrote nothing, which
+    /// puts the mark back as it was; a throw leaves the plugin marked.</summary>
+    public static async Task<bool> RunAsync(string modFolder, string plugin, Func<Task<bool>> compile)
     {
-        if (plugins.Count == 0) return [];
-
         var earlier = UnfinishedBatch(modFolder);
-        var named = (earlier?.Plugins ?? []).Union(plugins, StringComparer.Ordinal).ToList();
-        var landedBefore = (earlier?.Landed ?? []).Except(plugins, StringComparer.Ordinal).ToList();
-        WriteMarker(modFolder, named, landedBefore);
+        var named = (earlier?.Plugins ?? []).Union([plugin], StringComparer.Ordinal).ToList();
+        var landedBefore = (earlier?.Landed ?? []).Where(p => !string.Equals(p, plugin, StringComparison.Ordinal)).ToList();
+        WriteMarker(modFolder, new CompileJournalState(named, landedBefore));
 
-        var landed = new List<string>();
-        foreach (var plugin in plugins)
+        if (!await compile())
         {
-            if (!await compileOne(plugin)) break;
-
-            landed.Add(plugin);
-            WriteMarker(modFolder, named, [.. landedBefore, .. landed]);
+            Settle(modFolder, earlier);
+            return false;
         }
 
-        if (new CompileJournalState(named, [.. landedBefore, .. landed]).Unlanded.Count == 0)
-            File.Delete(MarkerPath(modFolder));
+        Settle(modFolder, new CompileJournalState(named, [.. landedBefore, plugin]));
+        return true;
+    }
 
-        return landed;
+    // A mark with nothing unlanded is deleted, so its file exists only while it means something.
+    private static void Settle(string modFolder, CompileJournalState? state)
+    {
+        if (state is null || state.Unlanded.Count == 0) File.Delete(MarkerPath(modFolder));
+        else WriteMarker(modFolder, state);
     }
 
     /// <summary>The marker's content, or null when no plugin it names is unlanded: a marker means the
@@ -61,9 +59,9 @@ public static class CompileJournal
                 $"Expected every '{propertyName}' element to be a non-null string."))
             .ToList();
 
-    private static void WriteMarker(string modFolder, IReadOnlyList<string> plugins, IReadOnlyList<string> landed)
+    private static void WriteMarker(string modFolder, CompileJournalState state)
     {
-        var json = JsonSerializer.Serialize(new { plugins, landed });
+        var json = JsonSerializer.Serialize(new { plugins = state.Plugins, landed = state.Landed });
         var path = MarkerPath(modFolder);
 
         // Write-then-rename: a marker torn by a second crash mid-write would defeat the point of having one.
@@ -73,9 +71,8 @@ public static class CompileJournal
     }
 }
 
-/// <summary>A journal marker's content: every plugin the interrupted batch named, and which of them
-/// had already landed. <see cref="Unlanded"/> is everything the batch didn't reach — recovery's own
-/// job, never this record's.</summary>
+/// <summary>A journal marker's content: every plugin whose compile began since the mark was left, and
+/// which of them have landed since. <see cref="Unlanded"/> is the plugins whose binary may be bad.</summary>
 public sealed record CompileJournalState(IReadOnlyList<string> Plugins, IReadOnlyList<string> Landed)
 {
     public IReadOnlyList<string> Unlanded => [.. Plugins.Except(Landed, StringComparer.Ordinal)];

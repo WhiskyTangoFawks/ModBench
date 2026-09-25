@@ -80,6 +80,17 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
     }
 
+    [Fact]
+    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_WroteNothing_SoLeavesNoCompileMark()
+    {
+        var compileService = CompileServices.Over(_loadOrder);
+
+        var result = await compileService.CompileAsync(_plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }

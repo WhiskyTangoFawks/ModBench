@@ -96,8 +96,8 @@ public sealed class TrackedModSettledTests : IDisposable
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question already open before the crash");
         await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await CompileJournal.RunBatchAsync(_mod.ModFolder, [SourceEditFixture.PluginName],
-                _ => throw new InvalidOperationException("simulated crash between source and binary write")));
+            await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName,
+                () => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder));
 
         var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
