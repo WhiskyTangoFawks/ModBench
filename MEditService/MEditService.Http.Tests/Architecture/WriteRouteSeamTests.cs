@@ -7,14 +7,12 @@ namespace MEditService.Http.Tests.Architecture;
 /// <see cref="WriteRouteHandlerTests"/>'s own canonical set so the two cannot drift apart.</summary>
 public sealed class WriteRouteSeamTests
 {
-    // Route, and the internal method answering it — null for the one route with no named method
-    // (PeekNextFreeFormKey, scanned by its call-site span instead). Method + Pattern are joined with
-    // a space, matching how they're compared against WriteRouteHandlerTests.Routes below.
-    private static readonly (string Route, string? Method)[] Routes =
+    // Route, and the internal method answering it. Method + Pattern are joined with a space, matching
+    // how they're compared against WriteRouteHandlerTests.Routes below.
+    private static readonly (string Route, string Method)[] Routes =
     [
         ("POST /records/{formKey}/edit", "EditRecord"),
         ("POST /records/delete", "DeleteRecord"),
-        ("POST /records/{formKey}/renumber", "RenumberRecord"),
         ("POST /records/{formKey}/copy-as-override", "CopyRecordAsOverride"),
         ("POST /records/{formKey}/copy-as-new-record", "CopyRecordAsNewRecord"),
         ("POST /plugins/create", "CreatePlugin"),
@@ -26,7 +24,6 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/rebase", "Rebase"),
         ("POST /plugins/rebase/continue", "ContinueRebase"),
         ("PUT /load-order", "PutLoadOrder"),
-        ("GET /plugins/{plugin}/records/next-form-key", null),
     ];
 
     private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs"];
@@ -58,14 +55,8 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400)""",
     ];
 
-    public static IEnumerable<object[]> EveryNamedMethodRoute
-    {
-        get
-        {
-            foreach (var (route, method) in Routes)
-                if (method is { } m) yield return [route, m];
-        }
-    }
+    public static IEnumerable<object[]> EveryNamedMethodRoute =>
+        Routes.Select(r => new object[] { r.Route, r.Method });
 
     [Fact]
     public void TheGate_CoversExactlyTheCanonicalWriteRoutes()
@@ -101,30 +92,6 @@ public sealed class WriteRouteSeamTests
             offenders.Length == 0,
             $"{route}: {method} hand-rolls a Results.Problem(...) outside the request-shape validation "
             + $"carve-out — a handler outcome must map through WriteEndpointMapping instead: {string.Join(" | ", offenders)}");
-    }
-
-    // PeekNextFreeFormKey answers inline in its own MapGet lambda, not a named method, so its
-    // call-site span is scanned directly instead of a method body.
-    [Fact]
-    public void PeekNextFreeFormKey_MapsThroughTheSharedSeam_AndHandRollsNoResultsProblem()
-    {
-        const string route = "GET /plugins/{plugin}/records/next-form-key";
-        var span = PeekNextFreeFormKeySpan();
-
-        Assert.Contains("WriteEndpointMapping.", span, StringComparison.Ordinal);
-        var offenders = ExtractProblemCalls(span).Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal)).ToArray();
-        Assert.True(offenders.Length == 0, $"{route}: hand-rolls {string.Join(" | ", offenders)}.");
-    }
-
-    private static string PeekNextFreeFormKeySpan()
-    {
-        const string route = "GET /plugins/{plugin}/records/next-form-key";
-        var source = File.ReadAllText(EndpointFile("PluginEndpoints.cs"));
-        var routeIndex = source.IndexOf("\"/plugins/{plugin}/records/next-form-key\"", StringComparison.Ordinal);
-        Assert.True(routeIndex >= 0, $"{route}: route pattern not found in PluginEndpoints.cs.");
-        var nameIndex = source.IndexOf(".WithName(\"PeekNextFreeFormKey\")", routeIndex, StringComparison.Ordinal);
-        Assert.True(nameIndex >= 0, $"{route}: could not find its own .WithName(\"PeekNextFreeFormKey\") to bound the scan.");
-        return source[routeIndex..nameIndex];
     }
 
     [Fact]

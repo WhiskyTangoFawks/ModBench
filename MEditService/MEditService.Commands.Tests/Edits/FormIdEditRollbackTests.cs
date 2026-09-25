@@ -10,12 +10,12 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A renumber that fails part-way leaves the working tree as it was. The faults are real
+/// <summary>A FormID edit that fails part-way leaves the working tree as it was. The faults are real
 /// I/O: its write touches files and nothing else.</summary>
-public sealed class RenumberRollbackTests
+public sealed class FormIdEditRollbackTests
 {
-    // Free at both refs in the flat fixture's plugin, and requested rather than allocated so the
-    // renumbered file's leaf name is nameable before the write.
+    // Free at both refs in the flat fixture's plugin, and named so the moved file's leaf name is nameable
+    // before the write.
     private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
 
     // The same, in the container fixture's plugin.
@@ -25,18 +25,18 @@ public sealed class RenumberRollbackTests
     private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
-    public void BlockingTheRenumberedRecordsNewFile_LeavesTheSourceTreeUnchanged()
+    public void BlockingTheRecordsNewFile_LeavesTheSourceTreeUnchanged()
     {
         using var mod = SourceEditFixture.Tracked();
         Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
 
-        // Taken after the block, so the restoration is measured against the tree the renumber
+        // Taken after the block, so the restoration is measured against the tree the edit
         // actually started from.
         var before = TreeSnapshot.Of(mod.ModFolder);
         var statusBefore = mod.GitStatus();
 
         var thrown = Assert.Throws<IOException>(() =>
-            mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
+            mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
 
         Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
         Assert.Equal(statusBefore, mod.GitStatus());
@@ -46,7 +46,7 @@ public sealed class RenumberRollbackTests
     // Two units claiming one container is the tree's state, not a write fault: a refusal names it,
     // and a 500 "write failure" would send the author to check a disk that is fine.
     [Fact]
-    public void ARenumberWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
+    public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
     {
         const string pluginName = "TwoUnits.esp";
         var placed = FormKey.Null;
@@ -73,7 +73,7 @@ public sealed class RenumberRollbackTests
         File.Copy(cellFile, Path.Combine(impostor, "RecordData.json"));
         var before = TreeSnapshot.Of(mod.ModFolder);
 
-        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, placed.ToString());
+        var result = mod.EditHandler.SetFormId(mod.Plugin, placed.ToString(), $"000F00:{pluginName}");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, result.Refusal);
@@ -84,7 +84,7 @@ public sealed class RenumberRollbackTests
     // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
     // a container whose EditorID carries a NUL has no path a rename can land on.
     [Fact]
-    public void ARenumberThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
+    public void AFormIdEditThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
     {
         using var fixture = new SourceContainerFixture();
         var worldspaceDocument = fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId);
@@ -95,7 +95,7 @@ public sealed class RenumberRollbackTests
         var before = TreeSnapshot.Of(fixture.ModFolder);
 
         Assert.Throws<ArgumentException>(() =>
-            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+            fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
     }
@@ -114,7 +114,7 @@ public sealed class RenumberRollbackTests
             .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         Assert.Throws<IOException>(() =>
-            mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
+            mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), NewNpcFormKey.ToString()));
 
         Assert.Equal(
             entriesBefore,
@@ -122,18 +122,18 @@ public sealed class RenumberRollbackTests
     }
 
     [Fact]
-    public void AContainerRenumberOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
+    public void AContainersFormIdEditOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
     {
         using var fixture = new SourceContainerFixture();
         // A worldspace is the one directory-per-record container: its cells and their placed
-        // references travel with the directory the renumber moves.
+        // references travel with the directory the edit moves.
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
 
         var before = TreeSnapshot.Of(fixture.ModFolder);
         var statusBefore = fixture.GitStatus();
 
         var thrown = Assert.Throws<IOException>(() =>
-            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+            fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
         // The occupied check's own words, not a message the filesystem happened to produce: the
         // check is what this test is watching, not whatever Directory.Move would have said instead.
@@ -148,7 +148,7 @@ public sealed class RenumberRollbackTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
-    // Put a placeholder at the renumber's own target and read back where the repository landed it, so
+    // Put a placeholder at the edit's own target and read back where the repository landed it, so
     // the collision this plants sits at the tree's own answer, not a name recomputed here.
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {

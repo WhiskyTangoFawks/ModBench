@@ -6,10 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The FormIDs a plugin's own binary already holds: its header document, and the keys
-/// native to it, which is what an allocator may not draw again.</summary>
-public readonly record struct PluginFormIds(string HeaderText, IReadOnlySet<string> Native);
-
 /// <summary>Bytes to documents and facts and back (ADR-0005 rule 2): a live mod crosses this door
 /// in neither direction. The game release is a parameter of every verb.</summary>
 public interface IPluginAdapter
@@ -44,10 +40,6 @@ public interface IPluginAdapter
     /// gate.</summary>
     (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
-
-    /// <summary>What a plugin's own binary says about the FormIDs it holds: its header as a document
-    /// (ADR-0007), and every FormKey native to it. No record becomes a document.</summary>
-    PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files at
     /// <paramref name="loadOrder"/>, as the game resolves it, beside the files that could not be

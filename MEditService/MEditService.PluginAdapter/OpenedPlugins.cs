@@ -37,12 +37,4 @@ internal static class OpenedPlugins
         }
         return (count, null);
     }
-
-    internal static PluginFormIds FormIdsIn(IModGetter mod, string pluginName) =>
-        new(Encoding.UTF8.GetString(HeaderDocument.Write(mod)),
-            mod.EnumerateMajorRecords()
-                .Select(record => record.FormKey)
-                .Where(key => key.ModKey.FileName.String.Equals(pluginName, StringComparison.OrdinalIgnoreCase))
-                .Select(key => key.ToString())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase));
 }

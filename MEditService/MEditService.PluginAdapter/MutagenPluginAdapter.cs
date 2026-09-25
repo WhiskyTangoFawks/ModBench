@@ -85,12 +85,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String);
     }
 
-    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease)
-    {
-        using var loaded = OpenForRead(modPath, gameRelease);
-        return OpenedPlugins.FormIdsIn(loaded.Getter, modPath.ModKey.FileName.String);
-    }
-
     public LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,

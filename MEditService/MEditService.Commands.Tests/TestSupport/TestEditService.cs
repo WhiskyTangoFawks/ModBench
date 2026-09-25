@@ -70,12 +70,6 @@ internal static class TestEditService
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
-    internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<PeekNextFreeFormKeyHandler>();
-
-    internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<RenumberRecordHandler>();
-
     /// <summary>The watcher's verb over the port a suite reads.</summary>
     internal static TrackedModSettled Settled(INotificationPublisher notifications) =>
         Over(new LoadOrderHolder(), notifications: notifications).GetRequiredService<TrackedModSettled>();

@@ -190,12 +190,13 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID.Require()));
     }
 
-    // ---- renumber ----
+    // ---- FormID ----
 
     [Fact]
-    public async Task RenumberingAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
+    public async Task EditingTheFormIdOfAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
     {
-        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
+        var result = _fixture.EditHandler.SetFormId(
+            _fixture.Plugin, _fixture.DialogTopic2.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(QuestFile);

@@ -148,9 +148,11 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await client.copyRecordAsOverride('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'Other.esp', 'ModB');
 
-    expect(result).toEqual({ refused: true, message: 'Could not renumber 000800:MyPatch.esp — No load order has been received.' });
+    expect(result).toEqual({
+      refused: true, message: 'Could not copy 000800:MyPatch.esp into "Other.esp" — No load order has been received.',
+    });
   });
 });
 
@@ -253,6 +255,35 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
     const result = await client.track([first, second], 'Edits');
 
     expect(result).toEqual({ refused: true, message: 'Could not track 2 plugins — git was not found on PATH.' });
+  });
+});
+
+describe('HttpMEditClient — an applied edit', () => {
+  it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'FormKey', newFormKey: '000900:MyPatch.esp',
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA',
+      { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' },
+    );
+
+    expect(outcome).toEqual({ applied: true, newFormKey: '000900:MyPatch.esp' });
+  });
+
+  it('editRecord answers no new FormKey for an edit of any other field', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
+      applied: true, formKey: '000800:MyPatch.esp', path: 'EditorID', newFormKey: null,
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.editRecord(
+      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
+    );
+
+    expect(outcome).toEqual({ applied: true });
   });
 });
 

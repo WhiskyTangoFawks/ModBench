@@ -12,16 +12,15 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Delete and Renumber resolve containers through the repository's own Locate (internal), as
+/// <summary>Delete and a FormID edit resolve containers through the repository's own Locate (internal), as
 /// EditField does. A container moves or removes its directory whole; an embedded child is spliced
 /// inside its owner's document, no file move.</summary>
-public sealed class ContainerDeleteAndRenumberTests : IDisposable
+public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private RenumberRecordHandler RenumberHandler() => _fixture.RenumberHandler;
     private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
 
     // ---- a container's own record ----
@@ -117,41 +116,41 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         Assert.NotNull(_fixture.Document(_fixture.Worldspace.ToString()));
     }
 
-    // ---- renumber a container's own record ----
+    // ---- the FormID of a container's own record ----
 
     [Fact]
-    public void RenumberingAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
+    public void EditingTheFormIdOfAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
     {
         var cellFile = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
         var oldDirectory = Path.GetDirectoryName(cellFile)
             ?? throw new InvalidOperationException($"Expected '{cellFile}' to have a parent directory.");
         var parent = Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException($"Expected '{oldDirectory}' to have a parent directory.");
 
-        var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Cell.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
 
-        var renumbered = _fixture.Document(result.NewFormKey.Require());
-        Assert.NotNull(renumbered);
-        Assert.Contains(result.NewFormKey.Require(), renumbered.Body, StringComparison.Ordinal);
+        var moved = _fixture.Document(result.NewFormKey.Require());
+        Assert.NotNull(moved);
+        Assert.Contains(result.NewFormKey.Require(), moved.Body, StringComparison.Ordinal);
 
         var newFile = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
         Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
     }
 
-    // ---- renumber an embedded child ----
+    // ---- the FormID of an embedded child ----
 
     [Fact]
-    public void RenumberingAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
+    public void EditingTheFormIdOfAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var before = File.ReadAllText(file);
         var formKeyLine = $"\"FormKey\": \"{_fixture.TemporaryRef}\"";
         Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
 
-        var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.TemporaryRef.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
         // Same file — an embedded record has no leaf of its own to move.
@@ -166,10 +165,10 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         Assert.NotNull(_fixture.Document(result.NewFormKey.Require()));
     }
 
-    // ---- renumbering a record a container references ----
+    // ---- the FormID of a record a container references ----
 
     [Fact]
-    public void RenumberingARecordReferencedByAContainer_LeavesTheContainersFileAsItWas()
+    public void EditingTheFormIdOfARecordReferencedByAContainer_LeavesTheContainersFileAsItWas()
     {
         // A self-contained mod rather than the shared fixture: none of ContainerModFixture's embedded refs
         // point anywhere, and giving one a real Base is a riskier change to a fixture four other suites
@@ -198,14 +197,14 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains(referenced.ToString(), before, StringComparison.Ordinal);
 
-        var result = referencer.RenumberHandler.RenumberRecord(referencer.Plugin, referenced.ToString());
+        var result = referencer.EditHandler.SetFormId(referencer.Plugin, referenced.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(before, File.ReadAllText(file));
     }
 
     [Fact]
-    public void RenumberingAnEmbeddedChild_LeavesASiblingThatLinksIt_AsItWas()
+    public void EditingTheFormIdOfAnEmbeddedChild_LeavesASiblingThatLinksIt_AsItWas()
     {
         const string pluginName = "SiblingReferencer.esp";
         var enabler = FormKey.Null;
@@ -237,7 +236,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         Assert.Contains(formKeyLine, before, StringComparison.Ordinal);
         Assert.Contains($"\"Reference\": \"{enabler}\"", before, StringComparison.Ordinal);
 
-        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, enabler.ToString());
+        var result = mod.EditHandler.SetFormId(mod.Plugin, enabler.ToString(), $"000F00:{pluginName}");
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(

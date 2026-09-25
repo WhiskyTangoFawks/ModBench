@@ -37,9 +37,6 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
     public virtual IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
         Real.ImplicitPluginsIn(dataFolder, gameRelease);
 
-    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) =>
-        Real.ReadFormIds(modPath, gameRelease);
-
     public virtual LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,

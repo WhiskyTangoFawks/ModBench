@@ -213,7 +213,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
         Assert.Contains("Clear the light flag", result.Message, StringComparison.Ordinal);
-        Assert.Contains("renumber", result.Message, StringComparison.Ordinal);
+        Assert.Contains("change a record's FormID", result.Message, StringComparison.Ordinal);
     }
 
     // A Cell is on xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —

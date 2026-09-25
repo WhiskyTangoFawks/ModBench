@@ -102,27 +102,6 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        app.MapPost("/records/{formKey}/renumber", (
-            string formKey, RecordRenumberRequest request, RenumberRecordHandler edits) =>
-            RenumberRecord(formKey, request, edits, logger))
-        .WithName("RenumberRecord")
-        .WithSummary("Renumber a native record's FormKey as a delete+create pair.")
-        .WithDescription(
-            "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
-            "collision-safe, or an explicit target) as a working-tree delete of the old source file " +
-            "plus a create of the new one. Nothing else changes: the records that reference it are left " +
-            "as they are.")
-        .WithTags("Records")
-        .Produces<RecordRenumberResponse>()
-        .ProducesProblem(400)
-        .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422)
-        // A rolled-back renumber surfaces here too — same shape as every other write path's I/O
-        // failure, with a richer message naming what the rollback deliberately left standing.
-        .ProducesProblem(500)
-        .ProducesProblem(503);
-
         // ADR-0007: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits) =>
@@ -205,7 +184,7 @@ public static class RecordEndpoints
             execute: () => edits.Edit(
                 new PluginCopyKey(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
-            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled)),
+            onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled, result.NewFormKey)),
             onWriteFailure: ex =>
             {
                 logger.LogError(ex, "Could not write the source file while editing {FormKey} at {Path}", decoded, spelled);
@@ -255,49 +234,6 @@ public static class RecordEndpoints
 
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
-
-    internal static IResult RenumberRecord(
-        string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, ILogger logger)
-    {
-        var decoded = Uri.UnescapeDataString(formKey);
-        return WriteEndpointMapping.Execute(
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
-                        decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
-                }
-            },
-            validate: () =>
-                string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
-                    ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
-                    : null,
-            execute: () => edits.RenumberRecord(new PluginCopyKey(request.Plugin, request.Origin), decoded, request.NewFormKey),
-            onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
-            onWriteFailure: ex =>
-            {
-                // A rolled-back renumber lands here too, with the richer message
-                // RenumberRecordHandler already built naming the paths it left standing —
-                // ex.Message goes straight through, unwrapped, unlike every sibling's own
-                // onWriteFailure here.
-                logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
-                return WriteEndpointMapping.WriteFailure(ex.Message);
-            },
-            // request.NewFormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so a
-            // malformed value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
-            onMalformedFormKey: ex =>
-            {
-                logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
-                return WriteEndpointMapping.MalformedFormKey(ex);
-            },
-            onNoLoadOrder: ex =>
-            {
-                logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
-    }
 
     internal static IResult CopyRecordAsOverride(
         string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, ILogger logger)
