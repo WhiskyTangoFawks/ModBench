@@ -291,8 +291,8 @@ public sealed partial class SourceRepository
     public bool HoldsAtEitherRef(PluginCopyKey plugin, string formKey) =>
         HoldsNow(plugin, formKey) || HoldsAtRef(plugin, formKey, "HEAD");
 
-    // Its own document's text has to declare the FormKey its name carries; otherwise another
-    // record's document carries it inline, which the owner map answers.
+    // Its own document is found as Locate finds it and has to declare the key; otherwise another
+    // record's document carries it inline, which the tree scan answers.
     private bool HoldsNow(PluginCopyKey plugin, string formKey)
     {
         if (!FormKey.TryFactory(formKey, out var parsed)) return false;
@@ -304,17 +304,17 @@ public sealed partial class SourceRepository
         if (parsed.ToString().Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
             return File.Exists(HeaderDocumentIn(_modFolder, plugin.Name));
 
-        foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
-        {
-            if (ReadOrNull(documentPath) is not { } text) continue;
-            if (RootStringIn(text, "FormKey") is { } declared
-                && FormKey.TryFactory(declared, out var carried) && carried == parsed)
-            {
-                return true;
-            }
-        }
-        return CarriesEmbedded(plugin, parsed.ToString());
+        var spelled = parsed.ToString();
+        return DocumentsNaming(sourceRoot, spelled).Any(document => Declares(document, parsed))
+               || ScanOf(sourceRoot).DocumentsDeclaring(spelled).Count > 0
+               || CarriesEmbedded(plugin, spelled);
     }
+
+    private static bool Declares(string documentPath, FormKey formKey) =>
+        ReadOrNull(documentPath) is { } text
+        && RootStringIn(text, "FormKey") is { } declared
+        && FormKey.TryFactory(declared, out var carried)
+        && carried == formKey;
 
     // The committed set, read the same way the allocator reads it: a document's own FormKey, plus
     // every child inlined in it.
