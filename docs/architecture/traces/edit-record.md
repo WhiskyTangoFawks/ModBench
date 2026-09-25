@@ -57,7 +57,7 @@ Commands refuses before it writes the record, and names the cause.
 |---|---|---|
 | The plugin is not tracked, naming Track | every gesture | An untracked plugin is read-only (ADR-0007, invariant 1). |
 | The plugin is in no mod, pointing at a patch plugin | every gesture | The game's plugins are not edited. |
-| The record is a losing copy | every gesture | A copy the game does not load is read-only (ADR-0012, invariant 5). |
+| The record is in an overridden plugin | every gesture | A plugin the game does not load is read-only (ADR-0012, invariant 5). |
 | The record is in a plugin with no plugins.txt line | every gesture | A file the game does not load is read-only (ADR-0012, invariant 5). Plugin sync gives it a line. |
 | A question is open on the mod | every gesture | ADR-0003, invariant 3. |
 | The record has gone, naming it | every gesture | A gone object is refused. |

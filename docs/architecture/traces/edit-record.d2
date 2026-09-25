@@ -40,7 +40,7 @@ http -> client: stream {class: push}
 client -> editor: rows changed (push), then re-read {class: push}
 
 refused: "refused, nothing written for that record" {
-  commands -> http: "untracked · in no mod · a losing copy · a question open on the mod · the record has gone · a path not there · a value the codec rejects · a duplicate key · a read-only field · no free FormID · the destination holds the record, with no replace" {class: edit}
+  commands -> http: "untracked · in no mod · an overridden plugin · a question open on the mod · the record has gone · a path not there · a value the codec rejects · a duplicate key · a read-only field · no free FormID · the destination holds the record, with no replace" {class: edit}
   http -> client: the refusal {class: edit}
   client -> editor: the refusal {class: edit}
 }
