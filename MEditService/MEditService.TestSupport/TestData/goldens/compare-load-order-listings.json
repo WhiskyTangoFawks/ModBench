@@ -3,6 +3,7 @@
     {
       "editorId": "ConflictedNPC",
       "formKey": "000800:Base.esm",
+      "fullName": "Base name",
       "hasContainerChildren": false,
       "hasParseFailure": false,
       "isWinner": false,
@@ -15,6 +16,7 @@
     {
       "editorId": "ConflictedNPC",
       "formKey": "000800:Base.esm",
+      "fullName": "Mid name",
       "hasContainerChildren": false,
       "hasParseFailure": false,
       "isWinner": false,
@@ -27,6 +29,7 @@
     {
       "editorId": "ConflictedNPC",
       "formKey": "000800:Base.esm",
+      "fullName": "Top name",
       "hasContainerChildren": false,
       "hasParseFailure": false,
       "isWinner": true,
@@ -39,6 +42,7 @@
     {
       "editorId": "InjectedNPC",
       "formKey": "000800:Mid.esp",
+      "fullName": "Injected",
       "hasContainerChildren": false,
       "hasParseFailure": false,
       "isWinner": true,
@@ -51,6 +55,7 @@
     {
       "editorId": "SoleNPC",
       "formKey": "000802:Base.esm",
+      "fullName": null,
       "hasContainerChildren": false,
       "hasParseFailure": false,
       "isWinner": true,

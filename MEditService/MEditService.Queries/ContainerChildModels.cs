@@ -17,4 +17,5 @@ public record ContainerChildSummary(
     // The same pair every record row carries: this child's own diagnosis, and the fact widened to
     // its own children so the tree renders the failure prefix without walking them.
     string? ParseDiagnosis = null,
-    bool HasParseFailure = false);
+    bool HasParseFailure = false,
+    string? FullName = null);

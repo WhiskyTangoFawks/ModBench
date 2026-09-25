@@ -25,6 +25,7 @@
         {
           "EditorId": null,
           "FormKey": "1A6C6F:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -37,6 +38,7 @@
         {
           "EditorId": null,
           "FormKey": "1A6C71:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -49,6 +51,7 @@
         {
           "EditorId": null,
           "FormKey": "1A6C7B:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -66,6 +69,7 @@
         {
           "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
           "FormKey": "24A313:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -78,6 +82,7 @@
         {
           "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
           "FormKey": "24A314:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -90,6 +95,7 @@
         {
           "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
           "FormKey": "24A315:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -102,6 +108,7 @@
         {
           "EditorId": "VRWorkshopShared_WorkshopBell01",
           "FormKey": "24A316:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -119,6 +126,7 @@
         {
           "EditorId": "cc_Armor_Power_X01_Helm",
           "FormKey": "24A3FE:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -131,6 +139,7 @@
         {
           "EditorId": "cc_Armor_Power_X01_LegLeft",
           "FormKey": "24A3FF:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -143,6 +152,7 @@
         {
           "EditorId": "cc_Armor_Power_X01_LegRight",
           "FormKey": "24A400:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -155,6 +165,7 @@
         {
           "EditorId": "cc_Armor_Power_X01_Torso",
           "FormKey": "24A401:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -172,6 +183,7 @@
         {
           "EditorId": null,
           "FormKey": "00DB41:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -184,6 +196,7 @@
         {
           "EditorId": null,
           "FormKey": "00DB42:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -196,6 +209,7 @@
         {
           "EditorId": null,
           "FormKey": "00DB43:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -208,6 +222,7 @@
         {
           "EditorId": null,
           "FormKey": "018AA2:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -220,6 +235,7 @@
         {
           "EditorId": "CroupManor01",
           "FormKey": "03C0F0:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -232,6 +248,7 @@
         {
           "EditorId": "MinutemenHoldingCell",
           "FormKey": "0782A8:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -244,6 +261,7 @@
         {
           "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
           "FormKey": "092A18:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -261,6 +279,7 @@
         {
           "EditorId": null,
           "FormKey": "0048EB:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -273,6 +292,7 @@
         {
           "EditorId": null,
           "FormKey": "0057DD:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -285,6 +305,7 @@
         {
           "EditorId": null,
           "FormKey": "00581D:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -297,6 +318,7 @@
         {
           "EditorId": null,
           "FormKey": "0179D9:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -309,6 +331,7 @@
         {
           "EditorId": null,
           "FormKey": "0179DA:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -321,6 +344,7 @@
         {
           "EditorId": null,
           "FormKey": "0179DB:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -333,6 +357,7 @@
         {
           "EditorId": null,
           "FormKey": "0179DC:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -345,6 +370,7 @@
         {
           "EditorId": null,
           "FormKey": "0179F1:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -357,6 +383,7 @@
         {
           "EditorId": null,
           "FormKey": "017BF8:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -369,6 +396,7 @@
         {
           "EditorId": null,
           "FormKey": "018184:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -386,6 +414,7 @@
         {
           "EditorId": "DialogueDiamondCitySharedBranch",
           "FormKey": "01DADA:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -398,6 +427,7 @@
         {
           "EditorId": "DialogueGenericPlayerSharedQuestion",
           "FormKey": "0267FA:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -410,6 +440,7 @@
         {
           "EditorId": "DialogueConcordAreaSharedBranch",
           "FormKey": "0CA9D0:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -422,6 +453,7 @@
         {
           "EditorId": "WorkbenchPlayerGrunt",
           "FormKey": "182094:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -434,6 +466,7 @@
         {
           "EditorId": "WorkbenchPlayerHumWhistle",
           "FormKey": "1820C1:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -446,6 +479,7 @@
         {
           "EditorId": "PlayerActivateComment",
           "FormKey": "19DDCC:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -458,6 +492,7 @@
         {
           "EditorId": "PlayerLockpickSuccessDialogue",
           "FormKey": "211C48:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -470,6 +505,7 @@
         {
           "EditorId": "PlayerHackSuccessDialogue",
           "FormKey": "211C4F:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -482,6 +518,7 @@
         {
           "EditorId": "PlayerHackFailDialogue",
           "FormKey": "211C50:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -494,6 +531,7 @@
         {
           "EditorId": "PlayerJetDialogue",
           "FormKey": "2490A2:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -511,6 +549,7 @@
         {
           "EditorId": "CIS_CompanionInSceneFaction",
           "FormKey": "249D44:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -523,6 +562,7 @@
         {
           "EditorId": "TunnelingRaceNoDirtFromFurniture",
           "FormKey": "249E8F:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -535,6 +575,7 @@
         {
           "EditorId": "CC_PetDogFaction",
           "FormKey": "24A157:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -547,6 +588,7 @@
         {
           "EditorId": "VRWorkshopShared_AlienFaction",
           "FormKey": "24A3E8:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -564,6 +606,7 @@
         {
           "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
           "FormKey": "24A340:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -576,6 +619,7 @@
         {
           "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
           "FormKey": "24A341:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -588,6 +632,7 @@
         {
           "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
           "FormKey": "24A342:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -600,6 +645,7 @@
         {
           "EditorId": "VRWorkshopShared_IsInstalled",
           "FormKey": "24A3C7:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -617,6 +663,7 @@
         {
           "EditorId": null,
           "FormKey": "0057DE:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -629,6 +676,7 @@
         {
           "EditorId": null,
           "FormKey": "0057DF:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -641,6 +689,7 @@
         {
           "EditorId": null,
           "FormKey": "0057E0:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -653,6 +702,7 @@
         {
           "EditorId": null,
           "FormKey": "0057E4:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -665,6 +715,7 @@
         {
           "EditorId": null,
           "FormKey": "0057E5:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -677,6 +728,7 @@
         {
           "EditorId": "MyrnaGreetSharedResponse1",
           "FormKey": "005824:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -689,6 +741,7 @@
         {
           "EditorId": "PlayerMyrnaSharedResponse1",
           "FormKey": "005825:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -701,6 +754,7 @@
         {
           "EditorId": null,
           "FormKey": "005834:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -713,6 +767,7 @@
         {
           "EditorId": null,
           "FormKey": "0179DD:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -725,6 +780,7 @@
         {
           "EditorId": null,
           "FormKey": "0179DE:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -742,6 +798,7 @@
         {
           "EditorId": "dn_HasPiggyBank",
           "FormKey": "24A403:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -754,6 +811,7 @@
         {
           "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
           "FormKey": "24A405:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -766,6 +824,7 @@
         {
           "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
           "FormKey": "24A406:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -778,6 +837,7 @@
         {
           "EditorId": "BypassDestroyedExplosionTest",
           "FormKey": "24A4C2:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -795,6 +855,7 @@
         {
           "EditorId": "shipment_Wood_250",
           "FormKey": "24A068:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -807,6 +868,7 @@
         {
           "EditorId": "shipment_Rubber_large",
           "FormKey": "24A069:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -819,6 +881,7 @@
         {
           "EditorId": "shipment_Ceramic_large",
           "FormKey": "24A06B:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -831,6 +894,7 @@
         {
           "EditorId": "shipment_Copper_large",
           "FormKey": "24A06C:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -848,6 +912,7 @@
         {
           "EditorId": "EncRadRoachAmbushLegendary",
           "FormKey": "2499C4:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -860,6 +925,7 @@
         {
           "EditorId": "LvlMutantHoundLegendary",
           "FormKey": "2499C8:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -872,6 +938,7 @@
         {
           "EditorId": "VRWorkshopShared_LvlSynthCourser",
           "FormKey": "24A37F:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -884,6 +951,7 @@
         {
           "EditorId": "VRWorkshopShared_WorkshopNPC",
           "FormKey": "24A381:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -901,6 +969,7 @@
         {
           "EditorId": "DialogueDiamondCity",
           "FormKey": "003648:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -913,6 +982,7 @@
         {
           "EditorId": "DialogueGenericPlayer",
           "FormKey": "0179EF:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -925,6 +995,7 @@
         {
           "EditorId": "DialogueConcordArea",
           "FormKey": "0179F3:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -937,6 +1008,7 @@
         {
           "EditorId": "DialogueVault114Aftermath",
           "FormKey": "018A5E:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": true,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -954,6 +1026,7 @@
         {
           "EditorId": "FeralGhoulGlowingRace",
           "FormKey": "0A96BF:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -966,6 +1039,7 @@
         {
           "EditorId": "RaiderDogRace",
           "FormKey": "187AF9:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -978,6 +1052,7 @@
         {
           "EditorId": "TurretWorkshopRace",
           "FormKey": "1A6D64:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -990,6 +1065,7 @@
         {
           "EditorId": "SynthGen2RaceValentine",
           "FormKey": "2261A4:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1007,6 +1083,7 @@
         {
           "EditorId": null,
           "FormKey": "0782AA:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1019,6 +1096,7 @@
         {
           "EditorId": null,
           "FormKey": "0782B7:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1031,6 +1109,7 @@
         {
           "EditorId": null,
           "FormKey": "0782B8:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1043,6 +1122,7 @@
         {
           "EditorId": null,
           "FormKey": "092A34:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1055,6 +1135,7 @@
         {
           "EditorId": null,
           "FormKey": "092A35:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1067,6 +1148,7 @@
         {
           "EditorId": null,
           "FormKey": "092A36:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1079,6 +1161,7 @@
         {
           "EditorId": null,
           "FormKey": "092A37:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1091,6 +1174,7 @@
         {
           "EditorId": null,
           "FormKey": "092A38:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1103,6 +1187,7 @@
         {
           "EditorId": null,
           "FormKey": "0A06E6:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1115,6 +1200,7 @@
         {
           "EditorId": null,
           "FormKey": "0B0FC0:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1132,6 +1218,7 @@
         {
           "EditorId": "ArturoGreetScene",
           "FormKey": "004E1E:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1144,6 +1231,7 @@
         {
           "EditorId": "MyrnaGreetScene",
           "FormKey": "00583D:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1156,6 +1244,7 @@
         {
           "EditorId": "NatGreetScene",
           "FormKey": "017B27:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1168,6 +1257,7 @@
         {
           "EditorId": "TakahashiGreetScene",
           "FormKey": "017C71:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1180,6 +1270,7 @@
         {
           "EditorId": "JohnGreetScene",
           "FormKey": "0180EC:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1192,6 +1283,7 @@
         {
           "EditorId": "MoeGreetScene",
           "FormKey": "018D0D:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1204,6 +1296,7 @@
         {
           "EditorId": "CrockerGreetScene",
           "FormKey": "018D0E:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1216,6 +1309,7 @@
         {
           "EditorId": "SolomonGreetScene",
           "FormKey": "018D0F:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1228,6 +1322,7 @@
         {
           "EditorId": "006SurvivorSceneIntro",
           "FormKey": "01A4D6:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1240,6 +1335,7 @@
         {
           "EditorId": "008MuseumMurphyTalk1",
           "FormKey": "01A4DC:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1257,6 +1353,7 @@
         {
           "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
           "FormKey": "24A3AF:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1269,6 +1366,7 @@
         {
           "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
           "FormKey": "24A3B0:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1281,6 +1379,7 @@
         {
           "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
           "FormKey": "24A3B1:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1293,6 +1392,7 @@
         {
           "EditorId": "VRWorkshopShared_10mm_NonPlayable",
           "FormKey": "24A3B2:Fallout4.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1310,6 +1410,7 @@
         {
           "EditorId": "Commonwealth",
           "FormKey": "000800:mEditTestSubset.esm",
+          "FullName": null,
           "HasContainerChildren": false,
           "HasParseFailure": false,
           "IsWinner": true,
@@ -1329,6 +1430,7 @@
     {
       "EditorId": "TurretWorkshopRace",
       "FormKey": "1A6D64:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1341,6 +1443,7 @@
     {
       "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
       "FormKey": "24A313:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1353,6 +1456,7 @@
     {
       "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
       "FormKey": "24A314:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1365,6 +1469,7 @@
     {
       "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
       "FormKey": "24A315:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1377,6 +1482,7 @@
     {
       "EditorId": "VRWorkshopShared_WorkshopBell01",
       "FormKey": "24A316:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1389,6 +1495,7 @@
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
       "FormKey": "24A340:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1401,6 +1508,7 @@
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
       "FormKey": "24A341:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1413,6 +1521,7 @@
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
       "FormKey": "24A342:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1425,6 +1534,7 @@
     {
       "EditorId": "VRWorkshopShared_LvlSynthCourser",
       "FormKey": "24A37F:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1437,6 +1547,7 @@
     {
       "EditorId": "VRWorkshopShared_WorkshopNPC",
       "FormKey": "24A381:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1449,6 +1560,7 @@
     {
       "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
       "FormKey": "24A3AF:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1461,6 +1573,7 @@
     {
       "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
       "FormKey": "24A3B0:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1473,6 +1586,7 @@
     {
       "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
       "FormKey": "24A3B1:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1485,6 +1599,7 @@
     {
       "EditorId": "VRWorkshopShared_10mm_NonPlayable",
       "FormKey": "24A3B2:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1497,6 +1612,7 @@
     {
       "EditorId": "VRWorkshopShared_IsInstalled",
       "FormKey": "24A3C7:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1509,6 +1625,7 @@
     {
       "EditorId": "VRWorkshopShared_AlienFaction",
       "FormKey": "24A3E8:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1521,6 +1638,7 @@
     {
       "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
       "FormKey": "24A405:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
@@ -1533,6 +1651,7 @@
     {
       "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
       "FormKey": "24A406:Fallout4.esm",
+      "FullName": null,
       "HasContainerChildren": false,
       "HasParseFailure": false,
       "IsWinner": true,
