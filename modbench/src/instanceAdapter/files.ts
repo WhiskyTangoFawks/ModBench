@@ -9,6 +9,7 @@ import {
 import { join, relative, sep } from 'node:path';
 import { modsDir as modsDirOf, modGitDir, profilesDir, settingsFile } from './layout';
 import { errnoCode } from '../ports/errno';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
  *  reads `true` here, and surfaces that error elsewhere (ADR-0019). Synchronous: the composition
@@ -124,16 +125,19 @@ export function listDir(path: string): Promise<Dirent[]> {
 }
 
 /** The folders directly in `path`, each link followed as MO2 follows it (QDir::Dirs without
- *  NoSymLinks): a link or junction to a folder is one, a link to a file or to nothing is not. */
-export async function listFolders(path: string): Promise<string[]> {
+ *  NoSymLinks): a link or junction to a folder is one, a link to a file is not. A link whose target
+ *  cannot be checked, for any reason, is skipped as MO2 skips it, and handed to `skippedLink`. */
+export async function listFolders(
+  path: string, skippedLink?: (name: string, reason: string) => void,
+): Promise<string[]> {
   const folders = await Promise.all((await listDir(path)).map(async (dirent) => {
     if (dirent.isDirectory()) return dirent.name;
     if (!dirent.isSymbolicLink()) return undefined;
     try {
       return (await stat(join(path, dirent.name))).isDirectory() ? dirent.name : undefined;
     } catch (err) {
-      if (errnoCode(err) === 'ENOENT') return undefined;
-      throw err;
+      skippedLink?.(dirent.name, errorMessage(err));
+      return undefined;
     }
   }));
   return folders.filter((name): name is string => name !== undefined);

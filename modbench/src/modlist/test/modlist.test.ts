@@ -1130,14 +1130,28 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // only a real directory counts, so a symlinked mod's line is dropped and never comes back.
   it('keeps the line of a mod whose folder is a link to a folder', async () => {
     const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
-    await symlink(target, join(dir, 'mods', 'Linked Mod'), 'junction');
-    await writeFile(modlistPath(), `+Linked Mod\r\n${await readFile(modlistPath(), 'utf8')}`);
+    try {
+      await symlink(target, join(dir, 'mods', 'Linked Mod'), 'junction');
+      await writeFile(modlistPath(), `+Linked Mod\r\n${await readFile(modlistPath(), 'utf8')}`);
+
+      const outcome = await sync(MOD_FOLDERS);
+
+      expect(outcome.applied && outcome.dropped).not.toContain('Linked Mod');
+      expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Linked Mod', enabled: true });
+    } finally {
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+
+  // MO2 skips a link it cannot follow, and has no mod by its name. Rival: refusing the whole sync
+  // on it, so one bad link stops every line from syncing.
+  it('skips a mod folder link whose target cannot be checked, and drops its line', async () => {
+    await symlink(join(dir, 'mods', 'Loop'), join(dir, 'mods', 'Loop'));
+    await writeFile(modlistPath(), `+Loop\r\n${await readFile(modlistPath(), 'utf8')}`);
 
     const outcome = await sync(MOD_FOLDERS);
 
-    expect(outcome.applied && outcome.dropped).not.toContain('Linked Mod');
-    expect(await readModlist()).toContainEqual({ kind: 'mod', name: 'Linked Mod', enabled: true });
-    await rm(target, { recursive: true });
+    expect(outcome.applied && outcome.dropped).toContain('Loop');
   });
 
   // MO2 matches a line to its folder without case (FileNameComparator); a Linux disk does not.

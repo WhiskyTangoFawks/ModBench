@@ -146,9 +146,11 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
 
 // A missing mods/ is an answer, not a failed read: a workspace before its first install has
 // none. Any other listing failure is a real one and fails the recompute.
-async function readModFolderNames(instanceRoot: string): Promise<string[] | undefined> {
+async function readModFolderNames(
+  instanceRoot: string, skippedLink: (name: string, reason: string) => void,
+): Promise<string[] | undefined> {
   try {
-    return await listFolders(modsDir(instanceRoot));
+    return await listFolders(modsDir(instanceRoot), skippedLink);
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
@@ -244,6 +246,8 @@ export class Instance implements vscode.Disposable {
   private downloadsWatcherDir: string | undefined;
 
   private disposed = false;
+  // The mod folder links already told as skipped, so each is one Output line until it changes.
+  private linksTold: ReadonlySet<string> = new Set();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.instanceRoot);
@@ -314,6 +318,18 @@ export class Instance implements vscode.Disposable {
     this.downloadsWatcher?.dispose();
     this.subscribers = [];
     this.failureListeners = [];
+  }
+
+  private async readModFolders(instanceRoot: string): Promise<string[] | undefined> {
+    const skipped = new Map<string, string>();
+    const folders = await readModFolderNames(instanceRoot, (name, reason) => skipped.set(name, reason));
+    for (const [name, reason] of skipped) {
+      if (!this.linksTold.has(name)) {
+        this.options.log(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
+      }
+    }
+    this.linksTold = new Set(skipped.keys());
+    return folders;
   }
 
   private schedule(): void {
@@ -408,7 +424,7 @@ export class Instance implements vscode.Disposable {
         return { kind: 'listed' as const, downloadsDir, downloadEntries: await scanDownloads(downloadsDir) };
       }),
       countOverwriteFiles(overwriteDir(instanceRoot)),
-      readModFolderNames(instanceRoot),
+      this.readModFolders(instanceRoot),
       readProfileNames(instanceRoot),
       // Same reasoning as downloads above; beside the reads above, the game side costs no round trip.
       resolveGameDirectory(iniText).then(async (gameFolder) => ({
