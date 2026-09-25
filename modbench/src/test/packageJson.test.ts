@@ -1141,17 +1141,30 @@ const TITLES_SET_ELSEWHERE = new Set(['modbench.record.create', 'modbench.record
 
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
+function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, title: string): void {
+  const [, object = '', verb = ''] = present(
+    /^modbench\.(\w+)\.(\w+)$/.exec(catalogId) ?? undefined, `${catalogId} as modbench.<object>.<verb>`);
+  const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
+  const objectWords = wordsOf(object);
+  const noun = present(objectWords.pop(), `the noun of ${object}`);
+  expect(titleWords, `the title of ${registeredId} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
+  expect(titleWords, `the title of ${registeredId} names the object`).toEqual(expect.arrayContaining(objectWords));
+  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${registeredId} names the ${noun}`).toBe(true);
+}
+
 describe('package.json palette titles are the verb and the object', () => {
   const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command) && !TITLES_SET_ELSEWHERE.has(c.command));
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
-    const [, object = '', verb = ''] = present(
-      /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
-    const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
-    const objectWords = wordsOf(object);
-    const noun = present(objectWords.pop(), `the noun of ${object}`);
-    expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
-    expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
-    expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
+    expectTitleNamesVerbAndObject(id, id, title);
   });
+
+  const compile = present(LEGACY_GESTURES.find((g) => g.gesture === 'compile'), 'the compile legacy gesture');
+  const legacyCompile = pkg.contributes.commands.filter((c) => (compile.ids as readonly string[]).includes(c.command));
+
+  it.each(legacyCompile.map((c) => [c.command, c.title]))(
+    '%s, still under its legacy ID, is titled by the catalog\'s compile: "%s"', (id, title) => {
+      expectTitleNamesVerbAndObject('modbench.plugin.compile', id, title);
+      expect(title.toLowerCase().split(/\s+/)[0], `the title of ${id} leads with the verb`).toBe('compile');
+    });
 });

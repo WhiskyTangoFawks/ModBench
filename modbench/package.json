@@ -398,13 +398,13 @@
       },
       {
         "command": "modbench.saveAndCompile",
-        "title": "Save & Compile",
+        "title": "Compile Plugin",
         "icon": "$(check)",
         "category": "Modbench"
       },
       {
         "command": "modbench.pluginListTree.compileAtMain",
-        "title": "Save & Compile from main…",
+        "title": "Compile Plugin from main…",
         "category": "Modbench"
       },
       {

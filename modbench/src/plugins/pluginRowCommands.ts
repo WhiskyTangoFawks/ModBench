@@ -28,7 +28,7 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-// Everything Save & Compile and Compile at Ref call: resolving an origin and a record's owner,
+// Everything compile and compile at ref call: resolving an origin and a record's owner,
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
@@ -160,7 +160,7 @@ export function registerSaveAndCompileCommand(
           const plugins = await client.getPlugins();
           const choice = await vscode.window.showQuickPick(
             plugins.map((p) => ({ label: p.name, description: p.origin })),
-            { placeHolder: 'Save & Compile which plugin?' },
+            { placeHolder: 'Compile which plugin?' },
           );
           if (!choice) return undefined;
           if (!choice.description) {

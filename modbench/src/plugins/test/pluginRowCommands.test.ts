@@ -491,6 +491,16 @@ describe('registerSaveAndCompileCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
+  it('asks which plugin to compile in the catalog\'s own verb, when no row is in hand', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    showQuickPick.mockResolvedValue(undefined);
+    const { handler } = invokeSaveAndCompile(client);
+
+    await handler(undefined);
+
+    expect(showQuickPick).toHaveBeenCalledWith(expect.anything(), { placeHolder: 'Compile which plugin?' });
+  });
+
   it('reports an unresolvable compile target at error and compiles nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);

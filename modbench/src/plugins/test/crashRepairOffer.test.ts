@@ -26,6 +26,10 @@ describe('crashRepairOffer.messageFor', () => {
     expect(missing).toMatch(/missing|unreadable/i);
     expect(interrupted).not.toEqual(missing);
   });
+
+  it('names the interrupted gesture by the catalog verb, compile', () => {
+    expect(messageFor(offer({ reason: 'InterruptedCompile' })).detail).toMatch(/^A previous compile /);
+  });
 });
 
 describe('crashRepairOffer.presentCrashRepairOffers', () => {
