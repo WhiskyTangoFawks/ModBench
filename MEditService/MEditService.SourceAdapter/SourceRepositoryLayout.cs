@@ -68,8 +68,8 @@ public sealed partial class SourceRepository
     public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
         IsTracked(modFolder) && Directory.Exists(RootIn(modFolder, pluginFileName));
 
-    /// <summary>Whether the plugin is tracked: its source is on <c>main</c> or in the working tree. A
-    /// plugin tracked into an existing repository is on <c>main</c> alone until the user rebases the
+    /// <summary>Whether the plugin is tracked: its source is on <c>main</c> or in the working tree.
+    /// Tracked into an existing repository, it is on <c>main</c> alone until the user rebases the
     /// edit branch with git.</summary>
     public static bool IsPluginTracked(string modFolder, string pluginFileName) =>
         HoldsTreeFor(modFolder, pluginFileName)
