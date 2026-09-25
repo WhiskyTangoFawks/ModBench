@@ -141,6 +141,9 @@ internal sealed class WatcherSinks
         var namedByHead = new List<string>();
         foreach (var path in change.Paths)
         {
+            // The operating system watches a new folder only once its creation is handled, so what
+            // was written into it can reach no batch.
+            if (Directory.Exists(path)) return null;
             if (SourceRepository.CarriesNoRecord(path)) continue;
             if (SourceRepository.FormKeyDeclaredBy(path, change.PluginName) is { } formKey)
                 declared.Add(formKey);

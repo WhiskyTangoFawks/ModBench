@@ -80,7 +80,7 @@ public sealed partial class SourceRepository
         // with no group of its own is always embedded, so nothing is scanned for it.
         var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
         if (RecordTypeDispatch.For(_release).GroupFolderNameFor(identity.RecordType) is not null
-            && FindOwnUnit(sourceRoot, identity.FormKey) is { } own)
+            && FindOwnUnit(sourceRoot, plugin.Name, identity.FormKey) is { } own)
         {
             return Unit(own, identity.FormKey, identity.RecordType, isEmbedded: false);
         }
@@ -286,21 +286,32 @@ public sealed partial class SourceRepository
     // Matches the FormKey alone, never the EditorID, which a caller may hold stale mid-rename. Every
     // directory-per-record group is searched, since a cell's directory sits in its own group's blocks
     // or inside its worldspace's.
-    private string? FindOwnUnit(string sourceRoot, string formKey)
+    private string? FindOwnUnit(string sourceRoot, string pluginFileName, string formKey)
     {
         var suffix = FilesafeFormKey(formKey);
+        var scanRoots = RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames
+            .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))
+            .Where(Directory.Exists)
+            .ToList();
         var matches = new List<string>();
-        foreach (var groupFolder in RecordTypeDispatch.For(_release).DirectoryPerRecordFolderNames)
+        foreach (var scanRoot in scanRoots)
         {
-            var scanRoot = Path.Combine(sourceRoot, groupFolder);
-            if (!Directory.Exists(scanRoot)) continue;
-
             // The subtree is listed once per repository and the pre-filter runs in memory, leaving
             // the name test below as the only real one.
             var candidates = EntriesUnder(scanRoot)
                 .Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
             matches.AddRange(candidates.Select(entry => AsSourceUnitFile(entry, suffix)).OfType<string>().Take(2));
             if (matches.Count > 1) break;
+        }
+
+        // A move by hand can rename a container's directory, and the name alone reads a live record as
+        // deleted.
+        if (matches.Count == 0)
+        {
+            matches.AddRange(scanRoots
+                .SelectMany(EntriesUnder)
+                .Where(entry => IsDocumentOfADirectoryNamedForNoRecord(entry) && Declares(entry, pluginFileName, formKey))
+                .Take(2));
         }
 
         return matches.Count switch
@@ -312,6 +323,10 @@ public sealed partial class SourceRepository
                 "unique within a mod, so this tree is corrupt — resolve the duplicate by hand before editing."),
         };
     }
+
+    private static bool IsDocumentOfADirectoryNamedForNoRecord(string entry) =>
+        Path.GetFileName(entry).Equals(RecordDataFileName, StringComparison.Ordinal)
+        && !NamesAnyRecord(Path.GetFileName(PathShape.DirectoryOf(entry)));
 
     // A directory whose name carries the FormKey holds RecordData.json; a file whose name carries it is
     // the record.

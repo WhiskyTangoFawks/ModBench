@@ -78,6 +78,25 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
+    // The edit rides along so that only a read of the tree, never the binary, answers with it.
+    [Fact]
+    public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
+    {
+        using (var live = Opened())
+        {
+            var document = NpcSourceFile(live);
+            var sorted = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "SortedByHand"));
+            File.WriteAllText(
+                Path.Combine(sorted.FullName, Path.GetFileName(document)),
+                File.ReadAllText(document).Replace(NpcEditorId, "SortedByHandNpc", StringComparison.Ordinal));
+            File.Delete(document);
+        }
+
+        using var reloaded = Opened();
+
+        Assert.Equal("SortedByHandNpc", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+    }
+
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
     {

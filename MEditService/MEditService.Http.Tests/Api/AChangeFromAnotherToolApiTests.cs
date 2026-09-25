@@ -127,11 +127,57 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
         OtherTool.DeletesTheFile(original);
         await stream.EventsUntil("rows-changed", e => Names(e, npc));
+        var afterTheDelete = await Client.Sequence();
 
         OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
 
-        await stream.EventsUntil("rows-changed", e => Names(e, npc));
+        await Client.SequenceReaches(afterTheDelete + 1);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+    }
+
+    // A container's document is its directory's RecordData.json, so the name a hand move drops is
+    // the directory's, and the placed reference inside moves with it.
+    [Fact]
+    public async Task ACommittedContainerCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var quest = await Client.FirstFormKey(Plugin, "qust");
+        var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
+        using var stream = await Client.NotificationStream();
+        OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
+        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await stream.EventsUntil("rows-changed", e => Names(e, quest));
+
+        OtherTool.DeletesTheDirectory(original);
+
+        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
+        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && (Names(f.Data, cell) || Names(f.Data, placedRef)));
+        Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
+        Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
+    }
+
+    [Fact]
+    public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var cell = await Client.FirstFormKey(Plugin, "cell");
+        var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell);
+        var original = Path.GetDirectoryName(document).Require();
+        var text = File.ReadAllText(document);
+        using var stream = await Client.NotificationStream();
+        OtherTool.DeletesTheDirectory(original);
+        await stream.EventsUntil("rows-changed", e => Names(e, cell));
+        var afterTheDelete = await Client.Sequence();
+
+        OtherTool.WritesTheFile(
+            Path.Combine(OtherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
+
+        await Client.SequenceReaches(afterTheDelete + 1);
+        Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
     }
 
     // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame

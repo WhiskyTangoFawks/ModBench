@@ -295,12 +295,11 @@ public sealed partial class SourceRepository
         };
     }
 
-    // "[<EditorID> - ]<hex6>_<ModKey>.json", where both the EditorID and the ModKey can hold the
-    // separator, so every place it could split is tried.
+    // "[<EditorID> - ]<hex6>_<ModKey>", with ".json" for a flat file, where both the EditorID and the
+    // ModKey can hold the separator, so every place it could split is tried.
     private static bool NamesAnyRecord(string leaf)
     {
-        if (!leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)) return false;
-        var stem = leaf[..^JsonSuffix.Length];
+        var stem = leaf.EndsWith(JsonSuffix, StringComparison.Ordinal) ? leaf[..^JsonSuffix.Length] : leaf;
         for (var start = 0; start >= 0; start = NextAfterSeparator(stem, start))
         {
             var tail = stem[start..];
@@ -441,7 +440,7 @@ public sealed partial class SourceRepository
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
 
-        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), worldspace) is not { } document)
+        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } document)
         {
             throw new InvalidOperationException(
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
@@ -571,8 +570,9 @@ public sealed partial class SourceRepository
             _segments.Length == HeaderDocumentDepth && UnderTheSourceRoot && NamesAPlugin
             && Leaf.Equals(RecordDataFileName, StringComparison.Ordinal);
 
+        // At its group's own level, or in a folder the user sorted it into below it.
         internal bool IsFlatDocument =>
-            _segments.Length == FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
+            _segments.Length >= FlatDocumentDepth && UnderTheSourceRoot && NamesAPlugin
             && Leaf.EndsWith(JsonSuffix, StringComparison.Ordinal)
             && !Leaf.Equals(RecordDataFileName, StringComparison.Ordinal)
             && !Leaf.Equals(GroupRecordDataFileName, StringComparison.Ordinal);

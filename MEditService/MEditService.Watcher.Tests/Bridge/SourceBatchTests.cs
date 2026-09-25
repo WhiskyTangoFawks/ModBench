@@ -169,6 +169,23 @@ public sealed class SourceBatchTests
         Assert.Empty(tree.Index.Of("validate"));
     }
 
+    // The operating system watches a new folder only once its creation is handled, so a batch naming
+    // the folder cannot vouch for the documents written into it.
+    [Fact]
+    public async Task AFolderCreatedUnderTheSourceRoot_ValidatesTheCopyWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+
+        await tree.Observes(() => Directory.CreateDirectory(
+            Path.Combine(SourceRepository.RootIn(modFolder, "A.esp"), "SortedByHand")));
+
+        tree.AdvancePastBothWindows();
+
+        Assert.Single(tree.Index.Of("validate"));
+        Assert.Empty(tree.Index.Of("refresh"));
+    }
+
     [Fact]
     public async Task ADocumentNoCommitFiled_DeletedFromTheWorkingTree_ValidatesTheCopyWhole()
     {
