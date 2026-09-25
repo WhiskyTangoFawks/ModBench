@@ -18,8 +18,6 @@ describe('reportSkippedPlugins', () => {
     expect(sink.warn).not.toHaveBeenCalled();
   });
 
-  // The channel is named Modbench (not mEdit), and the warning never begins "mEdit:" — it names
-  // the channel by its own name.
   it('warns naming every skipped plugin and the Modbench output, and logs each reason', () => {
     const sink = { log: vi.fn(), warn: vi.fn() };
 

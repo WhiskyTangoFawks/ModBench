@@ -19,7 +19,7 @@ export function registerRevealInExplorerCommand(
     const filePath = await pluginsTree.resolvePluginPath(name);
     if (!filePath) {
       // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      reporter.report('error', `Could not resolve a file location for "${name}" — it is not in the load order.`);
+      reporter.report('error', `Could not resolve a file location for "${name}" — no mod or Overwrite holds this file.`);
       return;
     }
     try {

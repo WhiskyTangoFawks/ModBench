@@ -120,18 +120,17 @@ export function registerRebaseCommand(
     }
 
     const result = await runRebase({
-      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
+      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel, reporter),
       showError: (message) => reporter.report('error', message),
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
     }, origin);
     if (!result) return; // transport failure or refusal already surfaced by runRebase
 
-    // plugins.md, Rebase edit branch: a clean rebase says nothing, a refused one names the paths
-    // (`result.refusalReason`), and a conflict's opened merge editor(s), above, are the whole
-    // story — neither gets a report of its own.
     if (result.outcome === 'Refused') {
-      reporter.report('warning', result.refusalReason ?? 'Rebase refused.');
+      reporter.report('warning', result.refusalReason ?? 'mEdit gave no reason.');
+    } else if (result.outcome === 'Conflicted' && result.refusalReason) {
+      reporter.report('warning', result.refusalReason);
     }
   });
 }

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Captures every registerCommand(id, handler) so each row's handler can be invoked directly —
 // the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
-  handlers, registerCommand, showQuickPick, withProgress,
+  handlers, registerCommand, showQuickPick, withProgress, executeCommand,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -14,6 +14,7 @@ const {
     }),
     showQuickPick: vi.fn(),
     withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
+    executeCommand: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -24,7 +25,7 @@ import {
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  commands: { registerCommand },
+  commands: { registerCommand, executeCommand },
   window: { showQuickPick, withProgress },
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range,
@@ -187,8 +188,6 @@ describe('registerRebaseCommand', () => {
     };
   }
 
-  // plugins.md, Rebase edit branch: a clean rebase says nothing — there is nothing for the user
-  // to act on, so no toast and no Output line report it.
   it('reports nothing on a clean rebase, but still refreshes', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
@@ -230,28 +229,74 @@ describe('registerRebaseCommand', () => {
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
-  it('reports a typed rebase refusal at warning, in the reason the backend gave', async () => {
+  it('reports a typed rebase refusal at warning, naming the dirty paths the backend gave', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason: 'the working tree is dirty', conflictedPaths: [] });
+    const refusalReason = 'Cannot rebase: uncommitted changes in source/Scripts/Foo.psc. '
+      + 'Commit, stash, or discard them first, then try again.';
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason, conflictedPaths: [] });
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
-    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'the working tree is dirty', detail: undefined }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
   });
 
-  // plugins.md, Rebase edit branch: a conflict opens the native merge editor — that is the whole
-  // story, so nothing more is reported here (runRebase already opened it).
-  it('reports nothing on a conflicted rebase, relying on the opened merge editor', async () => {
+  it('opens the native merge editor for every conflicted path, and reports nothing when the backend gave no reason', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: [] });
+    client.setCommandResult(
+      'rebaseOntoMain',
+      { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc', 'source/Scripts/Bar.psc'] },
+    );
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Bar.psc' }));
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  // SourceRepository.cs's autostash case: git kept the change in the stash list rather than
+  // losing it, and the reason names the recovery — the merge editor alone does not say that.
+  it('reports the reason a conflicted rebase carries, once the merge editor is open', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    const refusalReason = 'The rebase replayed cleanly, but re-applying its autostashed tracked-file changes '
+      + 'conflicted. Nothing was lost — they are kept in `git stash list` — resolve the conflict markers, '
+      + 'stage them, then run `git stash drop`.';
+    client.setCommandResult(
+      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason, conflictedPaths: ['source/Scripts/Foo.psc'] },
+    );
+    const { handler, reporter } = invokeRebase(client);
+
+    await handler(pluginNode());
+
+    expect(executeCommand).toHaveBeenCalledWith('git.openMergeEditor', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: refusalReason, detail: undefined }]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  // The rival: falling straight back to `vscode.open` on every path, without trying the real
+  // merge editor first, would leave conflict markers in a plain text editor with no explanation.
+  it('falls back to a plain editor and reports why, when the Git extension cannot open the merge editor', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult(
+      'rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Scripts/Foo.psc'] },
+    );
+    executeCommand.mockImplementation((command: string) => (
+      command === 'git.openMergeEditor' ? Promise.reject(new Error('command not found')) : Promise.resolve(undefined)
+    ));
+    const { handler, reporter } = invokeRebase(client);
+
+    await handler(pluginNode());
+
+    expect(executeCommand).toHaveBeenCalledWith('vscode.open', expect.objectContaining({ fsPath: '/data/source/Scripts/Foo.psc' }));
+    expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: 'Could not open the merge editor for "source/Scripts/Foo.psc" — opened it as a text editor instead.',
+      detail: 'command not found',
+    }]);
   });
 });
 

@@ -150,7 +150,7 @@ describe('registerRevealInExplorerCommand', () => {
     expect(reporter.reports).toEqual([
       {
         severity: 'error',
-        message: 'Could not resolve a file location for "MyMod.esp" — it is not in the load order.',
+        message: 'Could not resolve a file location for "MyMod.esp" — no mod or Overwrite holds this file.',
         detail: undefined,
       },
     ]);
