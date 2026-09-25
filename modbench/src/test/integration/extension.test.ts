@@ -918,6 +918,31 @@ describe('Overwrite row', () => {
 
 // ── A Mods gesture's write reaches the view through the watch alone ──────────────
 
+// VS Code's delete-to-trash on Linux writes the freedesktop.org Trash; the extension's trash
+// cannot be doubled, since `vscode.workspace.fs.delete` cannot be redefined. Elsewhere a run leaves
+// its trashed folder in the OS trash.
+const xdgTrash = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'Trash');
+const trashInfoDir = path.join(xdgTrash, 'info');
+const TRASH_INFO = '.trashinfo';
+
+function trashInfoNames(): ReadonlySet<string> {
+  return new Set(fs.existsSync(trashInfoDir) ? fs.readdirSync(trashInfoDir) : []);
+}
+
+// Takes each entry trashed from `original` since `before` out of the OS trash, answering how many.
+function takeFromTrash(original: string, before: ReadonlySet<string>): number {
+  let taken = 0;
+  for (const info of trashInfoNames()) {
+    if (before.has(info) || !info.endsWith(TRASH_INFO)) continue;
+    const pathLine = fs.readFileSync(path.join(trashInfoDir, info), 'utf8').split('\n').find((l) => l.startsWith('Path='));
+    if (pathLine === undefined || decodeURIComponent(pathLine.slice('Path='.length)) !== original) continue;
+    fs.rmSync(path.join(xdgTrash, 'files', info.slice(0, -TRASH_INFO.length)), { recursive: true, force: true });
+    fs.rmSync(path.join(trashInfoDir, info));
+    taken++;
+  }
+  return taken;
+}
+
 // ADR-0015 invariant 2: the gesture writes modlist.txt and returns, and the view follows the value
 // the watch lands, as it would a change from MO2.
 describe('A Mods gesture\'s write reaches the Mods view through the watch alone', () => {
@@ -929,9 +954,11 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     (await provider().getChildren()).find((n) => n.kind === 'separator' && n.label === name);
   const doomedDir = root ? path.join(root, 'mods', 'Doomed_separator') : '';
   let original = '';
+  let trashedBefore: ReadonlySet<string> = new Set();
 
   before(async () => {
     if (!root) return;
+    trashedBefore = trashInfoNames();
     original = fs.readFileSync(modlistPath, 'utf8');
     await writeAndAwaitInstance(() => {
       fs.mkdirSync(doomedDir, { recursive: true });
@@ -941,6 +968,7 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
 
   after(async () => {
     if (!root) return;
+    takeFromTrash(doomedDir, trashedBefore);
     await writeAndAwaitInstance(() => {
       fs.rmSync(doomedDir, { recursive: true, force: true });
       fs.writeFileSync(modlistPath, original);
@@ -958,7 +986,10 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
       await vscode.commands.executeCommand('modbench.separator.delete', doomed);
 
       assert.ok(!fs.readFileSync(modlistPath, 'utf8').includes('Doomed'), 'the delete should have written modlist.txt');
-      assert.ok(!fs.existsSync(doomedDir), 'the delete should have trashed the separator\'s folder');
+      assert.ok(!fs.existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
+      if (process.platform === 'linux') {
+        assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
+      }
       assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
       assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
 
