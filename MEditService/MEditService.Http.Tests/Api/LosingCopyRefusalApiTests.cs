@@ -9,13 +9,13 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Http.Tests.Traces;
+namespace MEditService.Http.Tests.Api;
 
 /// <summary>edit-record's Refusals table: a losing copy is read-only (ADR-0012 invariant 5),
 /// refused through the real host before any source write. The same write against the winning
 /// copy of the same name lands.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class LosingCopyRefusalTraceTests : HostedTests
+public sealed class LosingCopyRefusalApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";
     private const string WinningOrigin = "WinningMod";
@@ -23,7 +23,7 @@ public sealed class LosingCopyRefusalTraceTests : HostedTests
 
     private async Task<ScatteredFixtureData> Loaded()
     {
-        var fx = new PluginFixtureBuilder("trace-losing-copy")
+        var fx = new PluginFixtureBuilder("api-losing-copy")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("LosingNpc"), origin: LosingOrigin)
             .BuildScattered();
