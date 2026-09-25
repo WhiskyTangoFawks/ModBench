@@ -11,6 +11,7 @@ import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsP
 import { present } from '../../ports/present';
 import { isRecord } from '../manifest';
 import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
+import { PLUGINS_KEY_ARGS } from '../../plugins/gestureEntry';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -654,6 +655,7 @@ describe('modbench.openEditorBeside', () => {
 
     await vscode.commands.executeCommand('modbench.openEditorBeside', {
       kind: 'placed',
+      formKey: 'Fallout4.esm:000040',
       placed: { formKey: 'Fallout4.esm:000040', recordType: 'refr', editorId: 'TestRef' },
       origin: 'Data',
       label: 'TestRef [REFR:000040]',
@@ -1188,6 +1190,85 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
       await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
       return instanceExport()?.value.mods.some((m) => m.name === 'Palette Mod' && !m.enabled);
     });
+  });
+});
+
+// ── The Plugins keys in a running host ───────────────────────────────────────
+
+// plugins.md, Menus and keys. A test cannot press a key, so a key is the command VS Code runs for
+// it: `list.toggleExpand` for Space and `list.select` for Enter, or Modbench's own where it binds.
+describe('The Plugins view\'s keys, as VS Code runs them', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  let gameDir = '';
+  let original = '';
+
+  // TestMod.esp is the first row and enabled; Other.esp is the second and disabled.
+  const focusRow = async (index: number) => {
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\r\nOther.esp\r\n'));
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await waitFor('the plugin row to be focused and selected', async () => {
+      await vscode.env.clipboard.writeText('');
+      await vscode.commands.executeCommand('modbench.pluginListTree.focus');
+      await vscode.commands.executeCommand('workbench.actions.treeView.modbench.pluginListTree.collapseAll');
+      await vscode.commands.executeCommand('list.focusFirst');
+      for (let i = 0; i < index; i++) await vscode.commands.executeCommand('list.focusDown');
+      await vscode.commands.executeCommand('list.selectAndPreserveFocus');
+      await vscode.commands.executeCommand('modbench.record.copyValue', PLUGINS_KEY_ARGS);
+      return (await vscode.env.clipboard.readText()) === ['TestMod.esp', 'Other.esp'][index];
+    });
+  };
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    original = fs.readFileSync(pluginsTxtPath, 'utf8');
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-keys-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+    await setGameDirectory(gameDir);
+    // Setting the game directory relaunches mEdit; the tests below need no backend.
+    await enterEditing();
+    exitEditing();
+  });
+
+  after(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    if (!root) return;
+    await setGameDirectory(undefined);
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, original));
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
+    if (!root) this.skip();
+    await focusRow(0);
+    await vscode.commands.executeCommand('list.toggleExpand');
+    await new Promise((r) => setTimeout(r, 750));
+    assert.strictEqual(fs.readFileSync(pluginsTxtPath, 'utf8'), '*TestMod.esp\r\nOther.esp\r\n');
+  });
+
+  it('Space disables the selected plugin', async function () {
+    if (!root) this.skip();
+    await focusRow(0);
+    await vscode.commands.executeCommand('modbench.plugin.disable');
+    await waitFor('the disable to land in the Instance', () =>
+      instanceExport()?.value.plugins.some((p) => p.name === 'TestMod.esp' && !p.enabled));
+  });
+
+  it('VS Code\'s own Enter on an enabled plugin row opens its header, as a click does', async function () {
+    if (!root) this.skip();
+    await focusRow(0);
+    await vscode.commands.executeCommand('list.select');
+    await waitFor('a header tab for TestMod.esp', () => openTabs().some((t) => t.label === 'TestMod.esp') || undefined);
+  });
+
+  it('VS Code\'s own Enter on a disabled plugin row only selects it', async function () {
+    if (!root) this.skip();
+    await focusRow(1);
+    await vscode.commands.executeCommand('list.select');
+    await new Promise((r) => setTimeout(r, 750));
+    assert.deepStrictEqual(openTabs().map((t) => t.label), []);
   });
 });
 
