@@ -8,6 +8,7 @@ import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
+import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { errorMessage } from '../ports/errorMessage';
@@ -115,7 +116,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
     // Routed through the modbench.openHeader bridge command, as PluginNode's row click is.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
-    if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
+    if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }
 

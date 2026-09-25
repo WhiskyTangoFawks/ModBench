@@ -677,6 +677,8 @@ describe('modbench.openEditorBeside', () => {
 // The implicit-master row is a different class with a different contextValue and no `.plugin`
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
+import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
+import { publishLoadDiagnoses } from '../../medit/loadDiagnostics';
 // esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
 // here from source is a distinct constructor — `.kind` is what identifies a node across that
 // boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
@@ -696,6 +698,30 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
+  });
+});
+
+// plugins.md, A plugin the game loads with no line: the row table draws a greyed label and no
+// Problems badge, and VS Code badges any tree row whose resourceUri carries diagnostics.
+describe('the locked row is greyed and carries no Problems badge', () => {
+  const dataFolder = path.join(os.tmpdir(), 'locked-row-game', 'Data');
+  const node = new ImplicitMasterNode('Fallout4.esm', path.join(dataFolder, 'Fallout4.esm'));
+  const collection = vscode.languages.createDiagnosticCollection('locked-row-test');
+  after(() => collection.dispose());
+
+  it('holds none of the diagnostics published on its plugin file', () => {
+    publishLoadDiagnoses(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', defectClass: 'malformed', message: 'malformed', text: 'malformed' }]);
+
+    const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
+    assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
+  });
+
+  it('is greyed', async () => {
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+
+    const decoration = await provider.provideFileDecoration(present(node.resourceUri, 'the locked row\'s resourceUri'));
+
+    assert.deepStrictEqual(decoration?.color, new vscode.ThemeColor('disabledForeground'));
   });
 });
 

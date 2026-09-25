@@ -12,14 +12,14 @@ import {
 } from '../../client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFilePlain, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
+  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFilePlain, from: uriFrom }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
 import * as vscode from 'vscode';
@@ -220,9 +220,9 @@ describe('ImplicitMasterNode — leading slot', () => {
     expect(node.tooltip).toBe("This plugin can't be disabled or moved (enforced by the game).");
   });
 
-  it('sets resourceUri from the given path, for the label-graying decoration provider to key on', () => {
+  it('keys resourceUri on the given path, for the label-graying decoration provider', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', '/game/Data/Fallout4.esm');
-    expect(node.resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+    expect(node.resourceUri?.path).toBe('/game/Data/Fallout4.esm');
   });
 
   it('leaves resourceUri undefined when no path is given (test-construction convenience)', () => {
@@ -837,7 +837,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 
   it('resolves each implicit row file inside the Data folder, for the graying decoration to key on', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri?.path).toBe('/game/Data/Fallout4.esm');
   });
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {

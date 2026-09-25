@@ -8,39 +8,45 @@ vi.mock('vscode', () => ({
   Uri: {
     file: (p: string) => {
       const path = p.replaceAll('\\', '/');
-      return { fsPath: p, path, toString: () => `file://${path}` };
+      return { scheme: 'file', fsPath: p, path, toString: () => `file://${path}` };
     },
+    from: ({ scheme, path }: { scheme: string; path: string }) => ({ scheme, path, toString: () => `${scheme}://${path}` }),
   },
 }));
 
 import * as vscode from 'vscode';
-import { ImplicitMasterDecorationProvider } from '../ImplicitMasterDecorationProvider';
-import { fakeUri } from '../../test/vscodeMock';
+import { ImplicitMasterDecorationProvider, lockedRowUri } from '../ImplicitMasterDecorationProvider';
 import { present } from '../../ports/present';
 
 // MO2 grays a `forceLoaded` row's name (`pluginlist.cpp`) — the one piece of its
 // forced-master presentation the platform lets this surface adopt verbatim.
 describe('ImplicitMasterDecorationProvider', () => {
   const dataFolder = '/game/Data';
-  const dataUri = (name: string) => fakeUri(join(dataFolder, name));
+  const rowUri = (name: string) => lockedRowUri(join(dataFolder, name));
 
   it('grays an implicit master row', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
-    const decoration = present(await provider.provideFileDecoration(dataUri('Fallout4.esm')), 'the decoration for an implicit master row');
+    const decoration = present(await provider.provideFileDecoration(rowUri('Fallout4.esm')), 'the decoration for an implicit master row');
     // MO2's foregroundData() grays via this exact theme color — check the
     // id itself, not just that some color object was constructed.
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
     expect(decoration.badge).toBeUndefined();
   });
 
+  // The grey belongs to the locked row, never to the plugin file an Explorer row shows.
+  it('returns undefined for the implicit master\'s own file', async () => {
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+    expect(await provider.provideFileDecoration(vscode.Uri.file(join(dataFolder, 'Fallout4.esm')))).toBeUndefined();
+  });
+
   it('returns undefined for a plugin that is not an implicit master', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
-    expect(await provider.provideFileDecoration(dataUri('Mod.esp'))).toBeUndefined();
+    expect(await provider.provideFileDecoration(rowUri('Mod.esp'))).toBeUndefined();
   });
 
   it('returns undefined for a URI outside the resolved Data folder', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
-    expect(await provider.provideFileDecoration(fakeUri('/other/Fallout4.esm'))).toBeUndefined();
+    expect(await provider.provideFileDecoration(lockedRowUri('/other/Fallout4.esm'))).toBeUndefined();
   });
 
   // A permissive set isolates the parent-URI guard from the name guard below.
@@ -54,18 +60,18 @@ describe('ImplicitMasterDecorationProvider', () => {
   it('returns undefined for a sibling folder whose name is Data-prefixed', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), permissive);
     expect(
-      await provider.provideFileDecoration(fakeUri('/game/Data2/Fallout4.esm')),
+      await provider.provideFileDecoration(lockedRowUri('/game/Data2/Fallout4.esm')),
     ).toBeUndefined();
   });
 
   it('returns undefined for a URI outside the Data folder even if implicitMasterNames would match anything', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), permissive);
-    expect(await provider.provideFileDecoration(fakeUri('/other/Fallout4.esm'))).toBeUndefined();
+    expect(await provider.provideFileDecoration(lockedRowUri('/other/Fallout4.esm'))).toBeUndefined();
   });
 
   it('degrades to undefined when the Data folder never resolved', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(undefined), () => new Set(['fallout4.esm']));
-    expect(await provider.provideFileDecoration(dataUri('Fallout4.esm'))).toBeUndefined();
+    expect(await provider.provideFileDecoration(rowUri('Fallout4.esm'))).toBeUndefined();
   });
 
   // `dirname` never carries a trailing separator, so a Data folder setting that does must be
@@ -73,7 +79,7 @@ describe('ImplicitMasterDecorationProvider', () => {
   it('grays an implicit master row when the Data folder setting ends in a separator', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(`${dataFolder}/`), () => new Set(['fallout4.esm']));
     const decoration = present(
-      await provider.provideFileDecoration(dataUri('Fallout4.esm')), 'the decoration for the trailing-separator setting',
+      await provider.provideFileDecoration(rowUri('Fallout4.esm')), 'the decoration for the trailing-separator setting',
     );
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
@@ -83,7 +89,7 @@ describe('ImplicitMasterDecorationProvider', () => {
   it('grays an implicit master row given a Windows-style Data folder and file path', async () => {
     const winDataFolder = String.raw`C:\Game\Data`;
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(winDataFolder), () => new Set(['fallout4.esm']));
-    const uri = vscode.Uri.file(String.raw`C:\Game\Data\Fallout4.esm`);
+    const uri = lockedRowUri(String.raw`C:\Game\Data\Fallout4.esm`);
 
     const decoration = present(await provider.provideFileDecoration(uri), 'the decoration for the Windows-style row');
 
