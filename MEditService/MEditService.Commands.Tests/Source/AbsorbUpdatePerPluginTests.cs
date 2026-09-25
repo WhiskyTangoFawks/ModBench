@@ -184,7 +184,7 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
     }
 
     [Fact]
-    public async Task Absorb_WithAPluginThatCannotBeRead_RefusesNamingTheMod_AndLeavesMainAlone()
+    public async Task Absorb_WithAPluginThatCannotBeRead_RefusesNamingThePluginItsOriginAndWhy_AndLeavesMainAlone()
     {
         var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
         ChangeBothPluginsAndTheAsset();
@@ -260,6 +260,42 @@ public sealed class AbsorbUpdatePerPluginTests : IDisposable
         Assert.Contains("index.lock", result.TrackedFilesRefusal, StringComparison.Ordinal);
         Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
         Assert.NotNull(SourceRepository.UnansweredExternalChange(_modFolder));
+    }
+
+    [Fact]
+    public async Task Absorb_AnsweredAgainAfterOnlyTheParkedRefFailed_MovesTheRefToTheBaselineOnMain_WithoutASecondCommit()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        WritePlugin(Second, heightMax: 2.0f);
+        RefMoveHook.RefuseEveryMoveOf(_modFolder, SourceRepository.LastCompileRef(Second));
+        await Absorb();
+        var baselineOnMain = Git("rev-parse", "refs/heads/main").Trim();
+        RefMoveHook.Remove(_modFolder);
+
+        var result = await Absorb();
+
+        Assert.True(result.AllApplied);
+        Assert.Equal([new PluginCopyKey(Second, Origin)], result.Landed);
+        Assert.Equal([$"Update {Second}"], SubjectsOnMainSince(mainBefore));
+        Assert.Equal(baselineOnMain, Git("rev-parse", SourceRepository.LastCompileRef(Second)).Trim());
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));
+    }
+
+    [Fact]
+    public async Task Absorb_AnsweredAgainAfterTheTrackedFilesCouldNotBeStaged_StagesThem_WithoutASecondCommit()
+    {
+        var mainBefore = Git("rev-parse", "refs/heads/main").Trim();
+        ChangeBothPluginsAndTheAsset();
+        var indexLock = Path.Combine(_modFolder, ".git", "index.lock");
+        File.WriteAllText(indexLock, "");
+        await Absorb();
+        File.Delete(indexLock);
+
+        var result = await Absorb();
+
+        Assert.True(result.AllApplied);
+        Assert.Equal([$"Update {First}", $"Update {Second}", $"Update {Origin}"], SubjectsOnMainSince(mainBefore));
+        Assert.Equal(TrackedModSettledOutcome.NoQuestion, TestEditService.Settled(_notifications).Handle(_loadOrder, _modFolder));
     }
 
     private void ChangeBothPluginsAndTheAsset()

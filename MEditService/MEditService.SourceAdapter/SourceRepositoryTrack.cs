@@ -125,6 +125,12 @@ public sealed partial class SourceRepository
                 var commitSha = string.Empty;
                 if (FailureOf(() =>
                     {
+                        // An earlier answer that landed this baseline but not its ref left it on main.
+                        if (BaselineOnMainOf(gitDir, scratchDir, trailers) is { } landed)
+                        {
+                            commitSha = landed;
+                            return;
+                        }
                         PristineFileWriter.WriteAll(files, scratchDir);
                         commitSha = CommitToMain(
                             gitDir, scratchDir, [LiteralPathspec(RootFor(trailers.Plugin))], BaselineMessage(subject, trailers));
@@ -151,8 +157,10 @@ public sealed partial class SourceRepository
     {
         if (changes.Count == 0) return null;
         var subject = $"Update {ModNameIn(modFolder)}";
+        // An earlier answer that committed them but could not stage them left main already holding them.
         var failure = FailureOf(() => CommitToMain(
-            Path.Combine(modFolder, ".git"), modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject));
+            Path.Combine(modFolder, ".git"), modFolder, [.. changes.Select(c => LiteralPathspec(c.RelativePath))], subject,
+            skipWhenUnchanged: true));
         return failure is { } reason ? (subject, $"could not be committed to main: {reason}") : null;
     }
 
@@ -167,8 +175,26 @@ public sealed partial class SourceRepository
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            Log.Warning(ex, "An Absorb step failed");
             return ex.Message.Trim();
         }
+    }
+
+    // The plugin's newest baseline commit on main, when it is this very baseline: same binary, same
+    // meta.ini and version. With no binary hash, nothing proves it the same.
+    private static string? BaselineOnMainOf(string gitDir, string workTree, BaselineTrailers trailers)
+    {
+        if (trailers.BinarySha256 is null) return null;
+        var records = GitCli.Run(gitDir, workTree, "log", "-z", "--format=%H%n%(trailers:only,unfold)", "refs/heads/main");
+        foreach (var record in records.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (sha, block) = record.Split('\n', 2) is [var head, var rest] ? (head, rest) : (record, "");
+            if (!string.Equals(ReadTrailer(block, "Plugin"), trailers.Plugin, StringComparison.OrdinalIgnoreCase)) continue;
+            var onMain = new BaselineTrailers(
+                trailers.Plugin, ReadTrailer(block, "Upstream-Version"), ReadTrailer(block, "Meta-SHA256"), ReadTrailer(block, "Binary-SHA256"));
+            return onMain == trailers ? sha.Trim() : null;
+        }
+        return null;
     }
 
     private static void CommitBaselineToMain(string gitDir, string workTree, string subject, BaselineTrailers trailers)
@@ -180,7 +206,8 @@ public sealed partial class SourceRepository
 
     // main's own tree with just the pathspecs restaged from the work tree, through a scratch index: the
     // real one may hold the user's own staged dirt.
-    private static string CommitToMain(string gitDir, string workTree, string[] pathspecs, string message)
+    private static string CommitToMain(
+        string gitDir, string workTree, string[] pathspecs, string message, bool skipWhenUnchanged = false)
     {
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-main-index-{Guid.NewGuid():N}");
         try
@@ -189,6 +216,8 @@ public sealed partial class SourceRepository
             GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "read-tree", parentSha);
             GitCli.RunWithIndex(gitDir, workTree, scratchIndex, ["add", "-A", "--", .. pathspecs]);
             var treeSha = GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
+            if (skipWhenUnchanged && treeSha == GitCli.Run(gitDir, workTree, "rev-parse", $"{parentSha}^{{tree}}").Trim())
+                return parentSha;
 
             var commitSha = GitCli.Run(gitDir, workTree, "commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
             // The old value makes the move conditional, so a main another tool moved in between is not
