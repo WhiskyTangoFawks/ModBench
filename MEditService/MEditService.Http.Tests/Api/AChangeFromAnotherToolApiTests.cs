@@ -180,6 +180,26 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
     }
 
+    // Only the folder's own arrival is an event: nothing inside it was watched when it was written.
+    [Fact]
+    public async Task ARecordInAFolderMovedInByHand_IsRead()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var npc = await Client.FirstFormKey(Plugin);
+        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
+        const string added = "000900:Shared.esp";
+        var text = File.ReadAllText(original)
+            .Replace(npc, added, StringComparison.Ordinal)
+            .Replace(Npc, "AddedNpc", StringComparison.Ordinal);
+        var before = await Client.Sequence();
+
+        OtherTool.MovesInAFolderHolding(OtherTool.Beside(original, "AddedByHand"), "AddedNpc - 000900_Shared.esp.json", text);
+
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("AddedNpc", (await Client.Record(added)).GetProperty("editorId").GetString());
+    }
+
     // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame
     // bounds everything the first batch published.
     private static async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSettleAnchoredBy(

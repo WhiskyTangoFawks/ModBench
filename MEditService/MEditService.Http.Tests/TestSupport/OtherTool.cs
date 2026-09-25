@@ -24,6 +24,14 @@ internal static class OtherTool
 
     internal static void DeletesTheDirectory(string path) => Directory.Delete(path, recursive: true);
 
+    /// <summary>A folder holding one file, written outside the mod folder and moved in whole.</summary>
+    internal static void MovesInAFolderHolding(string folder, string fileName, string contents)
+    {
+        var aside = Path.Combine(Path.GetTempPath(), $"medit-aside-{Guid.NewGuid():n}");
+        WritesTheFile(Path.Combine(aside, fileName), contents);
+        Directory.Move(aside, folder);
+    }
+
     internal static void WritesTheFile(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());

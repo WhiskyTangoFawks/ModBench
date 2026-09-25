@@ -79,11 +79,11 @@ internal sealed class ModWatch : IDisposable
             _quietTimer = time.CreateTimer(_ => settle(this), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _maxWindowTimer = time.CreateTimer(_ => settle(this), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _watcher.Changed += (_, e) => Observe(e.FullPath);
-            _watcher.Created += (_, e) => Observe(e.FullPath);
+            _watcher.Created += (_, e) => Observe(e.FullPath, appeared: true);
             // A deletion is a settle like any other: the whole point of the indexed-binary route,
             // and a no-op for a plugin classification finds no bytes for.
             _watcher.Deleted += (_, e) => Observe(e.FullPath);
-            _watcher.Renamed += (_, e) => { Observe(e.OldFullPath); Observe(e.FullPath); };
+            _watcher.Renamed += (_, e) => { Observe(e.OldFullPath); Observe(e.FullPath, appeared: true); };
             _watcher.Error += (_, _) => overflow(this);
             _watcher.EnableRaisingEvents = true;
         }
@@ -186,7 +186,7 @@ internal sealed class ModWatch : IDisposable
     // A ref move, a document under a registered source root, a registered binary, the source tree
     // appearing under a top-level watch, or another external-change candidate: each makes the mod
     // a candidate for the next settle.
-    private void Observe(string fullPath)
+    private void Observe(string fullPath, bool appeared = false)
     {
         lock (_lock)
         {
@@ -209,7 +209,10 @@ internal sealed class ModWatch : IDisposable
             }
             else if (_plugins.Values.FirstOrDefault(p => Under(p.SourceRoot, fullPath)) is { } sourcePlugin)
             {
-                sourcePlugin.DocumentPaths.Add(fullPath);
+                // The operating system watches a folder that appears only once its creation is
+                // handled, so what was written into it may reach no batch.
+                if (appeared && Directory.Exists(fullPath)) sourcePlugin.WholePlugin = true;
+                else sourcePlugin.DocumentPaths.Add(fullPath);
             }
             else if (_plugins.Values.FirstOrDefault(p => fullPath.Equals(p.Path, StringComparison.Ordinal)) is { } filePlugin)
             {
