@@ -212,8 +212,6 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
-        // Both remedies, named (edit-record.md): clearing the light flag, or renumber — never a
-        // flag-removal-and-retry prompt, which this gesture does not offer.
         Assert.Contains("Clear the light flag", result.Message, StringComparison.Ordinal);
         Assert.Contains("renumber", result.Message, StringComparison.Ordinal);
     }
