@@ -306,7 +306,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             {
                 Value = copy.Slot
                     ?? throw new InvalidOperationException(
-                        $"Expected participating copy '{copy.Name}' from '{copy.Origin}' to carry a load-order slot."),
+                        $"Expected participating plugin '{copy.Name}' from '{copy.Origin}' to carry a load-order slot."),
             });
             cmd.ExecuteNonQuery();
         }

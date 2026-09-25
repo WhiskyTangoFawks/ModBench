@@ -104,7 +104,7 @@ public sealed class PluginCompileService(
         var loadOrderNames = loadOrder.Plugins
             .Where(c => c.Registration.InLoadOrder)
             .OrderBy(c => c.Slot
-                ?? throw new InvalidOperationException($"Expected copy '{c.Name}' from '{c.Origin}' in load order to carry a slot."))
+                ?? throw new InvalidOperationException($"Expected plugin '{c.Name}' from '{c.Origin}' in load order to carry a slot."))
             .Select(c => c.Name)
             .ToList();
 

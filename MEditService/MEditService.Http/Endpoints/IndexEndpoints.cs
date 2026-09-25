@@ -65,9 +65,9 @@ public static class IndexEndpoints
             .WithTags(IndexTag)
             .WithDescription(
                 "Validates the index by content hash against the systems of record its rows came " +
-                "from — each source document at both refs for a tracked copy, the binary for an " +
-                "untracked one — and refreshes what differs. Name one copy with plugin and origin " +
-                "together, or omit both to check every registered copy. Rows it changes are " +
+                "from — each source document at both refs for a tracked plugin, the binary for an " +
+                "untracked one — and refreshes what differs. Name one plugin with plugin and origin " +
+                "together, or omit both to check every registered plugin. Rows it changes are " +
                 "published on /notifications/stream as they land.")
             .Produces<ReconcileResponse>()
             .ProducesProblem(400)
@@ -186,13 +186,13 @@ public static class IndexEndpoints
 
         // ADR-0012 invariant 1: a copy is (origin, plugin) together, so half an identity names nothing.
         if (string.IsNullOrEmpty(plugin) != string.IsNullOrEmpty(origin))
-            return Results.Problem("Name a copy with both plugin and origin, or neither to check every copy.", statusCode: 400);
+            return Results.Problem("Name a plugin with both plugin and origin, or neither to check every plugin.", statusCode: 400);
 
         PluginAddress? key = !string.IsNullOrEmpty(plugin) && !string.IsNullOrEmpty(origin)
             ? new PluginAddress(plugin, origin)
             : null;
         if (key is { } named && !index.Registers(named))
-            return Results.Problem($"No registered copy of '{plugin}' from '{origin}'.", statusCode: 404);
+            return Results.Problem($"No registered plugin '{plugin}' from '{origin}'.", statusCode: 404);
 
         try
         {
