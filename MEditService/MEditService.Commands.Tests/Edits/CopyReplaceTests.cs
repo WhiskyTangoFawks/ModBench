@@ -116,7 +116,6 @@ public sealed class CopyReplaceTests : IDisposable
         Assert.Equal(1, occurrences);
     }
 
-    // Flat and container targets both refuse the same way.
     [Fact]
     public void CopyAsOverride_IntoADestinationThatLoadsBeforeTheOrigin_RefusesAsUnderride()
     {

@@ -235,6 +235,22 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // A copy as new lands under a FormID of its own, so it replaces nothing.
+    [Fact]
+    public async Task CopyRecord_AsNewWithTheReplaceOption_Is400_AndCopiesNothing()
+    {
+        using var fx = BuildSourceAndDestination();
+        await Load(fx);
+        await Track(DestOrigin);
+        var formKey = await FirstNpcFormKey(Plugin);
+        var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
+
+        var response = await _client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(destination, TreeSnapshot.Of(ModFolderOf(fx, DestOrigin)));
+    }
+
     // --- CreateRecord (400 already pinned by MalformedFormKeyEndpointTests; 200 incidentally by FormIdEditApiTests) ---
 
     [Fact]

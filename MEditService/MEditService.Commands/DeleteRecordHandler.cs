@@ -42,33 +42,14 @@ public sealed class DeleteRecordHandler
             // A record named twice is deleted once: its second delete would find nothing and be
             // reported as refused, for a record that is gone.
             if (!seen.Add(record)) continue;
-            var result = DeleteOrRefuseTheWriteFailure(record);
+            var result = ItemWrite.RefusingTheWriteFailure(
+                () => Delete(record.Plugin, record.FormKey),
+                $"Could not delete the source file for {record.FormKey} in {record.Plugin.Name} ({record.Plugin.Origin})",
+                _logger);
             if (result.Applied) applied.Add(record);
             else refused.Add(new RecordRefused(record, result.Refusal, result.Message));
         }
         return PerRecordResult.PerRecord(applied, refused);
-    }
-
-    // A tree another tool changed, or a file system that refused the write, is this record's answer,
-    // not the batch's: an exception here would hide the records already deleted before it.
-    private RecordEditResult DeleteOrRefuseTheWriteFailure(RecordAt record)
-    {
-        try
-        {
-            return Delete(record.Plugin, record.FormKey);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogError(ex, "Could not delete the source file for {FormKey} in {Plugin} ({Origin})",
-                record.FormKey, record.Plugin.Name, record.Plugin.Origin);
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceWriteFailed,
-                $"Could not delete the source file for {record.FormKey}: {ex.Message}");
-        }
     }
 
     private RecordEditResult Delete(PluginAddress plugin, string formKey)
