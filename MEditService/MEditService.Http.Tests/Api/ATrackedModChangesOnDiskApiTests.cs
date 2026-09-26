@@ -469,6 +469,28 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
+    // ADR-0015 invariant 2: Keep writes the source tree and returns, and the change reaches the
+    // views as the rows-changed push the Mod watcher's re-read publishes.
+    [Fact]
+    public async Task KeepingARelease_PushesRowsChanged_NamingTheKeptRecord_AndTheNextReadAgrees()
+    {
+        var fx = Owned(await Watched());
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+        ARelease(fx);
+        await stream.EventsUntil("question-open");
+
+        (await Answer("keep", Origin)).EnsureSuccessStatusCode();
+
+        var rows = await stream.EventsUntil(
+            "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey));
+        Assert.Equal(Plugin, rows[^1].GetProperty("plugin").GetString());
+        var heightMax = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
+            .GetProperty("value").GetDouble();
+        Assert.Equal(0.9, heightMax, 3);
+    }
+
     // The same 200-with-a-refusal posture both answers have: an outcome the dialog can show, not a
     // transport failure.
     [Fact]
