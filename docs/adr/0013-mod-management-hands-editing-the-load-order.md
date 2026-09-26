@@ -19,9 +19,8 @@ it is handed and never reloads.
 2. **The snapshot names every plugin file in the instance** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)),
    each with the three facts Mod Management already computes: the name's `plugins.txt` slot or
    none, whether its line is enabled, and whether this plugin is the one the Mod override order
-   resolves the name to. The one fact the service derives itself is the set of forced names, the
-   game's implicit masters and the Creation Club catalogue, read from the game directory at the
-   API.
+   resolves the name to. The one fact the service derives itself is which plugins the game loads
+   with no line: the game's own masters and its Creation Club plugins, read from the game folder.
 3. **Participation is derived, once, in the load order value: enabled, winning and listed.** It
    is never a stored column and no SQL re-spells it. Only participating rows compete for winner
    or count in a conflict; a non-participating row is hidden by default and shown on request

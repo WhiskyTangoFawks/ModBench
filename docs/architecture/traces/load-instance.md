@@ -27,8 +27,8 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
-5. The value goes to every view, and to instance commands. Instance commands derive the load order
-   snapshot from it, every plugin file in the instance (ADR-0012), and send it to mEdit
+5. The value goes to every view. The Instance loader derives the load order snapshot from it, every
+   plugin file in the instance (ADR-0012), and hands it to instance commands, which send it to mEdit
    ([index-load-order](index-load-order.md)).
 
 ## refresh

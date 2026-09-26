@@ -34,7 +34,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
   commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ndecompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
-  queries: "Queries\ninterface: compare, references, children, the plugin list,\nimplicit masters, the malformed-plugin diagnosis, the record\ntypes a game can create\nhides: the Index's reads" {class: core}
+  queries: "Queries\ninterface: compare, references, children, the plugin list,\nthe malformed-plugin diagnosis, the record\ntypes a game can create\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
@@ -67,7 +67,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
     store: "Store\nDuckDB" {class: derived}
   }
   sourceadapter: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
-  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
+  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; the plugins the game loads\nwith no line\nhides: the game assemblies" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
