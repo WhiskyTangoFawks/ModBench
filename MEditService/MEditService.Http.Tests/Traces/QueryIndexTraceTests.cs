@@ -410,13 +410,14 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AFilenamesFormIds_SortAsThePluginTheGameLoadsUnderIt_NotAnOverriddenCopy(
         string winnerOrigin, string loserOrigin, string[] expected)
     {
+        static Action<Fallout4Mod> Twin(string origin) => mod =>
+        {
+            mod.IsSmallMaster = origin == "LightTwin";
+            mod.Activators.AddNew("ZTwinLever");
+        };
         var fixture = Owned(new PluginFixtureBuilder("trace-query-twin-order")
-            .WithPlugin("Twin.esp", mod =>
-            {
-                mod.IsSmallMaster = true;
-                mod.Activators.AddNew("ZTwinLever");
-            }, origin: "LightTwin")
-            .WithPlugin("Twin.esp", mod => mod.Activators.AddNew("ZTwinLever"), origin: "FullTwin")
+            .WithPlugin("Twin.esp", Twin(loserOrigin), origin: loserOrigin)
+            .WithPlugin("Twin.esp", Twin(winnerOrigin), origin: winnerOrigin)
             .WithPlugin("Late.esm", mod => mod.Activators.AddNew("ALateLever"), origin: "LateMod")
             .WithPlugin("Patch.esp", (mod, masters) =>
             {
@@ -424,10 +425,7 @@ public sealed class QueryIndexTraceTests : HostedTests
                 mod.Activators.GetOrAddAsOverride(masters[2].Activators.Single());
             }, origin: "PatchMod")
             .BuildScattered());
-        var winner = fixture.Plugins.Single(p => p.Origin == winnerOrigin);
-        (await Client.PutLoadOrder(fixture, fixture.Plugins.Select(p => p.Origin == loserOrigin
-            ? p with { Slot = winner.Slot, Winning = false }
-            : p))).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
 
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
 

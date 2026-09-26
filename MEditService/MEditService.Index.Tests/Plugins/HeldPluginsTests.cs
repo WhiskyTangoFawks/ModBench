@@ -86,11 +86,11 @@ public sealed class HeldPluginsTests
     public void Open_OverriddenPluginUnparseable_TheFailureNamesTheOverriddenPluginsOrigin()
     {
         using var fx = new PluginFixtureBuilder("lo-losing-garbage")
-            .WithPlugin("Shared.esp", origin: "ModA")
             .WithPlugin("Shared.esp", origin: "ModB")
+            .WithPlugin("Shared.esp", origin: "ModA")
             .BuildScattered();
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var overridden = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        var overridden = fx.Plugins.Single(p => p.Origin == "ModB");
         File.WriteAllBytes(overridden.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
 
         using var held = Indexes.Reconciled(fx.GameDirectory, [winner, overridden]);
