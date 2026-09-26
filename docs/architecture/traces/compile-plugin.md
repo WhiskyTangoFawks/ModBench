@@ -10,7 +10,7 @@ Diagram: [compile-plugin.d2](compile-plugin.d2). Catalog row: `compile` under Pl
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 `compile` writes a tracked plugin's binary from its plugin source. It is the inverse of
-[decompile plugin](decompile-plugin.md). Its Option is the source: the working tree, or `main`.
+[decompile plugin](decompile-plugin.md). It builds from the working tree.
 
 For a tracked plugin, the source is the truth and the binary is its build (ADR-0006; ADR-0007).
 Git keeps every state of the source, so compile keeps no copy of the binary. A failed build means a
@@ -19,10 +19,9 @@ bad binary, and compiling again rebuilds it.
 ## The flow
 
 1. Plugins or the Editor sends `compile` to Commands, through the mEdit client and the HTTP
-   endpoints: the plugins, each as origin and file name, and the source. Each plugin compiles on
+   endpoints: the plugins, each as origin and file name. Each plugin compiles on
    its own.
-2. The Source adapter reads the plugin's documents from the source: the working tree, or the tree
-   at `main`. Compile never commits, and never changes a branch or the working tree (ADR-0007,
+2. The Source adapter reads the plugin's documents from the working tree. Compile never commits, and never changes a branch or the working tree (ADR-0007,
    invariant 4).
 3. Commands checks the documents before it writes anything. The codec reproduces every document
    exactly (ADR-0006, invariant 6), and no two documents claim one FormKey.
@@ -31,8 +30,8 @@ bad binary, and compiling again rebuilds it.
    fit the light range.
 5. Commands marks in the mod's repository that a compile has begun.
 6. The Plugin adapter writes the binary, and a localized plugin's strings beside it.
-7. Commands records the compiled tree and the new binary's hash as what Modbench last wrote, for
-   either source (ADR-0003, invariant 1). It then clears the mark.
+7. Commands records the compiled tree and the new binary's hash as what Modbench last wrote
+   (ADR-0003, invariant 1). It then clears the mark.
 8. Commands checks the references. A reference it cannot resolve is a diagnostic, never a refusal
    (ADR-0007, invariant 4).
 9. Commands answers per plugin: applied, with the masters and the diagnostics, or the refusal.

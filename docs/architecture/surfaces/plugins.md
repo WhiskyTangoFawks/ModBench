@@ -165,7 +165,7 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track… · compile · compile from `main`… · copy value |
+| Plugin menu | reveal · enable or disable · create record… · track… · compile · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
@@ -236,13 +236,11 @@ As a user, I want:
 
 1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
    truth and the plugin a projection of it, so compile destroys nothing. *ruling*
-2. `compile from main…` to confirm first, saying my edit branch and working tree stay as they are.
-   *catalog `compile`, source Option; compile-plugin, The flow*
-3. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
+2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
-4. A warning when a compile did not finish, naming the plugin and saying to compile it again.
+3. A warning when a compile did not finish, naming the plugin and saying to compile it again.
    *compile-plugin, Failure*
-5. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
+4. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
 
 ### Create record
 

@@ -21,7 +21,7 @@ indexer.label: Indexer
 port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 
-plugins -> client: "compile: the plugins · the working tree or main" {class: edit}
+plugins -> client: "compile: the plugins" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 source -> sourceadapter: documents {class: compile}
