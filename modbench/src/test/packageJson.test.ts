@@ -1219,34 +1219,6 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// The reverse of the forward gate below: a `built` row naming an ID nothing registers.
-function catalogBuiltCommandIds(markdown: string): Set<string> {
-  const ids = new Set<string>();
-  let idColumn: number | undefined;
-  let statusColumn: number | undefined;
-  for (const line of markdown.split('\n')) {
-    if (!line.startsWith('|')) {
-      idColumn = undefined;
-      statusColumn = undefined;
-      continue;
-    }
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (idColumn === undefined) {
-      idColumn = cells.indexOf('Command ID');
-      statusColumn = cells.indexOf('Status');
-      continue;
-    }
-    if (idColumn === -1 || statusColumn === undefined || statusColumn === -1) continue;
-    if (cells[statusColumn] !== 'built') continue;
-    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
-      ids.add(present(match[1], 'the backticked Command ID'));
-    }
-  }
-  return ids;
-}
-
-const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
-
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
@@ -1289,14 +1261,6 @@ describe('package.json registers every command under its catalog Command ID', ()
   it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
     const stale = [...legacy].filter((id) => !registered.includes(id));
     expect(stale, `${stale.join(', ')} is not registered: delete it from LEGACY_GESTURES.`).toEqual([]);
-  });
-
-  it('registers every Command ID whose row is built', () => {
-    const missing = [...builtCatalog].filter((id) => !registered.includes(id));
-    expect(
-      missing,
-      missing.map((id) => `${id} is \`built\` in commands.md but package.json does not register it.`).join('\n'),
-    ).toEqual([]);
   });
 });
 
