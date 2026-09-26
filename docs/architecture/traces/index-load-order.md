@@ -33,7 +33,7 @@ first is the Mod watcher's, and it ends in the same tail.
    adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
    not. It takes the schema from the Codec, and writes the plugin's rows to the Store.
 6. After the last plugin, the Indexer takes the participating plugins from Load order state, enabled,
-   listed and winning (ADR-0013, invariant 3), and computes the winners and the conflicts once.
+   listed and winning (ADR-0013, invariant 3), and computes each FormKey's winner once.
 7. Through Ports, the Indexer publishes the index status at each plugin: reconciling, with the count
    done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
    The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3).
