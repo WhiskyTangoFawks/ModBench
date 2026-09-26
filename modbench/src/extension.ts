@@ -161,8 +161,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolbox,
     {
       dispose: wireQuestionOpen({
-        client: meditClient, outputChannel, treeProvider,
-        refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+        client: meditClient, outputChannel,
         askQuestion,
         reporter: makeReporter(outputChannel, 'externalChange'),
       }),
@@ -185,7 +184,6 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),

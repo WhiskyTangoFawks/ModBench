@@ -10,9 +10,6 @@ export interface ExternalChangeCoordinatorDeps {
   showDialog: AskQuestion;
   /** ADR-0019: each gesture's refusal, and each plugin of Absorb's answer that did not land. */
   reporter: Pick<Reporter, 'report' | 'selectionOutcome'>;
-  /** A landed Keep/Absorb is a working-tree change (ADR-0017). */
-  refreshTree: () => void;
-  refreshMatchingPlugins: () => void;
   log?: (msg: string) => void;
 }
 

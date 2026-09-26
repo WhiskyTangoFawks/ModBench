@@ -1,7 +1,6 @@
 import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { subscribeQuestionOpen } from './externalChangeCoordinator';
-import type { PluginTreeProvider } from './PluginTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 
@@ -15,14 +14,12 @@ import type { AskQuestion } from '../ports/dialog';
 export interface QuestionOpenWiring {
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'subscribe'>;
   outputChannel: vscode.LogOutputChannel;
-  treeProvider: PluginTreeProvider;
-  refreshMatchingPlugins: () => void;
   askQuestion: AskQuestion;
   reporter: Reporter;
 }
 
 export function wireQuestionOpen({
-  client, outputChannel, treeProvider, refreshMatchingPlugins, askQuestion, reporter,
+  client, outputChannel, askQuestion, reporter,
 }: QuestionOpenWiring): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
@@ -31,8 +28,6 @@ export function wireQuestionOpen({
     client,
     showDialog: askQuestion,
     reporter,
-    refreshTree: () => treeProvider.refresh(),
-    refreshMatchingPlugins,
     log,
   }, client);
 }
