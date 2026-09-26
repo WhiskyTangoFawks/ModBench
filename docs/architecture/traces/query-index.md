@@ -1,9 +1,9 @@
 # query-index: contract
 
-Diagram: [query-index.d2](query-index.d2). Catalog rows under Record: `open`, `filter` and `show
-referenced by`, in [commands.md](../commands.md). What the views show is in
-[plugins.md](../surfaces/plugins.md), [editor.md](../surfaces/editor.md) and
-[editor-referenced-by.md](../surfaces/editor-referenced-by.md). Governed by
+Diagram: [query-index.d2](query-index.d2). Catalog rows under Record: `open` and `filter`, in
+[commands.md](../commands.md). What the views show is in [plugins.md](../surfaces/plugins.md),
+[editor.md](../surfaces/editor.md) and [editor-referenced-by.md](../surfaces/editor-referenced-by.md).
+Governed by
 [ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md),
 [ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md),

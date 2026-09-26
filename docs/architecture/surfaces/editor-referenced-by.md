@@ -18,7 +18,7 @@ Where surfaces live*
 As a user, I want:
 
 1. The list to follow the record tab I am in, with no gesture of mine: xEdit's tab follows the
-   selected record, and nothing aims it. *catalog `show referenced by`; xEdit*
+   selected record, and nothing aims it. *xEdit*
 2. When I move to a tab that is not a record, the list to keep the last record. When I close the
    last record tab, the list to empty.
 3. The title to count the records that reference it, as xEdit's tab caption does: `Referenced By
