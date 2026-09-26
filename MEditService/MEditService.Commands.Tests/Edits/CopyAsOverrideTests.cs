@@ -99,8 +99,10 @@ public sealed class CopyAsOverrideTests
 
     // Held at Head is held: a record the destination committed and then deleted in its working tree
     // is still in the compiled plugin, and a replacement has no document to replace.
-    [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtHeadOnly_EvenWithReplace()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtHeadOnly_WithOrWithoutReplace(bool replace)
     {
         using var mod = CopyFixture.Create();
         Assert.True(mod.CopyHandler.CopyAsOverride(
@@ -109,7 +111,7 @@ public sealed class CopyAsOverrideTests
         Assert.Empty(mod.DeleteHandler.DeleteRecords([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
 
         var result = mod.CopyHandler.CopyAsOverride(
-            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, replace: true);
+            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, replace);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);

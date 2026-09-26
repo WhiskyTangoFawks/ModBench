@@ -29,13 +29,13 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
         if (destination.Repository.HoldsAtEitherRef(destination.Plugin, formKey))
         {
+            // Held only at Head has no document to replace, so no replacement is asked for.
+            if (Identity(destination, formKey, release) is not { } existing)
+                return RefuseHeldOnlyAtHead(formKey, destination.Plugin);
             if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
-            // Replaced in place, never duplicated. Held only at Head has no document to replace.
-            if (Identity(destination, formKey, release) is { } existing)
-                return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
-
-            return RefuseHeldOnlyAtHead(formKey, destination.Plugin);
+            // Replaced in place, never duplicated.
+            return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
         }
 
         var appended = AppendEmbeddedChild(source, container, ownFields, destination, release);

@@ -119,6 +119,7 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<RecordCopyResponse>()
         .ProducesProblem(400)
+        .ProducesProblem(500)
         .ProducesProblem(503);
 
         return app;
@@ -176,33 +177,15 @@ public static class RecordEndpoints
         {
             logger.LogInformation("Received DeleteRecord for {Count} records", records.Count);
         }
-        if (records.Count == 0)
-            return Results.Problem("At least one record is required.", statusCode: 400);
-        if (records.Any(r =>
-                string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
-            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-
-        try
+        return OverRecords(records, "deleting", logger, validateOptions: () => null, answer: addressed =>
         {
-            var result = edits.DeleteRecords(
-                [.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
+            var result = edits.DeleteRecords(addressed);
             if (result.SelectionRefusal is { } selectionRefusal) return WriteEndpointMapping.Refusal(selectionRefusal);
             return Results.Ok(new RecordDeleteResponse(
                 [.. result.Applied.Select(Addressed)],
                 [.. result.Refused.Select(r => new RecordAddressRefusal(Addressed(r.Record), r.Refusal, r.Message))]));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            // Matches every sibling write route's own mapping for it (WriteEndpointMapping, the
-            // shared seam): the load order went away underneath the request, a "not right now",
-            // never a per-record refusal.
-            logger.LogError(ex, "No usable loadOrder while deleting {Count} records", records.Count);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        });
     }
-
-    private static RecordAddress Addressed(RecordAt record) =>
-        new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
     internal static IResult CopyRecord(RecordCopyRequest request, CopyRecordHandler edits, ILogger logger)
     {
@@ -214,32 +197,51 @@ public static class RecordEndpoints
                 "Received CopyRecord {Mode} for {Count} records into {DestinationCount} destinations (replace: {Replace})",
                 request.Mode, records.Count, destinations.Count, request.Replace);
         }
+        return OverRecords(records, "copying", logger, validateOptions: () =>
+        {
+            if (destinations.Count == 0)
+                return Results.Problem("At least one destination is required.", statusCode: 400);
+            if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
+                return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
+            if (request.Replace && request.Mode != CopyMode.Override)
+                return Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400);
+            return null;
+        }, answer: addressed =>
+        {
+            var result = edits.Copy(addressed, request.Mode, destinations, request.Replace);
+            return Results.Ok(new RecordCopyResponse(
+                [.. result.Applied.Select(l => new RecordCopyLanded(Addressed(l.Item.Record), l.Item.Destination, l.NewFormKey))],
+                [.. result.Refused.Select(r => new RecordCopyRefusal(
+                    Addressed(r.Item.Record), r.Item.Destination, r.Refusal, r.Message))]));
+        });
+    }
+
+    // The routes over a selection of records share their request's shape and one answer that is no
+    // record's: the load order went away underneath the request, a "not right now".
+    private static IResult OverRecords(
+        IReadOnlyList<RecordAddress> records, string gesture, ILogger logger,
+        Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, IResult> answer)
+    {
         if (records.Count == 0)
             return Results.Problem("At least one record is required.", statusCode: 400);
         if (records.Any(r =>
                 string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
             return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
-        if (destinations.Count == 0)
-            return Results.Problem("At least one destination is required.", statusCode: 400);
-        if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
-            return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
+        if (validateOptions() is { } invalid) return invalid;
 
         try
         {
-            var result = edits.Copy(
-                [.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))],
-                request.Mode, destinations, request.Replace);
-            return Results.Ok(new RecordCopyResponse(
-                [.. result.Applied.Select(l => new RecordCopyLanded(Addressed(l.Item.Record), l.Item.Destination, l.NewFormKey))],
-                [.. result.Refused.Select(r => new RecordCopyRefusal(
-                    Addressed(r.Item.Record), r.Item.Destination, r.Refusal, r.Message))]));
+            return answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
         }
         catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "No usable loadOrder while copying {Count} records", records.Count);
+            logger.LogError(ex, "No usable loadOrder while {Gesture} {Count} records", gesture, records.Count);
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
+
+    private static RecordAddress Addressed(RecordAt record) =>
+        new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
     {
