@@ -535,11 +535,7 @@ export interface components {
             fullName?: string | null;
             hasParseFailure: boolean;
             parseDiagnosis?: string | null;
-        };
-        CellSummaryPagedResult: {
-            items: components["schemas"]["CellSummary"][];
-            /** Format: int32 */
-            total: number;
+            hasChildren: boolean;
         };
         CompareOverride: {
             formKey: string;
@@ -679,6 +675,18 @@ export interface components {
         IndexedPlugin: {
             name: string;
             origin: string;
+        };
+        InteriorCellBlock: {
+            /** Format: int32 */
+            number: number;
+            subBlocks: components["schemas"]["InteriorCellSubBlock"][];
+            hasParseFailure: boolean;
+        };
+        InteriorCellSubBlock: {
+            /** Format: int32 */
+            number: number;
+            cells: components["schemas"]["CellSummary"][];
+            hasParseFailure: boolean;
         };
         LoadOrderPlugin: {
             name: string;
@@ -994,6 +1002,7 @@ export interface components {
             hasParseFailure: boolean;
             fullName?: string | null;
             parseDiagnosis?: string | null;
+            hasChildren: boolean;
         };
     };
     responses: never;
@@ -2272,8 +2281,6 @@ export interface operations {
         parameters: {
             query?: {
                 origin?: string;
-                limit?: number;
-                offset?: number;
             };
             header?: never;
             path: {
@@ -2289,7 +2296,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CellSummaryPagedResult"];
+                    "application/json": components["schemas"]["InteriorCellBlock"][];
                 };
             };
             /** @description Internal Server Error */

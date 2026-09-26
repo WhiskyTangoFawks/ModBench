@@ -391,9 +391,9 @@ public class PlacementIndexingTests
     {
         using var f = new TwoOriginWorldspace();
 
-        Assert.Equal(1, f.Reads.GetInteriorCells(SharedA, 50, 0).Total);
-        Assert.Equal(1, f.Reads.GetInteriorCells(SharedB, 50, 0).Total);
-        Assert.Equal(0, f.Reads.GetInteriorCells(SharedC, 50, 0).Total);
+        Assert.Single(f.Reads.GetInteriorCells(SharedA));
+        Assert.Single(f.Reads.GetInteriorCells(SharedB));
+        Assert.Empty(f.Reads.GetInteriorCells(SharedC));
     }
 
     [Fact]
@@ -410,66 +410,17 @@ public class PlacementIndexingTests
     public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
     {
         using var b = new Built();
-        var page = b.Reads.GetInteriorCells(Key, 50, 0);
-        Assert.Equal(2, page.Total);
+        var cells = b.Reads.GetInteriorCells(Key);
+        Assert.Equal(2, cells.Count);
 
-        var named = page.Items.Single(c => c.FormKey == b.IntCellFk);
+        var named = cells.Single(c => c.FormKey == b.IntCellFk);
         Assert.Equal("IntCell", named.EditorId);
         Assert.Equal(0, named.CellX);
         Assert.Equal(0, named.CellY);
 
-        var bare = page.Items.Single(c => c.FormKey == b.BareIntCellFk);
+        var bare = cells.Single(c => c.FormKey == b.BareIntCellFk);
         Assert.Null(bare.EditorId);
         Assert.Null(bare.CellX);
         Assert.Null(bare.CellY);
-    }
-
-    // Several cells share "DupCell" and two more share a blank EditorID, ordinary in real plugin
-    // data, so an ORDER BY with no tiebreak lets DuckDB place tied rows either side of a LIMIT
-    // boundary.
-    [Fact]
-    public void GetInteriorCells_PagesCellsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
-    {
-        var total = 0;
-        using var fixture = new PluginFixtureBuilder("placement-dup-cells")
-            .WithPlugin("DupCells.esp", mod =>
-            {
-                var intSub = new CellSubBlock { BlockNumber = 0 };
-                for (var i = 0; i < 3; i++)
-                    intSub.Cells.Add(new Cell(mod) { EditorID = "DupCell" });
-                for (var i = 0; i < 2; i++)
-                    intSub.Cells.Add(new Cell(mod)); // blank EditorID
-                intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellA" });
-                intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellB" });
-                var intBlock = new CellBlock { BlockNumber = 0 };
-                intBlock.SubBlocks.Add(intSub);
-                mod.Cells.Records.Add(intBlock);
-                total = intSub.Cells.Count;
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
-        var plugin = new PluginAddress("DupCells.esp", "Data");
-
-        var full = reads.GetInteriorCells(plugin, 100, 0);
-        Assert.Equal(total, full.Total);
-        var expected = full.Items.Select(i => i.FormKey).ToList();
-
-        List<string> WalkAllPages()
-        {
-            var seen = new List<string>();
-            for (var offset = 0; offset < full.Total; offset += 2)
-            {
-                var page = reads.GetInteriorCells(plugin, 2, offset);
-                seen.AddRange(page.Items.Select(i => i.FormKey));
-            }
-            return seen;
-        }
-
-        var firstWalk = WalkAllPages();
-        var secondWalk = WalkAllPages();
-
-        Assert.Equal(expected, firstWalk);
-        Assert.Equal(firstWalk, secondWalk);
     }
 }

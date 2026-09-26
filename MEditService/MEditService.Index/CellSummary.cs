@@ -6,4 +6,4 @@ namespace MEditService.Index;
 public record CellSummary(
     string FormKey, string? EditorId, int? CellX, int? CellY,
     bool IsPersistentWorldspaceCell = false, string? FullName = null, bool HasParseFailure = false,
-    string? ParseDiagnosis = null);
+    string? ParseDiagnosis = null, bool HasChildren = false);

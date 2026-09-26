@@ -62,7 +62,7 @@ public static class WorldspaceEndpoints
         .Produces<CellReferences>()
         .ProducesProblem(500);
 
-        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc, int limit = 50, int offset = 0) =>
+        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -71,7 +71,7 @@ public static class WorldspaceEndpoints
             var decoded = Uri.UnescapeDataString(plugin);
             try
             {
-                return Results.Ok(svc.GetInteriorCells(decoded, limit, offset, origin));
+                return Results.Ok(svc.GetInteriorCells(decoded, origin));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -81,7 +81,7 @@ public static class WorldspaceEndpoints
         })
         .WithName("GetInteriorCells")
         .WithTags("Worldspaces")
-        .Produces<PagedResult<CellSummary>>()
+        .Produces<IReadOnlyList<InteriorCellBlock>>()
         .ProducesProblem(500);
 
         return app;

@@ -46,11 +46,11 @@ public class ContainerChildQueryServiceTests
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int l, int o) => new([], 0);
+        public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
+        public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
         public CellReferences GetCellReferences(PluginAddress plugin, string fk) => new([], []);
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
@@ -77,10 +77,9 @@ public class ContainerChildQueryServiceTests
     private static RegisteredPlugin Plugin(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
-    // Mixed rows come back Topics, then Branches, then Scenes (xEdit's DIAL, DLBR, SCEN order), never
-    // the raw table's alphabetical ORDER BY, which would put the branch before either topic.
+    // The index answers in FormID order, whatever the children's types, and hydration keeps it.
     [Fact]
-    public void GetChildren_Quest_OrdersTopicsThenBranchesThenScenes()
+    public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
         var reader = new StubReader(
             [
@@ -104,9 +103,9 @@ public class ContainerChildQueryServiceTests
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
         Assert.Equal(
-            ["dial1:M.esp", "dial2:M.esp", "dlbr1:M.esp", "scen1:M.esp"],
+            ["dlbr1:M.esp", "dial2:M.esp", "scen1:M.esp", "dial1:M.esp"],
             result.Select(r => r.FormKey).ToArray());
-        Assert.Equal(["dial", "dial", "dlbr", "scen"], result.Select(r => r.RecordType).ToArray());
+        Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType).ToArray());
     }
 
     // A returned "dial" child is itself a container the Plugins tree can expand, so its
@@ -136,9 +135,8 @@ public class ContainerChildQueryServiceTests
         Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
     }
 
-    // A Dialog Topic's Responses come back in SlotIndex order, tagged "info".
     [Fact]
-    public void GetChildren_DialogTopic_ReturnsResponsesInSlotOrder_TaggedInfo()
+    public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
     {
         var reader = new StubReader(
             [
@@ -157,7 +155,7 @@ public class ContainerChildQueryServiceTests
 
         var result = svc.GetChildren("M.esp", "dial1:M.esp");
 
-        Assert.Equal(["info1:M.esp", "info2:M.esp"], result.Select(r => r.FormKey).ToArray());
+        Assert.Equal(["info2:M.esp", "info1:M.esp"], result.Select(r => r.FormKey).ToArray());
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
     }
 

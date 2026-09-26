@@ -7,8 +7,8 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type AbsorbOutcome, type BackendStatus, type CellPage, type CellReferences, type CompileResult,
-  type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
+  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileResult,
+  type ContainerChildSummary, type ExternalChangeActionResult, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
@@ -594,14 +594,14 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage> {
+  async getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]> {
     return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
-        params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
         signal,
       });
       this.ensureOk(`getInteriorCells(${plugin})`, response, error);
-      return data ?? { items: [], total: 0 };
+      return data ?? [];
     });
   }
 
