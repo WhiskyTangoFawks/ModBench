@@ -361,7 +361,31 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     provider.refresh();
     await provider.getChildren(typeNode);
 
-    expect(read).toHaveLength(2);
+    const uri = recordResourceUri(record.plugin, 'ModA', record.formKey);
+    expect(read).toEqual([[uri], [uri]]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+  });
+
+  // ADR-0015 invariant 3: a read answered before mEdit's rows changed is not the rows' state now.
+  it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeClient();
+    const { provider, typeNode, read } = await readGroup(repo);
+    let answerStale!: (page: RecordPage) => void;
+    repo.setQueryAnswerOnce('getRecords', new Promise<RecordPage>((resolve) => { answerStale = resolve; }));
+    repo.setQueryAnswer('getRecords', { items: [{ ...record, workingTreeState: 'Modified' }], total: 1 });
+
+    const inFlight = provider.getChildren(typeNode);
+    provider.refresh();
+    answerStale({ items: [record], total: 1 });
+    await inFlight;
+
+    expect(read).toEqual([]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBeUndefined();
+
+    await provider.getChildren(typeNode);
+
+    expect(read).toEqual([[recordResourceUri(record.plugin, 'ModA', record.formKey)]]);
     expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
   });
 
