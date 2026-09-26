@@ -127,7 +127,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
         using var fixture = ZebraBeforeApple();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0, GroupOnly: true));
 
         Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
     }
