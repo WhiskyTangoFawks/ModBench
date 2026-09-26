@@ -5,7 +5,7 @@ The decisions the pictures draw are
 [ADR-0014](../adr/0014-modules-are-layered-and-call-adjacent-layers-through-ports.md) (the
 layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)
 (how a change flows) and [ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)
-(what crosses between the two processes); this file says how to read the pictures.
+(the load order the file layer hands the record layer); this file says how to read the pictures.
 
 ## The set
 
@@ -65,8 +65,7 @@ Modbench are the same signal in both
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
 draws that signal on its own, because there is no separate path: it is the watch that opens
 [load-instance](traces/load-instance.d2) and [index-load-order](traces/index-load-order.d2), and the
-settle that opens decompile-plugin's trigger. The two meet at one
-value, the load order snapshot, and one stream. mEdit is always running, so no view has a mode
+settle that opens decompile-plugin's trigger. mEdit is always running, so no view has a mode
 for its absence; a disconnect is an error the views surface.
 
 ## Rules the Modbench column draws
