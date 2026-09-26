@@ -70,7 +70,8 @@ public sealed class RecordQueryService(
             resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         }
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset);
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
+            GroupOnly: search is null);
         return reads.Search(query);
     }
 

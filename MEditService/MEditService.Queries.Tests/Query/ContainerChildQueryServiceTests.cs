@@ -77,7 +77,6 @@ public class ContainerChildQueryServiceTests
     private static RegisteredPlugin Plugin(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
-    // The index answers in FormID order, whatever the children's types, and hydration keeps it.
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {
