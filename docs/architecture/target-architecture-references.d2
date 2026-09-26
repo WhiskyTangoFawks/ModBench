@@ -32,7 +32,7 @@ medit_driven.pluginadapter -> medit_data.plugin {class: store}
 # the wire between the processes
 medit_drivers.panel -> medit_driving.http {class: outside}
 medit_drivers.scripts -> medit_driving.http {class: outside}
-modbench_core.client -> medit_driving.http {class: outside}
+modbench_driven.client -> medit_driving.http {class: outside}
 medit_drivers.panel -> modbench_kernel.wire {class: ref}
 
 # Modbench: views (a view's kernel reads are drawn)
@@ -41,8 +41,8 @@ modbench_driving.toolbox -> modbench_driven.instanceloader {class: ref}
 modbench_driving.mods -> modbench_driven.instanceloader {class: ref}
 modbench_driving.plugins -> modbench_driven.instanceloader {class: ref}
 modbench_driving.downloads -> modbench_driven.instanceloader {class: ref}
-modbench_driving.editor -> modbench_core.client {class: ref}
-modbench_driving.plugins -> modbench_core.client {class: ref}
+modbench_driving.editor -> modbench_driven.client {class: ref}
+modbench_driving.plugins -> modbench_driven.client {class: ref}
 modbench_driving.mods -> modbench_core.modlist {class: ref}
 modbench_driving.plugins -> modbench_core.pluginscommands {class: ref}
 modbench_driving.toolbox -> modbench_core.instancecommands {class: ref}
@@ -61,9 +61,9 @@ modbench_driving.editor -> modbench_kernel.wire {class: ref}
 modbench_core.modlist -> modbench_driven.instanceloader {class: ref}
 modbench_core.pluginscommands -> modbench_driven.instanceloader {class: ref}
 modbench_core.deploy -> modbench_driven.instanceloader {class: ref}
-modbench_core.pluginscommands -> modbench_core.client {class: ref}
+modbench_core.pluginscommands -> modbench_driven.client {class: ref}
 modbench_core.instancecommands -> modbench_driven.instanceloader {class: ref}
-modbench_core.instancecommands -> modbench_core.client {class: ref}
+modbench_core.instancecommands -> modbench_driven.client {class: ref}
 modbench_core.modlist -> modbench_driven.instanceadapter {class: ref}
 modbench_core.pluginscommands -> modbench_driven.instanceadapter {class: ref}
 modbench_core.instancecommands -> modbench_driven.instanceadapter {class: ref}

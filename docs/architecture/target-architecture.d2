@@ -45,7 +45,6 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a download's\nrecord" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nsource/; the installed mark on the downloaded file" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the winners as an argument\nhides: the rules that refuse a deploy" {class: core}
-  client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
@@ -76,6 +75,7 @@ modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the on
   instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every MO2-side watcher; the debounce; which file wins\neach path; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
   instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files; changes: the lines to flip, move, add or\ndrop, a download's record, a mod's meta, the selected profile; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
   deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
+  client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
 
 medit_data: "MEDIT · Systems of record" {

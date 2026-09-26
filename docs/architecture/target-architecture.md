@@ -48,10 +48,9 @@ A box is a project. Its reference list is the arrows that leave it in the refere
 a Core box or a driven adapter, every box of its column's kernel by the band's rule; a driving
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
-Every arrow points down or into the kernel, with five same-band references the captions name: the
-record index reads the two adapters beside it, Ports reads Load order state, the Instance loader reads the Instance
-adapter, plugins commands ask the mEdit client which plugins load implicitly, and instance commands
-hand the mEdit client the load order and ask it to rebuild. A composition root, the HTTP endpoints
+Every arrow points down or into the kernel, with three same-band references the captions name: the
+record index reads the two adapters beside it, Ports reads Load order state, and the Instance loader
+reads the Instance adapter. A composition root, the HTTP endpoints
 on mEdit and the activation file on Modbench, references every box below it by definition.
 A reference the reference view does not draw is a compile error and a question for the
 maintainer, never a line an agent adds.
