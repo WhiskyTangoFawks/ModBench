@@ -22,8 +22,8 @@ public class CompoundPluginIdentityTests
     {
         FormKey key = default;
         var fixture = new PluginFixtureBuilder(prefix)
-            .WithPlugin("Shared.esp", mod => key = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB"), origin: "ModB", enabled: modBEnabled)
+            .WithPlugin("Shared.esp", mod => key = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
             .BuildScattered();
         npcKey = key;
         return fixture with

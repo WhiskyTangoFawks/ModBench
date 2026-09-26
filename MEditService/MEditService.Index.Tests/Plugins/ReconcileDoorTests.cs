@@ -57,6 +57,25 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
+    [Fact]
+    public void ALoadOrderNamingTwoWinnersOfOneFilename_IsAnsweredAsFailed_NamingBoth()
+    {
+        using var fx = new PluginFixtureBuilder("two-winners-door")
+            .WithPlugin("Shared.esp", origin: "ModA")
+            .WithPlugin("Shared.esp", origin: "ModB")
+            .BuildScattered();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        var plugins = fx.Plugins.Select(p => p with { Winning = true }).ToList();
+
+        index.Reconcile(holder, fx.GameDirectory, plugins, GameRelease.Fallout4);
+
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        Assert.Contains("Shared.esp", index.Status.Message, StringComparison.Ordinal);
+        Assert.Contains("ModA", index.Status.Message, StringComparison.Ordinal);
+        Assert.Contains("ModB", index.Status.Message, StringComparison.Ordinal);
+    }
+
     // A superseded reconcile is ordinary (a watcher firing mid-load): never an escaped exception,
     // never mistaken for the held-elsewhere refusal, and the survivor finishes Ready for its version.
     [Fact]

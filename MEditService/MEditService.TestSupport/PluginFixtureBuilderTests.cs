@@ -31,6 +31,23 @@ public class PluginFixtureBuilderTests
     }
 
     [Fact]
+    public void BuildScattered_TwoCopiesOfAFilename_TheLaterModWins_AndTheOtherLoadsInItsSlot()
+    {
+        using var data = new PluginFixtureBuilder()
+            .WithPlugin("Shared.esp", origin: "ModA")
+            .WithPlugin("Other.esp", origin: "OtherMod")
+            .WithPlugin("Shared.esp", origin: "ModB")
+            .BuildScattered();
+
+        var overridden = data.Plugins.Single(p => p.Origin == "ModA");
+        var winner = data.Plugins.Single(p => p.Origin == "ModB");
+        Assert.True(winner.Winning);
+        Assert.False(overridden.Winning);
+        Assert.Equal(winner.Slot, overridden.Slot);
+        Assert.True(data.Plugins.Single(p => p.Origin == "OtherMod").Winning);
+    }
+
+    [Fact]
     public void Build_UnlistedPlugin_IsNotInTheLoadOrder()
     {
         using var data = new PluginFixtureBuilder()
