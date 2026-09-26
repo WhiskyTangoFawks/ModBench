@@ -65,12 +65,12 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
   return client;
 }
 
+type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
+
 // decompile-plugin.md's preset table, in the QuickPick items' own words (plugins.md, Pickers,
 // Track: "each with a line saying what it keeps").
-const EDITS_ITEM = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
-const EVERYTHING_ITEM = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
-
-type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
+const EDITS_ITEM: PresetItem = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EVERYTHING_ITEM: PresetItem = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 
 // Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
 // directly, matching DownloadsPanel.test.ts's own fake.
