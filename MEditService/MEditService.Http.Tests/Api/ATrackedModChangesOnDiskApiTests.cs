@@ -25,11 +25,16 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     private const string DeletedAsset = "Meshes/Gone.nif";
 
     // A safety bound against a hang, never the proof: the proof is the settle line itself.
-    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(30);
+
+    // ModFolderWatcher's own quiet-window default (Program.cs overrides neither): the delay
+    // AwaitLiveSettle fires directly rather than waiting out for real.
+    private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(300);
 
     private readonly List<LogEntry> _logs = [];
+    private readonly ObservingClock _clock = new(Quiet);
 
-    protected override MEditHost CreateHost() => new(_logs);
+    protected override MEditHost CreateHost() => new(_logs, _clock);
 
     // Where the log stands right now: a caller takes this before the write under test, so the
     // settle it later awaits is one this write produced, never one an earlier step already logged.
@@ -38,25 +43,40 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         lock (_logs) return _logs.Count;
     }
 
-    // The watcher's own settle completion (ModFolderWatcher, Debug) logged no earlier than
-    // <paramref name="since"/>: the module's one signal that a classification — and any question it
-    // would have opened — is now final for this mod folder.
-    private async Task<bool> AwaitSettleLine(string modFolder, int since, TimeSpan timeout)
+    private static async Task<bool> Reached(Func<bool> condition, TimeSpan timeout)
     {
         var elapsed = Stopwatch.StartNew();
         while (elapsed.Elapsed < timeout)
         {
-            lock (_logs)
-            {
-                if (_logs.Skip(since).Any(l =>
-                    l.Message.Contains(modFolder, StringComparison.Ordinal)
-                    && (l.Message.Contains("Live settle of", StringComparison.Ordinal)
-                        || l.Message.Contains("Load-time settle of", StringComparison.Ordinal))))
-                    return true;
-            }
+            if (condition()) return true;
             await Task.Delay(20);
         }
-        return false;
+        return condition();
+    }
+
+    // The watcher's own settle completion (ModFolderWatcher, Debug) logged no earlier than
+    // <paramref name="since"/>: the module's one signal that a classification — and any question it
+    // would have opened — is now final for this mod folder.
+    private Task<bool> AwaitSettleLine(string modFolder, int since, TimeSpan timeout) =>
+        Reached(() =>
+        {
+            lock (_logs)
+            {
+                return _logs.Skip(since).Any(l =>
+                    l.Message.Contains(modFolder, StringComparison.Ordinal)
+                    && (l.Message.Contains("Live settle of", StringComparison.Ordinal)
+                        || l.Message.Contains("Load-time settle of", StringComparison.Ordinal)));
+            }
+        }, timeout);
+
+    // Waits for the write to arm the watch's quiet window (a real signal), then fires that window
+    // directly: the debounce delay never has to survive real load, only the OS delivery and the
+    // settle's own processing still do.
+    private async Task<bool> AwaitLiveSettle(string modFolder, int since, int observedBefore)
+    {
+        if (!await Reached(() => _clock.Observations > observedBefore, SettleTimeout)) return false;
+        _clock.FireArmedQuietWindowNow();
+        return await AwaitSettleLine(modFolder, since, SettleTimeout);
     }
 
     private int _markers;
@@ -244,9 +264,10 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
         var since = LogMark();
+        var observedBefore = _clock.Observations;
         OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "changed-by-the-release");
 
-        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        Assert.True(await AwaitLiveSettle(modFolder, since, observedBefore), "never saw the watcher's settle line");
         var frames = await FramesThroughAMarkerPut(stream, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
@@ -262,9 +283,10 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
 
         var since = LogMark();
+        var observedBefore = _clock.Observations;
         OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
-        Assert.True(await AwaitSettleLine(modFolder, since, SettleTimeout), "never saw the watcher's settle line");
+        Assert.True(await AwaitLiveSettle(modFolder, since, observedBefore), "never saw the watcher's settle line");
         var frames = await FramesThroughAMarkerPut(stream, fx);
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
