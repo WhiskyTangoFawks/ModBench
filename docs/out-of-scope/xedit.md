@@ -39,7 +39,7 @@ Gestures Modbench does differently.
 | 13 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
 | 14 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
 | 15 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
-| 16 | Sorted arrays | Kept in the order they have; an array without a key aligns by its values in sequence, and every array takes add, remove and move | Sorts `wbArrayS` arrays on save and aligns them by value, with no move | Ruling: the game does not need the order, so sorting is xEdit's tidy-up, and *Minimal by default* ranks above *Reference behaviour*. |
+| 16 | Sorted arrays | Kept in the order they have; an array without a key aligns by its values in sequence, and every array takes add, remove and move | Sorts `wbArrayS` arrays on save and aligns them by value, with no move | Ruling: the game does not need the order, so sorting is xEdit's habit reaching into the data, and Mutagen decides the data. |
 
 ## Omissions by object
 
