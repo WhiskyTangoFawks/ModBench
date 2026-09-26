@@ -56,7 +56,7 @@ tracker holds no standing bug/tech-debt backlog (`docs/agents/issue-tracker.md`)
 |---|---|
 | **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it |
 | **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev (interactive) or the advisor (orchestrated); verdict is fix / reject / report |
-| **Report** | real, of settled value, but needs its own design or plan, or touches surface outside this branch → state it in the session summary (finding + analysis + recommendation); the maintainer decides whether it enters the grill → `/to-spec` pipeline |
+| **Report** | real, of settled value, but needs its own design or plan, or touches surface outside this branch → state it in the session summary (finding + analysis + recommendation); the maintainer decides whether it enters the grill → `/to-epic` pipeline |
 | **Reject** | not real → note why |
 
 Rerun the gates if any fix changed logic.

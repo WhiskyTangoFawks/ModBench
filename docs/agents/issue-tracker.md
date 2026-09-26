@@ -6,21 +6,23 @@ Issues live as GitHub issues. Use `gh` for all operations.
 
 Three kinds of open issue, nothing else:
 
-- **PRD** (`prd` label) — one full spec per feature, minted only by the maintainer's
-  grill → `/to-spec` pipeline. Always assigned to a release milestone. Future tense;
-  spent when its slices ship. The surface specs and traces it changes are written
-  before its slices are built, never updated afterwards to match them.
-- **Implementation ticket** — a slice of a PRD, minted by `/to-tickets` run against
-  that PRD; carries a Parent reference to it and native blocked-by edges. No
+- **Epic** (`epic` label) — the bounded scope of one batch of work, drawn as pointers
+  into the specs, minted only by the maintainer's grill → `/to-epic` pipeline. Always
+  assigned to a release milestone. Future tense; spent when its slices ship. The specs
+  it points at are written before its slices are built, never updated afterwards to
+  match them.
+- **Implementation ticket** — a slice of an epic, minted by `/to-tickets` run against
+  that epic; a native sub-issue of it, pointing at the spec lines it makes true, with
+  native blocked-by edges. No
   parentless implementation tickets.
-- **`speculative`** — proto-PRD parked during the 2026-09 backlog migration; a
-  grilling session turns it into a PRD or discards it. Migration-era stock only:
+- **`speculative`** — proto-epic parked during the 2026-09 backlog migration; a
+  grilling session turns it into an epic or discards it. Migration-era stock only:
   nothing new gets this label.
 
 **Agents never create bug or tech-debt issues — the tracker holds no standing
 bug/tech-debt backlog.** A finding met mid-task is fixed in the same session,
 reported to the maintainer in the session summary, or dropped. Only the maintainer
-escalates a finding into tracked work, through grill → `/to-spec` → `/to-tickets`.
+escalates a finding into tracked work, through grill → `/to-epic` → `/to-tickets`.
 The `bug`/`tech debt` tickets still open on `1 — Alpha` are grandfathered
 legacy-orchestrate stock, burning down to zero — a closed set, never added to.
 
@@ -90,7 +92,7 @@ Issues/PRs share one number space — a bare number may be either; try `gh pr vi
 
 ## When a skill says "publish to the issue tracker"
 
-Only `/to-spec` (a PRD) and `/to-tickets` (implementation tickets) publish — both run
+Only `/to-epic` (an epic) and `/to-tickets` (implementation tickets) publish — both run
 by the maintainer. Any other skill's instruction to file an issue is overridden by
 this repo's no-standing-backlog policy above: report the finding to the maintainer
 instead.
