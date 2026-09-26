@@ -28,10 +28,12 @@ bad binary, and compiling again rebuilds it.
 4. Commands derives what the format forces: the masters from the content, in load order
    (ADR-0008), and the header's counters (ADR-0007, invariant 4). A light plugin's records must
    fit the light range.
-5. Commands marks in the mod's repository that a compile has begun.
-6. The Plugin adapter writes the binary, and a localized plugin's strings beside it.
-7. Commands records the compiled tree and the new binary's hash as what Modbench last wrote
-   (ADR-0003, invariant 1). It then clears the mark.
+5. Commands records the compiled tree and the new binary's hash as what Modbench last wrote
+   (ADR-0003, invariant 1).
+6. The Plugin adapter writes the binary, whole or not at all, and a localized plugin's strings
+   beside it.
+7. Until the next compile, the record before this one also counts as what Modbench last wrote, so
+   either binary an interrupted compile leaves is Modbench's own.
 8. Commands checks the references. A reference it cannot resolve is a diagnostic, never a refusal
    (ADR-0007, invariant 4).
 9. Commands answers per plugin: applied, with the masters and the diagnostics, or the refusal.
@@ -63,19 +65,18 @@ Commands refuses before any write, and names the cause.
 
 - **A failed write** says so, and names the plugin. The source is untouched, so compiling again
   rebuilds the binary.
-- **An interrupted compile** leaves the mark from step 5. The next settle or load-time check finds
-  it, and Commands publishes a warning through Ports, naming the plugin: its binary is bad, and
-  compiling again rebuilds it. No question opens, and nothing is refused.
+- **An interrupted compile** leaves the old binary or the new one, and each is what Modbench last
+  wrote (step 7), so no question opens. Compiling again builds the binary.
 
 Exceptions to the principles:
 
-- **A failed gesture writes nothing.** A failed or interrupted compile can leave a bad binary. The
-  source, which is the truth, is untouched.
+- **A failed gesture writes nothing.** An interrupted compile can leave a localized plugin's strings
+  written without its binary. The source, which is the truth, is untouched.
 
 ## Test seam
 
 - **Commands:** given the plugin, the source and the repository, the binary's records, header,
   masters and strings, what Modbench last wrote, and the diagnostics; or the refusal and nothing
   written.
-- **Commands, at a settle:** given the bytes a compile wrote, no question. Given the mark from an
-  interrupted compile, the warning and no question.
+- **Commands, at a settle:** given the bytes a compile wrote, or the binary before them, no
+  question.

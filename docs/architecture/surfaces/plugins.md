@@ -238,9 +238,7 @@ As a user, I want:
    truth and the plugin a projection of it, so compile destroys nothing. *ruling*
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
-3. A warning when a compile did not finish, naming the plugin and saying to compile it again.
-   *compile-plugin, Failure*
-4. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
+3. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
 
 ### Create record
 
