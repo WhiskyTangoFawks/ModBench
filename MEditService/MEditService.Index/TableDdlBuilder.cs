@@ -226,12 +226,14 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // ADR-0013: replaced whole by each sweep, never diffed — the load order value decides who is in
     // it, and this table only remembers the answer for the re-sweeps a working-tree write triggers.
+    // is_light is the file's own flag, which places its FormIDs after every full plugin's.
     private static void CreateParticipatingTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {ParticipatingRelation} (
                 plugin VARCHAR NOT NULL,
                 origin VARCHAR NOT NULL,
                 load_order_idx INTEGER NOT NULL,
+                is_light BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);

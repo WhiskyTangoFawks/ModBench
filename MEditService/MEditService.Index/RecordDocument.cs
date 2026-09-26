@@ -36,14 +36,16 @@ public record OverrideStackEntry(
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
 /// <summary>A <c>Search</c> term's matches list by EditorID, and a listing without one in FormID
-/// order. <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
+/// order. <c>GroupOnly</c> lists what a group shows: no record another record holds.
+/// <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
     string? Origin = null,
     string? Search = null,
     int Limit = 50,
-    int Offset = 0);
+    int Offset = 0,
+    bool GroupOnly = false);
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
 public record RecordTypeCount(string Type, int Count, bool HasParseFailure);

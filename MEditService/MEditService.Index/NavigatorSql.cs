@@ -35,17 +35,18 @@ internal static class NavigatorSql
             WHERE held.child = {alias}.form_key AND held.plugin = {alias}.plugin AND held.origin = {alias}.origin)
         """;
 
-    /// <summary>A FormID is the load position of the FormKey's plugin, then its ID; a light plugin's
-    /// FormIDs take the FE prefix, so they follow every full plugin's.</summary>
-    internal static string FormIdOrder(string formKey, IEnumerable<string> lightPlugins)
+    /// <summary>A FormID is the load position of the plugin the game loads under the FormKey's
+    /// filename, then its ID; a light plugin's FormIDs take the FE prefix, so they follow every full
+    /// plugin's.</summary>
+    internal static string FormIdOrder(string formKey)
     {
-        var plugin = $"lower(split_part({formKey}, ':', 2))";
-        var lights = string.Join(", ", lightPlugins.Select(name => $"'{name.ToLowerInvariant().Replace("'", "''", StringComparison.Ordinal)}'"));
-        var lightLast = lights.Length == 0 ? "" : $"{plugin} IN ({lights}), ";
+        var loaded = $"""
+            FROM {TableDdlBuilder.ParticipatingRelation} fo WHERE lower(fo.plugin) = lower(split_part({formKey}, ':', 2))
+            ORDER BY fo.load_order_idx DESC, fo.origin LIMIT 1
+            """;
         return $"""
-            {lightLast}(SELECT MIN(fo.load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} fo
-             WHERE lower(fo.plugin) = {plugin}) NULLS LAST,
-            {plugin}, split_part({formKey}, ':', 1)
+            (SELECT fo.is_light {loaded}) NULLS LAST, (SELECT fo.load_order_idx {loaded}) NULLS LAST,
+            lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)
             """;
     }
 }
