@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 
 function pluginNode(name = 'MyMod.esp'): PluginNode {
-  return new PluginNode({ name, enabled: true });
+  return new PluginNode({ name, enabled: true }, 'ModA');
 }
 
 function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
@@ -107,7 +107,7 @@ describe('registerTrackCommand', () => {
     const reporter = recordingReporter();
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
-    registerTrackCommand(progress, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked, viewSelection);
+    registerTrackCommand(progress, client, reporter, treeProvider, onTracked, viewSelection);
     return {
       handler: present(handlers.get('modbench.plugin.track'), 'the track command registerTrackCommand registers'),
       onTracked, reporter, refresh, said,
@@ -184,22 +184,6 @@ describe('registerTrackCommand', () => {
     expect(reporter.landings).toEqual([]);
     expect(refresh).not.toHaveBeenCalled();
     expect(onTracked).not.toHaveBeenCalled();
-  });
-
-  it('refuses a plugin whose mod cannot be resolved, naming it, and never opens the preset pick', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', []);
-    const { handler, reporter } = invokeTrack(client);
-
-    await handler(pluginNode());
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not track 1 of 1 plugins.', detail: '"MyMod.esp" (its mod could not be resolved)' },
-    ]);
-    // ADR-0012: the row's own identity, with no origin invented for it.
-    expect(reporter.selectionOutcomeCalls.map((call) => call.outcome.refused.map((r) => r.item))).toEqual([[{ name: 'MyMod.esp' }]]);
-    expect(createQuickPick).not.toHaveBeenCalled();
-    expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
   });
 
   // The palette hands the command no row: it falls back to the view's own selection, the same

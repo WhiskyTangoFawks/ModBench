@@ -11,7 +11,7 @@ import {
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import { compilableSelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
@@ -30,12 +30,9 @@ export interface PluginsViewProgress {
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'compile' | 'editRecord'>;
 
-// ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
-// mod cannot be resolved has none, and none is invented for it.
-type TrackedRow = { name: string; origin?: string };
-
-function rowName(row: TrackedRow): string {
-  return row.origin ? `${row.name} (${row.origin})` : row.name;
+// ADR-0012: the origin tells two plugins that share a filename apart.
+function rowName(row: PluginAddress): string {
+  return `${row.name} (${row.origin})`;
 }
 
 type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
@@ -72,7 +69,7 @@ function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined>
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
-  progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
+  progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
   reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
@@ -82,19 +79,12 @@ export function registerTrackCommand(
     const nodes = pluralArgument(entry, 'plugin');
     if (nodes.length === 0) return;
 
-    const addressed: PluginAddress[] = [];
-    const unaddressed: ItemRefusal<TrackedRow>[] = [];
-    for (const node of nodes) {
-      const name = node.plugin.name;
-      const origin = node.origin ?? await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-      if (origin) addressed.push({ name, origin });
-      else unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
-    }
-    const report = (outcome: SelectionOutcome<TrackedRow>) => {
+    const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
+    const report = (outcome: SelectionOutcome<PluginAddress>) => {
       reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
     };
     const [first] = addressed;
-    if (!first) { report({ landed: [], refused: unaddressed }); return; }
+    if (!first) return;
 
     const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
     if (!choice) return;
@@ -105,7 +95,7 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      const outcome = { landed: result.landed, refused: [...unaddressed, ...result.refused] };
+      const outcome = result;
       if (outcome.landed.length > 0) {
         // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
         // menu entry's opposite. Not the filter-match set: tracking changes no record.

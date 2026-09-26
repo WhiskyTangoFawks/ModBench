@@ -54,8 +54,8 @@ public sealed class VmadCompareTests
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, Masters: [], RecordCount: 2),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, Masters: ["Base.esm"], RecordCount: 2),
+            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 2),
+            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 2),
         };
         var plugins = new[]
         {

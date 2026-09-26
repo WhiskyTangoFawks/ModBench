@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import {
+  ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode, type SortDirection,
+} from './PluginsTreeProvider';
 import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
@@ -11,6 +13,21 @@ import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDe
 import { appendPlugin } from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
+
+/** The Plugins view's direction writes no file, so it lives with the view it flips. It starts
+ *  losing at the top on each activation, and the context key, which outlives an extension host
+ *  restart, is told so. */
+export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider, 'setViewDirection'>): vscode.Disposable[] {
+  const show = (direction: SortDirection) => {
+    pluginsTree.setViewDirection(direction);
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', direction === 'winningAtTop');
+  };
+  void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', false);
+  return [
+    vscode.commands.registerCommand('modbench.plugin.sortWinningAtTop', () => show('winningAtTop')),
+    vscode.commands.registerCommand('modbench.plugin.sortLosingAtTop', () => show('losingAtTop')),
+  ];
+}
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.

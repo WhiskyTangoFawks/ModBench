@@ -8,6 +8,7 @@ export function pluginMetadataFixture(overrides: Partial<PluginMetadata> & { nam
     loadOrderIndex: 0,
     isLight: false,
     isMaster: false,
+    isBlueprint: false,
     masters: [],
     recordCount: 0,
     isImmutable: false,

@@ -44,9 +44,9 @@ beforeEach(() => {
 
 describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection, one command per direction', () => {
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
-  const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false });
-  const beta = new PluginNode({ name: 'Beta.esp', enabled: true });
-  const locked = new ImplicitMasterNode('Fallout4.esm');
+  const alpha = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
+  const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'SomeMod');
+  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
 
   it('enable applies to every selected plugin, whatever its own current state', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } });

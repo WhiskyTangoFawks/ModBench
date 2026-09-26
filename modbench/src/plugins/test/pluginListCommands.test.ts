@@ -27,7 +27,9 @@ vi.mock('vscode', () => ({
 
 vi.mock('../../pluginsCommands/plugins', () => ({ appendPlugin: vi.fn() }));
 
-import { pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand } from '../pluginListCommands';
+import {
+  pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
+} from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
@@ -135,7 +137,7 @@ describe('registerRevealInExplorerCommand', () => {
   function invoke(resolvePluginPath: (name: string) => Promise<string | undefined>, viewSelection: readonly PluginsTreeNode[] = []) {
     const reporter = recordingReporter();
     registerRevealInExplorerCommand(
-      { resolvePluginPath: (row) => resolvePluginPath(pluginFileOf(row) ?? '') }, reporter, () => viewSelection);
+      { resolvePluginPath: (row) => resolvePluginPath(pluginFileOf(row)) }, reporter, () => viewSelection);
     return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
   }
 
@@ -143,7 +145,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('reveals a locked row\'s file from the row the tree resolves it to', async () => {
     const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`));
 
-    await run(new ImplicitMasterNode('Fallout4.esm'));
+    await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
 
     expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', { fsPath: '/game/Data/Fallout4.esm' });
   });
@@ -151,7 +153,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('says the game folder was not found when a locked row resolves to no file', async () => {
     const { run, reporter } = invoke(() => Promise.resolve(undefined));
 
-    await run(new ImplicitMasterNode('Fallout4.esm'));
+    await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
 
     expect(reporter.reports).toEqual([{
       severity: 'error', message: 'Could not resolve a file location for "Fallout4.esm" — the game folder was not found.', detail: undefined,
@@ -159,7 +161,7 @@ describe('registerRevealInExplorerCommand', () => {
   });
 
   it('reveals the one selected locked row from the palette', async () => {
-    const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`), [new ImplicitMasterNode('Fallout4.esm')]);
+    const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`), [new ImplicitMasterNode('Fallout4.esm', 'Data')]);
 
     await run();
 
@@ -169,7 +171,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('reveals the resolved file in the OS explorer and says nothing', async () => {
     const { run, reporter } = invoke(() => Promise.resolve('/instance/mods/MyMod/MyMod.esp'));
 
-    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }));
+    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod'));
 
     expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', { fsPath: '/instance/mods/MyMod/MyMod.esp' });
     expect(reporter.reports).toEqual([]);
@@ -179,7 +181,7 @@ describe('registerRevealInExplorerCommand', () => {
   it('reports an unresolved file location at error, naming why, rather than doing nothing', async () => {
     const { run, reporter } = invoke(() => Promise.resolve(undefined));
 
-    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }));
+    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod'));
 
     expect(reporter.reports).toEqual([
       {
@@ -194,7 +196,7 @@ describe('registerRevealInExplorerCommand', () => {
   // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
   it('reveals the one selected plugin from the palette', async () => {
     const { run } = invoke(
-      (name) => Promise.resolve(`/instance/mods/MyMod/${name}`), [new PluginNode({ name: 'Selected.esp', enabled: true })]);
+      (name) => Promise.resolve(`/instance/mods/MyMod/${name}`), [new PluginNode({ name: 'Selected.esp', enabled: true }, 'SomeMod')]);
 
     await run();
 
@@ -203,7 +205,7 @@ describe('registerRevealInExplorerCommand', () => {
 
   it('reveals nothing from the palette over a selection of several plugins', async () => {
     const { run } = invoke(() => Promise.resolve('/instance/mods/MyMod/MyMod.esp'), [
-      new PluginNode({ name: 'A.esp', enabled: true }), new PluginNode({ name: 'B.esp', enabled: true }),
+      new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod'), new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'),
     ]);
 
     await run();
@@ -215,7 +217,7 @@ describe('registerRevealInExplorerCommand', () => {
     executeCommand.mockRejectedValue(new Error('no file manager'));
     const { run, reporter } = invoke(() => Promise.resolve('/instance/mods/MyMod/MyMod.esp'));
 
-    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }));
+    await run(new PluginNode({ name: 'MyMod.esp', enabled: true }, 'SomeMod'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to reveal "MyMod.esp" in Explorer.', detail: 'no file manager' },
@@ -227,7 +229,7 @@ describe('registerRevealInExplorerCommand', () => {
 // each selected record as `EditorID [FormKey]`, or the FormKey alone with no EditorID, one to a line.
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
-  const locked = new ImplicitMasterNode('Fallout4.esm');
+  const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
   const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
   const unnamed = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA');
   const worldspace = new WorldspaceNode('Alpha.esp', { formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true });
@@ -262,5 +264,34 @@ describe('pluginsCopyValueText', () => {
     expect(copy(undefined, undefined)).toBeUndefined();
     expect(copy({ view: 'modbench.modList' }, undefined)).toBeUndefined();
     expect(copy(new TreeItem('a Mods row'), undefined)).toBeUndefined();
+  });
+});
+
+// plugins.md, Order and view state, story 1; common.md, A view, story 4: a lens, not a setting.
+describe('the sort direction', () => {
+  const directionKeys = () => executeCommand.mock.calls
+    .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.plugin.winningAtTop')
+    .map((c) => (c as unknown[])[2]);
+  const run = (command: string) => present(handlers.get(command), command)();
+
+  // A context key outlives an extension host restart; the view's direction does not.
+  it('starts losing at the top, and the title-bar icon agrees', () => {
+    const setViewDirection = vi.fn();
+    registerPluginSortCommands({ setViewDirection });
+
+    expect(setViewDirection).not.toHaveBeenCalled();
+    expect(directionKeys()).toEqual([false]);
+  });
+
+  it('each title-bar icon sets its own direction, whatever the view last showed', async () => {
+    const setViewDirection = vi.fn();
+    registerPluginSortCommands({ setViewDirection });
+
+    await run('modbench.plugin.sortLosingAtTop');
+    await run('modbench.plugin.sortWinningAtTop');
+    await run('modbench.plugin.sortWinningAtTop');
+
+    expect(setViewDirection.mock.calls).toEqual([['losingAtTop'], ['winningAtTop'], ['winningAtTop']]);
+    expect(directionKeys()).toEqual([false, false, true, true]);
   });
 });

@@ -233,6 +233,7 @@ internal sealed class HeldPlugins
             LoadOrderIndex: plugin.Registration.LoadOrderIndex,
             IsLight: content.IsLight,
             IsMaster: content.IsMaster,
+            IsBlueprint: content.IsBlueprint,
             Masters: content.Masters,
             RecordCount: content.RecordCount,
             IsForced: plugin.IsForced,
