@@ -173,7 +173,7 @@ describe('HttpMEditClient — creating a record', () => {
   // to remove the flag and try again.
   it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once', async () => {
     const detail = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { eslContradiction: true, detail })));
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
 
     const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_');

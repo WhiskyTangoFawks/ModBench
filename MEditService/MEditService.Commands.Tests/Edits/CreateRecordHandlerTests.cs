@@ -57,7 +57,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, editorId: null);
 
-        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
     }
 
     [Fact]

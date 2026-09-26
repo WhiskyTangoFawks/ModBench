@@ -47,18 +47,9 @@ export function createTargetOf(arg: unknown): CreateTarget | undefined {
   return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
 }
 
-/** A record create wrote, which the view selects once the watch lists it. */
-export interface CreatedRecord {
-  plugin: string;
-  origin: string;
-  recordType: string;
-  formKey: string;
-}
-
-/** The view create is offered on: its own rows as the Argument, and the row of a new record. */
+/** The view create is offered on: its own rows as the Argument. */
 export interface CreateSurface {
   surfaceTarget(clicked: unknown, selected: readonly unknown[] | undefined): CreateTarget | undefined;
-  selectWhenListed(record: CreatedRecord): void;
 }
 
 // A node's own `origin` when the row already carries it (ADR-0012), else derived from
@@ -152,7 +143,6 @@ export function registerRecordCreateCommand(
     const result = await client.createRecord(target.plugin, origin, recordType);
     if (isRefused(result)) { reporter.report('error', result.message); return; }
     reporter.landed(`Created ${result.formKey}.`);
-    surface.selectWhenListed({ plugin: target.plugin, origin, recordType: result.recordType, formKey: result.formKey });
   });
 }
 

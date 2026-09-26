@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
 
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerRecordCreateCommand, recordIdentity, createTargetOf,
-  type CreatedRecord, type CreateTarget,
+  type CreateTarget,
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
@@ -86,7 +86,7 @@ describe('recordTypeIdentity / recordIdentity — structural, not node-typed', (
 });
 
 // plugins.md, Pickers, Create record: on a group, a record of that type with no prompt; on a
-// plugin, a pick of the record type first. The new record is selected once the watch brings it.
+// plugin, a pick of the record type first.
 describe('registerRecordCreateCommand', () => {
   const NEW_NPC = { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' };
   const CREATABLE = [
@@ -98,13 +98,12 @@ describe('registerRecordCreateCommand', () => {
 
   function invoke(client: InMemoryMEditClient) {
     const reporter = recordingReporter();
-    const selected: CreatedRecord[] = [];
     const surfaceTarget = vi.fn((_clicked: unknown, _selected: readonly unknown[] | undefined) => fromTheView);
     registerRecordCreateCommand(client, new FakeLogOutputChannel(), reporter, {
-      surfaceTarget, selectWhenListed: (record) => { selected.push(record); },
+      surfaceTarget,
     });
     const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-    return { reporter, selected, surfaceTarget, create };
+    return { reporter, surfaceTarget, create };
   }
   const creates = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'createRecord').map(c => c.args);
 
@@ -152,14 +151,13 @@ describe('registerRecordCreateCommand', () => {
     client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
     fromTheView = { plugin: 'MyPatch.esp', origin: 'ModA' };
     showQuickPick.mockResolvedValue(undefined);
-    const { create, reporter, selected } = invoke(client);
+    const { create, reporter } = invoke(client);
 
     await create();
 
     expect(creates(client)).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
-    expect(selected).toEqual([]);
   });
 
   it('says why when mEdit cannot name the types, and creates nothing', async () => {
@@ -186,30 +184,26 @@ describe('registerRecordCreateCommand', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // plugins.md, Create record: the new record is selected once the watch brings it, and the tree
-  // is not refreshed by the gesture (commands.md, A write is forgotten).
-  it('hands the new record to the view to select once listed', async () => {
+  it('lands the new record\'s FormKey', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createRecord', NEW_NPC);
-    const { create, selected, reporter } = invoke(client);
+    const { create, reporter } = invoke(client);
 
     await create(RECORD_TYPE_NODE);
 
-    expect(selected).toEqual([{ plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_', formKey: '000900:MyPatch.esp' }]);
     expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
   });
 
-  it('reports a refusal as mEdit words it, asks nothing, and selects nothing', async () => {
+  it('reports a refusal as mEdit words it and asks nothing', async () => {
     const client = new InMemoryMEditClient();
     const message = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
     client.setCommandResult('createRecord', { refused: true, message });
-    const { create, reporter, selected } = invoke(client);
+    const { create, reporter } = invoke(client);
 
     await create(RECORD_TYPE_NODE);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
-    expect(selected).toEqual([]);
   });
 
   it('reports an unresolvable origin at error and never reaches the backend', async () => {

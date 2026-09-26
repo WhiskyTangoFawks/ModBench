@@ -187,7 +187,6 @@ export function activate(context: vscode.ExtensionContext) {
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       createSurface: {
         surfaceTarget: pluginsCreateTarget(() => session.pluginsTreeView?.selection ?? []),
-        selectWhenListed: (record) => session.selectCreatedRecord?.(record),
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
