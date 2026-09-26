@@ -121,8 +121,8 @@ As a user, I want:
    that state is left alone. *MO2; Doing nothing is not an error*
 4. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for
    separators.
-5. The check box to flip as I click it. If the write fails, it returns to what the disk says, and I
-   am told why. *A write is forgotten; common, Reporting*
+5. The check box to flip as I click it. If the write fails, I am told why, and the box shows what
+   the disk says at its next value or a refresh. *common, Unconfirmed writes, story 6*
 6. A click or double click on a row to do nothing but select it. *catalog: no row click on Mods*
 7. Copy value to copy each selected mod's or separator's name, one to a line. *catalog `copy value`*
 
