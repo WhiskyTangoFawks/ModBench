@@ -27,8 +27,8 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
    child record (ADR-0006, invariant 4).
 4. Commands applies the gesture to the document, as the table below says. The schema decides what
    a field may hold, and Commands adds no rule of its own (ADR-0005).
-5. The Source adapter puts each changed document whole, then forgets it. An EditorID change
-   renames the record's file first.
+5. The Source adapter puts each changed document whole, then forgets it. It names each file from
+   the document's identity and EditorID, and moves it when the name changes.
 6. Commands answers per record: applied, with the new FormKey where there is one, or the refusal.
 
 | Gesture | What changes in the source |

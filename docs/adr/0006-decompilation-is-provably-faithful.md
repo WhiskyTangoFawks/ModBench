@@ -25,9 +25,9 @@ That hand-over only works if the decompilation is provably faithful.
    and hiding it is the diff view's job at render time.
 4. **A container's children live inline in the container's document, and no list carries
    order.** A child has no file; an edit, insert, delete or reorder of one is a hunk in one file.
-   A group's records are files named by identity alone, so an insert or delete is one file and no
-   sibling is ever renamed for another's arrival. The order the binary had is encoding, per
-   invariant 2.
+   A group's records are files named by identity, with the EditorID in front for the reader, so
+   an insert or delete is one file and no sibling is ever renamed for another's arrival. The order
+   the binary had is encoding, per invariant 2.
 5. **Format identity is not stamped; compile failure is the uniform signal.** A format break, a
    hand edit and external corruption produce the same named compile failure and the same remedy,
    re-Track.
