@@ -85,6 +85,10 @@ A prefactor or wide-refactor ticket replaces this section with **Change**: the m
 
 - A reference to each blocking ticket, or "None — can start immediately".
 
+## Notes
+
+What planning found in the code: a known defect, where to look, a parked branch and its SHA. Facts about the code, never what the user sees. Omit the section when there are none.
+
 </issue-template>
 
 Beyond the spec pointers, avoid file paths and code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
