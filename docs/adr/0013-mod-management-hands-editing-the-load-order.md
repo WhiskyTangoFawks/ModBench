@@ -33,10 +33,9 @@ it is handed and never reloads.
 
 ## Derived tactical observations
 
-- The snapshot is what Mod Management already walks for its file order conflict index: every root-level
-  plugin in every enabled mod, `overwrite/`, and the `Data/` plugin of every listed name no mod
-  provides. A disabled mod's plugins are not in it, so enabling a mod is when its plugins first pay
-  their one index.
+- The snapshot is every plugin file on disk: every root-level plugin in every mod, enabled or not,
+  in `overwrite/`, and the game's own plugins in the game folder, never deploy's links. The load
+  order is a filter over it, so enabling a mod re-reads nothing.
 - Opening the record index does not clear the registration rows; they are the last known load
   order, and the snapshot sent on activation corrects them.
 
