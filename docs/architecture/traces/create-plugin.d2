@@ -27,6 +27,7 @@ client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
 pluginadapter -> plugin: bytes, then forget {class: edit}
+pluginadapter -> commands: "written · the folder has gone · the file exists" {class: edit}
 plugin."the same file, in the picked mod's folder or in overwrite/"
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}

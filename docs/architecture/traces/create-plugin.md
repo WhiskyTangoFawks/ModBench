@@ -37,7 +37,8 @@ This flow waits for no hand-off.
 
 ## Refusals
 
-Commands refuses before any write, and names the cause.
+Commands refuses with nothing written, and names the cause. The Plugin adapter answers for the
+folder and the file, because only it touches the disk.
 
 | Refusal | Why |
 |---|---|
