@@ -23,6 +23,11 @@ prompt stands between the user and the work.
 The user's picture of their data is never silently wrong. Nothing is dropped, skipped or repaired
 in silence. A user who trusts a wrong picture makes wrong edits to their modlist.
 
+## Windows and Linux alike
+Every feature works natively on Windows and on Linux. Neither is a port of the other, and neither
+lacks a feature the other has. Where the two differ, as file watching, paths and processes do, the
+difference stays inside the module that meets it.
+
 ## Existing tools
 Where VS Code, git or Mutagen already does a job, Modbench uses it. The user already understands
 VS Code and git, and Mutagen already knows every game's format, so a job they do is one Modbench
