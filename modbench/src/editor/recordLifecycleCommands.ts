@@ -293,7 +293,7 @@ export function registerRecordCopyCommands(
       const into = (item: CopyItem) =>
         `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
       reporter.selectionOutcome(
-        `Could not make ${answer.refused.length} of ${answer.landed.length + answer.refused.length} copies.`,
+        `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
         answer, into);
       reportUnaddressed();
     }),

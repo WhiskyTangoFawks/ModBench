@@ -4,6 +4,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -309,35 +310,75 @@ public sealed class EditRecordTraceTests : HostedTests
         await AssertParseRefusal(response);
     }
 
-    [Theory]
-    [InlineData("Override")]
-    [InlineData("New")]
-    public async Task CopyingTwoRecordsIntoTwoDestinations_WhereOneIsUntracked_LandsTheOthers_AndAnswersPerItem(string mode)
+    [Fact]
+    public async Task CopyingTwoRecordsAsOverrides_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
     {
-        using var fx = new PluginFixtureBuilder("trace-copy-several")
+        using var fx = await TwoRecordsAndTwoDestinations();
+        var records = await NpcFormKeys(Plugin);
+
+        var answer = await Body(await CopyBothIntoBoth(records, "Override"));
+
+        Assert.Equal(
+            [(records[0], OtherPlugin), (records[1], OtherPlugin)],
+            answer.GetProperty("applied").EnumerateArray().Select(CopiedInto).ToArray());
+        Assert.Equal(
+            [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
+            answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
+        Assert.Single(DestinationDocumentsCarrying(fx, records[0]));
+        Assert.Single(DestinationDocumentsCarrying(fx, records[1]));
+    }
+
+    [Fact]
+    public async Task CopyingTwoRecordsAsNew_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
+    {
+        using var fx = await TwoRecordsAndTwoDestinations();
+        var records = await NpcFormKeys(Plugin);
+
+        var answer = await Body(await CopyBothIntoBoth(records, "New"));
+
+        var applied = answer.GetProperty("applied");
+        Assert.Equal(
+            [(records[0], OtherPlugin), (records[1], OtherPlugin)],
+            applied.EnumerateArray().Select(CopiedInto).ToArray());
+        Assert.Equal(
+            [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
+            answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
+        Assert.Single(DestinationDocumentsCarrying(fx, applied[0].GetProperty("newFormKey").GetString().Require()));
+        Assert.Single(DestinationDocumentsCarrying(fx, applied[1].GetProperty("newFormKey").GetString().Require()));
+    }
+
+    private async Task<ScatteredFixtureData> TwoRecordsAndTwoDestinations()
+    {
+        var fx = new PluginFixtureBuilder("trace-copy-several")
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew(Npc); mod.Npcs.AddNew("SecondEditableNpc"); }, origin: Origin)
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
             .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
-        var records = await NpcFormKeys(Plugin);
-
-        var response = await Client.Copy(
-            records.Select(formKey => (formKey, Plugin, Origin)), mode, [(OtherPlugin, OtherOrigin), (UntrackedPlugin, UntrackedOrigin)]);
-
-        response.EnsureSuccessStatusCode();
-        var answer = await Body(response);
-        Assert.Equal(
-            [(records[0], OtherPlugin), (records[1], OtherPlugin)],
-            answer.GetProperty("applied").EnumerateArray().Select(CopiedInto).ToArray());
-        Assert.Equal(
-            [(records[0], UntrackedPlugin), (records[1], UntrackedPlugin)],
-            answer.GetProperty("refused").EnumerateArray().Select(CopiedInto).ToArray());
-        Assert.All(
-            answer.GetProperty("refused").EnumerateArray(),
-            refused => Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString()));
+        return fx;
     }
+
+    private async Task<HttpResponseMessage> CopyBothIntoBoth(string[] records, string mode)
+    {
+        var response = await Client.Copy(
+            [(records[0], Plugin, Origin), (records[1], Plugin, Origin)], mode,
+            [(OtherPlugin, OtherOrigin), (UntrackedPlugin, UntrackedOrigin)]);
+        response.EnsureSuccessStatusCode();
+        return response;
+    }
+
+    // The tracked destination's working tree, read as a file on disk rather than through any answer.
+    private static string[] DestinationDocumentsCarrying(ScatteredFixtureData fx, string formKey) =>
+        [.. Directory.EnumerateFiles(
+                SourceRepository.RootIn(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
+                SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal))];
+
+    private static (string FormKey, string Destination, string Refusal) RefusedFrom(JsonElement item) =>
+        (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
+            item.GetProperty("destination").GetProperty("name").GetString().Require(),
+            item.GetProperty("refusal").GetString().Require());
 
     [Fact]
     public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_IsRefusedNamingIt_WithoutTheReplaceOption()

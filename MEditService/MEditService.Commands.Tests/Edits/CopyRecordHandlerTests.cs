@@ -63,8 +63,7 @@ public sealed class CopyRecordHandlerTests
     {
         using var mod = CopyFixture.Create(trackSource: true);
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-        // Text the codec would respell, so a rewrite of the record over itself shows.
-        File.AppendAllText(mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId), "\n\n");
+        LeaveTextTheCodecWouldRespell(mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId));
         var before = TreeSnapshot.Of(mod.SourceModFolder);
 
         var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.SourcePlugin], replace);
@@ -73,6 +72,8 @@ public sealed class CopyRecordHandlerTests
         Assert.Empty(result.Refused);
         Assert.Equal(before, TreeSnapshot.Of(mod.SourceModFolder));
     }
+
+    private static void LeaveTextTheCodecWouldRespell(string document) => File.AppendAllText(document, "\n\n");
 
     [Fact]
     public void ARecordAndADestinationNamedTwice_AreCopiedOnce()

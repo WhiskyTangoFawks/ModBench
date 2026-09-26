@@ -530,16 +530,22 @@ describe('modbench.record.copy', () => {
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
     client.setQueryAnswerOnce('getRecordHolders', [PATCH]);
     client.setCommandResult('copyRecords', {
-      landed: [{ record: SOURCE, destination: PATCH }, { record: elsewhere, destination: PATCH }], refused: [],
+      landed: [
+        { record: SOURCE, destination: PATCH },
+        { record: elsewhere, destination: PATCH },
+        { record: elsewhere, destination: OTHER },
+      ],
+      refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'boom' }],
     });
-    pick('Override', [PATCH]);
+    pick('Override', [PATCH, OTHER]);
     const { ask, reporter } = invoke(client);
 
     await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
 
     expect(ask.asked).toEqual([]);
-    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH], false]]);
-    expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
+    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH, OTHER], false]]);
+    expect(reporter.landings).toEqual(['Made 2 copies.']);
+    expect(reporter.reports.map((r) => r.message)).toEqual(['Could not make 1 of 3 copies.']);
   });
 
   it('never asks to replace a copy as new, which lands under a FormID of its own', async () => {
