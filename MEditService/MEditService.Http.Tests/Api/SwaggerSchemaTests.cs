@@ -174,7 +174,7 @@ public sealed class SwaggerSchemaTests
         "PluginResponse",
         new[]
         {
-            "name", "path", "isLight", "isMaster", "masters", "recordCount", "isImmutable",
+            "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
             "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
             "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]

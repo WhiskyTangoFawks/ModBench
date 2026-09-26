@@ -21,6 +21,7 @@ public record PluginMetadata(
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
+    bool IsBlueprint,
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsForced,
@@ -32,7 +33,7 @@ public record PluginMetadata(
 
     public Registration Registration => new(LoadOrderIndex, Enabled, Winning);
 
-    public PluginContent Content => new(IsLight, IsMaster, Masters, RecordCount);
+    public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount);
 
     public bool Participates => Registration.Participates;
 
@@ -43,4 +44,4 @@ public record PluginMetadata(
 
 /// <summary>What reading the file told the Index about a plugin, which no registration carries.
 /// Read once when the plugin is opened; a plugin that never opened has none.</summary>
-public sealed record PluginContent(bool IsLight, bool IsMaster, IReadOnlyList<string> Masters, int RecordCount);
+public sealed record PluginContent(bool IsLight, bool IsMaster, bool IsBlueprint, IReadOnlyList<string> Masters, int RecordCount);

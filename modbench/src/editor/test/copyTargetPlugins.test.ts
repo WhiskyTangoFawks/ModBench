@@ -7,7 +7,7 @@ import type { PluginMetadata } from '../../client';
 
 function plugin(name: string, isImmutable = false): PluginMetadata {
   return {
-    name, path: `/data/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false,
+    name, path: `/data/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false,
     masters: [], recordCount: 0, isImmutable, enabled: true, winning: true, participates: true, inLoadOrder: true, origin: 'Data', masterIssues: [],
     hasMatchingRecords: true, isTracked: false, hasParseFailure: false,
   };

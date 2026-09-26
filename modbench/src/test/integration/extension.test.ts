@@ -87,7 +87,7 @@ function awaitStatus(client: MEditClient, status: BackendStatus, label: string, 
 type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'participates'>): MockPlugin {
   return {
-    isLight: false, isMaster: false, masters: [], recordCount: 0, isImmutable: false,
+    isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0, isImmutable: false,
     inLoadOrder: true, enabled: true, winning: true, masterIssues: [], hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,

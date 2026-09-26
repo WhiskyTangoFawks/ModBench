@@ -7,13 +7,15 @@ namespace MEditService.PluginAdapter;
 /// <see cref="IPluginAdapter"/> so the verbs cannot drift between implementations.</summary>
 internal static class OpenedPlugins
 {
-    internal static (PluginContent Content, Exception? Unreachable) ContentIn(IModGetter mod, string pluginName)
+    internal static (PluginContent Content, Exception? Unreachable) ContentIn(
+        IModGetter mod, string pluginName, int headerFlags)
     {
         var (recordCount, unreachable) = ReachableRecordCount(mod);
         return (
             new PluginContent(
                 IsLight: PluginFlagPredicates.IsLight(mod, pluginName),
                 IsMaster: PluginFlagPredicates.IsMaster(mod, pluginName),
+                IsBlueprint: PluginFlagPredicates.IsBlueprint(mod.GameRelease, headerFlags),
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
                 RecordCount: recordCount),
             unreachable);

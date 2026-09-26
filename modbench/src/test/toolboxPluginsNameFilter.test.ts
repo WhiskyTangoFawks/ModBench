@@ -203,7 +203,7 @@ describe('the Plugins view, given the game folder not found', () => {
 // plugins.md, States, story 5.
 function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
   return {
-    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, masters: [], recordCount: 0,
+    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
     isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
     winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
   };

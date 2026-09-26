@@ -6,6 +6,7 @@ import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
+import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
@@ -167,6 +168,7 @@ interface PluginFacts {
   masterIssues?: MasterIssue[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
+  order?: PluginOrderFacts;
 }
 
 // ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
@@ -279,9 +281,9 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
-  // plugins.txt's raw file order as last rendered, so a drop computes its index against what
-  // the user dragged against rather than a fresh read an external edit could skew.
-  private lastOrder: string[] = [];
+  // plugins.txt's lines as last rendered, which a drop's order check reads: the order the user
+  // dragged against.
+  private lastOrder: { name: string; origin: string }[] = [];
   private filterText = '';
   private filterLower = '';
   private recordFilterSource?: string;
@@ -433,7 +435,7 @@ export class PluginsTreeProvider
     const listed = this.instanceValue.plugins
       .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
       .sort((a, b) => a.slot - b.slot);
-    this.lastOrder = listed.map((p) => p.name);
+    this.lastOrder = listed.map(({ name, origin }) => ({ name, origin }));
 
     // A name in both sets renders once, as the implicit row. Display order only:
     // `this.lastOrder` stays plugins.txt's raw order, which write positions are computed against.
@@ -665,6 +667,7 @@ export class PluginsTreeProvider
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
         readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        order: { masters: p.masters, blueprint: p.isBlueprint },
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);
     }
@@ -727,9 +730,8 @@ export class PluginsTreeProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ names }));
   }
 
-  /** The block lands before `target`, or at the end past the last row. A drop onto the implicit
-   *  masters is no plugins.txt position — those rows have no line — so it lands at file
-   *  index 0. */
+  /** The block lands before `target`, at the winning end past the last row, or at the losing end
+   *  on a locked row, which has no plugins.txt line of its own. */
   async handleDrop(
     target: PluginsTreeNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -738,29 +740,43 @@ export class PluginsTreeProvider
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
     const { names } = payload.value;
-    if (names.length === 0) return;
-    const drop = this.dropFor(target);
+    const drop = this.dropFor(target, names);
     if (drop === undefined) return;
+    const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
+    if (refusal !== undefined) {
+      this.reporter?.report('error', 'Could not move plugins.', refusal);
+      return;
+    }
     try {
       await this.source.reorderPlugins(names, drop);
     } catch (e) {
-      // ADR-0019: an explicit user action failed — notify + log, then resync the
-      // moved rows against disk so the tree never shows a phantom reorder.
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
-      this.reporter?.report('error', 'Failed to reorder plugins.', errorMessage(e));
+      this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
     }
-    this.invalidate();
+  }
+
+  // ADR-0012: the plugins.txt line's own plugin, by its origin, else the one held by that name.
+  private orderFacts(): PluginOrderFactsOf {
+    const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
+    return (name) => {
+      const origin = originOf.get(name);
+      const joined = origin !== undefined && this.facts?.has(name, origin) === true ? origin : undefined;
+      return this.facts?.get(name, joined)?.order;
+    };
   }
 
   // VS Code can hand the drop a row this controller never produced, and "not one of my rows" is
-  // not "past the last row" — the latter means the losing end, so a foreign row must not fall
+  // not "past the last row" — the latter means the winning end, so a foreign row must not fall
   // through to it.
-  private dropFor(target: PluginsTreeNode | undefined): PluginsDrop | undefined {
+  private dropFor(target: PluginsTreeNode | undefined, names: readonly string[]): PluginsDrop | undefined {
+    if (names.length === 0) return undefined;
     if (target !== undefined && !OWN_ROW_KINDS.has((target as { kind?: string }).kind ?? '')) return undefined;
-    // An implicit master's row is above every plugins.txt line, so a drop on one is the top.
-    if (target instanceof ImplicitMasterNode) return { kind: 'winningEnd' };
-    if (target instanceof PluginNode) return { kind: 'before', name: target.plugin.name };
-    return { kind: 'losingEnd' };
+    // A locked row loads before every plugins.txt line, so a drop on one is the losing end.
+    if (target instanceof ImplicitMasterNode) return { kind: 'losingEnd' };
+    if (target instanceof PluginNode) {
+      return names.includes(target.plugin.name) ? undefined : { kind: 'before', name: target.plugin.name };
+    }
+    return { kind: 'winningEnd' };
   }
 }
 

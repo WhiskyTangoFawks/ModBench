@@ -814,6 +814,7 @@ export interface components {
             loadOrderIndex?: number | null;
             isLight: boolean;
             isMaster: boolean;
+            isBlueprint: boolean;
             masters: string[];
             /** Format: int32 */
             recordCount: number;

@@ -25,4 +25,11 @@ public static class PluginFlagPredicates
 
     public static bool IsMaster(IModFlagsGetter mod, string fileName) =>
         mod.IsMaster || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase);
+
+    // Mutagen's header flag enums name no blueprint bit; TES5Edit's wbDefinitionsSF1.pas names
+    // 0x800 'Blueprint' in Starfield's TES4 header, and no other game gives the bit that meaning.
+    private const int StarfieldBlueprintFlag = 0x800;
+
+    public static bool IsBlueprint(GameRelease release, int headerFlags) =>
+        release.ToCategory() == GameCategory.Starfield && (headerFlags & StarfieldBlueprintFlag) != 0;
 }

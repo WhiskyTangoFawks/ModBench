@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
@@ -82,7 +83,9 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {
         using var loaded = OpenForRead(modPath, gameRelease, strings);
-        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String);
+        // A game's header flags are its own enum; the raw bits are what every game's plugin carries.
+        var headerFlags = ModHeaderFrame.FromPath(modPath, gameRelease).Flags;
+        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String, headerFlags);
     }
 
     public LinkAnswers LinkTargets(

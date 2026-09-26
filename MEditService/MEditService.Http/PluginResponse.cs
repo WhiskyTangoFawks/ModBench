@@ -10,6 +10,9 @@ public record PluginResponse(
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
+    // IsBlueprint (plugins.md, Drag and drop, story 3): a blueprint plugin loads after every plugin
+    // that is not one. False for every plugin of a game without blueprint plugins.
+    bool IsBlueprint,
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
@@ -44,7 +47,7 @@ public record PluginResponse(
         var plugin = row.Plugin;
         var registration = plugin.Registration;
         return new(plugin.Name, plugin.Path, plugin.Slot, row.Content.IsLight, row.Content.IsMaster,
-            row.Content.Masters, row.Content.RecordCount, plugin.IsImmutable, registration.Participates,
+            row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, plugin.IsImmutable, registration.Participates,
             plugin.Origin, row.MasterIssues, registration.InLoadOrder, plugin.Enabled, plugin.Winning,
             row.HasMatchingRecords, row.IsTracked,
             row.HasParseFailure);
