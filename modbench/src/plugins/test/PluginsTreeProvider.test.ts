@@ -826,6 +826,22 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
     const { calls } = await dropAfterReconcile(['D.esp'], node('C.esp'), heldAll({ 'A.esp': { masters: ['B.esp'] } }));
     expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'C.esp' } }]);
   });
+
+  // MO2's PluginList::setPluginPriority holds master order only between plugins that are both
+  // blueprints or both not, so the blueprint rule alone places this pair.
+  it('fires a drop that puts a plugin that is not a blueprint before its blueprint master', async () => {
+    const { calls, reports } = await dropAfterReconcile(
+      ['D.esp'], node('B.esp'), heldAll({ 'B.esp': { isBlueprint: true }, 'D.esp': { masters: ['B.esp'] } }));
+    expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'B.esp' } }]);
+    expect(reports).toEqual([]);
+  });
+
+  it('refuses a drop that puts a blueprint master below a blueprint plugin that depends on it', async () => {
+    const { calls, reports } = await dropAfterReconcile(
+      ['D.esp'], undefined, heldAll({ 'D.esp': { isBlueprint: true }, 'E.esp': { isBlueprint: true, masters: ['D.esp'] } }));
+    expect(calls).toEqual([]);
+    expect(reports.map((r) => r.detail)).toEqual(['"D.esp" is a master of "E.esp", so it must load before it.']);
+  });
 });
 
 // End-to-end: the real reorder command over a temp plugins.txt, driven through the provider's

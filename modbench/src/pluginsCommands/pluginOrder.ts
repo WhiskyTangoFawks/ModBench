@@ -1,5 +1,5 @@
 // The plugin-order rules a move keeps: masters above their dependants, blueprint plugins last
-// (update-load-order-file, Refusals; MO2's PluginList::setPluginPriority).
+// (update-load-order-file, Refusals; MO2's PluginList::setPluginPriority, pluginlist.cpp).
 
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 
@@ -34,17 +34,21 @@ function movesBehindIn(before: readonly string[], after: readonly string[]): Mov
     (was.get(first) ?? 0) < (was.get(second) ?? 0) && (is.get(first) ?? 0) > (is.get(second) ?? 0);
 }
 
-function masterRefusal(order: readonly string[], factsOf: PluginOrderFactsOf, movesBehind: MovesBehind): string | undefined {
+// MO2 holds master order only within one blueprint class; across the two, blueprint last decides.
+function sameClassMasters(order: readonly string[], factsOf: PluginOrderFactsOf): [master: string, plugin: string][] {
   const listedByFolded = new Map(order.map((name) => [name.toLowerCase(), name] as const));
-  for (const plugin of order) {
-    for (const masterName of factsOf(plugin)?.masters ?? []) {
-      const master = listedByFolded.get(masterName.toLowerCase());
-      if (master !== undefined && movesBehind(master, plugin)) {
-        return `"${master}" is a master of "${plugin}", so it must load before it.`;
-      }
-    }
-  }
-  return undefined;
+  return order.flatMap((plugin) => {
+    const facts = factsOf(plugin);
+    return (facts?.masters ?? [])
+      .map((masterName) => listedByFolded.get(masterName.toLowerCase()))
+      .filter((master): master is string => master !== undefined && factsOf(master)?.blueprint === facts?.blueprint)
+      .map((master): [string, string] => [master, plugin]);
+  });
+}
+
+function masterRefusal(order: readonly string[], factsOf: PluginOrderFactsOf, movesBehind: MovesBehind): string | undefined {
+  const broken = sameClassMasters(order, factsOf).find(([master, plugin]) => movesBehind(master, plugin));
+  return broken && `"${broken[0]}" is a master of "${broken[1]}", so it must load before it.`;
 }
 
 function blueprintRefusal(order: readonly string[], factsOf: PluginOrderFactsOf, movesBehind: MovesBehind): string | undefined {

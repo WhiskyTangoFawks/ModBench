@@ -15,7 +15,7 @@ internal static class OpenedPlugins
             new PluginContent(
                 IsLight: PluginFlagPredicates.IsLight(mod, pluginName),
                 IsMaster: PluginFlagPredicates.IsMaster(mod, pluginName),
-                IsBlueprint: PluginFlagPredicates.IsBlueprint(mod.GameRelease, headerFlags),
+                IsBlueprint: PluginFlagPredicates.IsBlueprint(mod.GameRelease, headerFlags, pluginName),
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
                 RecordCount: recordCount),
             unreachable);
