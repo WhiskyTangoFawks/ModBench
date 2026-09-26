@@ -36,8 +36,7 @@ neither teaches nor maintains.
 ## Mutagen's data, the reference's behaviour, VS Code's interaction
 Mutagen decides the data: the format, what a record holds, and how it is read and written.
 Modbench uses Mutagen's model as it is. The reference tool decides behaviour: what the user
-sees, what a gesture does and what it is called. MO2 is the reference for mod management, xEdit
-for records and Vortex for deployment. VS Code decides interaction: how the user reaches a
+sees, what a gesture does and what it is called. MO2 is the reference for mod management and xEdit for records. VS Code decides interaction: how the user reaches a
 gesture through keys, menus, navigation and selection. Where a reference tool's habit reaches
 into the data, Mutagen decides.
 
