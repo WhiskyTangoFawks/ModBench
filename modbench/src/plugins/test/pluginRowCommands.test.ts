@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Captures every registerCommand(id, handler) so each row's handler can be invoked directly —
 // the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
-  handlers, registerCommand, showQuickPick, withProgress, executeCommand,
+  handlers, registerCommand, showQuickPick, createQuickPick, withProgress, executeCommand,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -16,6 +16,7 @@ const {
       (items: readonly { label: string; description?: string }[], options?: unknown) =>
         Promise<{ label: string; description?: string } | undefined>
     >(),
+    createQuickPick: vi.fn(),
     withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
     executeCommand: vi.fn().mockResolvedValue(undefined),
   };
@@ -29,7 +30,7 @@ import {
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
-  window: { showQuickPick, withProgress },
+  window: { showQuickPick, createQuickPick, withProgress },
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range,
   Uri: { file: uriFile },
@@ -64,6 +65,36 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
   return client;
 }
 
+// decompile-plugin.md's preset table, in the QuickPick items' own words (plugins.md, Pickers,
+// Track: "each with a line saying what it keeps").
+const EDITS_ITEM = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EVERYTHING_ITEM = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
+
+type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
+
+// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
+// directly, matching DownloadsPanel.test.ts's own fake.
+function makeFakeQuickPick() {
+  const acceptListeners: Array<() => void> = [];
+  const hideListeners: Array<() => void> = [];
+  const qp = {
+    items: [] as PresetItem[],
+    placeholder: undefined as string | undefined,
+    activeItems: [] as PresetItem[],
+    selectedItems: [] as PresetItem[],
+    show: vi.fn(),
+    hide: vi.fn(() => { hideListeners.forEach((cb) => cb()); }),
+    dispose: vi.fn(),
+    onDidAccept: (cb: () => void) => { acceptListeners.push(cb); return { dispose: () => {} }; },
+    onDidHide: (cb: () => void) => { hideListeners.push(cb); return { dispose: () => {} }; },
+  };
+  return {
+    qp,
+    accept: (picked: PresetItem) => { qp.selectedItems = [picked]; acceptListeners.forEach((cb) => cb()); },
+    escape: () => { hideListeners.forEach((cb) => cb()); },
+  };
+}
+
 // ── registerTrackCommand ──────────────────────────────────────────────────
 
 describe('registerTrackCommand', () => {
@@ -83,14 +114,27 @@ describe('registerTrackCommand', () => {
     };
   }
 
+  // Runs `handler(...)` and settles the preset pick it opens once `createQuickPick` has been
+  // called, so the QuickPick's own async wiring (onDidAccept/onDidHide) has a chance to attach.
+  async function runTrackedWithPreset(
+    handler: (...args: unknown[]) => unknown, picked: PresetItem | undefined, ...args: unknown[]
+  ): Promise<ReturnType<typeof makeFakeQuickPick>['qp']> {
+    const { qp, accept, escape } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+    const pending = handler(...args);
+    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
+    if (picked) accept(picked); else escape();
+    await pending;
+    return qp;
+  }
+
   it('tracks the right-clicked plugin alone, refreshes the tree and lands the tracked toast', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     const plugin = { name: 'MyMod.esp', origin: 'ModA' };
     client.setCommandResult('track', { landed: [plugin], refused: [] });
-    showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
-    await handler(pluginNode());
+    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
     expect(refresh).toHaveBeenCalledOnce();
@@ -107,13 +151,12 @@ describe('registerTrackCommand', () => {
     const second = { name: 'Second.esp', origin: 'ModB' };
     const outcome = { landed: [first], refused: [{ item: second, reason: 'Second.esp does not round-trip.' }] };
     client.setCommandResult('track', outcome);
-    showQuickPick.mockResolvedValue({ label: 'Everything' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
     const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
 
-    await handler(nodes[0], nodes);
+    await runTrackedWithPreset(handler, EVERYTHING_ITEM, nodes[0], nodes);
 
-    expect(showQuickPick).toHaveBeenCalledOnce();
+    expect(createQuickPick).toHaveBeenCalledOnce();
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([
       { method: 'track', args: [[first, second], 'Everything', expect.anything()] },
     ]);
@@ -131,10 +174,9 @@ describe('registerTrackCommand', () => {
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the whole selection', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
-    showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
-    await handler(pluginNode());
+    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 plugin — git was not found on PATH.', detail: undefined },
@@ -144,7 +186,7 @@ describe('registerTrackCommand', () => {
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  it('refuses a plugin whose mod cannot be resolved, naming it, and never asks what the .gitignore should hold', async () => {
+  it('refuses a plugin whose mod cannot be resolved, naming it, and never opens the preset pick', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
     const { handler, reporter } = invokeTrack(client);
@@ -156,7 +198,7 @@ describe('registerTrackCommand', () => {
     ]);
     // ADR-0012: the row's own identity, with no origin invented for it.
     expect(reporter.selectionOutcomeCalls.map((call) => call.outcome.refused.map((r) => r.item))).toEqual([[{ name: 'MyMod.esp' }]]);
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(createQuickPick).not.toHaveBeenCalled();
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
   });
 
@@ -166,40 +208,33 @@ describe('registerTrackCommand', () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     const plugin = { name: 'MyMod.esp', origin: 'ModA' };
     client.setCommandResult('track', { landed: [plugin], refused: [] });
-    showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler, reporter } = invokeTrack(client, undefined, () => [pluginNode()]);
 
-    await handler();
+    await runTrackedWithPreset(handler, EDITS_ITEM);
 
     expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
   });
 
-  // plugins.md, Pickers, Track: Edits first and pre-selected (VS Code highlights the first item of
-  // a QuickPick with no explicit active item), then Everything, each naming what it keeps.
-  it('offers Edits first, then Everything, each naming what it keeps', async () => {
+  it('offers Edits first and pre-selected, then Everything, each in decompile-plugin.md\'s own words for what it keeps', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
-    showQuickPick.mockResolvedValue({ label: 'Edits' });
     const { handler } = invokeTrack(client);
 
-    await handler(pluginNode());
+    const qp = await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
 
-    expect(showQuickPick).toHaveBeenCalledOnce();
-    const [items] = present(showQuickPick.mock.calls[0], 'the preset pick');
-    expect(items.map((i) => i.label)).toEqual(['Edits', 'Everything']);
-    expect(items.every((i) => (i.description ?? '').length > 0)).toBe(true);
+    expect(qp.items).toEqual([EDITS_ITEM, EVERYTHING_ITEM]);
+    expect(qp.activeItems).toEqual([EDITS_ITEM]);
+    expect(qp.placeholder).toBe('Track "MyMod.esp"');
   });
 
-  // Esc changes nothing (plugins.md, Pickers, Track: "Esc tracks nothing"): showQuickPick resolves
-  // undefined, and the rival this guards against is proceeding to track anyway.
-  it('tracks nothing on Esc', async () => {
+  it('shows the preset pick and tracks nothing on Esc', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    showQuickPick.mockResolvedValue(undefined);
     const { handler, reporter, refresh, onTracked } = invokeTrack(client);
 
-    await handler(pluginNode());
+    const qp = await runTrackedWithPreset(handler, undefined, pluginNode());
 
+    expect(qp.show).toHaveBeenCalledOnce();
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
@@ -207,25 +242,26 @@ describe('registerTrackCommand', () => {
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  // plugins.md, Pickers, Track: the message line names the mod and the phase. This is the wiring
-  // to mEdit's progress; trackProgress.test.ts covers the phase-to-words mapping.
-  it('says which mod and phase in the view message line as mEdit reports progress', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
-    showQuickPick.mockResolvedValue({ label: 'Edits' });
+  it('names the plugin it is about to track before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'First.esp', origin: 'ModA', inLoadOrder: true }),
+      pluginMetadataFixture({ name: 'Second.esp', origin: 'ModB', inLoadOrder: true }),
+    ]);
+    client.setCommandResult('track', { landed: [{ name: 'First.esp', origin: 'ModA' }, { name: 'Second.esp', origin: 'ModB' }], refused: [] });
     const trackSpy = vi.spyOn(client, 'track');
     const { handler, said } = invokeTrack(client);
+    const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
 
-    await handler(pluginNode());
+    await runTrackedWithPreset(handler, EDITS_ITEM, nodes[0], nodes);
 
-    // The Idle message said before mEdit's first answer.
     expect(said).toContain('Tracking "ModA"…');
 
     const [, , options] = present(trackSpy.mock.calls[0], 'the track call');
     said.length = 0;
-    present(options, 'the track options').onProgress?.({ origin: 'ModA', phase: 'Serializing', pluginsDone: 1, pluginsTotal: 2 });
+    present(options, 'the track options').onProgress?.({ origin: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
 
-    expect(said).toEqual(['Tracking "ModA" — serialized 1 of 2 plugins…']);
+    expect(said).toEqual(['Tracking "ModB" — committing to git…']);
   });
 });
 
