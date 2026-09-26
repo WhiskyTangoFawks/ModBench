@@ -12,7 +12,7 @@ referenced by`, in [commands.md](../commands.md). What the views show is in
 
 A query reads the Store, and never a file, git or a plugin's bytes. It answers from the last
 projection, which [index-load-order](index-load-order.md) and the Mod watcher write, and it writes
-nothing.
+nothing. The record types a game can create are the schema's answer, not the Store's.
 
 ## The flow
 
@@ -30,6 +30,7 @@ nothing.
 | A record's comparison | the Editor | One column for each plugin the game loads (ADR-0013, invariant 3), with each field's value and its conflict states ([editor-conflicts.md](../surfaces/editor-conflicts.md)). |
 | The references to a record | Referenced By | Each referring record, and the loaded plugins that hold the reference, with the fields that hold it. A plugin the game does not load holds no reference, and neither does a condition parameter its function does not use (ADR-0005, invariant 7). |
 | A search by FormID or EditorID | the record picker | The matching records. |
+| The record types a plugin's game can create | Plugins, create record's type pick | Each record type the game's schema can create, named as xEdit names it. |
 | A malformed plugin's diagnosis | Plugins | The reasons ingest recorded. |
 
 ## The record filter
