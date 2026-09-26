@@ -624,6 +624,8 @@ export class PluginsTreeProvider
   // Bumped by every state-changing call this provider receives, so a slow read answering after a
   // newer one — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
+  // `refreshFacts`' own order, apart from `generation` so a fact re-read never discards a hand-off.
+  private factsRead = 0;
 
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
    *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
@@ -679,13 +681,14 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  /** Re-reads the facts alone, leaving the held load order as it is — what a record edit or a
-   *  filter change makes stale. `undefined` when the read failed. Bumps its own generation so a
-   *  later refresh always wins. */
+  /** Re-reads the facts alone, leaving the held load order as it is. `undefined` when the read
+   *  failed. A later re-read wins, and none supersedes a reconcile's hand-off, the only answer
+   *  to which plugins are held. */
   async refreshFacts(): Promise<PluginMatch[] | undefined> {
-    const generation = ++this.generation;
+    const generation = this.generation;
+    const factsRead = ++this.factsRead;
     const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation) return undefined;
+    if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return undefined;
     this.applyPluginFacts(plugins);
     this._onDidChangeTreeData.fire(undefined);
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));

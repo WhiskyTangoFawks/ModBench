@@ -37,10 +37,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function fakeTreeSync() {
-  return { refresh: vi.fn(), workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn() };
-}
-
 // A RecordTypeNode-shaped tree row and its plain-identity equivalent — the two shapes
 // `modbench.record.create` must resolve to the same call.
 const RECORD_TYPE_NODE = { kind: 'recordType', plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
@@ -87,13 +83,10 @@ describe('recordTypeIdentity / recordIdentity — structural, not node-typed', (
 describe('registerRecordLifecycleCommands', () => {
   let viewSelection: readonly unknown[] = [];
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
-    const treeSync = fakeTreeSync();
-    const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordLifecycleCommands(
-      client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins, () => viewSelection);
-    return { treeSync, refreshMatchingPlugins, reporter, ask };
+    registerRecordLifecycleCommands(client, new FakeLogOutputChannel(), reporter, ask, () => viewSelection);
+    return { reporter, ask };
   }
 
   // commands.md, Where: the palette hands the gesture no row, so it takes the Plugins selection.
@@ -140,26 +133,24 @@ describe('registerRecordLifecycleCommands', () => {
       });
   });
 
-  it('lands the added FormKey and refreshes once the create applies', async () => {
+  it('lands the added FormKey once the create applies', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createRecord', { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
-    const { treeSync, refreshMatchingPlugins, reporter } = invoke(client);
+    const { reporter } = invoke(client);
 
     await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
     expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
-    expect(treeSync.refresh).toHaveBeenCalledOnce();
-    expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // The rival: landing the toast and refreshing on a refusal too would tell the user a record was
-  // added that the backend never wrote.
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a create', async () => {
+  // The rival: landing the toast on a refusal too would tell the user a record was added that the
+  // backend never wrote.
+  it('reports the ready-to-show message at error when the backend refuses a create', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createRecord', {
       refused: true, message: 'Could not create a new npc_ record in "MyPatch.esp" — boom',
     });
-    const { treeSync, refreshMatchingPlugins, reporter } = invoke(client);
+    const { reporter } = invoke(client);
 
     await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
@@ -167,8 +158,6 @@ describe('registerRecordLifecycleCommands', () => {
       { severity: 'error', message: 'Could not create a new npc_ record in "MyPatch.esp" — boom', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(treeSync.refresh).not.toHaveBeenCalled();
-    expect(refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('reports an unresolvable origin at error and never reaches the backend', async () => {
@@ -270,23 +259,22 @@ describe('registerRecordLifecycleCommands', () => {
     it('deletes nothing and says nothing when the confirmation is cancelled', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
-      const { treeSync, reporter } = invoke(client, undefined);
+      const { reporter } = invoke(client, undefined);
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(deleteCalls(client)).toEqual([]);
-      expect(treeSync.refresh).not.toHaveBeenCalled();
       expect(reporter.reports).toEqual([]);
     });
 
-    it('reports a partial answer once, naming the refused record and why, and refreshes for the ones that landed', async () => {
+    it('reports a partial answer once, naming the refused record and why', async () => {
       const client = new InMemoryMEditClient();
       const outcome = {
         landed: [FIRST, SECOND],
         refused: [{ item: UNTRACKED, reason: 'Other.esp is not tracked, so it is read-only.' }],
       };
       client.setCommandResult('deleteRecords', outcome);
-      const { treeSync, reporter } = invoke(client, 'Delete');
+      const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, UNTRACKED_NODE, SECOND_NODE]);
 
@@ -296,42 +284,29 @@ describe('registerRecordLifecycleCommands', () => {
         message: 'Could not delete 1 of 3 records.',
         detail: '"000900:Other.esp in Other.esp (ModB)" (Other.esp is not tracked, so it is read-only.)',
       }]);
-      expect(treeSync.refresh).toHaveBeenCalledOnce();
     });
 
     it('says nothing when every record landed', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
-      const { treeSync, reporter } = invoke(client, 'Delete');
+      const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(reporter.reports).toEqual([]);
       expect(reporter.landings).toEqual([]);
-      expect(treeSync.refresh).toHaveBeenCalledOnce();
     });
 
-    it('refreshes nothing when every record was refused', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('deleteRecords', { landed: [], refused: [{ item: UNTRACKED, reason: 'not tracked' }] });
-      const { treeSync } = invoke(client, 'Delete');
-
-      await deleteRecords(UNTRACKED_NODE);
-
-      expect(treeSync.refresh).not.toHaveBeenCalled();
-    });
-
-    it('reports the ready-to-show message at error and refreshes nothing when the call itself fails', async () => {
+    it('reports the ready-to-show message at error when the call itself fails', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, message: 'Could not delete 2 records — boom' });
-      const { treeSync, reporter } = invoke(client, 'Delete');
+      const { reporter } = invoke(client, 'Delete');
 
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(reporter.reports).toEqual([
         { severity: 'error', message: 'Could not delete 2 records — boom', detail: undefined },
       ]);
-      expect(treeSync.refresh).not.toHaveBeenCalled();
     });
 
     it('refuses a record whose mod cannot be resolved, and still sends the rest', async () => {
@@ -371,13 +346,10 @@ describe('modbench.record.copy', () => {
   beforeEach(() => { showQuickPick.mockReset(); });
 
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
-    const treeSync = fakeTreeSync();
-    const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordCopyCommands(
-      client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins, () => viewSelection);
-    return { treeSync, refreshMatchingPlugins, reporter, ask };
+    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, ask, () => viewSelection);
+    return { reporter, ask };
   }
 
   const copy = (...args: unknown[]) =>
@@ -561,7 +533,7 @@ describe('modbench.record.copy', () => {
     expect(client.calls.some((c) => c.method === 'getRecordHolders')).toBe(false);
   });
 
-  it('refreshes the tree and says where the copies landed, naming each refused item and why', async () => {
+  it('says where the copies landed, naming each refused item and why', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', {
@@ -569,12 +541,10 @@ describe('modbench.record.copy', () => {
       refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not tracked' }],
     });
     pick('New', [PATCH, OTHER]);
-    const { reporter, treeSync, refreshMatchingPlugins } = invoke(client);
+    const { reporter } = invoke(client);
 
     await copy(RECORD_NODE);
 
-    expect(treeSync.refresh).toHaveBeenCalledOnce();
-    expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
     expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
     expect(reporter.reports).toEqual([{
       severity: 'error',
@@ -583,17 +553,16 @@ describe('modbench.record.copy', () => {
     }]);
   });
 
-  it('reports a refused call at error and refreshes nothing', async () => {
+  it('reports a refused call at error', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — boom' });
     pick('New', [PATCH]);
-    const { reporter, treeSync } = invoke(client);
+    const { reporter } = invoke(client);
 
     await copy(RECORD_NODE);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — boom', detail: undefined }]);
-    expect(treeSync.refresh).not.toHaveBeenCalled();
   });
 
   it('says why a destination lookup failed, and copies nothing', async () => {

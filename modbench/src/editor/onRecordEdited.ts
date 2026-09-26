@@ -6,7 +6,6 @@ import type { WorkingTreeState } from '../client';
  *  not `PluginTreeProvider` itself: Editor names no Plugins-view type, and the real tree
  *  satisfies this unchanged. */
 export interface RecordTreeSync {
-  refresh(): void;
   workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): WorkingTreeState | undefined;
   markWorkingTreeState(plugin: string, origin: string | undefined, formKey: string, state: WorkingTreeState): boolean;
 }

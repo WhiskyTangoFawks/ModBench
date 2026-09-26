@@ -99,7 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
   // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(meditClient, treeProvider) },
+    { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
@@ -137,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, outputChannel, compileDiagnostics, treeProvider,
+    session, client: meditClient, outputChannel, compileDiagnostics,
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -225,7 +225,6 @@ interface PluginRowCommandDeps {
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
-  treeProvider: PluginTreeProvider;
   notifyConflictsComputed: () => void;
   originFiles: OriginFilesOf;
 }
@@ -233,11 +232,11 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, compileDiagnostics, notifyConflictsComputed, originFiles } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
-      client, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
+      client, makeReporter(outputChannel, 'pluginListTree.track'),
       async () => {
         await registerHeldTrackedRepositories(
           client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);

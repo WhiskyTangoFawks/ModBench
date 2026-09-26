@@ -43,7 +43,6 @@ import {
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
-import { PluginTreeProvider } from '../PluginTreeProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
@@ -105,12 +104,10 @@ describe('registerTrackCommand', () => {
     const said: (string | undefined)[] = [];
     const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
     const reporter = recordingReporter();
-    const treeProvider = new PluginTreeProvider(client);
-    const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
-    registerTrackCommand(progress, client, reporter, treeProvider, onTracked, viewSelection);
+    registerTrackCommand(progress, client, reporter, onTracked, viewSelection);
     return {
       handler: present(handlers.get('modbench.plugin.track'), 'the track command registerTrackCommand registers'),
-      onTracked, reporter, refresh, said,
+      onTracked, reporter, said,
     };
   }
 
@@ -128,16 +125,15 @@ describe('registerTrackCommand', () => {
     return qp;
   }
 
-  it('tracks the right-clicked plugin alone, refreshes the tree and lands the tracked toast', async () => {
+  it('tracks the right-clicked plugin alone and lands the tracked toast', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     const plugin = { name: 'MyMod.esp', origin: 'ModA' };
     client.setCommandResult('track', { landed: [plugin], refused: [] });
-    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
+    const { handler, onTracked, reporter } = invokeTrack(client);
 
     await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
-    expect(refresh).toHaveBeenCalledOnce();
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
     expect(reporter.reports).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
@@ -151,7 +147,7 @@ describe('registerTrackCommand', () => {
     const second = { name: 'Second.esp', origin: 'ModB' };
     const outcome = { landed: [first], refused: [{ item: second, reason: 'Second.esp does not round-trip.' }] };
     client.setCommandResult('track', outcome);
-    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
+    const { handler, onTracked, reporter } = invokeTrack(client);
     const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
 
     await runTrackedWithPreset(handler, EVERYTHING_ITEM, nodes[0], nodes);
@@ -165,16 +161,15 @@ describe('registerTrackCommand', () => {
       { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModB)" (Second.esp does not round-trip.)' },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(refresh).toHaveBeenCalledOnce();
     expect(onTracked).toHaveBeenCalledOnce();
   });
 
-  // The rival: landing the toast and refreshing on a refusal too would tell the user a track
-  // landed when the backend refused the whole selection.
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the whole selection', async () => {
+  // The rival: landing the toast on a refusal too would tell the user a track landed when the
+  // backend refused the whole selection.
+  it('reports the ready-to-show message at error when the backend refuses the whole selection', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
-    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
+    const { handler, onTracked, reporter } = invokeTrack(client);
 
     await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
 
@@ -182,7 +177,6 @@ describe('registerTrackCommand', () => {
       { severity: 'error', message: 'Could not track 1 plugin — git was not found on PATH.', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(refresh).not.toHaveBeenCalled();
     expect(onTracked).not.toHaveBeenCalled();
   });
 
@@ -214,7 +208,7 @@ describe('registerTrackCommand', () => {
 
   it('shows the preset pick and tracks nothing on Esc', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    const { handler, reporter, refresh, onTracked } = invokeTrack(client);
+    const { handler, reporter, onTracked } = invokeTrack(client);
 
     const qp = await runTrackedWithPreset(handler, undefined, pluginNode());
 
@@ -222,7 +216,6 @@ describe('registerTrackCommand', () => {
     expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
-    expect(refresh).not.toHaveBeenCalled();
     expect(onTracked).not.toHaveBeenCalled();
   });
 
