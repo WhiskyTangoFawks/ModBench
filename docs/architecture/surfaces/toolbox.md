@@ -80,7 +80,6 @@ By [common.md](common.md#reporting). As a user, I want:
 
 | What | Waits on |
 |---|---|
-| `deploy / purge`, a toggle the Toolbox offers, with a Deployment row and the first-deploy consent | deployment after the alpha, #968; #971 removed today's |
 | `log in`, `cancel` | their design |
 | `create` a profile | its design |
 | `validate` the instance | its design |

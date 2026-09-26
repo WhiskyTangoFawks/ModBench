@@ -19,8 +19,7 @@ record editor as it happens, with nothing relaunched and nothing reloaded.
    feeds it changes and reconciled, never reloaded
    ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)).
    That is what makes a mod change visible in the editor at once.
-4. **Deploy is for the game, never for editing.** Hardlinks into the game directory are needed to
-   run the game; editing reads the physical folders.
+4. **Deploy is for the game, never for editing.** Deployment is for running the game; editing reads the physical folders.
 
 ## Alternatives rejected
 

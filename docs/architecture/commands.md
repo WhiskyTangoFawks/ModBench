@@ -196,7 +196,6 @@ Offered on Toolbox.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | - |
 | open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive, and it clears every unconfirmed mark (common.md, Unconfirmed writes). It is refused while another window holds the index. | load-instance |
 | log in | writes | Toolbox: dialog answer | - | - | - | MO2 settings | Store a Nexus API key in VS Code's secret storage. | - |
