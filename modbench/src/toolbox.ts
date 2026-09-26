@@ -47,7 +47,9 @@ import {
   loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
-import { pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import {
+  pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand, registerPluginSortCommands,
+} from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { pluginsKeyContext } from './plugins/gestureEntry';
 import { errorMessage } from './ports/errorMessage';
@@ -260,6 +262,7 @@ function registerPluginListView(
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
     e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
+  ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(
     instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
   return { pluginsTree, pluginsSelection: () => pluginListView.selection };

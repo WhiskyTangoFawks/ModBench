@@ -19,8 +19,8 @@ import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../Plugins
 import { CellNode, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 
-const pluginRow = (name: string, origin?: string) => new PluginNode({ name, enabled: true }, origin);
-const lockedRow = (name: string) => new ImplicitMasterNode(name);
+const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
+const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
 
 // VS Code's own calling convention: a context menu passes the right-clicked row, and the
 // selection only when several rows are selected and the right-clicked row is among them. A key

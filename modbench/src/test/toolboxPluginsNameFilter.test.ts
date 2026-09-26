@@ -29,7 +29,7 @@ vi.mock('vscode', () => ({
 
 import { registerPluginsNameFilter } from '../toolbox';
 import { say } from '../editingTeardown';
-import { PluginsTreeProvider, type PluginListSource } from '../plugins/PluginsTreeProvider';
+import { NO_PLUGINS_MESSAGE, PluginsTreeProvider, type PluginListSource } from '../plugins/PluginsTreeProvider';
 import { InMemoryMEditClient, type PluginMetadata } from '../client';
 import { syncMessageDouble } from './syncMessageDouble';
 
@@ -197,6 +197,53 @@ describe('the Plugins view, given the game folder not found', () => {
     say(session, undefined);
     await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
     expect(view.message).toBe(GAME_FOLDER_MESSAGE);
+  });
+});
+
+// plugins.md, States, story 1.
+describe('the Plugins view, given no lines and no locked plugins', () => {
+  // VS Code asks for the rows once the view is registered.
+  async function emptyView(instance: FakeInstance) {
+    const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
+    const view: { description?: string; message?: string } = {};
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
+    const rows = await provider.getChildren();
+    return { provider, view, filter, rows };
+  }
+
+  it('says so in its message line, and shows no row', async () => {
+    const { view, rows } = await emptyView(new FakeInstance(valueOf([])));
+
+    await waitForMessage(view, (m) => m === NO_PLUGINS_MESSAGE, 'the empty-list message');
+    expect(rows).toEqual([]);
+  });
+
+  it('clears the message once a line lands', async () => {
+    const instance = new FakeInstance(valueOf([]));
+    const { provider, view } = await emptyView(instance);
+    await waitForMessage(view, (m) => m === NO_PLUGINS_MESSAGE, 'the empty-list message');
+
+    instance.publish(valueOf([plugin('TestMod.esp')]));
+    await provider.getChildren();
+
+    await waitForMessage(view, (m) => m === undefined, 'the message clearing');
+    expect(view.message).toBeUndefined();
+  });
+
+  it('leaves the start-up message its line, and takes the line back once that clears', async () => {
+    const instance = new FakeInstance(valueOf([plugin('TestMod.esp')]));
+    const { provider, view, filter } = await emptyView(instance);
+    const session = { pluginsTreeView: view, pluginsNameFilter: filter };
+
+    say(session, 'Starting backend…');
+    instance.publish(valueOf([]));
+    await provider.getChildren();
+    await flush();
+    expect(view.message).toBe('Starting backend…');
+
+    say(session, undefined);
+    await waitForMessage(view, (m) => m === NO_PLUGINS_MESSAGE, 'the empty-list message returning');
+    expect(view.message).toBe(NO_PLUGINS_MESSAGE);
   });
 });
 

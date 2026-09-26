@@ -732,13 +732,13 @@ function nodeKind(node: unknown): unknown {
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
   it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
-    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true });
+    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
   });
 
   it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
-    const node = new ImplicitMasterNode('Fallout4.esm');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
   });
@@ -748,7 +748,7 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
 // Problems badge, and VS Code badges any tree row whose resourceUri carries diagnostics.
 describe('the locked row is greyed and carries no Problems badge', () => {
   const dataFolder = path.join(os.tmpdir(), 'locked-row-game', 'Data');
-  const node = new ImplicitMasterNode('Fallout4.esm', path.join(dataFolder, 'Fallout4.esm'));
+  const node = new ImplicitMasterNode('Fallout4.esm', 'Data', path.join(dataFolder, 'Fallout4.esm'));
   const collection = vscode.languages.createDiagnosticCollection('locked-row-test');
   after(() => collection.dispose());
 
