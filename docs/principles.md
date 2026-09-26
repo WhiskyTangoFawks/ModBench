@@ -28,11 +28,13 @@ Where VS Code, git or Mutagen already does a job, Modbench uses it. The user alr
 VS Code and git, and Mutagen already knows every game's format, so a job they do is one Modbench
 neither teaches nor maintains.
 
-## Reference behaviour, VS Code interaction
-The reference tool decides behaviour: what the user sees, what a gesture does and what it is
-called. MO2 is the reference for mod management, xEdit for records and Vortex for deployment.
-VS Code decides interaction: how the user reaches a gesture through keys, menus, navigation and
-selection. Users arrive fluent in all of them.
+## Mutagen's data, the reference's behaviour, VS Code's interaction
+Mutagen decides the data: the format, what a record holds, and how it is read and written.
+Modbench uses Mutagen's model as it is. The reference tool decides behaviour: what the user
+sees, what a gesture does and what it is called. MO2 is the reference for mod management, xEdit
+for records and Vortex for deployment. VS Code decides interaction: how the user reaches a
+gesture through keys, menus, navigation and selection. Where a reference tool's habit reaches
+into the data, Mutagen decides.
 
 ## Modbench owns nothing
 Every file belongs to the user, the game or the mod manager. Modbench works on each one in place,
