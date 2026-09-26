@@ -192,22 +192,14 @@ sidebar view cannot sit beside an editor tab.
 
 ## Instance
 
-Offered on Toolbox. Run entries are not an object yet; the run-list gestures name them `run entry`.
+Offered on Toolbox.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | deploy / purge | writes | Toolbox: title overflow (an MO2 instance is open) | `modbench.instance.deploy`, `modbench.instance.purge` | - | - | none | Toggle between deployed and not deployed. Purge asks for confirmation. Deploy is a state, separate from `run`, and purge never runs on its own. | - |
-| run | runs | Toolbox: title icon (an MO2 instance is open) | `modbench.instance.run` | run entry | - | MO2 run box | Start the game or another executable from MO2's run list, as a VS Code task. | - |
-| select game | ? | Toolbox: ? | `modbench.instance.selectGame` | game | - | MO2 toolbar | Choose the game the instance is for. | - |
 | open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive, and it clears every unconfirmed mark (common.md, Unconfirmed writes). It is refused while another window holds the index. | load-instance |
-| add executable | writes | Toolbox: context menu | - | run entry | - | MO2 Executables dialog | Add an executable to the run list in `ModOrganizer.ini`, as a task. | - |
-| remove executable | writes | Toolbox: context menu | - | run entries | - | MO2 Executables dialog | Remove an executable from the run list. | - |
-| edit executable | writes | Toolbox: context menu | - | run entry | field | MO2 Executables dialog | Change the fields of a run-list entry. Reordering and resetting the list are open. | - |
-| set up instance | writes | Toolbox: context menu | - | instance | - | none | Create `mods/`, `profiles/`, `modlist.txt` and the config for a new instance. | - |
-| track modlist | writes | ? | - | instance | - | none | Put the modlist under git, and rebuild it from git state and download targets. The design is open. | - |
 | log in | writes | Toolbox: dialog answer | - | - | - | MO2 settings | Store a Nexus API key in VS Code's secret storage. | - |
-| run script | runs | Plugins: ? | - | script | debug | xEdit navigator | Run a Python script over the load order, a record or a plugin. Option: run it under the debugger. | - |
 | cancel | ? | Toolbox: context menu, key; Downloads: context menu, key | - | a running operation: a download, Track, a large copy | - | MO2 Downloads | Stop a running operation. | - |
 
 ## Profile
@@ -268,14 +260,7 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 | sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | none |
 | highlight origin | reads | Plugins: automatic; Mods: automatic | - | plugins, or mods | - | MO2 plugin list | Selecting a plugin marks its origin mod and its masters. Selecting a mod marks the plugins it provides. | - |
-| add sort rule | writes | Plugins: context menu | - | - | rule | none | Add a plugin sorting rule. A hard rule is red and a soft rule is yellow. | - |
-| edit sort rule | writes | Plugins: context menu | - | sort rule | field | none | Change a sorting rule. | - |
-| enable / disable sort rule | writes | Plugins: context menu | - | sort rules | - | none | Turn a sorting rule on or off. | - |
-| remove sort rule | writes | Plugins: context menu | - | sort rules | - | none | Remove a sorting rule. | - |
-| apply suggested sort | writes | Plugins: code action | - | plugin | - | none | Fix a sorting problem by applying the suggested position. The problem shows as a squiggle. | - |
 | rename | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin and its source tree. Updating the master reference in every dependent is a script. | - |
-| relink source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was renamed outside Modbench: move its source tree to the new name. | - |
-| remove source | writes | Plugins: dialog answer | - | plugin | - | none | A plugin was deleted outside Modbench: remove its source tree, as a working-tree deletion the user reviews. | - |
 
 ## Record
 

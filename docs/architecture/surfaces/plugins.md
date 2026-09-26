@@ -307,8 +307,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | Showing the plugins the game does not load | their design |
 | `move` from the menu, with its targets: top, bottom, priority N | the catalog's planned Options |
 | `highlight origin`, `open details` on a plugin's mod | their design |
-| `repair`, `validate`, sort rules, `apply suggested sort`, `rename`, `relink source`, `remove source` | their design |
-| `run script`: a Python script over the load order, a plugin or a record, through mEdit | its design |
+| `repair`, `validate`, `rename` | their design |
 | `create` in a new mod, and moving a plugin out of Overwrite | the Overwrite inbox design |
 | `create` record inside a container | the catalog's planned Options |
 | A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
