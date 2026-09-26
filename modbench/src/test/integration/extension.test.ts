@@ -526,6 +526,12 @@ describe('modbench command registration', () => {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
   });
+
+  // plugins.md, The tree, story 10: every record at once, so nothing pages.
+  it('registers no load-more command', async () => {
+    const all = await vscode.commands.getCommands(/* filterInternal */ true);
+    assert.ok(!all.includes('modbench.loadMore'), 'modbench.loadMore is registered');
+  });
 });
 
 // commands.md, The system commands: mod sync takes the instance value as its Argument.

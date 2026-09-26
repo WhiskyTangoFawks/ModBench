@@ -112,19 +112,33 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(0, result.Total);
     }
 
-    [Fact]
-    public void GetRecords_ReturnsSortedByEditorIdAscending()
-    {
-        using var fixture = new PluginFixtureBuilder("medit-sort-editorid")
+    private static PluginFixtureData ZebraBeforeApple() =>
+        new PluginFixtureBuilder("medit-sort")
             .WithPlugin("SortTest.esp", mod =>
             {
                 mod.Npcs.AddNew("Zebra");
                 mod.Npcs.AddNew("Apple");
             })
             .Build();
+
+    [Fact]
+    public void AListing_IsInFormIdOrder()
+    {
+        using var fixture = ZebraBeforeApple();
         using var index = Indexes.Reconciled(fixture);
 
         var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+
+        Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
+    }
+
+    [Fact]
+    public void ASearchTermsMatches_AreInEditorIdOrder()
+    {
+        using var fixture = ZebraBeforeApple();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Search: "e", Limit: 10, Offset: 0));
 
         Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
     }

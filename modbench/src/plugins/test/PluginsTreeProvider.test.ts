@@ -7,7 +7,7 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
-  type WorldspaceSummary, type WorldspaceBlocks, type CellPage, type RecordSummary, type CellReferences,
+  type WorldspaceSummary, type WorldspaceBlocks, type InteriorCellBlock, type RecordSummary, type CellReferences,
   type ContainerChildSummary, type CellSummary, type PlacedSummary,
 } from '../../client';
 import {
@@ -29,7 +29,7 @@ import {
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
-  SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, IndexingNode,
+  SubBlockNode, CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode, IndexingNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -137,7 +137,7 @@ function makeClient(overrides: Partial<{
   records: RecordPage;
   worldspaces: WorldspaceSummary[];
   worldspaceBlocks: WorldspaceBlocks;
-  interiorCells: CellPage;
+  interiorCells: InteriorCellBlock[];
   cellReferences: CellReferences;
   containerChildren: ContainerChildSummary[];
 }> = {}): InMemoryMEditClient {
@@ -152,7 +152,7 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getWorldspaceBlocks', overrides.worldspaceBlocks ?? { blocks: [], topCells: [] });
   client.setQueryAnswer('getCellReferences', overrides.cellReferences ?? { persistent: [], temporary: [] });
   client.setQueryAnswer('getContainerChildren', overrides.containerChildren ?? []);
-  client.setQueryAnswer('getInteriorCells', overrides.interiorCells ?? { items: [], total: 0 });
+  client.setQueryAnswer('getInteriorCells', overrides.interiorCells ?? []);
   return client;
 }
 
@@ -1761,14 +1761,14 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   it('renders the worldspace and cell hierarchy under a row', async () => {
     const client = makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: 'w:A.esp', editorId: 'Commonwealth', hasParseFailure: false }],
+      worldspaces: [{ formKey: 'w:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
       worldspaceBlocks: {
         topCells: [],
         blocks: [{
           x: 0, y: 0, hasParseFailure: false,
           subBlocks: [{
             x: 1, y: 1, hasParseFailure: false,
-            cells: [{ formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }],
+            cells: [{ formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
           }],
         }],
       },
@@ -1792,13 +1792,16 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(expectInstanceOf(cell, CellNode).label).toBe('TheCell');
   });
 
-  it('pages the interior cells, with a load-more leaf carrying the remainder', async () => {
-    const items = Array.from({ length: 50 }, (_, i) => ({
-      formKey: `i${i}:A.esp`, editorId: `IntCell${i}`, cellX: i, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false,
-    }));
+  it('nests the interior cells in xEdit\'s numbered blocks and sub-blocks', async () => {
     const client = makeClient({
-      recordTypes: [{ type: 'cell', count: 120, displayName: 'Cell' }],
-      interiorCells: { items, total: 120 },
+      recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
+      interiorCells: [{
+        number: 3, hasParseFailure: false,
+        subBlocks: [{
+          number: 7, hasParseFailure: false,
+          cells: [{ formKey: 'i:A.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }],
+        }],
+      }],
     });
     const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
@@ -1806,11 +1809,12 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     const [interior] = await h.tree.getChildren(row);
     expect(interior).toBeInstanceOf(InteriorCellsNode);
-    const cells = await h.tree.getChildren(interior);
-
-    expect(cells).toHaveLength(51);
-    expect(cells[50]).toBeInstanceOf(InteriorLoadMoreNode);
-    expect(expectInstanceOf(cells[50], InteriorLoadMoreNode).label).toBe('$(sync) Load more… (70 remaining)');
+    const [block] = await h.tree.getChildren(interior);
+    expect(expectInstanceOf(block, InteriorBlockNode).label).toBe('Block 3');
+    const [subBlock] = await h.tree.getChildren(block);
+    expect(expectInstanceOf(subBlock, InteriorSubBlockNode).label).toBe('Sub-Block 7');
+    const [cell] = await h.tree.getChildren(subBlock);
+    expect(expectInstanceOf(cell, CellNode).label).toBe('Room');
   });
 
   it('renders a child tree item through the record browser, not the row path', async () => {
@@ -1840,15 +1844,14 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(expectInstanceOf(children[0], ErrorNode).label).toBe('Failed to load: boom');
   });
 
-  it('forwards the record browser targeted change events, so a load-more refreshes one parent', async () => {
+  it('forwards the record browser change events', () => {
     const h = makeTree([A_ROW()]);
     const fired: unknown[] = [];
     h.tree.onDidChangeTreeData((e) => fired.push(e));
-    const parent = new InteriorCellsNode('A.esp', 'Cell', 0);
 
-    await h.records.loadMore(new InteriorLoadMoreNode(parent, 10));
+    h.records.refresh();
 
-    expect(fired).toContain(parent);
+    expect(fired).toEqual([undefined]);
   });
 
   it('forwards the load order own change events', () => {
@@ -1875,8 +1878,17 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   }
 
   const cell = (overrides: Partial<CellSummary>): CellSummary => ({
-    formKey: 'c:A.esp', isPersistentWorldspaceCell: false, hasParseFailure: false, ...overrides,
+    formKey: 'c:A.esp', isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false, ...overrides,
   });
+
+  const inOneSubBlock = (cells: CellSummary[]): InteriorCellBlock[] =>
+    [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells }] }];
+
+  async function interiorCellsOf(h: Harness, group: PluginsTreeNode | undefined): Promise<PluginsTreeNode[]> {
+    const [block] = await h.tree.getChildren(present(group, 'the Cell group'));
+    const [subBlock] = await h.tree.getChildren(present(block, 'its sole block'));
+    return h.tree.getChildren(present(subBlock, 'its sole sub-block'));
+  }
 
   it('names each group by mEdit\'s type name, in mEdit\'s order, with its record count, worldspaces and cells among the rest', async () => {
     const { groups } = await expandedRow(makeClient({
@@ -1932,7 +1944,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     const unreadable = { hasParseFailure: true, parseDiagnosis: 'bad flag' };
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', ...unreadable }],
+      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasChildren: true, ...unreadable }],
       worldspaceBlocks: { topCells: [cell({ formKey: '000101:A.esp', editorId: 'TopCell', ...unreadable })], blocks: [] },
       cellReferences: {
         persistent: [{ formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
@@ -1955,8 +1967,8 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
       worldspaces: [
-        { formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasParseFailure: false },
-        { formKey: '000200:A.esp', editorId: null, fullName: null, hasParseFailure: false },
+        { formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasParseFailure: false, hasChildren: true },
+        { formKey: '000200:A.esp', editorId: null, fullName: null, hasParseFailure: false, hasChildren: false },
       ],
     }));
 
@@ -1971,7 +1983,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   it('labels an exterior cell without an EditorID by its grid position, and any other cell as a record', async () => {
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
-      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', hasParseFailure: false }],
+      worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
       worldspaceBlocks: {
         topCells: [cell({ formKey: '000101:A.esp', isPersistentWorldspaceCell: true })],
         blocks: [{
@@ -2002,16 +2014,13 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   it('names an interior cell as it names a record', async () => {
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
-      interiorCells: {
-        items: [
-          cell({ formKey: '000201:A.esp', editorId: 'Vault111', fullName: 'Vault 111' }),
-          cell({ formKey: '000202:A.esp' }),
-        ],
-        total: 2,
-      },
+      interiorCells: inOneSubBlock([
+        cell({ formKey: '000201:A.esp', editorId: 'Vault111', fullName: 'Vault 111' }),
+        cell({ formKey: '000202:A.esp' }),
+      ]),
     }));
 
-    const cells = await h.tree.getChildren(groups[0]);
+    const cells = await interiorCellsOf(h, groups[0]);
 
     expect(cells.map(rowParts)).toEqual([
       ['Vault111', '000201:A.esp', 'Vault 111'],
@@ -2025,7 +2034,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
     });
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
-      interiorCells: { items: [cell({ formKey: '000201:A.esp', editorId: 'Vault111' })], total: 1 },
+      interiorCells: inOneSubBlock([cell({ formKey: '000201:A.esp', editorId: 'Vault111', hasChildren: true })]),
       cellReferences: {
         persistent: [
           placed({ formKey: '000301:A.esp', editorId: 'DoorRef', baseEditorId: 'VaultDoor', fullName: 'Vault Door' }),
@@ -2035,7 +2044,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
         temporary: [],
       },
     }));
-    const [vault] = await h.tree.getChildren(groups[0]);
+    const [vault] = await interiorCellsOf(h, groups[0]);
     const [persistent] = await h.tree.getChildren(vault);
 
     const references = await h.tree.getChildren(persistent);

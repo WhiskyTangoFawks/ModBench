@@ -39,7 +39,7 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
         var cell = _fixture.Cell;
         RenameInTheWorkingTree(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
 
-        var effective = _fixture.Reads.GetInteriorCells(_fixture.Plugin, 50, 0).Items.Single(c => c.FormKey == cell);
+        var effective = _fixture.Reads.GetInteriorCells(_fixture.Plugin).Single(c => c.FormKey == cell);
         var head = _fixture.Reads.HeadDocument(cell, _fixture.Plugin);
 
         Assert.Equal("RenamedCell", effective.EditorId);

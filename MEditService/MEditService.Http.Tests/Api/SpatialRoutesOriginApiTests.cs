@@ -137,10 +137,16 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         using var _fx = fx;
         await PutBothPlugins(fx);
 
-        var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB&limit=50&offset=0");
-        Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
+        var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB");
+        Assert.Equal(["InteriorModB"], InteriorEditorIds(modB));
 
-        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?limit=50&offset=0");
-        Assert.Equal(["InteriorModA"], omitted.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
+        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells");
+        Assert.Equal(["InteriorModA"], InteriorEditorIds(omitted));
     }
+
+    private static IEnumerable<string?> InteriorEditorIds(JsonElement blocks) =>
+        blocks.EnumerateArray()
+            .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(s => s.GetProperty("cells").EnumerateArray())
+            .Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId")));
 }

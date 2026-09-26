@@ -5,7 +5,11 @@ namespace MEditService.Codec.Serialization;
 /// carries, since a worldspace's document omits its blocks. Null blocks beside a worldspace mean
 /// its top cell.</summary>
 public readonly record struct CellStructure(
-    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
+    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior)
+{
+    /// <summary>An interior block and sub-block are one number each, held in the X coordinates.</summary>
+    public static CellStructure Interior(int? block, int? subBlock) => new(null, block, null, subBlock, null, IsInterior: true);
+}
 
 /// <summary>One placed record a cell's GRUP holds, and which of its two groups (ADR-0005). The
 /// parentage no placed record's own document carries.</summary>

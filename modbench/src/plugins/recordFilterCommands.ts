@@ -1,13 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, RecordFilter } from '../client';
 import type { Reporter } from '../ports/reporter';
-import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
-
-// The row's own load-more gesture: a partial record page grew a synthetic "load more" leaf, and
-// this is the only thing that leaf's click does.
-export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node));
-}
+import type { PluginTreeProvider } from './PluginTreeProvider';
 
 /** The filter's sources, answered at the composition root: the scripts folder the pick lists,
  *  and a document's name. This view holds no door onto the disk and builds no path. */
