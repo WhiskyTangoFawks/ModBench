@@ -41,7 +41,7 @@ describe('a write and the stream, together (ADR-0015 invariant 3)', () => {
 
     const treeSync: RecordTreeSync = { workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn().mockReturnValue(false) };
     const decorationProvider = fakeDecorationProvider();
-    const onRecordEdited = makeOnRecordEdited(treeSync, decorationProvider, vi.fn(), vi.fn());
+    const onRecordEdited = makeOnRecordEdited(treeSync, decorationProvider, vi.fn());
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'ModA');
     expect(panel.webview.postMessage).not.toHaveBeenCalled();

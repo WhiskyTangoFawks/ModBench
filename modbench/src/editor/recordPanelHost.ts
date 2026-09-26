@@ -39,9 +39,8 @@ export interface EditorCommandDeps {
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
-  // The two things a committed field edit redrives (the filter's match map, the plugin's Source
-  // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
-  refreshMatchingPlugins: () => void;
+  // The plugin's Source Control status, which a committed field edit redrives, lives on the session
+  // object, narrowed to a callback like mergedTreeSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
   outputChannel: vscode.LogOutputChannel;
   // The two ports (ADR-0019), built over the window API by the composition root: this box
@@ -60,7 +59,6 @@ function recordPanelWriteDeps(
     meditClient: deps.meditClient,
     onRecordEdited: makeOnRecordEdited(
       deps.treeSync, recordDecorationProvider,
-      () => { deps.refreshMatchingPlugins(); },
       (plugin, origin) => deps.refreshSourceControlFor(plugin, origin),
     ),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.

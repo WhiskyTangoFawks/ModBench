@@ -27,8 +27,6 @@ function makeDeps(
     client,
     showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
     reporter: recordingReporter(),
-    refreshTree: vi.fn(),
-    refreshMatchingPlugins: vi.fn(),
     ...overrides,
   };
 }
@@ -78,7 +76,6 @@ describe('subscribeQuestionOpen', () => {
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
     expect(reporter.reports).toEqual([]);
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {

@@ -12,11 +12,6 @@ export async function askOne(
   return outcome?.answer ?? 'defer';
 }
 
-function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTree' | 'refreshMatchingPlugins'>): void {
-  deps.refreshTree();
-  deps.refreshMatchingPlugins();
-}
-
 // A typed refusal rides a 200 (`succeeded: false`), which each dispatcher's own WriteRefused
 // check never sees — unsurfaced it leaves the mod unchanged and still read-only with nothing
 // saying why (ADR-0019).
@@ -31,11 +26,9 @@ function reportTypedRefusal(
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.keepAsMyEdit(origin);
   if (result && isRefused(result)) { deps.reporter.report('error', result.message); return; }
-  if (!result?.succeeded) {
-    if (result) reportTypedRefusal(deps, 'keepAsMyEdit', origin, `Could not keep "${origin}" as your own edit`, result.refusalReason);
-    return;
+  if (result && !result.succeeded) {
+    reportTypedRefusal(deps, 'keepAsMyEdit', origin, `Could not keep "${origin}" as your own edit`, result.refusalReason);
   }
-  refreshAfterWrite(deps);
 }
 
 // ADR-0019: a partial answer is a partial save, so what did not land is named even when the rest
@@ -53,8 +46,6 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: strin
       'error', `Could not commit the rest of the upstream update for "${origin}": every plugin landed.`, result.trackedFilesRefusal,
     );
   }
-  const answered = result.refused.length === 0 && result.trackedFilesRefusal === null;
-  if (result.landed.length > 0 || answered) refreshAfterWrite(deps);
 }
 
 export async function dispatchOne(

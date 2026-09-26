@@ -621,8 +621,8 @@ export class PluginsTreeProvider
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
-  // Bumped by every state-changing call this provider receives, so a slow read answering after a
-  // newer one — or after teardown — cannot resurrect a stale answer.
+  // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
+  // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
   // `refreshFacts`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private factsRead = 0;
