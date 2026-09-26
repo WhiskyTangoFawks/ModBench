@@ -16,14 +16,12 @@ export interface RecordTreeSync {
 export function makeOnRecordEdited(
   treeSync: RecordTreeSync,
   recordDecorationProvider: Pick<RecordDecorationProvider, 'refresh'>,
-  refreshMatchingPlugins: () => void,
   refreshSourceControl: (plugin: string, origin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
   return (formKey, plugin, origin) => {
     if (treeSync.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
     }
-    refreshMatchingPlugins();
     refreshSourceControl(plugin, origin);
   };
 }
