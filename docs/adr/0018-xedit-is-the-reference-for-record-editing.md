@@ -20,7 +20,7 @@ user arrives fluent in it. [The xEdit UX audit](../research/xedit-ux-audit.md) a
    takes xEdit's vocabulary.
 3. **Adopted, as xEdit's source has them:** the gesture model, where click focuses, the keyboard
    acts on the focused cell's model value and double click edits; the compare grid as one tree
-   with a slot per plugin at every depth, sorted arrays aligned by key, a complex field edited as
+   with a slot per plugin at every depth, keyed arrays aligned by key, a complex field edited as
    one value; and the two-axis record order conflict model, ConflictAll per record and per node, ConflictThis
    per plugin. [The Editor surface spec](../architecture/surfaces/editor.md) states each surface.
 4. **Cite xEdit's definitions; rule the composition yourself.** The TES5Edit clone under

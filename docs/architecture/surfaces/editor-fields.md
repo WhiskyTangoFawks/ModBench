@@ -86,24 +86,19 @@ As a user, I want:
 
 ## Arrays
 
-xEdit sorts some arrays and not others, and the kind decides what I can do to an element
-(ADR-0018, invariant 3).
+Every array takes the same gestures and keeps the order it has. Some arrays' elements have a key,
+which is the element's identity (ADR-0018, invariant 3).
 
-| Kind | Example | Add | Remove | Move up, move down |
-|---|---|---|---|---|
-| Unsorted | a quest's script fragments, a package's procedure tree | yes | yes | yes |
-| Sorted by a key | scripts by name, a script's properties by name | yes | yes | no |
-| Sorted by value | a list of keywords | yes | yes | no |
-
-*xEdit; catalog `add element`, `remove element`, `move element`*
+*catalog `add element`, `remove element`, `move element`*
 
 As a user, I want:
 
-1. A sorted array written back in its order whatever I do, so no move could change it. *xEdit*
-2. A sorted array aligned across the columns by its key, or by its value, so a plugin with fewer
-   elements than its master reads as an absence where they are missing, not as every row after them
-   shifting. An unsorted array stays aligned by position. *xEdit; ADR-0018, invariant 3*
-3. The keys xEdit sorts by: scripts and alias scripts by script name, properties and struct members
+1. Every array written back in the order I leave it: nothing re-sorts one. *ruling*
+2. An array whose elements have a key aligned across the columns by its key, and any other array by
+   its values in sequence, as a diff lines them up, so a plugin with fewer elements than its master
+   reads as an absence where they are missing, not as every row after them shifting. *xEdit;
+   ADR-0018, invariant 3; ruling*
+3. The keys, as xEdit's definitions give them: scripts and alias scripts by script name, properties and struct members
    by property name, a perk's fragments by index, a quest's fragments by stage and index, a scene's
    phase fragments by index and flags, a quest's alias bindings by alias number. *xEdit*
 4. Add on an array's row, whether it is collapsed or expanded, to append a new element, empty but

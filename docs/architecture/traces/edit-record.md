@@ -36,7 +36,7 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
 | `edit field` | A field's value is set, or cleared to its default. A new function or Run On empties the condition parameters it leaves unused (ADR-0005, invariant 7). An edit of the FormID changes the record's FormKey and nothing else: the records that reference it, itself included, are left as they are, and updating them is a script. |
 | `add element` | An element is appended to an array: the value a drop supplies, or an element empty but for its kind. |
 | `remove element` | An element leaves its array. |
-| `move element` | An element moves one step in an unsorted array. |
+| `move element` | An element moves one step in its array. |
 | `create` | A new record of the chosen type, as a new file. Its FormID is the next free one that neither the working tree nor `HEAD` uses, and its EditorID is fresh and unique in the plugin. |
 | `delete` | The record's file is removed, or a child record leaves its container's document. The records that reference it are left as they are: compile reports them. |
 | `copy`, as override | The record's document lands in the destination plugin's source, under the same FormKey. A destination that already holds the record takes it only with the replace Option, as xEdit's copy as override with overwriting does. |

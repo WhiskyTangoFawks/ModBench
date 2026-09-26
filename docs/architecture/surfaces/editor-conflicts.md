@@ -66,8 +66,8 @@ As a user, I want:
    where they differ: the game ignores them. Its children compare as any record does. *xEdit*
 3. A field's winner to be the last copy that has a value for it, so a Partial Form copy that leaves
    a field out never wins it. *xEdit*
-4. A sorted array compared element by element by its key or its value, and an unsorted one by
-   position. *xEdit; [editor-fields.md](editor-fields.md)*
+4. An array with a key compared element by element by its key, and any other array by its values
+   in sequence. *xEdit; [editor-fields.md](editor-fields.md)*
 
 ## The colours
 
