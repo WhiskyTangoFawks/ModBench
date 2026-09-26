@@ -10,7 +10,6 @@ grid-gap: 24
 medit_drivers: "MEDIT · Drivers — its clients" {
   class: band; grid-rows: 1
   modbench: "Modbench\nthe right column" {class: driving}
-  panel: "Record panel\nthe webview; its own read client (ADR-0007)" {class: driving}
   scripts: "Python scripts\na second HTTP client" {class: driving}
 }
 modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels and palette" {
@@ -53,7 +52,7 @@ medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a 
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences, children and an element's key; which record types can\nbe created\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
   ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod · untracked plugins in a tracked mod\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
 }
-modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter, the record panel included; a kernel box references nothing" {
+modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven adapter; a kernel box references nothing" {
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\ninterface: parse and byte-faithful splice of plugins.txt\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}

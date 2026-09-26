@@ -30,10 +30,8 @@ medit_driven.index -> medit_driven.pluginadapter {class: ref}
 medit_driven.sourceadapter -> medit_data.source {class: store}
 medit_driven.pluginadapter -> medit_data.plugin {class: store}
 # the wire between the processes
-medit_drivers.panel -> medit_driving.http {class: outside}
 medit_drivers.scripts -> medit_driving.http {class: outside}
 modbench_driven.client -> medit_driving.http {class: outside}
-medit_drivers.panel -> modbench_kernel.wire {class: ref}
 
 # Modbench: views (a view's kernel reads are drawn)
 modbench_drivers.user -> modbench_driving {class: outside}
