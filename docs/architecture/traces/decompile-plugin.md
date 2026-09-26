@@ -1,7 +1,7 @@
 # decompile-plugin: contract
 
-Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod and under
-Plugin, and the system command `decompile plugin`, in [commands.md](../commands.md). What the
+Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod, and the
+system command `decompile plugin`, in [commands.md](../commands.md). What the
 user picks and answers is in [plugins.md](../surfaces/plugins.md): Track and External change. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),

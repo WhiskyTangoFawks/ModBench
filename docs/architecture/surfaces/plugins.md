@@ -228,7 +228,7 @@ As a user, I want:
 
 As a user, I want a pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a
 line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod
-and the phase. *catalog `track`; decompile-plugin contract, story 2*
+and the phase. *catalog `track`; decompile-plugin, The command, step 4*
 
 ### Compile
 
