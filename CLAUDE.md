@@ -32,9 +32,9 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 
 ## The chain of authority
 
-principle > ADR > spec (`docs/architecture/`) > PRD > ticket > code. The higher level wins. A PRD
-or ticket is its issue body. The divergence registers in `docs/out-of-scope/` rank with the ADR
-each serves.
+principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An epic or ticket sets
+scope, never behaviour. The divergence registers in `docs/out-of-scope/` rank with the ADR each
+serves.
 
 @docs/principles.md
 
