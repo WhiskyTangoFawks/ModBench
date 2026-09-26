@@ -17,17 +17,29 @@ import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { fakeUri } from '../../test/vscodeMock';
+import type { WorkingTreeState } from '../../client';
+
+type Listener = (uris: readonly vscode.Uri[]) => void;
+
+function source(state: WorkingTreeState | undefined | ((plugin: string, origin: string, formKey: string) => WorkingTreeState | undefined)) {
+  const listeners: Listener[] = [];
+  return {
+    workingTreeStateOf: typeof state === 'function' ? state : () => state,
+    onDidReadRecords: (listener: Listener) => { listeners.push(listener); return { dispose: () => undefined }; },
+    read: (uris: readonly vscode.Uri[]) => { for (const listener of listeners) listener(uris); },
+  };
+}
 
 describe('RecordDecorationProvider', () => {
   const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
 
   it('returns undefined when the lookup reports no working-tree change', () => {
-    const provider = new RecordDecorationProvider(() => 'None');
+    const provider = new RecordDecorationProvider(source('None'));
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
   it('badges a Modified record with M and the git modified colour', () => {
-    const provider = new RecordDecorationProvider(() => 'Modified');
+    const provider = new RecordDecorationProvider(source('Modified'));
     const decoration = provider.provideFileDecoration(uri);
     expect(decoration).toEqual({
       badge: 'M',
@@ -37,7 +49,7 @@ describe('RecordDecorationProvider', () => {
   });
 
   it('badges an Added record with A and the git added colour', () => {
-    const provider = new RecordDecorationProvider(() => 'Added');
+    const provider = new RecordDecorationProvider(source('Added'));
     const decoration = provider.provideFileDecoration(uri);
     expect(decoration).toEqual({
       badge: 'A',
@@ -48,7 +60,7 @@ describe('RecordDecorationProvider', () => {
 
   it('passes (plugin, origin, formKey) parsed off the URI to the lookup', () => {
     const lookup = vi.fn().mockReturnValue('None');
-    const provider = new RecordDecorationProvider(lookup);
+    const provider = new RecordDecorationProvider(source(lookup));
     provider.provideFileDecoration(uri);
     expect(lookup).toHaveBeenCalledWith('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
   });
@@ -56,17 +68,18 @@ describe('RecordDecorationProvider', () => {
   // The rival: a provider that skips the scheme check would wrongly decorate an unrelated
   // resourceUri that merely happens to carry a matching lookup key by coincidence.
   it('returns undefined for a URI outside the medit-record: scheme', () => {
-    const provider = new RecordDecorationProvider(() => 'Modified');
+    const provider = new RecordDecorationProvider(source('Modified'));
     expect(provider.provideFileDecoration(fakeUri('/tmp/x'))).toBeUndefined();
   });
 
-  it('refresh(uri) fires onDidChangeFileDecorations for exactly that URI', () => {
-    const provider = new RecordDecorationProvider(() => 'None');
+  it('fires onDidChangeFileDecorations for exactly the rows its source reads', () => {
+    const badges = source('None');
+    const provider = new RecordDecorationProvider(badges);
     const handler = vi.fn();
     provider.onDidChangeFileDecorations(handler);
 
-    provider.refresh(uri);
+    badges.read([uri]);
 
-    expect(handler).toHaveBeenCalledWith(uri);
+    expect(handler).toHaveBeenCalledWith([uri]);
   });
 });

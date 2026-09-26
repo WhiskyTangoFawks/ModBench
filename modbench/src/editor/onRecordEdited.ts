@@ -1,27 +1,9 @@
-import type { RecordDecorationProvider } from './RecordDecorationProvider';
-import { recordResourceUri } from './recordResourceUri';
-import type { WorkingTreeState } from '../client';
-
-/** Editor's own view of whatever tree needs to hear about a landed edit — a structural shape,
- *  not `PluginTreeProvider` itself: Editor names no Plugins-view type, and the real tree
- *  satisfies this unchanged. */
-export interface RecordTreeSync {
-  workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): WorkingTreeState | undefined;
-  markWorkingTreeState(plugin: string, origin: string | undefined, formKey: string, state: WorkingTreeState): boolean;
-}
-
-/** Scoped, not `refresh()`: patches the cached record and refreshes only its decoration.
- *  Hardcodes `'Modified'` — the edit response carries no resulting state, so an edit that
- *  converges back to the committed bytes shows a stale M until an unrelated refresh. */
+/** What a landed field edit does itself. The records and their badges are not its to touch:
+ *  they follow mEdit's changed rows (ADR-0015 invariant 2). */
 export function makeOnRecordEdited(
-  treeSync: RecordTreeSync,
-  recordDecorationProvider: Pick<RecordDecorationProvider, 'refresh'>,
   refreshSourceControl: (plugin: string, origin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
-  return (formKey, plugin, origin) => {
-    if (treeSync.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
-      recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
-    }
+  return (_formKey, plugin, origin) => {
     refreshSourceControl(plugin, origin);
   };
 }

@@ -16,7 +16,9 @@ function lint(code: string): Linter.LintMessage[] {
   });
 }
 
-describe('no-reread-after-write', () => {
+const lines = (...source: string[]) => lint(source.join('\n'));
+
+describe('no-reread-after-write judges a function by what a call of it runs', () => {
   it('fails a planted invalidate after a plugins.txt write, with the rule\'s own message', () => {
     const messages = lint('async function f(tree) { await setPluginsParticipation(root, entries); tree.invalidate(); }\n');
 
@@ -48,64 +50,129 @@ describe('no-reread-after-write', () => {
     expect(messages).toHaveLength(1);
   });
 
-  it('fails each re-read of a closure the command it registers calls after its write', () => {
-    const messages = lint([
+  it('fails the call of a closure that re-reads, made by the command callback that writes', () => {
+    const messages = lines(
       'function register(client, treeSync, refreshMatchingPlugins) {',
       '  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };',
       '  return registerCommand(async () => { await client.createRecord(x); onWritten(); });',
       '}',
-    ].join('\n'));
+    );
 
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.line).toBe(3);
   });
 
   it('fails the call of a module-level helper that re-reads, made after a write', () => {
-    const messages = lint([
+    const messages = lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
       'async function dispatchKeep(deps, origin) { await deps.client.keepAsMyEdit(origin); refreshAfterWrite(deps); }',
-    ].join('\n'));
+    );
 
     expect(messages).toHaveLength(1);
     expect(messages[0]?.line).toBe(2);
   });
 
-  it('fails the call of a module-level arrow helper that re-reads, made after a write', () => {
-    const messages = lint([
+  it('fails the call of a helper declared after the function that calls it', () => {
+    const messages = lines(
+      'async function dispatchKeep(deps, origin) { await deps.client.keepAsMyEdit(origin); refreshAfterWrite(deps); }',
+      'function refreshAfterWrite(deps) { deps.refreshTree(); }',
+    );
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails the call of an arrow helper that re-reads, made after a write', () => {
+    const messages = lines(
       'const rereadAll = (tree) => tree.invalidate();',
       'async function f(tree) { await appendPlugin(root, profile, name); rereadAll(tree); }',
-    ].join('\n'));
+    );
 
     expect(messages).toHaveLength(1);
   });
 
-  it('fails a re-read beside the call of a module-level helper that writes', () => {
-    const messages = lint([
+  it('fails the call of a function-expression helper that re-reads, made after a write', () => {
+    const messages = lines(
+      'const rereadAll = function (tree) { tree.invalidate(); };',
+      'async function f(tree) { await appendPlugin(root, profile, name); rereadAll(tree); }',
+    );
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails the call of an export default function helper that re-reads, made after a write', () => {
+    const messages = lines(
+      'export default function rereadAll(tree) { tree.invalidate(); }',
+      'async function f(tree) { await appendPlugin(root, profile, name); rereadAll(tree); }',
+    );
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('passes an anonymous export default function, which no name can call', () => {
+    const messages = lines(
+      'export default function (tree) { tree.invalidate(); }',
+      'async function f(client) { await client.track(x); }',
+    );
+
+    expect(messages).toEqual([]);
+  });
+
+  it('fails a re-read beside the call of a helper that writes', () => {
+    const messages = lines(
       'async function appendCreated(root, name) { await appendPlugin(root, "Default", name); }',
       'async function create(tree) { await appendCreated(root, name); tree.invalidate(); }',
-    ].join('\n'));
+    );
 
     expect(messages).toHaveLength(1);
   });
 
-  it('passes a function that calls a helper which only registers a writing callback, and re-reads', () => {
-    const messages = lint([
+  it('passes a re-read in a function that only defines a callback which writes, written inline', () => {
+    const messages = lint('function build(view, instance) { view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, root)); instance.refresh(); }\n');
+
+    expect(messages).toEqual([]);
+  });
+
+  it('passes a re-read in a function that calls a helper which only defines a callback that writes', () => {
+    const messages = lines(
       'function registerView(view, root) { view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, root)); }',
       'function build(view, instance) { registerView(view, root); instance.refresh(); }',
-    ].join('\n'));
+    );
+
+    expect(messages).toEqual([]);
+  });
+
+  it('passes a re-read two helpers deep: a helper\'s own helpers are not followed', () => {
+    const messages = lines(
+      'function rereadAll(tree) { tree.invalidate(); }',
+      'function afterWrite(tree) { rereadAll(tree); }',
+      'async function f(tree) { await appendPlugin(root, profile, name); afterWrite(tree); }',
+    );
+
+    expect(messages).toEqual([]);
+  });
+
+  it('passes a re-read through a method call: this.method() and obj.fn() are not followed', () => {
+    const messages = lines(
+      'const helpers = { rereadAll(tree) { tree.invalidate(); } };',
+      'class P {',
+      '  rereadAll() { this.tree.invalidate(); }',
+      '  async f() { await appendPlugin(root, profile, name); this.rereadAll(); helpers.rereadAll(this.tree); }',
+      '}',
+    );
 
     expect(messages).toEqual([]);
   });
 
   it('passes a helper that neither writes nor re-reads', () => {
-    const messages = lint([
+    const messages = lines(
       'function say(reporter) { reporter.landed("Kept."); }',
       'async function f(client, reporter) { await client.keepAsMyEdit(x); say(reporter); }',
-    ].join('\n'));
+    );
 
     expect(messages).toEqual([]);
   });
 
-  it('reports a re-read once however many functions around it also write', () => {
+  it('judges a nested function apart from the function around it', () => {
     const messages = lint('async function outer(c, t) { await c.track(x); async function inner() { await c.track(y); t.refresh(); } }\n');
 
     expect(messages).toHaveLength(1);
@@ -118,12 +185,12 @@ describe('no-reread-after-write', () => {
   });
 
   it('passes a write and a re-read in sibling functions: the drop writes, the instance subscription re-reads', () => {
-    const messages = lint([
+    const messages = lines(
       'class Provider {',
       '  constructor(instance) { instance.subscribe(() => this.invalidate()); }',
       '  async handleDrop(names, drop) { await this.source.reorderPlugins(names, drop); }',
       '}',
-    ].join('\n'));
+    );
 
     expect(messages).toEqual([]);
   });

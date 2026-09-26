@@ -8,8 +8,8 @@ import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
-import { RecordDecorationProvider } from './RecordDecorationProvider';
-import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
+import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
+import { makeOnRecordEdited } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
@@ -30,8 +30,8 @@ export interface EditorCommandDeps {
   focusedCells: FocusedCells<vscode.WebviewPanel>;
   port: number;
   // Editor's own view of the Plugins tree, structural rather than the tree's own type — see
-  // `RecordTreeSync`'s own doc comment.
-  treeSync: RecordTreeSync;
+  // `RecordBadgeSource`'s own doc comment.
+  treeSync: RecordBadgeSource;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'createRecord' | 'deleteRecords' | 'copyRecords'
@@ -52,15 +52,10 @@ export interface EditorCommandDeps {
 }
 // ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
 // notification stream (ADR-0015 invariant 3), not a broadcast from here.
-function recordPanelWriteDeps(
-  deps: EditorCommandDeps, recordDecorationProvider: RecordDecorationProvider,
-): RecordWriteDeps {
+function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
-    onRecordEdited: makeOnRecordEdited(
-      deps.treeSync, recordDecorationProvider,
-      (plugin, origin) => deps.refreshSourceControlFor(plugin, origin),
-    ),
+    onRecordEdited: makeOnRecordEdited((plugin, origin) => deps.refreshSourceControlFor(plugin, origin)),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),
   };
@@ -71,17 +66,17 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync, meditClient,
     outputChannel, mergedTreeSelection,
   } = deps;
-  // One decoration provider per activation: its lookup reads treeSync's cache live, so it
-  // needs no copy of that state.
-  const recordDecorationProvider = new RecordDecorationProvider(
-    (plugin, origin, formKey) => treeSync.workingTreeStateOf(plugin, origin, formKey));
+  // One decoration provider per activation: it reads treeSync's cache live, so it needs no copy
+  // of that state.
+  const recordDecorationProvider = new RecordDecorationProvider(treeSync);
   const panelsById = new Map<string, vscode.WebviewPanel>();
-  const writeDeps = recordPanelWriteDeps(deps, recordDecorationProvider);
+  const writeDeps = recordPanelWriteDeps(deps);
   // The picker and the edit gate are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
     ...writeDeps, meditClient, channel: outputChannel,
   };
   return [
+    recordDecorationProvider,
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
