@@ -176,7 +176,7 @@ and are never edited. *ADR-0008, invariant 2; catalog `edit field`*
 
 - **A cell, given a field's schema and a column's value:** what it reads, its editor, what Ctrl+C
   copies, and what a pasted text writes, or the refusal.
-- **An array:** given its kind and the focused row, which of add, remove, move up and move down are
+- **An array:** given the focused row, which of add, remove, move up and move down are
   offered.
 - **A collapsed element:** given its value, what it reads.
 - **The record picker:** its items, what it opens on, what a pasted label searches, and what Esc

@@ -125,7 +125,7 @@ As a user, I want:
    the screen, so it is the same whatever the cell draws.
    *xEdit; [editor-fields.md](editor-fields.md)*
 6. Delete to remove the focused element, and Alt+Up or Alt+Down to move it one step, as VS Code
-   moves a line, each as the array's kind allows. Delete on a field that is not an element clears
+   moves a line. Delete on a field that is not an element clears
    it, as xEdit's Clear does. Add has no key, since VS Code has none for it. *VS Code; catalog
    `remove element`, `move element`, `edit field`*
 7. The keys to act on the grid only while no editor is open. In an open editor they edit its text.
@@ -177,7 +177,7 @@ focus. *commands.md, Record*
 
 | Where | Items, in order |
 |---|---|
-| Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element of an unsorted array) · copy value |
+| Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
 | Column header | track (untracked, in a mod) · compile (tracked) · copy… · delete (tracked) |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
@@ -193,7 +193,7 @@ As a user, I want:
    destination, as in Plugins. *catalog `copy`; xEdit's column header menu*
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it.
    *catalog `delete`; xEdit's column header menu*
-5. Compile and track on a column to act on that column's plugin. *catalog `compile`, `track`*
+5. Compile on a column to act on that column's plugin, and track on its plugin's mod. *catalog `compile`, `track`*
 
 ## Reporting
 
