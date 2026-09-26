@@ -7,9 +7,12 @@ live in the glossary.
 
 ## Strategic invariants
 
-1. **Six layers, and each talks only to the one below.** Front end; driving adapters, the API and
-   the watchers on the mEdit side, the views on the Modbench side; the core; the shared kernel both
-   sides read; driven adapters; the systems of record. The core knows no path, no table and no
+1. **Six layers; a write passes through the core, and a read takes the shortest path down.** Front
+   end; driving adapters, the API and the watchers on the mEdit side, the views on the Modbench
+   side; the core; the shared kernel both sides read; driven adapters; the systems of record. A
+   write reaches a system of record through the core, which holds the rules that refuse it, and
+   then a driven adapter. A read or a change notice skips a layer that would only pass it on. The
+   core knows no path, no table and no
    byte format. A driven adapter decides nothing.
 2. **A layer boundary is crossed through a port.** A driving adapter calls the core through the
    gesture's handler. The core reaches a system of record only through a driven adapter. The
