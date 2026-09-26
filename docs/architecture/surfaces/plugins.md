@@ -21,8 +21,7 @@ absence
 ([ADR-0002](../../adr/0002-mod-management-and-editing-are-one-tool.md), invariant 2).
 
 The view's description shows the name filter's term and the record filter's source while each is
-active: `"arm" · records: armor.sql`. mEdit keeps the source with the filter, so the description
-names it after a reload too. *ruling*
+active: `"arm" · records: armor.sql`. *ruling*
 
 ## The tree
 
@@ -137,7 +136,6 @@ As a user, I want:
    becomes a clear icon while it is active, and the view's description names its source, never its
    SQL. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
 4. A plugin with no record left under the record filter hidden while it is active. *ruling*
-5. The record filter to live in mEdit, so it survives a reload and clears only on purpose.
 
 ## States
 

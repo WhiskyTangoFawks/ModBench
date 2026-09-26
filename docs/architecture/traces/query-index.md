@@ -35,13 +35,11 @@ nothing. The record types a game can create are the schema's answer, not the Sto
 
 ## The record filter
 
-- **Set.** Queries runs the filter's SQL once against the Store, and keeps the FormKeys it returns,
-  the SQL and its source. The filter narrows every listing: the records, the type counts and which
+- **Set.** The Index runs the filter's SQL once against the Store, and keeps the FormKeys it
+  returns, the SQL and its source. The filter narrows every listing: the records, the type counts and which
   plugins keep a record. It never narrows a read of one record, or its references.
-- **After each projection,** Queries runs the SQL again.
+- **After each projection,** the Index runs the SQL again.
 - **Clear** drops it.
-
-The filter lives in mEdit, so it survives a reload ([plugins.md](../surfaces/plugins.md)).
 
 ## While the index is not ready
 
