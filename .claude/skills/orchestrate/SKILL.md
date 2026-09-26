@@ -20,7 +20,7 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 The stack is a PRD's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. File surface decides what can run beside what.
 
-Read each ticket's body and its PRD's body once, and name the files it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets sharing a file share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
+Read each ticket once, with its comments and its PRD's comments, and name the files it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets sharing a file share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
 **Criterion:** every ticket sits in one lane, and no two lanes name the same file.
 
@@ -34,7 +34,7 @@ For each ticket, assign yourself and start one fresh `general-purpose` agent wit
 
 Keep the agentId, because `SendMessage` carries every later exchange. Within a minute, confirm the agent's transcript is still growing: one that stopped at its first tool call is dead, and a message to a dead agent is queued, never delivered, so respawn rather than wait. The prompt is `BRIEF.md` verbatim, followed by the fillings it needs:
 
-- the ticket number, its body and its PRD's body (`gh issue view <n>`)
+- the ticket number, its body, and every comment on the ticket and on its PRD, oldest first (`gh issue view <n> --comments`). The body is the ticket, and the comments are its context.
 - **landed since**, the list of what this run has already merged only if it changes the ticket's ground
 - the branch name to create; the worktree is the agent's working directory
 
