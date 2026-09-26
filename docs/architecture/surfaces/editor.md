@@ -164,7 +164,7 @@ As a user, I want:
    naming it, in place of the grid. *A gone object is refused*
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
-   scroll stay. *ADR-0015, invariant 3; edit-record, Shared, story 8*
+   scroll stay. *ADR-0015, invariant 3; edit-record, Hand-off*
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
    the last good read:" and the reason. *common, States, story 6*
 
