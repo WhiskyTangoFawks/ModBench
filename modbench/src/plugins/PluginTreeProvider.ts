@@ -8,7 +8,6 @@ import type {
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey } from './trackedRepositories';
-import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
 export { headerFormKeyFor } from './formKeyIdentity';
 
@@ -355,6 +354,9 @@ type RecordBrowserClient = Pick<
 export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private readonly _onDidReadRecords = new vscode.EventEmitter<readonly vscode.Uri[]>();
+  /** The record rows a read from mEdit just answered, by resource URI. */
+  readonly onDidReadRecords = this._onDidReadRecords.event;
 
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache = new Map<string, InteriorCellBlock[]>();
@@ -408,19 +410,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // A field edit is the hottest path, so it gets a scoped fix rather than refresh()'s wholesale
-  // cache-clear: a cache entry the record already lives in is patched in place, never
-  // invalidated, so no repository call follows.
-  private findCachedRecordLocation(
-    plugin: string, origin: string | undefined, formKey: string,
-  ): { key: string; page: RecordPage; index: number; item: RecordSummary } | undefined {
+  private cachedRecord(plugin: string, origin: string | undefined, formKey: string): RecordSummary | undefined {
     const prefix = `${pluginAddressKey(plugin, origin)}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
-      const index = page.items.findIndex(r => r.formKey === formKey);
-      if (index === -1) continue;
-      const item = present(page.items[index], `cached record at index ${index}`);
-      return { key, page, index, item };
+      const item = page.items.find(r => r.formKey === formKey);
+      if (item) return item;
     }
     return undefined;
   }
@@ -428,24 +423,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** Undefined when nothing has cached this record yet, which the decoration provider reads the
    *  same as 'None': nothing to badge. */
   workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): RecordSummary['workingTreeState'] | undefined {
-    return this.findCachedRecordLocation(plugin, origin, formKey)?.item.workingTreeState;
-  }
-
-  /** Never downgrades Added to Modified: a create seeds no committed counterpart however many
-   *  field edits follow, so overwriting it would misrepresent one existing rather than merely go
-   *  stale. Returns whether a cached row existed to patch. */
-  markWorkingTreeState(
-    plugin: string, origin: string | undefined, formKey: string, state: RecordSummary['workingTreeState'],
-  ): boolean {
-    const loc = this.findCachedRecordLocation(plugin, origin, formKey);
-    if (!loc) return false;
-    const current = loc.item.workingTreeState;
-    if (current === state || current === 'Added') return true;
-    const items = [...loc.page.items];
-    items[loc.index] = { ...loc.item, workingTreeState: state };
-    this.pageCache.set(loc.key, { ...loc.page, items });
-    this._onDidChangeTreeData.fire(undefined);
-    return true;
+    return this.cachedRecord(plugin, origin, formKey)?.workingTreeState;
   }
 
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {
@@ -589,14 +567,18 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // Every record of this type in one call, no "Load more…" step (plugins.md, The tree, story
       // 10). Measured, it costs nothing noticeable at the realistic worst case, and xEdit's
       // record-type group nodes load in full too.
-      const cached = await this.getOrLoad(this.pageCache, this.cacheKey(node),
+      const key = this.cacheKey(node);
+      const read = !this.pageCache.has(key);
+      const cached = await this.getOrLoad(this.pageCache, key,
         () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
       // qust/dial rows are collapsible here too — a Quest reached from its flat record-type
       // listing still expands into its container children, the same mechanism
       // fetchContainerChildren uses.
-      return cached.items.map(r => new RecordNode(
+      const rows = cached.items.map(r => new RecordNode(
         r, node.origin, this.isImmutable(r, node.origin), this.isTracked(r),
         containerChildTypeOf(node.recordType), r.hasContainerChildren));
+      if (read) this._onDidReadRecords.fire(rows.map((row) => recordResourceUri(row.record.plugin, node.origin, row.record.formKey)));
+      return rows;
     });
   }
 }

@@ -320,55 +320,54 @@ describe('RecordNode', () => {
   });
 });
 
-// ── a field edit flips a cached row's badge without a refetch ─────────────────
-// A rival that calls refreshTree() wholesale fails the no-refetch assertion.
+// ── a read of a record group names its rows, so their badges follow the read ─────
 
-describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
-  it('flips a cached clean record to Modified without calling getRecords again', async () => {
-    const record = makeRecord(0, 'None');
-    const repo = makeClient({ records: { items: [record], total: 1 } });
+describe('onDidReadRecords / workingTreeStateOf', () => {
+  async function readGroup(repo: InMemoryMEditClient) {
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Fallout4.esm', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    await provider.getChildren(typeNode); // populates the page cache
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    const read: (readonly unknown[])[] = [];
+    provider.onDidReadRecords((uris) => read.push(uris));
+    return { provider, typeNode, read };
+  }
 
-    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
+  it('names each row of a group it reads from mEdit, by the row\'s own resource URI', async () => {
+    const record = makeRecord(0, 'Modified');
+    const { provider, typeNode, read } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
 
-    expect(changed).toBe(true);
-    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Modified');
-    // The rival this guards: a fix that re-fetches (or clears the cache and lets the next redraw
-    // re-fetch) instead of patching in place would show a second call here.
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    const [row] = await provider.getChildren(typeNode);
 
-    const [rec] = await provider.getChildren(typeNode);
-    expect(expectInstanceOf(rec, RecordNode).record.workingTreeState).toBe('Modified');
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    expect(read).toEqual([[expectInstanceOf(row, RecordNode).resourceUri]]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+  });
+
+  it('names nothing when a group answers from its cache', async () => {
+    const { provider, typeNode, read } = await readGroup(makeClient());
+    await provider.getChildren(typeNode);
+
+    await provider.getChildren(typeNode);
+
+    expect(read).toHaveLength(1);
+  });
+
+  // ADR-0015 invariant 3: mEdit's published rows reach the badge through the next read.
+  it('names the rows again, with mEdit\'s new state, when a refresh makes the group read again', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeClient({ records: { items: [record], total: 1 } });
+    const { provider, typeNode, read } = await readGroup(repo);
+    await provider.getChildren(typeNode);
+
+    repo.setQueryAnswer('getRecords', { items: [{ ...record, workingTreeState: 'Modified' }], total: 1 });
+    provider.refresh();
+    await provider.getChildren(typeNode);
+
+    expect(read).toHaveLength(2);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
     const provider = new PluginTreeProvider(makeClient());
     expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', '000001:Fallout4.esm')).toBeUndefined();
-  });
-
-  it('markWorkingTreeState returns false, and touches nothing, for an uncached record', () => {
-    const provider = new PluginTreeProvider(makeClient());
-    expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
-  });
-
-  // A create never seeds records_committed, so a field edit on an Added row must never downgrade
-  // it to Modified — that would misrepresent a committed counterpart existing. The rival, an
-  // unconditional overwrite with no current-state check, fails this.
-  it('preserves Added across a field edit — create, then edit, still badges A', async () => {
-    const record = makeRecord(0, 'Added');
-    const repo = makeClient({ records: { items: [record], total: 1 } });
-    const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Fallout4.esm', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    await provider.getChildren(typeNode);
-
-    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
-
-    expect(changed).toBe(true);
-    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Added');
   });
 });
 
