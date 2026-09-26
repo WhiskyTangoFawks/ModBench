@@ -9,14 +9,14 @@ namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A plain "Copy as Override" is own-fields-only for every record type, containers
 /// included (xEdit parity: only "Deep copy as override" carries children).</summary>
-public sealed class CopyRecordAsOverrideHandlerContainerTests
+public sealed class CopyAsOverrideContainerTests
 {
     [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -41,7 +41,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -74,7 +74,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -95,11 +95,11 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     public void CopyRecordAsOverride_OnAPlacedReference_WhenDestinationAlreadyOverridesTheCell_Appends()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = fixture.CopyAsOverrideHandler;
-        Assert.True(service.CopyRecordAsOverride(
+        var service = fixture.CopyHandler;
+        Assert.True(service.CopyAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
 
-        var result = service.CopyRecordAsOverride(
+        var result = service.CopyAsOverride(
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -122,7 +122,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -137,7 +137,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -153,7 +153,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -195,7 +195,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -225,7 +225,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -252,7 +252,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -285,7 +285,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = fixture.CopyHandler.CopyAsOverride(
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -312,8 +312,8 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
     public void CopyRecordAsOverride_OnAResponse_WhenDestinationAlreadyHoldsItsTopicEmbeddedInTheQuest_LandsAfterTheExistingResponseWithEveryOtherQuestByteUntouched()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = fixture.CopyAsOverrideHandler;
-        Assert.True(service.CopyRecordAsOverride(
+        var service = fixture.CopyHandler;
+        Assert.True(service.CopyAsOverride(
             fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin).Applied);
 
         var questFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response2EditorId);
@@ -322,7 +322,7 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
         var existingResponse = topicBefore["Responses"].Require()[0].Require().ToJsonString();
         topicBefore.Remove("Responses");
 
-        var result = service.CopyRecordAsOverride(
+        var result = service.CopyAsOverride(
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);

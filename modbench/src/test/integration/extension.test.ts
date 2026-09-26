@@ -2379,12 +2379,12 @@ describe('Progressive load', () => {
   });
 });
 
-// pickCopyDestination opens with an unguarded repository.getPlugins(); a rejection escapes the
-// command callback as VS Code's raw "fetch failed" toast. A load order-less mock reproduces it.
-describe('Copy destination picking degrades to a reported error, never an uncaught rejection', () => {
+// plugins.md, Reporting, story 1: a failed destination lookup says what failed and why, and the
+// command resolves rather than escaping as VS Code's raw rejection toast.
+describe('Copy says why its destination lookup failed', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution
-  // short-circuits with no HTTP call and pickCopyDestination's getPlugins() is the first thing to
-  // reach the refusing backend.
+  // short-circuits with no HTTP call, and the destination lookup is the first thing to reach the
+  // backend, which holds no load order.
   const headerArg = {
     webviewSection: 'recordHeader',
     formKey: 'TestMod.esp:000001',
@@ -2395,28 +2395,33 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
 
   beforeEach(() => resetMockBackend());
 
-  for (const command of ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord']) {
-    it(`${command} resolves (not rejects) and shows a Modbench-authored error when the plugins request is refused`, async () => {
+  for (const mode of ['Override', 'New']) {
+    it(`copy as ${mode} resolves and shows one Modbench error naming the reason`, async () => {
       const errors: string[] = [];
       const realShowError = vscode.window.showErrorMessage;
+      const realShowQuickPick = vscode.window.showQuickPick;
       Object.defineProperty(vscode.window, 'showErrorMessage', {
         configurable: true,
         value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
       });
+      Object.defineProperty(vscode.window, 'showQuickPick', {
+        configurable: true,
+        value: (items: readonly { mode?: string }[]) => Promise.resolve(items.find((item) => item.mode === mode)),
+      });
       try {
         // An escaped rejection out of the command callback fails executeCommand's own returned promise,
         // so awaiting with no try/catch is the assertion.
-        await vscode.commands.executeCommand(command, headerArg);
+        await vscode.commands.executeCommand('modbench.record.copy', headerArg);
 
-        assert.ok(requestLog.some((l) => l === 'GET /plugins'),
-          'the command must have actually reached pickCopyDestination\'s getPlugins() call');
+        assert.ok(requestLog.some((l) => l === 'GET /plugins'), 'the command must have looked up the destinations');
         assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
         const [errorToast] = errors;
         if (errorToast === undefined) throw new Error('expected the one error toast just asserted above');
         assert.ok(errorToast.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errorToast}`);
-        assert.ok(!errorToast.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errorToast}`);
+        assert.ok(errorToast.includes('No load order has been received.'), `expected the reason, got: ${errorToast}`);
       } finally {
         Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
+        Object.defineProperty(vscode.window, 'showQuickPick', { configurable: true, value: realShowQuickPick });
       }
     });
   }

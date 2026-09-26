@@ -4,13 +4,13 @@ import { isNotificationKind, type MEditClient, type NotificationKind, type Notif
 // distinction is architectural, not behavioural.
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordOverridePlugins' | 'getReferences'
+  | 'getRecordOwner' | 'getRecordHolders' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
   | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
   | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
-  | 'copyRecordAsOverride' | 'copyRecordAsNewRecord' | 'compile' | 'absorbUpstreamUpdate'
+  | 'copyRecords' | 'compile' | 'absorbUpstreamUpdate'
   | 'keepAsMyEdit' | 'editRecord' | 'putLoadOrder';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
@@ -208,15 +208,8 @@ export class InMemoryMEditClient implements MEditClient {
   deleteRecords(...args: Parameters<MEditClient['deleteRecords']>): ReturnType<MEditClient['deleteRecords']> {
     return this.command('deleteRecords', args);
   }
-  copyRecordAsOverride(
-    ...args: Parameters<MEditClient['copyRecordAsOverride']>
-  ): ReturnType<MEditClient['copyRecordAsOverride']> {
-    return this.command('copyRecordAsOverride', args);
-  }
-  copyRecordAsNewRecord(
-    ...args: Parameters<MEditClient['copyRecordAsNewRecord']>
-  ): ReturnType<MEditClient['copyRecordAsNewRecord']> {
-    return this.command('copyRecordAsNewRecord', args);
+  copyRecords(...args: Parameters<MEditClient['copyRecords']>): ReturnType<MEditClient['copyRecords']> {
+    return this.command('copyRecords', args);
   }
   compile(...args: Parameters<MEditClient['compile']>): ReturnType<MEditClient['compile']> {
     return this.command('compile', args);
@@ -247,10 +240,8 @@ export class InMemoryMEditClient implements MEditClient {
   getRecordOwner(...args: Parameters<MEditClient['getRecordOwner']>): ReturnType<MEditClient['getRecordOwner']> {
     return this.query('getRecordOwner', args);
   }
-  getRecordOverridePlugins(
-    ...args: Parameters<MEditClient['getRecordOverridePlugins']>
-  ): ReturnType<MEditClient['getRecordOverridePlugins']> {
-    return this.query('getRecordOverridePlugins', args);
+  getRecordHolders(...args: Parameters<MEditClient['getRecordHolders']>): ReturnType<MEditClient['getRecordHolders']> {
+    return this.query('getRecordHolders', args);
   }
   getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
     return this.query('getReferences', args);

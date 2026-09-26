@@ -1,5 +1,8 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 
+interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
+type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
+
 // Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
 // The three message APIs are absent, so a reintroduced direct call throws.
@@ -11,7 +14,7 @@ const { handlers, registerCommand, showQuickPick } = vi.hoisted(() => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    showQuickPick: vi.fn(),
+    showQuickPick: vi.fn<ShowQuickPick>(),
   };
 });
 
@@ -43,8 +46,8 @@ function fakeTreeSync() {
 const RECORD_TYPE_NODE = { kind: 'recordType', plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
 const RECORD_TYPE_IDENTITY = { plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
 
-// A RecordNode-shaped tree row and its plain-identity equivalent — what `modbench.record.delete`,
-// `.copyAsOverride` and `.copyAsNewRecord` must all resolve to the same call from.
+// A RecordNode-shaped tree row and its plain-identity equivalent — what `modbench.record.delete`
+// and `.copy` must both resolve to the same call from.
 const RECORD_NODE = {
   kind: 'record', origin: 'ModA',
   record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null },
@@ -349,153 +352,268 @@ describe('registerRecordLifecycleCommands', () => {
   });
 });
 
-describe('registerRecordCopyCommands', () => {
-  function invoke(client: InMemoryMEditClient) {
+// plugins.md, Pickers, Copy; edit-record, The flow: one command over the selection, the mode
+// picked, then the destinations.
+describe('modbench.record.copy', () => {
+  const SOURCE = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const SECOND_NODE = {
+    kind: 'record', origin: 'ModA',
+    record: { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', editorId: 'Second' },
+  };
+  const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const PATCH = { name: 'Patch.esp', origin: 'PatchMod' };
+  const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
+  const HEADER = { webviewSection: 'recordHeader', ...SOURCE, compilable: true, preventDefaultContextMenuItems: true };
+
+  let viewSelection: readonly unknown[] = [];
+  afterEach(() => { viewSelection = []; });
+  // A pick a test leaves unanswered must not answer the next test's.
+  beforeEach(() => { showQuickPick.mockReset(); });
+
+  function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const treeSync = fakeTreeSync();
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
-    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, treeSync, refreshMatchingPlugins);
-    return { treeSync, refreshMatchingPlugins, reporter };
+    const ask = scriptedDialog(...answers);
+    registerRecordCopyCommands(
+      client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins, () => viewSelection);
+    return { treeSync, refreshMatchingPlugins, reporter, ask };
   }
 
-  function scriptDestinationPick(client: InMemoryMEditClient) {
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA' })]);
-    client.setQueryAnswer('getRecordOverridePlugins', []);
-    showQuickPick.mockResolvedValue({ label: 'MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } });
-  }
+  const copy = (...args: unknown[]) =>
+    present(handlers.get('modbench.record.copy'), "the handler registered for 'modbench.record.copy'")(...args);
 
-  describe('modbench.record.copyAsOverride — a tree node and a plain identity record the same call', () => {
-    it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY]])(
-      'records copyRecordAsOverride from %s', async (_label, arg) => {
-        const client = new InMemoryMEditClient();
-        client.setCommandResult('copyRecordAsOverride', { applied: true, formKey: '000801:MyPatch.esp' });
-        scriptDestinationPick(client);
-        invoke(client);
-
-        await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(arg);
-
-        expect(client.calls.filter(c => c.method === 'copyRecordAsOverride').map(c => c.args)).toEqual([
-          ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA'],
-        ]);
-      });
-  });
-
-  it('lands the copied record and its destination once the copy-as-override applies', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('copyRecordAsOverride', { applied: true, formKey: '000801:MyPatch.esp' });
-    scriptDestinationPick(client);
-    const { treeSync, reporter } = invoke(client);
-
-    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
-
-    expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into MyPatch.esp.']);
-    expect(treeSync.refresh).toHaveBeenCalledOnce();
-  });
-
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a copy-as-override', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('copyRecordAsOverride', {
-      refused: true, message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
-    });
-    scriptDestinationPick(client);
-    const { treeSync, reporter } = invoke(client);
-
-    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
+  function destinations(client: InMemoryMEditClient) {
+    client.setQueryAnswer('getPlugins', [
+      pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA', loadOrderIndex: 2, isTracked: true }),
+      pluginMetadataFixture({ name: 'Patch.esp', origin: 'PatchMod', loadOrderIndex: 4, isTracked: true }),
+      pluginMetadataFixture({ name: 'Other.esp', origin: 'OtherMod', loadOrderIndex: 6, isTracked: true }),
     ]);
+  }
+
+  // The two picks, answered in order: the mode by its item, the destinations by their names.
+  function pick(mode: 'Override' | 'New' | undefined, picked?: readonly { name: string; origin: string }[]) {
+    showQuickPick.mockImplementationOnce((items) =>
+      Promise.resolve(items.find((item) => item.mode === mode)));
+    showQuickPick.mockImplementationOnce((items) =>
+      Promise.resolve(picked && items.filter((item) => picked.some((p) => p.name === item.plugin?.name))));
+  }
+
+  const copyCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'copyRecords').map((c) => c.args);
+
+  it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY], ['the Editor\'s record header', HEADER]])(
+    'copies the record %s names into every destination picked, in the mode picked', async (_what, arg) => {
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setCommandResult('copyRecords', { landed: [], refused: [] });
+      pick('New', [PATCH, OTHER]);
+      invoke(client);
+
+      await copy(arg);
+
+      expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false]]);
+    });
+
+  it('takes the whole selection when the right-clicked row is one of several selected', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    invoke(client);
+
+    await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
+  });
+
+  it('from the palette, takes the Plugins selection', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    viewSelection = [RECORD_NODE, SECOND_NODE];
+    invoke(client);
+
+    await copy();
+
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
+  });
+
+  it('asks for the destinations in one pick of many, each with its load position', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    pick('New', undefined);
+    invoke(client);
+
+    await copy(RECORD_NODE);
+
+    const [items, options] = present(showQuickPick.mock.calls[1], 'the destination pick');
+    expect(options?.canPickMany).toBe(true);
+    expect(items.map(({ label, description }) => `${label} ${description ?? ''}`))
+      .toEqual(['MyPatch.esp [2]', 'Patch.esp [4]', 'Other.esp [6]']);
+  });
+
+  // commands.md, Esc changes nothing: no write and no message.
+  it.each([
+    ['the mode', () => { pick(undefined); }],
+    ['the destinations', () => { pick('New', undefined); }],
+    ['the destinations, with none picked', () => { pick('New', []); }],
+  ])('Esc on %s copies nothing and says nothing', async (_what, answer) => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    answer();
+    const { reporter } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(copyCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  // commands.md, Confirm what destroys: once for the whole selection.
+  it('asks once to replace every copy the picked destinations already hold, then copies with replace', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH]);
+    client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH, OTHER]);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('Override', [PATCH, OTHER]);
+    const { ask } = invoke(client, 'Replace');
+
+    await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
+
+    expect(ask.asked).toHaveLength(1);
+    const question = present(ask.asked[0], 'the one replace question');
+    expect(question.buttons).toEqual(['Replace']);
+    expect(question.detail?.split('\n')).toEqual([
+      '000801:MyPatch.esp in Patch.esp (PatchMod)',
+      'Second [000802:MyPatch.esp] in Patch.esp (PatchMod)',
+      'Second [000802:MyPatch.esp] in Other.esp (OtherMod)',
+    ]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'Override', [PATCH, OTHER], true]]);
+  });
+
+  it('copies nothing when the replacement is not confirmed', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setQueryAnswer('getRecordHolders', [PATCH]);
+    pick('Override', [PATCH, OTHER]);
+    const { ask, reporter } = invoke(client, undefined);
+
+    await copy(RECORD_NODE);
+
+    expect(ask.asked).toHaveLength(1);
+    expect(copyCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('asks nothing when no picked destination holds a copy', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setQueryAnswer('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('Override', [PATCH]);
+    const { ask } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(ask.asked).toEqual([]);
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false]]);
+  });
+
+  it('never asks to replace a copy as new, which lands under a FormID of its own', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    const { ask } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(ask.asked).toEqual([]);
+    expect(client.calls.some((c) => c.method === 'getRecordHolders')).toBe(false);
+  });
+
+  it('refreshes the tree and says where the copies landed, naming each refused item and why', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', {
+      landed: [{ record: SOURCE, destination: PATCH }],
+      refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'Other.esp is not tracked' }],
+    });
+    pick('New', [PATCH, OTHER]);
+    const { reporter, treeSync, refreshMatchingPlugins } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(treeSync.refresh).toHaveBeenCalledOnce();
+    expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
+    expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not make 1 of 2 copies.',
+      detail: '"000801:MyPatch.esp in MyPatch.esp (ModA) into Other.esp (OtherMod)" (Other.esp is not tracked)',
+    }]);
+  });
+
+  it('reports a refused call at error and refreshes nothing', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { refused: true, message: 'Could not copy 1 record — boom' });
+    pick('New', [PATCH]);
+    const { reporter, treeSync } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — boom', detail: undefined }]);
     expect(treeSync.refresh).not.toHaveBeenCalled();
   });
 
-  it('tells the user when no plugin is eligible, and picks nothing', async () => {
+  it('says why a destination lookup failed, and copies nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswer('getRecordOverridePlugins', []);
+    client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503): No load order has been received.'));
+    showQuickPick.mockImplementationOnce((items) =>
+      Promise.resolve(items.find((item) => item.mode === 'New')));
     const { reporter } = invoke(client);
 
-    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
+    await copy(RECORD_NODE);
 
-    expect(reporter.landings).toEqual(['No eligible destination plugin for this copy.']);
-    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not look up the plugins to copy into.',
+      detail: 'GET /plugins failed (503): No load order has been received.',
+    }]);
+    expect(copyCalls(client)).toEqual([]);
   });
 
-  it('reports a failed destination lookup at error, with its reason as the detail', async () => {
+  it('says why it could not check which destinations hold the records, and copies nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA' })]);
-    client.setQueryFailure('getRecordOverridePlugins', new Error('backend down'));
+    destinations(client);
+    client.setQueryFailure('getRecordHolders', new Error('mEdit is stopped.'));
+    pick('Override', [PATCH]);
     const { reporter } = invoke(client);
 
-    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
+    await copy(RECORD_NODE);
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up destination plugins.', detail: 'backend down' },
-    ]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not check which plugins already hold a copy.',
+      detail: 'mEdit is stopped.',
+    }]);
+    expect(copyCalls(client)).toEqual([]);
   });
 
-  describe('modbench.record.copyAsNewRecord — a tree node and a plain identity record the same call', () => {
-    it.each([['a RecordNode row', RECORD_NODE], ['a plain identity literal', RECORD_IDENTITY]])(
-      'records copyRecordAsNewRecord from %s', async (_label, arg) => {
-        const client = new InMemoryMEditClient();
-        client.setCommandResult('copyRecordAsNewRecord', { applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
-        scriptDestinationPick(client);
-        invoke(client);
-
-        await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(arg);
-
-        expect(client.calls.filter(c => c.method === 'copyRecordAsNewRecord').map(c => c.args)).toEqual([
-          ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA', undefined],
-        ]);
-      });
-  });
-
-  it('lands the new FormKey and its destination once the copy-as-new-record applies', async () => {
+  it('says so when no plugin can take the copy, and offers no pick of none', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('copyRecordAsNewRecord', { applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
-    scriptDestinationPick(client);
-    const { treeSync, reporter } = invoke(client);
-
-    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
-
-    expect(reporter.landings).toEqual(['Copied as 000900:MyPatch.esp into MyPatch.esp.']);
-    expect(treeSync.refresh).toHaveBeenCalledOnce();
-  });
-
-  it('reports the ready-to-show message at error and refreshes nothing when the backend refuses a copy-as-new-record', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('copyRecordAsNewRecord', {
-      refused: true, message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom',
-    });
-    scriptDestinationPick(client);
-    const { treeSync, reporter } = invoke(client);
-
-    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
-    ]);
-    expect(reporter.landings).toEqual([]);
-    expect(treeSync.refresh).not.toHaveBeenCalled();
-  });
-
-  // xedit.md divergence 5.
-  it('reports a no-free-FormID refusal as a plain error, and never asks the ESL-flag question', async () => {
-    const client = new InMemoryMEditClient();
-    const refusalMessage = 'Could not copy 000801:MyPatch.esp into "MyPatch.esp" — MyPatch.esp has ' +
-      'exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use. Clear the light ' +
-      'flag in the header, or change a record\'s FormID.';
-    let capturedCallback: unknown;
-    client.setCommandHandler('copyRecordAsNewRecord', (...args) => {
-      capturedCallback = args[6];
-      return Promise.resolve({ refused: true, message: refusalMessage });
-    });
-    scriptDestinationPick(client);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Untracked.esp', origin: 'ModB', isTracked: false })]);
+    showQuickPick.mockImplementationOnce((items) =>
+      Promise.resolve(items.find((item) => item.mode === 'New')));
     const { reporter } = invoke(client);
 
-    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
+    await copy(RECORD_NODE);
 
-    expect(capturedCallback).toBeUndefined();
-    expect(reporter.reports).toEqual([{ severity: 'error', message: refusalMessage, detail: undefined }]);
+    expect(reporter.landings).toEqual(['No plugin can take the copy: Track a plugin to edit it.']);
+    expect(showQuickPick).toHaveBeenCalledOnce();
   });
 });

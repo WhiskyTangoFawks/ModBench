@@ -1,43 +1,34 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Edits;
 
-/// <summary>The Copy as New Record gesture's handler (ADR-0014 invariant 3): xEdit's "Copy as New
-/// Record Into…" — the codec's duplicate under a freshly allocated FormKey (ADR-0007).</summary>
-public sealed class CopyRecordAsNewRecordHandler
+/// <summary>Copy's new mode, one record into one destination: xEdit's "Copy as New Record Into…" —
+/// the codec's duplicate under a freshly allocated FormKey (ADR-0007).</summary>
+internal sealed class NewRecordCopy
 {
     private readonly WriteTargets _targets;
     private readonly RecordCopy _recordCopy;
     private readonly RecordTextCodec _codec;
-    private readonly ILogger<CopyRecordAsNewRecordHandler> _logger;
+    private readonly ILogger _logger;
 
-    // Internal because the shared module is, which is why this assembly registers its own handlers
-    // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal CopyRecordAsNewRecordHandler(
-        WriteTargets targets,
-        RecordCopy recordCopy,
-        RecordTextCodec codec,
-        ILogger<CopyRecordAsNewRecordHandler> logger)
+    internal NewRecordCopy(WriteTargets targets, RecordCopy recordCopy, RecordTextCodec codec, ILogger logger)
     {
         (_targets, _recordCopy, _codec, _logger) = (targets, recordCopy, codec, logger);
     }
 
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
-    public RecordEditResult CopyRecordAsNewRecord(
-        PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, string? requestedFormKey = null)
+    internal RecordEditResult Copy(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
-        return CopyAsNewRecord(copy, destinationPlugin, requestedFormKey);
+        return CopyAsNewRecord(copy, destinationPlugin);
     }
 
-    private RecordEditResult CopyAsNewRecord(
-        WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, string? requestedFormKey)
+    private RecordEditResult CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -48,12 +39,12 @@ public sealed class CopyRecordAsNewRecordHandler
         if (RecordTypeDispatch.For(release).FolderNameFor(identity.RecordType) is null)
         {
             if (source.ContainerOf(identity) is { } container)
-                return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin, requestedFormKey);
+                return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin);
             if (WriteTargets.RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
         if (_targets.ResolveTargetFormKey(
-                destination.Repository, destinationPlugin, requestedFormKey, out var targetFormKey)
+                destination.Repository, destinationPlugin, requestedFormKey: null, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
@@ -79,12 +70,12 @@ public sealed class CopyRecordAsNewRecordHandler
     // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
     // A missing container chain auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
-        WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin, string? requestedFormKey)
+        WriteTargets.CopyTarget copy, DocumentContainment container, PluginAddress destinationPlugin)
     {
         var (source, identity, destination, release, body) = copy;
 
         var allocator = _targets.AllocatorOver(destination.Repository, destinationPlugin);
-        if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey, out var targetFormKey) is { } refusedTarget)
+        if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey: null, out var targetFormKey) is { } refusedTarget)
             return refusedTarget;
 
         // Its own text carries its whole embedded subtree, so the codec has already read every

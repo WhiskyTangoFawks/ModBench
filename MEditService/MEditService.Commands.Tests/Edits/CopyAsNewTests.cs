@@ -5,7 +5,7 @@ using MEditService.Commands.Tests.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CopyRecordAsNewRecordHandlerTests
+public sealed class CopyAsNewTests
 {
     [Fact]
     public void CopyRecordAsNewRecord_AllocatesAFreeFormKey_AndLandsAsAWorkingTreeRecordInTheDestination()
@@ -13,7 +13,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         using var mod = CopyFixture.Create();
         var sourceBefore = mod.SourcePluginBytes();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -34,7 +34,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -49,8 +49,8 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var first = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
-        var second = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var first = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var second = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(first.Applied, first.Message);
         Assert.True(second.Applied, second.Message);
@@ -73,7 +73,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
             JsonDocument.Parse("\"SourceNpcDUPLICATE001\"").RootElement).Applied);
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -90,7 +90,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
             JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -104,7 +104,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = mod.CopyHandler.CopyAsNew(
             mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -115,24 +115,11 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     }
 
     [Fact]
-    public void CopyRecordAsNewRecord_WithARequestedFormKey_UsesItExactly()
-    {
-        using var mod = CopyFixture.Create();
-        const string requested = "900000:Destination.esp";
-
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
-            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, requested);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Equal(requested, result.NewFormKey);
-    }
-
-    [Fact]
     public void CopyRecordAsNewRecord_IsAbsentAtHead_UntilCommittedAndCompiled()
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -150,7 +137,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = mod.CopyHandler.CopyAsNew(
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -168,7 +155,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         using var mod = CopyFixture.Create();
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -176,38 +163,13 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     }
 
     [Fact]
-    public void CopyRecordAsNewRecord_WithARequestedFormKey_Refuses_WhenItCollides()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
-            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, mod.DestinationNpc.ToString());
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_WithARequestedFormKey_Refuses_WhenItBelongsToADifferentPlugin()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
-            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "900000:SomeOtherPlugin.esp");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
-    }
-
-    [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
-        var seeded = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
-            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "FFFFFF:Destination.esp");
+        var seeded = mod.CreateHandler.CreateRecord(mod.DestinationPlugin, "npc_", "AtTheTop", "FFFFFF:Destination.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -222,7 +184,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = fixture.CopyHandler.CopyAsNew(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -234,7 +196,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = fixture.CopyHandler.CopyAsNew(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -248,7 +210,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = fixture.CopyHandler.CopyAsNew(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -261,7 +223,7 @@ public sealed class CopyRecordAsNewRecordHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

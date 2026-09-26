@@ -71,20 +71,6 @@ public sealed class DeleteRecordHandler
         }
     }
 
-    // The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.
-    private sealed class SameRecord : IEqualityComparer<RecordAt>
-    {
-        internal static readonly SameRecord Instance = new();
-
-        public bool Equals(RecordAt x, RecordAt y) =>
-            PluginAddress.Comparer.Equals(x.Plugin, y.Plugin)
-            && string.Equals(x.FormKey, y.FormKey, StringComparison.OrdinalIgnoreCase);
-
-        public int GetHashCode(RecordAt record) => HashCode.Combine(
-            PluginAddress.Comparer.GetHashCode(record.Plugin),
-            StringComparer.OrdinalIgnoreCase.GetHashCode(record.FormKey));
-    }
-
     private RecordEditResult Delete(PluginAddress plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;

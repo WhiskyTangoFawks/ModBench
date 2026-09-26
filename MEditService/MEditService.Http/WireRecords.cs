@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 
 namespace MEditService.Http;
 
@@ -67,16 +68,15 @@ public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 /// answer, never the status of the call.</summary>
 public record RecordDeleteResponse(IReadOnlyList<RecordAddress> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
-// ADR-0007: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
-// names the record copied; both plugins travel as ADR-0012 compound identities.
+/// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an
+/// override copy over the one a destination holds; the surface supplies it once the user confirms.</summary>
+public record RecordCopyRequest(
+    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
 
-public record RecordCopyAsOverrideRequest(string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin);
+/// <summary><see cref="NewFormKey"/> is the duplicate's, and null for an override.</summary>
+public record RecordCopyLanded(RecordAddress Record, PluginAddress Destination, string? NewFormKey);
 
-public record RecordCopyAsOverrideResponse(bool Applied, string FormKey);
+public record RecordCopyRefusal(RecordAddress Record, PluginAddress Destination, RecordEditRefusal Refusal, string Message);
 
-/// <summary><see cref="RequestedFormKey"/> null means auto-allocate the next free local FormID
-/// (both-refs collision-safe); non-null is xEdit's typed-FormID path.</summary>
-public record RecordCopyAsNewRecordRequest(
-    string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin, string? RequestedFormKey);
-
-public record RecordCopyAsNewRecordResponse(bool Applied, string SourceFormKey, string NewFormKey);
+/// <summary>Applied or refusal, per record and destination (ADR-0019 invariant 4).</summary>
+public record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);

@@ -24,7 +24,7 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyInteriorCell_IntoAPluginHoldingNoCells_CompilesWithTheCellUnderTheMintedBlockPair()
     {
-        var copy = _fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var copy = _fixture.CopyHandler.CopyAsOverride(
             _fixture.SourcePlugin, _fixture.InteriorCell.ToString(), _fixture.DestinationPlugin);
         Assert.True(copy.Applied, copy.Message);
 
@@ -41,7 +41,7 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
     [Fact]
     public async Task CopyInteriorPlacedReference_IntoAPluginHoldingNoCells_CompilesWithTheRefInsideTheMintedCell()
     {
-        var copy = _fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var copy = _fixture.CopyHandler.CopyAsOverride(
             _fixture.SourcePlugin, _fixture.PersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copy.Applied, copy.Message);
 
