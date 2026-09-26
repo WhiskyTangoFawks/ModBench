@@ -24,8 +24,9 @@ The user's picture of their data is never silently wrong. Nothing is dropped, sk
 in silence. A user who trusts a wrong picture makes wrong edits to their modlist.
 
 ## Existing tools
-Where VS Code or git already does a job, Modbench uses it. The user already understands these tools,
-so a job they do is one Modbench neither teaches nor maintains.
+Where VS Code, git or Mutagen already does a job, Modbench uses it. The user already understands
+VS Code and git, and Mutagen already knows every game's format, so a job they do is one Modbench
+neither teaches nor maintains.
 
 ## Reference behaviour, VS Code interaction
 The reference tool decides behaviour: what the user sees, what a gesture does and what it is
