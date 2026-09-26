@@ -78,9 +78,9 @@ own item to the Argument.
   A category word such as "edit" fails the first test, so its variants are separate gestures. An
   opposite pair is one row with two entries, and it needs no picker. Gestures that share a flow share
   a diagram; that does not merge them.
-- **A gesture is atomic.** It does one thing the user can name. A convenience that chains gestures
-  the user already has, such as installing and then moving, is planned and never part of the alpha.
-  Until it ships, the user runs the gestures in turn.
+- **A gesture is atomic.** It does one thing the user intends, however many steps it takes inside. A
+  chain of gestures the user already has, such as installing and then moving, is a script the user
+  writes.
 - **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
   can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
   command, not a second gesture.
