@@ -31,6 +31,8 @@ the working tree, as the user answers.
 5. A later classification that finds nothing ends the question with no answer, so bytes restored
    by hand end it. An unanswered question is published again at each settle and load-time check
    that still finds the change.
+   A question that ends while its dialog still waits leaves the dialog open, and answering it writes
+   nothing, because an empty commit is skipped: no notification closes it, and no answer is refused.
 
 While a question is open, Commands refuses every write to every plugin the mod holds, compile
 included, and the refusal names the question: a compile would overwrite the evidence. Reads go on
