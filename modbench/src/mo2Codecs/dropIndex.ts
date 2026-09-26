@@ -22,11 +22,11 @@ export function dropIndexForMove(
   return targetIndex - movedBefore;
 }
 
-/** The index a splice writes the block at. The winning end is index 0 whatever else the list
- *  holds, so it needs no reckoning against the order at all. */
+/** The index a splice writes the block at, in `plugins.txt`, whose last line wins. The losing end
+ *  is index 0 whatever else the list holds, so it needs no reckoning against the order at all. */
 export function dropIndexIn(order: readonly string[], movedNames: readonly string[], drop: Drop): number {
-  if (drop.kind === 'winningEnd') return 0;
-  if (drop.kind === 'losingEnd') return dropIndexForMove(order, movedNames, undefined);
+  if (drop.kind === 'losingEnd') return 0;
+  if (drop.kind === 'winningEnd') return dropIndexForMove(order, movedNames, undefined);
   const at = dropIndexForMove(order, movedNames, drop.name);
   return drop.kind === 'before' ? at : at + 1;
 }

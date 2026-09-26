@@ -70,7 +70,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
                     .ToList();
 
                 opened[key] = new PluginContent(
-                    written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, masters, records.Count);
+                    written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, IsBlueprint: false, masters, records.Count);
                 if (listed) registered.Add(new RegisteredPlugin(name, origin, name, slot, enabled, Winning: true));
                 perPlugin.Add((key, slot, records));
             }

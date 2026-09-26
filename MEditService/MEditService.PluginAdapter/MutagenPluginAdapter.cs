@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
@@ -82,7 +83,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {
         using var loaded = OpenForRead(modPath, gameRelease, strings);
-        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String);
+        var name = modPath.ModKey.FileName.String;
+        // Mutagen's game-agnostic getter carries no raw header flags and names no blueprint bit, so
+        // only a game with blueprint plugins reads its header a second time.
+        var isBlueprint = PluginFlagPredicates.HasBlueprintPlugins(gameRelease)
+            && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, gameRelease).Flags);
+        return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
     }
 
     public LinkAnswers LinkTargets(
