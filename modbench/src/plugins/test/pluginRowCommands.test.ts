@@ -12,7 +12,10 @@ const {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    showQuickPick: vi.fn(),
+    showQuickPick: vi.fn<
+      (items: readonly { label: string; description?: string }[], options?: unknown) =>
+        Promise<{ label: string; description?: string } | undefined>
+    >(),
     withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
     executeCommand: vi.fn().mockResolvedValue(undefined),
   };
@@ -183,9 +186,9 @@ describe('registerTrackCommand', () => {
     await handler(pluginNode());
 
     expect(showQuickPick).toHaveBeenCalledOnce();
-    const [items] = showQuickPick.mock.calls[0] as [{ label: string; description: string }[]];
+    const [items] = present(showQuickPick.mock.calls[0], 'the preset pick');
     expect(items.map((i) => i.label)).toEqual(['Edits', 'Everything']);
-    expect(items.every((i) => i.description.length > 0)).toBe(true);
+    expect(items.every((i) => (i.description ?? '').length > 0)).toBe(true);
   });
 
   // Esc changes nothing (plugins.md, Pickers, Track: "Esc tracks nothing"): showQuickPick resolves
@@ -210,6 +213,7 @@ describe('registerTrackCommand', () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
+    const trackSpy = vi.spyOn(client, 'track');
     const { handler, said } = invokeTrack(client);
 
     await handler(pluginNode());
@@ -217,10 +221,9 @@ describe('registerTrackCommand', () => {
     // The Idle message said before mEdit's first answer.
     expect(said).toContain('Tracking "ModA"…');
 
-    const trackCall = client.calls.find((c) => c.method === 'track');
-    const options = present(trackCall, 'the track call').args[2] as { onProgress: (status: unknown) => void };
+    const [, , options] = present(trackSpy.mock.calls[0], 'the track call');
     said.length = 0;
-    options.onProgress({ origin: 'ModA', phase: 'Serializing', pluginsDone: 1, pluginsTotal: 2 });
+    present(options, 'the track options').onProgress?.({ origin: 'ModA', phase: 'Serializing', pluginsDone: 1, pluginsTotal: 2 });
 
     expect(said).toEqual(['Tracking "ModA" — serialized 1 of 2 plugins…']);
   });
