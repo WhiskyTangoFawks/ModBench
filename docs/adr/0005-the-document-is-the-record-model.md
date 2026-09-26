@@ -15,10 +15,9 @@
    read from bytes or written to them. The codec is the one shape gate: an edit reaches a live
    object only by deserializing through it. Gates: `BannedApiScopeTests`,
    `HandWrittenApplierScanTests`, `GameNamespaceScanTests`.
-3. **xEdit owns the presentation.** What a value reads as, the gesture that edits it, which
-   arrays sort and by what, is xEdit's answer
-   ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)). Presentation changes no edit
-   value and no copy value.
+3. **xEdit owns the presentation.** What a value reads as and the gesture that edits it is xEdit's
+   answer ([ADR-0018](0018-xedit-is-the-reference-for-record-editing.md)). Presentation changes no
+   edit value and no copy value.
 4. **Per-game knowledge is annotation data, validated against the assembly, never code.** What
    reflection cannot answer is one validated row per fact, one table per concern per game. A row
    that does not resolve fails schema generation and names itself. A fact the assembly can answer
