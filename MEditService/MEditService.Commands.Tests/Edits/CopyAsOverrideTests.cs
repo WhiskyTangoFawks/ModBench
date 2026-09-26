@@ -1,9 +1,10 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CopyRecordAsOverrideHandlerTests
+public sealed class CopyAsOverrideTests
 {
     [Fact]
     public void CopyRecordAsOverride_FromAnUntrackedSource_LandsUnderTheSameFormKey()
@@ -11,7 +12,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
         using var mod = CopyFixture.Create();
         var sourceBefore = mod.SourcePluginBytes();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         // Not NewFormKey: an override echoes the caller's own FormKey rather than minting one
@@ -35,7 +36,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.CommittedDocument(
@@ -53,7 +54,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
         var mutatedText = File.ReadAllText(sourceFile).Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk");
         File.WriteAllText(sourceFile, mutatedText);
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         var destinationFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", "MutatedOnDisk");
@@ -69,9 +70,9 @@ public sealed class CopyRecordAsOverrideHandlerTests
         using var untracked = CopyFixture.Create();
         using var tracked = CopyFixture.Create(trackSource: true);
 
-        Assert.True(untracked.CopyAsOverrideHandler.CopyRecordAsOverride(
+        Assert.True(untracked.CopyHandler.CopyAsOverride(
             untracked.SourcePlugin, untracked.SourceNpc.ToString(), untracked.DestinationPlugin).Applied);
-        Assert.True(tracked.CopyAsOverrideHandler.CopyRecordAsOverride(
+        Assert.True(tracked.CopyHandler.CopyAsOverride(
             tracked.SourcePlugin, tracked.SourceNpc.ToString(), tracked.DestinationPlugin).Applied);
 
         Assert.Equal(
@@ -89,7 +90,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
         // SourceEditFixture.Untracked() does — no .git in the folder at all.
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -97,20 +98,22 @@ public sealed class CopyRecordAsOverrideHandlerTests
     }
 
     // Held at Head is held: a record the destination committed and then deleted in its working tree
-    // is still in the compiled plugin, so its FormKey is not free.
+    // is still in the compiled plugin, and a replacement has no document to replace.
     [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtHeadOnly()
+    public void CopyRecordAsOverride_Refuses_WhenTheDestinationHoldsTheFormKeyAtHeadOnly_EvenWithReplace()
     {
         using var mod = CopyFixture.Create();
-        Assert.True(mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+        Assert.True(mod.CopyHandler.CopyAsOverride(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin).Applied);
         mod.CommitDestination();
         Assert.Empty(mod.DeleteHandler.DeleteRecords([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(
+            mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, replace: true);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
+        Assert.Contains("HEAD", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -118,7 +121,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

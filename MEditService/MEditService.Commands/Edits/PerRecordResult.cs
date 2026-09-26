@@ -6,6 +6,20 @@ namespace MEditService.Commands.Edits;
 /// one filename can be in two mods, each holding the record.</summary>
 public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
 
+// The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.
+internal sealed class SameRecord : IEqualityComparer<RecordAt>
+{
+    internal static readonly SameRecord Instance = new();
+
+    public bool Equals(RecordAt x, RecordAt y) =>
+        PluginAddress.Comparer.Equals(x.Plugin, y.Plugin)
+        && string.Equals(x.FormKey, y.FormKey, StringComparison.OrdinalIgnoreCase);
+
+    public int GetHashCode(RecordAt record) => HashCode.Combine(
+        PluginAddress.Comparer.GetHashCode(record.Plugin),
+        StringComparer.OrdinalIgnoreCase.GetHashCode(record.FormKey));
+}
+
 /// <summary>A record of a selection that wrote nothing, with the typed refusal and the message
 /// naming the way out.</summary>
 public sealed record RecordRefused(RecordAt Record, RecordEditRefusal Refusal, string Message);

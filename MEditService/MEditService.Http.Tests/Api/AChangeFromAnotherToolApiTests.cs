@@ -159,11 +159,10 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
         var renamed = OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\"");
 
-        var copied = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(response.ToString())}/copy-as-override",
-            new { sourcePlugin = master, sourceOrigin = masterOrigin, destinationPlugin = patch, destinationOrigin = patchOrigin });
+        var copied = await Client.Copy(response.ToString(), (master, masterOrigin), "Override", (patch, patchOrigin));
 
         copied.EnsureSuccessStatusCode();
+        Assert.Single((await copied.Body()).GetProperty("applied").EnumerateArray());
         Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\""));
         Assert.Contains("CopiedResponse", File.ReadAllText(renamed), StringComparison.Ordinal);
     }

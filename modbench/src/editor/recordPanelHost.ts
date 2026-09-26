@@ -34,8 +34,8 @@ export interface EditorCommandDeps {
   treeSync: RecordTreeSync;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecords' | 'copyRecordAsOverride' | 'copyRecordAsNewRecord'
-    | 'getPlugins' | 'getRecordOverridePlugins'>;
+    | 'createRecord' | 'deleteRecords' | 'copyRecords'
+    | 'getPlugins' | 'getRecordHolders'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
@@ -104,7 +104,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins,
       mergedTreeSelection),
     ...registerRecordCopyCommands(
-      meditClient, outputChannel, deps.reporterFor('recordCopy'), treeSync, refreshMatchingPlugins),
+      meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, treeSync, refreshMatchingPlugins,
+      mergedTreeSelection),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });

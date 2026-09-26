@@ -131,7 +131,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = mod.CopyHandler.CopyAsOverride(
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
 
         Assert.False(result.Applied);
@@ -143,7 +143,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = mod.CopyHandler.CopyAsNew(
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
 
         Assert.False(result.Applied);
@@ -155,7 +155,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = mod.CopyHandler.CopyAsOverride(
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.WinningPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -167,7 +167,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = mod.CopyHandler.CopyAsOverride(
             mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -231,7 +231,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsOverrideHandler.CopyRecordAsOverride(
+        var result = mod.CopyHandler.CopyAsOverride(
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
 
         Assert.False(result.Applied);
@@ -243,7 +243,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
-        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
+        var result = mod.CopyHandler.CopyAsNew(
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
 
         Assert.False(result.Applied);

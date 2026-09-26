@@ -226,6 +226,13 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allDeletableRecords).toBe(false);
   });
 
+  // A copy reads its source, so any record copies, whatever its plugin allows.
+  it('copy sees a selection of records, cells included, whatever their plugins allow', () => {
+    expect(context([own, cell, immutable, untrackedRecord]).allRecords).toBe(true);
+    expect(context([own, alpha]).allRecords).toBe(false);
+    expect(context([]).allRecords).toBe(false);
+  });
+
   // mods.md, Menus and keys, story 3, which plugins.md story 5 follows: Space takes the focused
   // row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
