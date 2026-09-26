@@ -41,7 +41,8 @@ serving the last state.
 ## The command
 
 1. Plugins sends `decompile plugin` to Commands, through the mEdit client and the HTTP endpoints:
-   the plugins, each as origin and file name, and the destination. `track` also sends the preset.
+   the plugins, each as origin and file name, and the destination. Each plugin carries its mod's
+   upstream version, as the mod manager records it. `track` also sends the preset.
 2. For each plugin in turn, the Plugin adapter reads its bytes, and Commands reads every record
    into documents. A localized plugin's strings come from the mod's `Strings/` folder, then from
    the game's.

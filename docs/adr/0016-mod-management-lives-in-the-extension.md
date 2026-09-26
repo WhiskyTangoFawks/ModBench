@@ -13,8 +13,8 @@ service.
    with no `plugins.txt` line, come from the backend through the generated client, so there is one
    master verdict and no second signal for two views to disagree over.
    `pluginBinaryScan.test.ts` is the gate.
-2. **Mod Management reaches the backend only with plugin files at physical paths.** It never
-   sends a mod, a modlist or a profile
+2. **Mod Management hands the backend plugin files at physical paths, and a mod's facts that
+   Editing needs, as data.** It never sends a modlist or a profile
    ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)),
    and it never touches git or a record.
 

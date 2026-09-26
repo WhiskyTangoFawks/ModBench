@@ -14,10 +14,8 @@ file re-read, which is what lets the editor follow a mod change as it happens
    can name several plugins, so it cannot be the key. `origin` is the mod folder that provides
    the file, with reserved values for the game's `Data/` directory and MO2's `overwrite/`;
    vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component.
-2. **The column is named `origin`, not `mod`.** Editing treats an origin as an opaque string it
-   never interprets. Mod Management knows an origin is a mod folder and is the only side that
-   renders it. The vocabulary boundary ([CONTEXT.md](../../CONTEXT.md)) holds even though
-   the boundary object sits in a primary key.
+2. **The column is named `origin`, not `mod`.** The game's `Data/` folder and Overwrite are origins
+   and not mods. An origin that is a mod is that mod's folder, where its repository lives.
 3. **Origin is never what the user reads.** The tree and the compare-grid header show the
    filename; the origin sits in the tooltip and appears inline only when two loaded plugins share a
    filename. Column headers are the scarcest space in the grid, and xEdit's carry filenames alone.

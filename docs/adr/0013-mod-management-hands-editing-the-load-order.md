@@ -1,9 +1,12 @@
 # Mod Management hands Editing the load order
 
-Mod Management owns both override orders and reads MO2's files; Editing reads neither. What
-crosses between them is the Plugin load order, as a value, whenever anything that feeds it
-changes, and the notification stream coming back. Nothing else crosses. Modbench is one tool
-([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)), so Editing reconciles the value
+Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order.
+The record layer is the plugins and their records, resolved by plugin order. A plugin file is where
+the two meet. Mod Management owns the file layer: both orders and every file of the mod manager,
+read through the Instance adapter. Editing owns the record layer and reads none of the mod
+manager's files. Mod Management hands Editing the load order, as a value, whenever anything that
+feeds it changes, and a fact about a mod that Editing needs arrives as data too. Modbench is one
+tool ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)), so Editing reconciles the value
 it is handed and never reloads.
 
 ## Strategic invariants
@@ -27,8 +30,6 @@ it is handed and never reloads.
    both sides and the adapters.** There is no session: nothing is loaded, reloaded or exited, and
    a plugin that fails to parse is a row in an error state, the way a file with a diagnostic is
    still a file.
-5. **No "mod" crosses.** Mod Management sends plugin files at physical paths plus the two
-   booleans above, and no modlist, profile or mod name.
 
 ## Derived tactical observations
 
@@ -37,9 +38,7 @@ it is handed and never reloads.
   provides. A disabled mod's plugins are not in it, so enabling a mod is when its plugins first pay
   their one index.
 - Opening the record index does not clear the registration rows; they are the last known load
-  order, and the snapshot sent on activation corrects them. Whether Editing should read the
-  profile files itself, which would move Mod override order resolution across the boundary, is
-  deliberately left open.
+  order, and the snapshot sent on activation corrects them.
 
 ## Alternatives rejected
 
@@ -47,4 +46,4 @@ it is handed and never reloads.
   mod-order change, participation for enable and disable, load and unload for unlisted plugins.
   Every future gesture would need its own endpoint and its own drift story.
 - **Editing reads `modlist.txt` and `plugins.txt` itself.** Self-validating like the record
-  index, but puts Mod override order resolution, and "mod", inside Editing. Deferred, not refused.
+  index, but puts the mod manager's formats and mod order inside Editing.
