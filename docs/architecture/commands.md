@@ -33,8 +33,7 @@ A gesture this file has and the model cannot hold is a ticket.
 - **Command ID**: the registered interface and the source of truth, which the code reflects. It is
   `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`,
   `modbench.downloadedFile.delete`). `-` means the gesture has none. A toggle or opposite pair has one
-  ID per direction. A row that lists more than one ID, other than a pair, is `debt`. So is a
-  registered ID that differs from the target here.
+  ID per direction.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
@@ -42,19 +41,18 @@ A gesture this file has and the model cannot hold is a ticket.
   name or a FormKey. For a gesture that creates an object, it identifies the container, when the
   entry point is on the container's row. A create from a title icon has none, and its container is
   an Option. It is the same on every surface that offers the gesture. Singular means the clicked
-  row, and plural means the whole selection. A handler that receives anything else is `debt`.
+  row, and plural means the whole selection.
 - **Template**: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md))
   or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row
   follows, read from [the xEdit audit](../research/xedit-surface-audit.md),
   [the xEdit grid audit](../research/xedit-ux-audit.md) and
   [the MO2 audit](../research/mo2-surface-audit.md). `none` means the template has no such
   gesture: the row is an addition or a divergence, and needs a ruling.
-- **Trace**: the sequence diagram of the gesture's flow. A gesture that is not built has none,
-  because drawing the trace is part of designing the gesture. A built gesture with `-` has a trace
-  still to draw, and `none` that it has no flow between boxes: its specification is this row and its
-  surface. Gestures whose arrows are the same share one diagram. Beside each diagram, a `.md` file of
-  the same name holds the contract: what the flow promises, step by step, where it hands off, what
-  it refuses, and what a failure leaves.
+- **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
+  drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
+  its specification is this row and its surface. Gestures whose arrows are the same share one
+  diagram. Beside each diagram, a `.md` file of the same name holds the contract: what the flow
+  promises, step by step, where it hands off, what it refuses, and what a failure leaves.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
