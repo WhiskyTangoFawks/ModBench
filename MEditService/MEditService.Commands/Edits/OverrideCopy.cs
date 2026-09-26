@@ -1,45 +1,43 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Edits;
 
-/// <summary>The Copy as Override gesture's handler (ADR-0014 invariant 3): xEdit's "Copy as
-/// Override Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0007).</summary>
-public sealed class CopyRecordAsOverrideHandler
+/// <summary>Copy's override mode, one record into one destination: xEdit's "Copy as Override
+/// Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0007).</summary>
+internal sealed class OverrideCopy
 {
     private readonly WriteTargets _targets;
     private readonly RecordCopy _recordCopy;
     private readonly LoadOrderHolder _loadOrder;
     private readonly RecordTextCodec _codec;
-    private readonly ILogger<CopyRecordAsOverrideHandler> _logger;
+    private readonly ILogger _logger;
 
-    // Internal because the shared module is, which is why this assembly registers its own handlers
-    // (MEditService.Commands.Composition) rather than the host naming a type it cannot see.
-    internal CopyRecordAsOverrideHandler(
+    internal OverrideCopy(
         WriteTargets targets,
         RecordCopy recordCopy,
         LoadOrderHolder loadOrder,
         RecordTextCodec codec,
-        ILogger<CopyRecordAsOverrideHandler> logger)
+        ILogger logger)
     {
         (_targets, _recordCopy, _loadOrder, _codec, _logger) = (targets, recordCopy, loadOrder, codec, logger);
     }
 
     /// <summary>The source's text is read before anything is written, so a record the codec cannot
-    /// read refuses rather than landing as a stub. The master dependency follows at compile.</summary>
-    public RecordEditResult CopyRecordAsOverride(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin)
+    /// read refuses rather than landing as a stub. A destination holding the record takes it only
+    /// with <paramref name="replace"/>.</summary>
+    internal RecordEditResult Copy(PluginAddress sourcePlugin, string formKey, PluginAddress destinationPlugin, bool replace)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
-        return CopyAsOverride(copy, destinationPlugin);
+        return CopyAsOverride(copy, destinationPlugin, replace);
     }
 
-    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
+    private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -53,24 +51,22 @@ public sealed class CopyRecordAsOverrideHandler
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
                 source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
-                container, destination, release);
+                container, destination, release, replace);
         }
 
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
             return containerRefusal;
 
-        var isContainer = ContainerChildFields.HasChildFields(identity.RecordType, release);
         if (destination.Repository.HoldsAtEitherRef(destinationPlugin, formKey))
         {
-            // A destination already overriding the explicitly-selected container record gets it
-            // replaced, own-fields-only (xEdit's copy-into behavior). Every other record still
-            // refuses, as does a record held only at Head.
-            if (isContainer && _recordCopy.Identity(destination, formKey, release) is { } existingTarget)
-                return ReplaceExplicitContainerCopyTarget(source, identity, body, existingTarget, destination, release);
+            if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeyCollision,
-                $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
+            // Own fields only, as xEdit's copy-into does: the children the destination's copy
+            // carries stay. A record held only at Head has no document to replace.
+            if (_recordCopy.Identity(destination, formKey, release) is { } existingTarget)
+                return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
+
+            return RecordCopy.RefuseHeldOnlyAtHead(formKey, destinationPlugin);
         }
 
         // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell. Only the
@@ -105,7 +101,8 @@ public sealed class CopyRecordAsOverrideHandler
         }
 
         // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
-        if (isContainer) body = StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release);
+        if (ContainerChildFields.HasChildFields(identity.RecordType, release))
+            body = StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release);
 
         destination.Repository.Put(
             destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body));
@@ -124,7 +121,7 @@ public sealed class CopyRecordAsOverrideHandler
     // The destination's embedded children are transplanted onto the replacing record so the copy
     // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
     // regenerates canonical names.
-    private RecordEditResult ReplaceExplicitContainerCopyTarget(
+    private RecordEditResult ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
@@ -147,7 +144,7 @@ public sealed class CopyRecordAsOverrideHandler
         {
             _logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — replaced the existing override's own fields in place",
+                "({DestinationOrigin}) — replaced the copy it held, own fields only",
                 identity.FormKey, source.Plugin.Name, source.Plugin.Origin, destination.Plugin.Name,
                 destination.Plugin.Origin);
         }

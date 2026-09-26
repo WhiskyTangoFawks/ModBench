@@ -14,7 +14,7 @@ namespace MEditService.Commands.Tests.Edits;
 /// <summary>Its own fixture rather than <see cref="CopyFixture"/>: the source must be localized, the
 /// shape of the game's own masters, and none of that fixture's records carry a translated string.
 /// </summary>
-public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
+public sealed class CopyAsOverrideLocalizedTests : IDisposable
 {
     private const string SourcePluginName = "Localized.esm";
     private const string SourceOrigin = "LocalizedMod";
@@ -26,9 +26,9 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
     private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copy-localized-dest-").FullName;
     private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-copy-localized-game-").FullName;
     private readonly FormKey _door;
-    private readonly CopyRecordAsOverrideHandler _handler;
+    private readonly CopyRecordHandler _handler;
 
-    public CopyRecordAsOverrideLocalizedTests()
+    public CopyAsOverrideLocalizedTests()
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var door = sourceMod.Doors.AddNew("MainDoor");
@@ -54,7 +54,7 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
-        _handler = TestEditService.CopyAsOverrideHandler(holder);
+        _handler = TestEditService.CopyHandler(holder);
     }
 
     public void Dispose()
@@ -69,7 +69,7 @@ public sealed class CopyRecordAsOverrideLocalizedTests : IDisposable
     {
         var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
 
-        var result = _handler.CopyRecordAsOverride(
+        var result = _handler.CopyAsOverride(
             new PluginAddress(SourcePluginName, SourceOrigin), _door.ToString(), destination);
 
         Assert.True(result.Applied, result.Message);

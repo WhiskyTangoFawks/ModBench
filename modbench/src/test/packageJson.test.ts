@@ -675,8 +675,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
         ['modbench.openEditorBeside', '1_open'],
-        ['modbench.record.copyAsOverride', '5_copy'],
-        ['modbench.record.copyAsNewRecord', '5_copy'],
+        ['modbench.record.copy', '5_copy'],
         ['modbench.record.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
       ]);
@@ -685,8 +684,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
       ['modbench.openEditorBeside', '1_open'],
-      ['modbench.record.copyAsOverride', '5_copy'],
-      ['modbench.record.copyAsNewRecord', '5_copy'],
+      ['modbench.record.copy', '5_copy'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
   });
@@ -871,6 +869,16 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
+// editor.md, Menus and keys: the column header offers copy…, which picks the mode itself.
+describe('package.json copy on the record tab', () => {
+  it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
+    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+    expect(webviewMenu.filter((e) => e.command.startsWith('modbench.record.copy')).map((e) => [e.command, e.when])).toEqual([
+      ['modbench.record.copy', String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/`],
+    ]);
+  });
+});
+
 // plugins.md, Compile: from the palette, the one selected compilable plugin, or a pick of them.
 describe('package.json compile\'s palette entry', () => {
   it('is in the palette while any plugin compiles', () => {
@@ -888,6 +896,7 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
     ['modbench.record.create', 'modbench.plugin.singleEditableRecordType'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
+    ['modbench.record.copy', 'modbench.plugin.allRecords'],
   ] as const;
 
   it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
@@ -1219,10 +1228,6 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
   {
     gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
     outOfPalette: ['modbench.pluginListTree.compileAtMain'],
-  },
-  {
-    gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
-    outOfPalette: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
   },
 ];
 

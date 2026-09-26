@@ -1,0 +1,72 @@
+import { describe, it, expect } from 'vitest';
+import { COPY_MODE_ITEMS, copyDestinationItems, heldCopies } from '../copyPicks';
+import type { PluginMetadata, RecordAddress } from '../../client';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
+
+function plugin(name: string, origin: string, loadOrderIndex: number, facts: Partial<PluginMetadata> = {}): PluginMetadata {
+  return pluginMetadataFixture({ name, origin, loadOrderIndex, isTracked: true, isImmutable: false, ...facts });
+}
+
+const npc: RecordAddress = { formKey: '000801:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
+const faction: RecordAddress = { formKey: '000802:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
+const elsewhere: RecordAddress = { formKey: '000803:Other.esp', plugin: 'Other.esp', origin: 'OtherMod' };
+
+// plugins.md, Pickers, Copy: a pick of the mode, then a pick of the destination.
+describe('the mode pick', () => {
+  it('offers override and new, override first as xEdit\'s navigator does', () => {
+    expect(COPY_MODE_ITEMS.map((item) => item.mode)).toEqual(['Override', 'New']);
+  });
+});
+
+describe('the destination pick', () => {
+  const plugins = [
+    plugin('Source.esp', 'SourceMod', 3),
+    plugin('Patch.esp', 'PatchMod', 5),
+    plugin('Untracked.esp', 'UntrackedMod', 6, { isTracked: false }),
+    plugin('ReadOnly.esp', 'ReadOnlyMod', 7, { isImmutable: true }),
+    plugin('Other.esp', 'OtherMod', 9),
+  ];
+
+  // plugins.md, Menus and keys, story 7: an untracked plugin is no copy destination.
+  it('offers the tracked, editable plugins, each with its load position', () => {
+    expect(copyDestinationItems(plugins, 'New', [npc]).map(({ label, description }) => ({ label, description }))).toEqual([
+      { label: 'Source.esp', description: '[3]' },
+      { label: 'Patch.esp', description: '[5]' },
+      { label: 'Other.esp', description: '[9]' },
+    ]);
+  });
+
+  it('carries each plugin as (name, origin)', () => {
+    expect(copyDestinationItems(plugins, 'New', [npc]).map((item) => item.plugin)).toContainEqual({ name: 'Patch.esp', origin: 'PatchMod' });
+  });
+
+  it('does not offer an override the plugin every record already lives in', () => {
+    expect(copyDestinationItems(plugins, 'Override', [npc, faction]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
+  });
+
+  it('offers every tracked, editable plugin to an override of records from several plugins', () => {
+    expect(copyDestinationItems(plugins, 'Override', [npc, elsewhere]).map((item) => item.label))
+      .toEqual(['Source.esp', 'Patch.esp', 'Other.esp']);
+  });
+});
+
+describe('heldCopies', () => {
+  const patch = { name: 'Patch.esp', origin: 'PatchMod' };
+  const other = { name: 'Other.esp', origin: 'OtherMod' };
+
+  it('names each record and picked destination that already holds a copy of it', () => {
+    const holders = new Map([[npc.formKey, [{ name: 'Source.esp', origin: 'SourceMod' }, patch]], [faction.formKey, [other]]]);
+
+    expect(heldCopies([npc, faction], [patch, other], holders)).toEqual([
+      { record: npc, destination: patch },
+      { record: faction, destination: other },
+    ]);
+  });
+
+  // ADR-0012 invariant 1: a plugin of the same name in another mod is another plugin.
+  it('matches a destination by its origin as well as its name', () => {
+    const holders = new Map([[npc.formKey, [{ name: 'Patch.esp', origin: 'SomeOtherMod' }]]]);
+
+    expect(heldCopies([npc], [patch], holders)).toEqual([]);
+  });
+});

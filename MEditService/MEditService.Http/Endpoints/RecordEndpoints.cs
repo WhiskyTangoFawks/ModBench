@@ -102,54 +102,23 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0007: the source record's own bytes land under the same FormKey in the destination.
-        app.MapPost("/records/{formKey}/copy-as-override", (
-            string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits) =>
-            CopyRecordAsOverride(formKey, request, edits, logger))
-        .WithName("CopyRecordAsOverride")
-        .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.")
+        // ADR-0007: each record lands in each destination's working tree, as an override under its own
+        // FormKey or as a duplicate under the destination's next free one.
+        app.MapPost("/records/copy", (RecordCopyRequest request, CopyRecordHandler edits) =>
+            CopyRecord(request, edits, logger))
+        .WithName("CopyRecord")
+        .WithSummary("Copy records into destination plugins, each record into each destination on its own.")
         .WithDescription(
-            "Serializes the source record's own text, verbatim, into the destination plugin's working " +
-            "tree under the identical FormKey — no Mutagen deserialization, since a record's stored " +
-            "document is already byte-identical to its source file. The destination's master dependency " +
-            "on the record's origin is derived at compile from the bytes it now carries (ADR-0008); no " +
-            "copy-specific master handling happens here.")
+            "Override: the source record's own text lands verbatim in the destination under the same " +
+            "FormKey; the master dependency is derived at compile (ADR-0008). A destination that already " +
+            "holds the record is refused unless replace is given, and a replacement changes its own fields " +
+            "only, keeping the children the destination's copy carries. New: a duplicate under the " +
+            "destination's next free FormID, with an EditorID derived from the source's; a container's " +
+            "embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each " +
+            "record and destination is applied or refused on its own, and the answer names both.")
         .WithTags("Records")
-        .Produces<RecordCopyAsOverrideResponse>()
+        .Produces<RecordCopyResponse>()
         .ProducesProblem(400)
-        .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422)
-        .ProducesProblem(500)
-        .ProducesProblem(503);
-
-        // ADR-0007: Copy as New Record Into… — the source record itself under a fresh FormKey, via
-        // Mutagen's own Duplicate. A top-level record's child slots are cleared; an embedded
-        // child's whole subtree rides along under fresh FormKeys.
-        app.MapPost("/records/{formKey}/copy-as-new-record", (
-            string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits) =>
-            CopyRecordAsNewRecord(formKey, request, edits, logger))
-        .WithName("CopyRecordAsNewRecord")
-        .WithSummary(
-            "Copy as New Record Into… — the source record under a fresh FormKey; a top-level record's " +
-            "child slots are cleared, an embedded child's whole subtree copies with it.")
-        .WithDescription(
-            "Copies the source record (Mutagen's own record-level Duplicate — no mod object is " +
-            "constructed) under a fresh FormKey in the destination plugin's working tree. A top-level " +
-            "record's own child slots are cleared, since a container's children never ride along that " +
-            "way; an embedded child (a quest topic, a topic response) instead copies its whole embedded " +
-            "subtree, each descendant under its own fresh FormKey, minting the container chain in the " +
-            "destination when it is missing. FormKey is the caller's requested one or the next free " +
-            "local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A " +
-            "FormLink from the record to itself is remapped onto the new FormKey, so an internal " +
-            "self-reference follows the copy, not the original.")
-        .WithTags("Records")
-        .Produces<RecordCopyAsNewRecordResponse>()
-        .ProducesProblem(400)
-        .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422)
-        .ProducesProblem(500)
         .ProducesProblem(503);
 
         return app;
@@ -235,88 +204,41 @@ public static class RecordEndpoints
     private static RecordAddress Addressed(RecordAt record) =>
         new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
-    internal static IResult CopyRecordAsOverride(
-        string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, ILogger logger)
+    internal static IResult CopyRecord(RecordCopyRequest request, CopyRecordHandler edits, ILogger logger)
     {
-        var decoded = Uri.UnescapeDataString(formKey);
-        return WriteEndpointMapping.Execute(
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-                        decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
-                }
-            },
-            validate: () =>
-            {
-                if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
-                    return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
-                if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
-                    return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
-                return null;
-            },
-            execute: () => edits.CopyRecordAsOverride(
-                new PluginAddress(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginAddress(request.DestinationPlugin, request.DestinationOrigin)),
-            onApplied: result => Results.Ok(new RecordCopyAsOverrideResponse(true, decoded)),
-            onWriteFailure: ex =>
-            {
-                logger.LogError(ex, "Could not write the source file while copying {FormKey} as an override", decoded);
-                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
-            },
-            onMalformedFormKey: null,
-            onNoLoadOrder: ex =>
-            {
-                logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
-    }
+        var records = request.Records ?? [];
+        var destinations = request.Destinations ?? [];
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received CopyRecord {Mode} for {Count} records into {DestinationCount} destinations (replace: {Replace})",
+                request.Mode, records.Count, destinations.Count, request.Replace);
+        }
+        if (records.Count == 0)
+            return Results.Problem("At least one record is required.", statusCode: 400);
+        if (records.Any(r =>
+                string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
+            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
+        if (destinations.Count == 0)
+            return Results.Problem("At least one destination is required.", statusCode: 400);
+        if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
+            return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
 
-    internal static IResult CopyRecordAsNewRecord(
-        string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, ILogger logger)
-    {
-        var decoded = Uri.UnescapeDataString(formKey);
-        return WriteEndpointMapping.Execute(
-            logReceived: () =>
-            {
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-                        decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
-                }
-            },
-            validate: () =>
-            {
-                if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
-                    return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
-                if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
-                    return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
-                return null;
-            },
-            execute: () => edits.CopyRecordAsNewRecord(
-                new PluginAddress(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginAddress(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
-            onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
-            onWriteFailure: ex =>
-            {
-                logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
-                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
-            },
-            // request.RequestedFormKey reaches Mutagen's FormKey.Factory with no TryFactory guard, so
-            // a malformed value throws ArgumentException: malformed syntax is a 400, never Refusal's 422.
-            onMalformedFormKey: ex =>
-            {
-                logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
-                return WriteEndpointMapping.MalformedFormKey(ex);
-            },
-            onNoLoadOrder: ex =>
-            {
-                logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
-                return WriteEndpointMapping.NoLoadOrder(ex);
-            });
+        try
+        {
+            var result = edits.Copy(
+                [.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))],
+                request.Mode, destinations, request.Replace);
+            return Results.Ok(new RecordCopyResponse(
+                [.. result.Applied.Select(l => new RecordCopyLanded(Addressed(l.Item.Record), l.Item.Destination, l.NewFormKey))],
+                [.. result.Refused.Select(r => new RecordCopyRefusal(
+                    Addressed(r.Item.Record), r.Item.Destination, r.Refusal, r.Message))]));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No usable loadOrder while copying {Count} records", records.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
     }
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)

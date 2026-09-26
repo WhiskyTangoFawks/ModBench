@@ -408,8 +408,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
-                        // Copy as Override Into…/Copy as New Record Into…,
-                        // this column's native right-click menu — unconditional on isImmutable/
+                        // Copy…, on this column's native right-click menu — unconditional on isImmutable/
                         // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
                         // case, not one to gate out.
                         vscodeContext={combineVscodeContexts(
