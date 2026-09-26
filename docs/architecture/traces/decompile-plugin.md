@@ -16,9 +16,9 @@ the working tree, as the user answers.
 
 ## The trigger
 
-1. The Mod watcher waits until a tracked mod's folder is quiet, then classifies the mod once,
-   against git and never against the paths that changed. The load-time check classifies every
-   tracked mod the same way (ADR-0003, invariant 3).
+1. The Mod watcher waits until a tracked mod's folder is quiet, then tells Commands the mod
+   settled. Commands classifies the mod once, against git and never against the paths that
+   changed. The load-time check classifies every tracked mod the same way (ADR-0003, invariant 3).
 2. The mod has changed when a tracked plugin's bytes differ from what Modbench last wrote, or when
    a file git tracks outside `source/` differs from the edit branch. `meta.ini` alone never
    changes the mod. The default is always `main`.
@@ -132,8 +132,8 @@ Exceptions to the principles:
 
 ## Test seam
 
-- **The Mod watcher:** given a settled mod and git's view of it, the question it opens and its
-  default, or none.
+- **The Mod watcher:** given a mod folder's changes, one settle once it is quiet.
+- **Commands, at a settle:** given git's view of the mod, the question it opens, or none.
 - **Commands:** given the plugins, a destination, a preset and the repository, the documents,
   commits, messages, refs and staged files written, or the refusal and nothing of that plugin
   written.

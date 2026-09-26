@@ -77,5 +77,5 @@ Exceptions to the principles:
 - **Commands:** given the plugin, the source and the repository, the binary's records, header,
   masters and strings, what Modbench last wrote, and the diagnostics; or the refusal and nothing
   written.
-- **The Mod watcher:** given the bytes a compile wrote, no question. Given the mark from an
+- **Commands, at a settle:** given the bytes a compile wrote, no question. Given the mark from an
   interrupted compile, the warning and no question.
