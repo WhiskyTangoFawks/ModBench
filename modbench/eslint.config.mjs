@@ -5,6 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
+import { noRereadAfterPluginsWrite } from './eslint-rules/noRereadAfterPluginsWrite.mjs';
 
 // ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
@@ -16,6 +17,7 @@ const local = {
     rules: {
         'no-gesture-result-use': noGestureResultUse,
         'no-leading-medit': noLeadingMEdit,
+        'no-reread-after-plugins-write': noRereadAfterPluginsWrite,
     },
 };
 
@@ -146,6 +148,17 @@ export default defineConfig(
         plugins: { local },
         rules: {
             'local/no-gesture-result-use': 'error',
+        },
+    },
+
+    // ADR-0015 invariant 2: a Plugins write returns, and the watch brings its change back. Tests are
+    // out of scope: a test drives a write and then the watch's own re-read.
+    {
+        files: ['src/**/*.ts'],
+        ignores: ['src/**/*.test.ts', 'src/test/**'],
+        plugins: { local },
+        rules: {
+            'local/no-reread-after-plugins-write': 'error',
         },
     },
 

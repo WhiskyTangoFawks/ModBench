@@ -1981,6 +1981,23 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
+
+  // ADR-0015 invariant 3: mEdit's published rows re-read the facts at any moment, a reconcile's
+  // hand-off in flight included, and that hand-off is the only thing that says which plugins mEdit holds.
+  it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
+    const h = makeTree([A_ROW()]);
+    let resolveSlow!: (plugins: PluginMetadata[]) => void;
+    h.client.setQueryAnswerOnce('getPlugins', new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; }));
+    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
+
+    const handOff = h.tree.applyReconciled([]);
+    await h.tree.refreshFacts();
+    resolveSlow([held('A.esp')]);
+
+    expect(await handOff).toEqual([{ name: 'A.esp', hasMatchingRecords: true }]);
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).not.toContainEqual(expect.any(IndexingNode));
+  });
 });
 
 // ── children ─────────────────────────────────────────────────────────────────

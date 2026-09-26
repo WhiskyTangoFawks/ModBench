@@ -6,7 +6,6 @@ import { resolveOrigin } from './resolveOrigin';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import type { RecordTreeSync } from './onRecordEdited';
 import { errorMessage } from '../ports/errorMessage';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
@@ -116,14 +115,10 @@ type RecordLifecycleClient = Pick<MEditClient,
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
-  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
   // The palette hands no row, so both take the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-  // A create or delete landed: the same re-derive every write in this file needs
-  // (plugins.md) — a changed record can start or stop matching the active filter.
-  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
 
   return [
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
@@ -141,7 +136,6 @@ export function registerRecordLifecycleCommands(
       );
       if (!result) return; // the ESL prompt was declined — nothing happened
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      onWritten();
       reporter.landed(`Created ${result.formKey}.`);
     }),
 
@@ -156,7 +150,6 @@ export function registerRecordLifecycleCommands(
       const answer = addressed.length > 0
         ? await client.deleteRecords(addressed.map((a) => a.address)) : { landed: [], refused: [] };
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      if (answer.landed.length > 0) onWritten();
       const outcome: SelectionOutcome<RecordIdentity> = {
         landed: answer.landed, refused: [...unaddressed, ...answer.refused],
       };
@@ -253,14 +246,9 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
 export function registerRecordCopyCommands(
   client: RecordCopyClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
-  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
   // The palette hands no row, so copy takes the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
-  // A copy lands as a working-tree change on the destination plugin — same reason create
-  // and delete re-derive the tree and the filter's matching-plugin set.
-  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
-
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
       const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
@@ -286,10 +274,7 @@ export function registerRecordCopyCommands(
       const answer = await client.copyRecords(records, mode, destinations, replace);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       const written = copiesWritten(answer.landed, mode);
-      if (written.length > 0) {
-        onWritten();
-        reporter.landed(landedMessage(written, editorIds));
-      }
+      if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
       const into = (item: CopyItem) =>
         `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
       reporter.selectionOutcome(

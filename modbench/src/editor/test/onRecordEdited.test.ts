@@ -13,7 +13,6 @@ import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 function fakeTreeProvider(markResult = true): RecordTreeSync {
   return {
     markWorkingTreeState: vi.fn().mockReturnValue(markResult),
-    refresh: vi.fn(),
     workingTreeStateOf: vi.fn(),
   };
 }

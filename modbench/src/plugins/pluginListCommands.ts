@@ -112,15 +112,12 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
-// ADR-0007: only once Editing's create endpoint has actually succeeded does Mod Management's
-// `appendPlugin` add the load-order line — never the other way around, so the load order can
-// never name a file that does not exist.
+// ADR-0007: `appendPlugin` adds the load-order line only once Editing's create has succeeded, so
+// the load order never names a missing file. The row arrives with the Instance loader's next value.
 async function appendCreatedPluginToLoadOrder(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, pluginsTree: Pick<PluginsTreeProvider, 'invalidate'>,
-  pluginName: string, reporter: Reporter,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, pluginName: string, reporter: Reporter,
 ): Promise<void> {
   const result = await appendPlugin(instanceRoot, instance.value.activeProfile, pluginName);
-  pluginsTree.invalidate();
   if (!result.applied) {
     reporter.report(
       'error',
@@ -134,7 +131,7 @@ async function appendCreatedPluginToLoadOrder(
 
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
-  mo2: { instance: Pick<Instance, 'value'>; instanceRoot: string; pluginsTree: Pick<PluginsTreeProvider, 'invalidate'> } | undefined,
+  mo2: { instance: Pick<Instance, 'value'>; instanceRoot: string } | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
@@ -152,6 +149,6 @@ export function registerCreatePluginCommand(
     const result = await client.createPlugin(name, destination.path, destination.origin);
     if (isRefused(result)) { reporter.report('error', result.message); return; }
 
-    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, result.name, reporter);
+    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, result.name, reporter);
   });
 }

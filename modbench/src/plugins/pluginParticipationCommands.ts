@@ -33,18 +33,16 @@ function participationVerb(entries: readonly PluginParticipation[]): string {
 }
 
 // Shared by the menu/key path above and the check box, so both read one outcome the same way.
-// The return says whether a row needs a resync.
 export function reportPluginsParticipation(
   result: PluginsSelectionResult, entries: readonly PluginParticipation[], reporter: Reporter,
-): boolean {
+): void {
   const verb = participationVerb(entries);
   if (!result.applied) {
     reporter.report('error', `Failed to ${verb} plugins.`, result.refusal);
-    return true;
+    return;
   }
   reporter.selectionOutcome(
     `Could not ${verb} ${result.outcome.refused.length} of ${entries.length} plugins.`,
     result.outcome, (name) => name,
   );
-  return result.outcome.refused.length > 0;
 }
