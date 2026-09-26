@@ -133,13 +133,10 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-losing")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .BuildScattered();
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var snapshot = fx.Plugins
-            .Select(p => p.Origin == "ModB" ? p with { Slot = winner.Slot, Winning = false } : p)
-            .ToList();
+        var snapshot = fx.Plugins;
         var (index, opens) = MakeIndex(holder);
         using var _ = index;
         using var __ = opens;

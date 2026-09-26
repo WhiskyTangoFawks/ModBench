@@ -277,6 +277,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
             // moment this one is asked for, whichever way this one goes.
             lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
+            RequireOneWinnerPerFilename(snapshot);
 
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
@@ -389,6 +390,21 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // The diff is computed first and without side effects — one stamp read and a folder probe per
     // plugin — so a snapshot that moves nothing writes nothing and publishes no status.
+
+    // ADR-0012: the game loads one file per name. A load order naming two answers wrong everywhere
+    // a FormID or a winner is read by filename, so it is refused before anything registers.
+    private static void RequireOneWinnerPerFilename(LoadOrderSnapshot snapshot)
+    {
+        var contested = snapshot.Plugins
+            .Where(p => p.Winning)
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (contested is null) return;
+
+        throw new InvalidOperationException(
+            $"The load order names more than one winning {contested.Key}: " +
+            $"{string.Join(", ", contested.Select(p => p.Origin))}. The game loads one file per name.");
+    }
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.

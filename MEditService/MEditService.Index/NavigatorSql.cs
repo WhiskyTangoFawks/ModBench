@@ -39,7 +39,7 @@ internal static class NavigatorSql
     /// filename, then its ID; a light plugin's FormIDs take the FE prefix, so they follow every full
     /// plugin's.</summary>
     internal static string FormIdOrder(string formKey) => $"""
-        (SELECT min(row(fo.is_light, fo.load_order_idx))
+        (SELECT row(fo.is_light, fo.load_order_idx)
          FROM {TableDdlBuilder.RegistrationsRelation} fo
          WHERE fo.winning AND lower(fo.plugin) = lower(split_part({formKey}, ':', 2))) NULLS LAST,
         lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)

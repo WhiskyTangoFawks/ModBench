@@ -36,8 +36,8 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     {
         string? questFk = null;
         var fx = new PluginFixtureBuilder("api-container-child-origin")
-            .WithPlugin("Shared.esp", mod => questFk = ConfigurePlugin(mod, "ModA"), origin: "ModA")
             .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => questFk = ConfigurePlugin(mod, "ModA"), origin: "ModA")
             .BuildScattered();
         return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have captured the quest's FormKey."));
     }
@@ -46,10 +46,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
         // same slot; only the winning, enabled, listed one participates.
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
-            ? p with { Slot = winner.Slot, Winning = false }
-            : p);
+        var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {

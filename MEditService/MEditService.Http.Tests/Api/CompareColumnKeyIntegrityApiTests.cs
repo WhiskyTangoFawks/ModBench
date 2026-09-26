@@ -24,7 +24,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
     protected override void DisposeFixtures() => _fixture?.Dispose();
 
     [Fact]
-    public async Task GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
+    public async Task GetCompare_TwoModOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
         // Perk, not Npc: a record type carrying both a script adapter and a top-level Conditions field, so
         // one record reaches every column-keyed dictionary this guards as well as the nested condition
@@ -71,7 +71,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
         };
         _fixture = new PluginFixtureBuilder("compare-column-keys")
             .WithPlugin("Shared.esp", configure, origin: "ModA")
-            .WithPlugin("Shared.esp", configure, origin: "ModB")
+            .WithPlugin("Patch.esp", (mod, masters) => mod.Perks.GetOrAddAsOverride(masters[0].Perks.Single()), origin: "ModB")
             .BuildScattered();
         (await Client.PutLoadOrder(_fixture)).EnsureSuccessStatusCode();
         var perkKey = await Client.FirstFormKey("Shared.esp", "perk");
