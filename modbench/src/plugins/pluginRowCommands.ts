@@ -38,6 +38,36 @@ function rowName(row: TrackedRow): string {
   return row.origin ? `${row.name} (${row.origin})` : row.name;
 }
 
+type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
+
+// decompile-plugin.md's preset table: what each preset's repository tracks.
+const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
+const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
+
+// createQuickPick, not showQuickPick: only the former lets Edits show pre-selected
+// (plugins.md, Pickers, Track), the same pattern DownloadsPanel.ts's pickSort uses.
+function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined> {
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<PresetOption>();
+    quickPick.items = PRESET_OPTIONS;
+    quickPick.placeholder = placeholder;
+    quickPick.activeItems = [EDITS_OPTION];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
+  });
+}
+
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
@@ -66,17 +96,7 @@ export function registerTrackCommand(
     const [first] = addressed;
     if (!first) { report({ landed: [], refused: unaddressed }); return; }
 
-    const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { label: 'Edits' | 'Everything' }>(
-      [
-        { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
-        { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
-      ],
-      {
-        placeHolder: nodes.length === 1
-          ? `Track "${first.name}" — what should its .gitignore include?`
-          : `Track ${nodes.length} plugins — what should their .gitignore include?`,
-      },
-    );
+    const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
     if (!choice) return;
 
     await progress.while(async () => {
