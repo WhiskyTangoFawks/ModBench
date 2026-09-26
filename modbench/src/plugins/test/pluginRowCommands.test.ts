@@ -171,6 +171,59 @@ describe('registerTrackCommand', () => {
     expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
   });
+
+  // plugins.md, Pickers, Track: Edits first and pre-selected (VS Code highlights the first item of
+  // a QuickPick with no explicit active item), then Everything, each naming what it keeps.
+  it('offers Edits first, then Everything, each naming what it keeps', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
+    showQuickPick.mockResolvedValue({ label: 'Edits' });
+    const { handler } = invokeTrack(client);
+
+    await handler(pluginNode());
+
+    expect(showQuickPick).toHaveBeenCalledOnce();
+    const [items] = showQuickPick.mock.calls[0] as [{ label: string; description: string }[]];
+    expect(items.map((i) => i.label)).toEqual(['Edits', 'Everything']);
+    expect(items.every((i) => i.description.length > 0)).toBe(true);
+  });
+
+  // Esc changes nothing (plugins.md, Pickers, Track: "Esc tracks nothing"): showQuickPick resolves
+  // undefined, and the rival this guards against is proceeding to track anyway.
+  it('tracks nothing on Esc', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    showQuickPick.mockResolvedValue(undefined);
+    const { handler, reporter, refresh, onTracked } = invokeTrack(client);
+
+    await handler(pluginNode());
+
+    expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(onTracked).not.toHaveBeenCalled();
+  });
+
+  // plugins.md, Pickers, Track: the message line names the mod and the phase. This is the wiring
+  // to mEdit's progress; trackProgress.test.ts covers the phase-to-words mapping.
+  it('says which mod and phase in the view message line as mEdit reports progress', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
+    showQuickPick.mockResolvedValue({ label: 'Edits' });
+    const { handler, said } = invokeTrack(client);
+
+    await handler(pluginNode());
+
+    // The Idle message said before mEdit's first answer.
+    expect(said).toContain('Tracking "ModA"…');
+
+    const trackCall = client.calls.find((c) => c.method === 'track');
+    const options = present(trackCall, 'the track call').args[2] as { onProgress: (status: unknown) => void };
+    said.length = 0;
+    options.onProgress({ origin: 'ModA', phase: 'Serializing', pluginsDone: 1, pluginsTotal: 2 });
+
+    expect(said).toEqual(['Tracking "ModA" — serialized 1 of 2 plugins…']);
+  });
 });
 
 // ── compileAndReport ───────────────────────────────────────────────────────
