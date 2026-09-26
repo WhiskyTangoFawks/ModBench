@@ -199,8 +199,8 @@ As a user, I want:
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A refused edit to raise a notification that says why and names the field. The cell keeps my
-   value, marked, until mEdit's next read or a refresh. *common, Unconfirmed writes, story 6*
+1. A refused edit to raise a notification that says why and names the field. The cell shows
+   mEdit's value again. *common, Unconfirmed writes, story 6*
 2. A failed copy to the clipboard to say so. *ADR-0019, invariant 2*
 
 ## Deferred
