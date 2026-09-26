@@ -22,14 +22,13 @@ Your turn is your life. The final message of your turn is your report, and nothi
 
 Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
 
-Never edit `docs/architecture/`, an ADR, `CONTEXT.md` or any `CLAUDE.md`, under any condition. They are the user's source of truth, and you build from them. When your work needs one changed, write the exact before/after text in the report.
+Root CLAUDE.md's chain of authority governs your work. Your report carries every break and every strategic question in its form.
 
 Park only for one of these:
 
 - The premise is refuted.
-- The ticket contradicts an ADR.
 - A tool call is denied.
-- The work needs a **gesture** the ticket did not name. A gesture is a command, menu entry, icon, toggle, dialog or keybinding, or the behaviour of one.
+- A stop the chain of authority names. A **gesture** is a command, menu entry, icon, toggle, dialog or keybinding, or the behaviour of one.
 
 To park, commit WIP and end your turn with the question as the report.
 

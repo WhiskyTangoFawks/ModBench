@@ -26,7 +26,7 @@ How the engineering skills consume this repo's domain documentation when explori
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as `CONTEXT.md` defines it. Do not use a word from a term's `Avoid:` line for that concept. A word scoped in brackets, such as "override (a placement, not a clash)", stays valid for its other meaning.
 
-If the concept you need isn't in the glossary, either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
+A concept the glossary does not name takes the reference tool's word or plain words.
 
 ## Flag ADR conflicts
 
