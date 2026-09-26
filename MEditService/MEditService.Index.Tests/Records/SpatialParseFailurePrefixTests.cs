@@ -40,8 +40,6 @@ public sealed class SpatialParseFailurePrefixTests
         Assert.True(world.Row("qust").HasParseFailure);
     }
 
-    // The exterior cell holding it lists beneath its worldspace, so the Cell group, which lists the
-    // interior cells, holds no failure.
     [Fact]
     public void AnUnreadablePlacedReference_MarksTheGroupOfTheRecordItSitsBeneath_AndNoOther()
     {
@@ -140,7 +138,6 @@ public sealed class SpatialParseFailurePrefixTests
         internal string ResponseFormKey { get; }
         internal IRecordReads Reads => _index.RequireReads();
 
-        // The one record of the type this world holds, as its group lists it.
         internal RecordSummary Row(string recordType) =>
             Assert.Single(Reads.Search(new RecordQuery(RecordTypes: [recordType], Plugin: PluginName, Limit: 100)).Items);
 

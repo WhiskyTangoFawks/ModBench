@@ -67,6 +67,15 @@ internal static class Wire
             ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} to carry a formKey.");
     }
 
+    internal static async Task<string> FormKeyNamed(this HttpClient client, string plugin, string type, string editorId)
+    {
+        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}&search={editorId}");
+        return records.GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("editorId").GetString() == editorId)
+            .GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
+    }
+
     internal static async Task<string> FirstFormKeyIn(
         this HttpClient client, string plugin, string origin, string type = "npc_")
     {
