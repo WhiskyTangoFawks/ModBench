@@ -5,7 +5,6 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
 }));
 
-import { makeOnRecordEdited } from '../../editor/onRecordEdited';
 import { applyRecordEdit } from '../../editor/applyRecordEdit';
 import { RecordDecorationProvider } from '../../editor/RecordDecorationProvider';
 import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../../plugins/PluginTreeProvider';
@@ -49,9 +48,8 @@ describe('a write and the stream, together (ADR-0015 invariants 2 and 3)', () =>
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, FORM_KEY);
     subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker, { holds: () => false, waitingFor: () => undefined, release: () => false });
-    const onRecordEdited = makeOnRecordEdited(vi.fn());
-
-    await applyRecordEdit({ meditClient, onRecordEdited, reporter: recordingReporter() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
+    await applyRecordEdit(
+      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() }, FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
     expect(panel.webview.postMessage).not.toHaveBeenCalled();
 
     meditClient.emit(rowsChanged());
@@ -75,7 +73,7 @@ describe('a write and the stream, together (ADR-0015 invariants 2 and 3)', () =>
     badges.onDidChangeFileDecorations((changed) => { badgeChanges.push(changed); });
 
     await applyRecordEdit(
-      { meditClient, onRecordEdited: makeOnRecordEdited(vi.fn()), reporter: recordingReporter() },
+      { meditClient, refreshSourceControlFor: vi.fn(), reporter: recordingReporter() },
       FORM_KEY, 'Test.esp', 'ModA', { op: 'set', path: [] });
 
     expect(treeChanges).toBe(0);

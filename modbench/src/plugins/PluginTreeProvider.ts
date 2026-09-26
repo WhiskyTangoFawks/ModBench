@@ -346,6 +346,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   readonly onDidReadRecords = this._onDidReadRecords.event;
 
   private readonly pageCache: PageCache = new Map();
+  // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
+  private generation = 0;
   private readonly interiorCache = new Map<string, InteriorCellBlock[]>();
   private readonly refCache = new Map<string, CellReferences>();
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
@@ -390,6 +392,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
 
   refresh(): void {
+    this.generation++;
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
@@ -478,11 +481,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // A failed load caches nothing, so the next expand retries. `load`, never `fetch`: this has
   // nothing to do with the backend seam the client folder owns.
   private async getOrLoad<T>(map: Map<string, T>, key: string, load: () => Promise<T>): Promise<T> {
-    let value = map.get(key);
-    if (value === undefined) {
-      value = await load();
-      map.set(key, value);
-    }
+    const cached = map.get(key);
+    if (cached !== undefined) return cached;
+    const generation = this.generation;
+    const value = await load();
+    if (generation === this.generation) map.set(key, value);
     return value;
   }
 
@@ -555,9 +558,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       // 10). Measured, it costs nothing noticeable at the realistic worst case, and xEdit's
       // record-type group nodes load in full too.
       const key = this.cacheKey(node);
-      const read = !this.pageCache.has(key);
+      const wasCached = this.pageCache.has(key);
       const cached = await this.getOrLoad(this.pageCache, key,
         () => this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin));
+      const read = !wasCached && this.pageCache.get(key) === cached;
       // qust/dial rows are collapsible here too — a Quest reached from its flat record-type
       // listing still expands into its container children, the same mechanism
       // fetchContainerChildren uses.

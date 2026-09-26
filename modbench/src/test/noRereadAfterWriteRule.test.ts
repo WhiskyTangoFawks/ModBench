@@ -126,6 +126,39 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
     expect(messages).toHaveLength(1);
   });
 
+  it('fails a re-read chained on a write with .then, as part of the caller', () => {
+    const messages = lint('async function f(client, tree) { await client.createRecord(x).then(() => tree.refresh()); }\n');
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a re-read chained on a write with .finally, past a .then, as part of the caller', () => {
+    const messages = lint('function f(client, tree) { return client.copyRecords(x).then(report).finally(() => tree.invalidate()); }\n');
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a re-read in an inline function passed to a write, as part of the caller', () => {
+    const messages = lint('async function f(tree) { await setPluginsParticipation(x, () => tree.refresh()); }\n');
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('fails a re-read chained on a same-file helper that writes', () => {
+    const messages = lines(
+      'async function appendCreated(root, name) { await appendPlugin(root, "Default", name); }',
+      'function create(tree) { return appendCreated(root, name).then(() => tree.invalidate()); }',
+    );
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('passes a re-read in an inline function passed to a call that is not a write', () => {
+    const messages = lint('function build(view, tree) { view.onDidChangeSelection(() => tree.refresh()); onPluginCheckboxChanged(e, root); }\n');
+
+    expect(messages).toEqual([]);
+  });
+
   it('passes a re-read in a function that only defines a callback which writes, written inline', () => {
     const messages = lint('function build(view, instance) { view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, root)); instance.refresh(); }\n');
 

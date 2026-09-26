@@ -9,7 +9,6 @@ import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
-import { makeOnRecordEdited } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
@@ -29,9 +28,7 @@ export interface EditorCommandDeps {
   // Each panel's focused cell, which a field gesture from the palette acts on.
   focusedCells: FocusedCells<vscode.WebviewPanel>;
   port: number;
-  // Editor's own view of the Plugins tree, structural rather than the tree's own type — see
-  // `RecordBadgeSource`'s own doc comment.
-  treeSync: RecordBadgeSource;
+  recordBadgeSource: RecordBadgeSource;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'createRecord' | 'deleteRecords' | 'copyRecords'
@@ -55,7 +52,7 @@ export interface EditorCommandDeps {
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
-    onRecordEdited: makeOnRecordEdited((plugin, origin) => deps.refreshSourceControlFor(plugin, origin)),
+    refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: deps.reporterFor('recordPanel'),
   };
@@ -63,12 +60,12 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync, meditClient,
+    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, recordBadgeSource, meditClient,
     outputChannel, mergedTreeSelection,
   } = deps;
-  // One decoration provider per activation: it reads treeSync's cache live, so it needs no copy
+  // One decoration provider per activation: it reads the tree's cache live, so it needs no copy
   // of that state.
-  const recordDecorationProvider = new RecordDecorationProvider(treeSync);
+  const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const panelsById = new Map<string, vscode.WebviewPanel>();
   const writeDeps = recordPanelWriteDeps(deps);
   // The picker and the edit gate are each panel's own, added per panel below.
