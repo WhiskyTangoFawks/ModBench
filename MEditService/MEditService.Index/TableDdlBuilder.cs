@@ -232,7 +232,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 plugin VARCHAR NOT NULL,
                 origin VARCHAR NOT NULL,
                 load_order_idx INTEGER NOT NULL,
-                is_light BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);
@@ -262,6 +261,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 load_order_idx INTEGER,
                 enabled BOOLEAN NOT NULL,
                 winning BOOLEAN NOT NULL,
+                is_light BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);

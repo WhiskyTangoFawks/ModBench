@@ -35,9 +35,9 @@ public record OverrideStackEntry(
 /// not a collection.</summary>
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
-/// <summary><c>Search</c>'s matches list by EditorID, and a listing without it in FormID order.
-/// <c>GroupOnly</c> leaves out a record another record holds. <c>Plugin</c> and <c>Origin</c>
-/// filter apart (ADR-0012).</summary>
+/// <summary><c>GroupOnly</c> lists a group: in FormID order, without a record another record holds.
+/// Otherwise records list by EditorID. <c>Plugin</c> and <c>Origin</c> filter apart
+/// (ADR-0012).</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,

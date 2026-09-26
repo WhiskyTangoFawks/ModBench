@@ -404,8 +404,11 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(["ZFullLever", "ALightLever"], EditorIds(activators.GetProperty("items")));
     }
 
-    [Fact]
-    public async Task AFilenamesFormIds_SortAsThePluginTheGameLoadsUnderIt_NotAnOverriddenCopy()
+    [Theory]
+    [InlineData("FullTwin", "LightTwin", new[] { "ZTwinLever", "ALateLever" })]
+    [InlineData("LightTwin", "FullTwin", new[] { "ALateLever", "ZTwinLever" })]
+    public async Task AFilenamesFormIds_SortAsThePluginTheGameLoadsUnderIt_NotAnOverriddenCopy(
+        string winnerOrigin, string loserOrigin, string[] expected)
     {
         var fixture = Owned(new PluginFixtureBuilder("trace-query-twin-order")
             .WithPlugin("Twin.esp", mod =>
@@ -421,14 +424,14 @@ public sealed class QueryIndexTraceTests : HostedTests
                 mod.Activators.GetOrAddAsOverride(masters[2].Activators.Single());
             }, origin: "PatchMod")
             .BuildScattered());
-        var winner = fixture.Plugins.Single(p => p.Origin == "FullTwin");
-        (await Client.PutLoadOrder(fixture, fixture.Plugins.Select(p => p.Origin == "LightTwin"
+        var winner = fixture.Plugins.Single(p => p.Origin == winnerOrigin);
+        (await Client.PutLoadOrder(fixture, fixture.Plugins.Select(p => p.Origin == loserOrigin
             ? p with { Slot = winner.Slot, Winning = false }
             : p))).EnsureSuccessStatusCode();
 
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
 
-        Assert.Equal(["ZTwinLever", "ALateLever"], EditorIds(activators.GetProperty("items")));
+        Assert.Equal(expected, EditorIds(activators.GetProperty("items")));
     }
 
     [Fact]
@@ -700,9 +703,11 @@ public sealed class QueryIndexTraceTests : HostedTests
         await LoadedHeldRecords();
 
         var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types");
+        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&limit=10");
         var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&search=Held&limit=10");
 
         Assert.Equal(1, held.GetProperty("total").GetInt32());
+        Assert.Equal(0, group.GetProperty("total").GetInt32());
         Assert.DoesNotContain(type, types.EnumerateArray().Select(t => t.GetProperty("type").GetString()));
     }
 

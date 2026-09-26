@@ -69,7 +69,6 @@ public sealed class RecordQueryService(
             pluginFilter = plugin;
             resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         }
-        // Without a term the caller browses a group, which lists no record another record holds.
         var query = new RecordQuery(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
             GroupOnly: search is null);

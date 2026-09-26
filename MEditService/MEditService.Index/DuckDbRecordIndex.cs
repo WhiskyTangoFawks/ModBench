@@ -213,7 +213,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         DeleteRegistration(plugin, origin);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, enabled, winning) VALUES ($1, $2, $3, $4, $5)";
+        cmd.CommandText =
+            $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, enabled, winning, is_light) VALUES ($1, $2, $3, $4, $5, $6)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter
@@ -222,6 +223,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         });
         cmd.Parameters.Add(new DuckDBParameter { Value = registration.Enabled });
         cmd.Parameters.Add(new DuckDBParameter { Value = registration.Winning });
+        cmd.Parameters.Add(new DuckDBParameter
+        {
+            Value = _openedPlugins().TryGetValue(new PluginAddress(plugin, origin), out var content) && content.IsLight,
+        });
         cmd.ExecuteNonQuery();
     }
 
@@ -297,11 +302,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private void ReplaceParticipating(IReadOnlyList<RegisteredPlugin> participating)
     {
         Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
-        var opened = _openedPlugins();
         foreach (var plugin in participating)
         {
             using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx, is_light) VALUES ($1, $2, $3, $4)";
+            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             cmd.Parameters.Add(new DuckDBParameter
@@ -310,7 +314,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     ?? throw new InvalidOperationException(
                         $"Expected participating plugin '{plugin.Name}' from '{plugin.Origin}' to carry a load-order slot."),
             });
-            cmd.Parameters.Add(new DuckDBParameter { Value = opened.TryGetValue(plugin.Key, out var content) && content.IsLight });
             cmd.ExecuteNonQuery();
         }
     }
@@ -803,9 +806,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             AddParams(countCmd, paramValues);
             var total = ExecuteCount(countCmd);
 
-            // xEdit's record picker lists a term's matches by EditorID, and its navigator lists a group
-            // in FormID order. (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
-            var order = query.Search is null ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
+            // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
+            // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
+            var order = query.GroupOnly ? NavigatorSql.FormIdOrder("form_key") : "editor_id, form_key";
             using var dataCmd = connection.CreateCommand();
             dataCmd.CommandText = $"""
                 WITH RECURSIVE {NavigatorSql.AboveAFailure(records, holdings)}
@@ -1034,8 +1037,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) =>
             CellLocations(plugin, "cl.is_interior", "cl.block_x, cl.sub_x", []);
 
-        // Within its sub-block, a cell lists in FormID order. The plugin binds $1 and $2, and
-        // parameters beyond them follow.
         private List<CellLocationSummary> CellLocations(
             PluginAddress plugin, string where, string blockOrder, IEnumerable<string> parameters)
         {
