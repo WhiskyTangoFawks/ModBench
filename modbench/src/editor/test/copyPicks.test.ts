@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { COPY_MODE_ITEMS, copyDestinationItems, heldCopies } from '../copyPicks';
+import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies } from '../copyPicks';
 import type { PluginMetadata, RecordAddress } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
@@ -44,6 +44,11 @@ describe('the destination pick', () => {
     expect(copyDestinationItems(plugins, 'Override', [npc, faction]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
   });
 
+  it('knows the plugin every record lives in whatever the case of its origin', () => {
+    const shouted = { ...npc, origin: 'SOURCEMOD' };
+    expect(copyDestinationItems(plugins, 'Override', [shouted]).map((item) => item.label)).toEqual(['Patch.esp', 'Other.esp']);
+  });
+
   it('offers every tracked, editable plugin to an override of records from several plugins', () => {
     expect(copyDestinationItems(plugins, 'Override', [npc, elsewhere]).map((item) => item.label))
       .toEqual(['Source.esp', 'Patch.esp', 'Other.esp']);
@@ -68,5 +73,35 @@ describe('heldCopies', () => {
     const holders = new Map([[npc.formKey, [{ name: 'Patch.esp', origin: 'SomeOtherMod' }]]]);
 
     expect(heldCopies([npc], [patch], holders)).toEqual([]);
+  });
+
+  // As pluginAddressKey and mEdit compare them.
+  it('matches a destination by name and origin whatever their case', () => {
+    const holders = new Map([[npc.formKey, [{ name: 'PATCH.ESP', origin: 'patchmod' }]]]);
+
+    expect(heldCopies([npc], [patch], holders)).toEqual([{ record: npc, destination: patch }]);
+  });
+
+  // plugins.md, Pickers, Copy: a record's own plugin holds the record, not a copy of it.
+  it('leaves out a record\'s own plugin, which holds no copy to replace', () => {
+    const own = { name: 'Source.esp', origin: 'SourceMod' };
+    const holders = new Map([[npc.formKey, [own]], [elsewhere.formKey, [own]]]);
+
+    expect(heldCopies([npc, elsewhere], [own], holders)).toEqual([{ record: elsewhere, destination: own }]);
+  });
+});
+
+// commands.md, Doing nothing is not an error: it writes nothing and says nothing.
+describe('copiesWritten', () => {
+  const own = { name: 'Source.esp', origin: 'SourceMod' };
+  const patch = { name: 'Patch.esp', origin: 'PatchMod' };
+
+  it('leaves out an override into the record\'s own plugin, which wrote nothing', () => {
+    expect(copiesWritten([{ record: npc, destination: own }, { record: npc, destination: patch }], 'Override'))
+      .toEqual([{ record: npc, destination: patch }]);
+  });
+
+  it('keeps a copy as new into the record\'s own plugin, which is a duplicate beside it', () => {
+    expect(copiesWritten([{ record: npc, destination: own }], 'New')).toEqual([{ record: npc, destination: own }]);
   });
 });

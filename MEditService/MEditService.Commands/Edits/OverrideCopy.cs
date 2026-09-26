@@ -34,6 +34,8 @@ internal sealed class OverrideCopy
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
+        // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
+        if (PluginAddress.Comparer.Equals(sourcePlugin, destinationPlugin)) return RecordEditResult.Success();
         return CopyAsOverride(copy, destinationPlugin, replace);
     }
 
@@ -59,14 +61,14 @@ internal sealed class OverrideCopy
 
         if (destination.Repository.HoldsAtEitherRef(destinationPlugin, formKey))
         {
+            // A record held only at Head has no document to replace, so no replacement is asked for.
+            if (_recordCopy.Identity(destination, formKey, release) is not { } existingTarget)
+                return RecordCopy.RefuseHeldOnlyAtHead(formKey, destinationPlugin);
             if (!replace) return RecordCopy.RefuseHeldWithoutReplace(formKey, destinationPlugin);
 
             // Own fields only, as xEdit's copy-into does: the children the destination's copy
-            // carries stay. A record held only at Head has no document to replace.
-            if (_recordCopy.Identity(destination, formKey, release) is { } existingTarget)
-                return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
-
-            return RecordCopy.RefuseHeldOnlyAtHead(formKey, destinationPlugin);
+            // carries stay.
+            return ReplaceHeldCopy(source, identity, body, existingTarget, destination, release);
         }
 
         // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell. Only the

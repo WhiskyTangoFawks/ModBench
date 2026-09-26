@@ -39,6 +39,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
         """Results.Problem("At least one destination is required.", statusCode: 400)""",
         """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
+        """Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
         """Results.Problem("Destination path and origin are required.", statusCode: 400)""",
         """Results.Problem( $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400)""",

@@ -54,8 +54,8 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
     }
 
-    // Every item's refusal rides the 200's body; only a malformed request and a missing load order
-    // are the status of the call, so an undeclared one makes Swashbuckle emit `content?: never`.
+    // Every item's refusal rides the 200's body. A malformed request, a missing load order and a
+    // fault no item answers are the call's status; an undeclared one reaches the client as `never`.
     [Fact]
     public async Task CopyRoute_DeclaresEveryStatusItsHandlerCanReturn()
     {
@@ -63,7 +63,7 @@ public sealed class SwaggerSchemaTests
         var responses = root.GetProperty("paths").GetProperty("/records/copy").GetProperty("post").GetProperty("responses");
 
         var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
-        Assert.Equal(new HashSet<string> { "200", "400", "503" }, declared);
+        Assert.Equal(new HashSet<string> { "200", "400", "500", "503" }, declared);
     }
 
     // Swashbuckle types an undeclared response `content?: never` on the TS side and nothing

@@ -522,6 +522,26 @@ describe('modbench.record.copy', () => {
     expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false]]);
   });
 
+  // plugins.md, Pickers, Copy: a record's own plugin holds the record, not a copy to replace.
+  it('asks nothing of a record\'s own plugin picked for a mixed selection, and says nothing of it', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
+    client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
+    client.setQueryAnswerOnce('getRecordHolders', [PATCH]);
+    client.setCommandResult('copyRecords', {
+      landed: [{ record: SOURCE, destination: PATCH }, { record: elsewhere, destination: PATCH }], refused: [],
+    });
+    pick('Override', [PATCH]);
+    const { ask, reporter } = invoke(client);
+
+    await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
+
+    expect(ask.asked).toEqual([]);
+    expect(copyCalls(client)).toEqual([[[SOURCE, elsewhere], 'Override', [PATCH], false]]);
+    expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into Patch.esp.']);
+  });
+
   it('never asks to replace a copy as new, which lands under a FormID of its own', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);

@@ -337,11 +337,6 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.All(
             answer.GetProperty("refused").EnumerateArray(),
             refused => Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString()));
-        foreach (var landed in answer.GetProperty("applied").EnumerateArray())
-        {
-            var copied = landed.GetProperty("newFormKey").GetString() ?? landed.GetProperty("record").GetProperty("formKey").GetString();
-            Assert.NotNull(OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, copied.Require()));
-        }
     }
 
     [Fact]

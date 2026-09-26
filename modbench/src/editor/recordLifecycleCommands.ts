@@ -3,7 +3,7 @@ import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginA
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
-import { COPY_MODE_ITEMS, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
+import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { RecordTreeSync } from './onRecordEdited';
@@ -60,12 +60,12 @@ function makeResolveOriginOrReport(
   };
 }
 
-// The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
-// share a filename (ADR-0012), and the question must say which.
 function recordName(formKey: string, editorId: string | undefined): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
 
+// The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
+// share a filename (ADR-0012), and the question must say which.
 function recordLabel(record: RecordIdentity): string {
   const where = record.origin ? `${record.plugin} (${record.origin})` : record.plugin;
   return `${recordName(record.formKey, record.editorId)} in ${where}`;
@@ -285,9 +285,10 @@ export function registerRecordCopyCommands(
 
       const answer = await client.copyRecords(records, mode, destinations, replace);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      if (answer.landed.length > 0) {
+      const written = copiesWritten(answer.landed, mode);
+      if (written.length > 0) {
         onWritten();
-        reporter.landed(landedMessage(answer.landed, editorIds));
+        reporter.landed(landedMessage(written, editorIds));
       }
       const into = (item: CopyItem) =>
         `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
