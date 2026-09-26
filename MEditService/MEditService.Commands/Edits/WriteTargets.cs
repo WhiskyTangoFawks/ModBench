@@ -289,15 +289,12 @@ internal sealed class WriteTargets(
         }
 
         targetFormKey = "";
-        // The ESL cap, not the FormKey space, is exhausted, and the light-ness is the removable header
-        // flag: surfaced as a typed marker, the same way out compile offers.
-        var eslContradiction = allocator.IsLight
+        var freeAboveTheLightCap = allocator.IsLight
             && allocator.EslFlagIsRemovable
             && NextFreeNativeFormId(allocator, isLight: false, taken) != null;
         return RecordEditResult.Refused(
             RecordEditRefusal.FormKeySpaceExhausted,
-            FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, eslContradiction),
-            eslContradiction);
+            FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, freeAboveTheLightCap));
     }
 
     // The header document in the working tree is the truth (ADR-0007), so a flag flipped this session
@@ -353,10 +350,10 @@ internal sealed class WriteTargets(
 
     // Shared by create and copy as new (edit-record.md's refusal table): every branch
     // names both remedies, even where one is moot for this plugin.
-    internal static string FormKeySpaceExhaustedMessage(PluginAddress plugin, bool isLight, bool eslContradiction = false)
+    internal static string FormKeySpaceExhaustedMessage(PluginAddress plugin, bool isLight, bool freeAboveTheLightCap)
     {
         const string remedies = "Clear the light flag in the header, or change a record's FormID.";
-        if (eslContradiction)
+        if (freeAboveTheLightCap)
         {
             return $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
                 "already in use (a light-flagged plugin's addressable range) — but native space remains " +

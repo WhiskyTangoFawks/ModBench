@@ -156,31 +156,30 @@ describe('HttpMEditClient — a 503 from a write', () => {
   });
 });
 
-describe('HttpMEditClient — the ESL contradiction detail', () => {
-  it('an eslContradiction refusal calls the hook with the refusal detail, skipping the generic refusal', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      eslContradiction: true, detail: 'MyPatch.esp has exhausted its ESL FormKey space',
-    })));
+describe('HttpMEditClient — creating a record', () => {
+  it('sends the plugin and the type, and reads the new record', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' })));
     const client = makeClient(fetch);
-    const onEslContradiction = vi.fn().mockResolvedValue(false);
 
-    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction);
+    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_');
 
-    expect(result).toBeUndefined();
-    expect(onEslContradiction).toHaveBeenCalledWith('MyPatch.esp has exhausted its ESL FormKey space');
+    expect(result).toEqual({ applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/MyPatch\.esp\/records$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_', editorId: null, formKey: null });
   });
 
-  it('accepting the hook retries the create once and resolves the retry\'s own response', async () => {
-    const fetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(422, { eslContradiction: true, detail: 'exhausted' }))
-      .mockResolvedValueOnce(jsonResponse(200, { applied: true, formKey: '001000:MyPatch.esp', recordType: 'npc_' }));
+  // plugins.md, Create record: no free FormID is refused, naming the remedies, and nothing offers
+  // to remove the flag and try again.
+  it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once', async () => {
+    const detail = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { eslContradiction: true, detail })));
     const client = makeClient(fetch);
-    const onEslContradiction = vi.fn().mockResolvedValue(true);
 
-    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction);
+    const result = await client.createRecord('MyPatch.esp', 'ModA', 'npc_');
 
-    expect(result).toEqual({ applied: true, formKey: '001000:MyPatch.esp', recordType: 'npc_' });
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ refused: true, message: `Could not create a new npc_ record in "MyPatch.esp" — ${detail}` });
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });
 
@@ -685,6 +684,27 @@ describe('HttpMEditClient — implicitMasters', () => {
     const client = makeClient(fetch);
 
     await expect(client.implicitMasters('/game/Data', 'Fallout4')).resolves.toBeUndefined();
+  });
+});
+
+describe('HttpMEditClient — the record types the game can create', () => {
+  it('asks mEdit for them and reads each type with its name', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, [
+      { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
+    ])));
+    const client = makeClient(fetch);
+
+    const types = await client.getCreatableRecordTypes();
+
+    expect(types).toEqual([{ type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' }]);
+    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/record-types\/creatable$/);
+  });
+
+  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getCreatableRecordTypes()).rejects.toThrow(/No load order has been loaded/);
   });
 });
 

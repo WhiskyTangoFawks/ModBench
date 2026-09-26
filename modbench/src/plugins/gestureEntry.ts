@@ -78,6 +78,8 @@ export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, .
 /** The rows that stand for a record: the record menu's rows (plugins.md, Menus and keys). */
 export const RECORD_ROW_KINDS = ['record', 'worldspace', 'cell', 'placed'] as const;
 
+export const isRecordRow = isOf(RECORD_ROW_KINDS);
+
 /** The rows that stand for a plugin file: a plugins.txt line, or a plugin the game loads with
  *  none. */
 export const PLUGIN_ROW_KINDS = ['plugin', 'implicitMaster'] as const;
@@ -103,12 +105,26 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
   return hasFlags(only, 'tracked', 'editable') ? only : undefined;
 }
 
+/** The plugin create adds a record to, and the record type when a group names it: create's
+ *  Argument from a Plugins row or, from the palette, the one selected. */
+export function pluginsCreateTarget(
+  viewSelection: () => readonly PluginsTreeNode[],
+): (clicked: unknown, selected: readonly unknown[] | undefined) => { plugin: string; origin?: string; recordType?: string } | undefined {
+  return (clicked, selected) => {
+    const row = singularArgument(pluginsGestureEntry(clicked, selected?.filter(isRow), viewSelection), 'plugin', 'recordType');
+    if (row === undefined) return undefined;
+    return row.kind === 'plugin'
+      ? { plugin: row.plugin.name, origin: row.origin }
+      : { plugin: row.plugin, origin: row.origin, recordType: row.recordType };
+  };
+}
+
 /** What the Plugins palette entries' and keys' `when` clauses read off the selection, since
  *  neither is handed a row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
   readonly allUntrackedInMod: boolean;
-  readonly singleEditableRecordType: boolean;
+  readonly singleCreatable: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
@@ -122,7 +138,7 @@ export function pluginsKeyContext(
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
     allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
-    singleEditableRecordType: hasFlags(onlySelected(selection, 'recordType'), 'tracked', 'editable'),
+    singleCreatable: hasFlags(onlySelected(selection, 'plugin', 'recordType'), 'tracked', 'editable'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

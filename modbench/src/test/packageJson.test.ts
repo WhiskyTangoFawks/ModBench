@@ -651,7 +651,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  it('plugin menu: reveal, enable or disable, track, compile, compile from main, copy value', () => {
+  it('plugin menu: reveal, enable or disable, create record, track, compile, compile from main, copy value', () => {
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
@@ -661,6 +661,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
+      ['modbench.record.create', '3_create'],
       ['modbench.saveAndCompile', '4_sourceControl'],
       ['modbench.pluginListTree.compileAtMain', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
@@ -680,7 +681,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ['in the game folder', 'plugin enabled untracked editable'],
     ['tracked but read-only', 'plugin enabled inMod tracked'],
     ['not yet described by mEdit', 'plugin enabled inMod'],
-  ])('plugin menu on a plugin %s: neither track nor compile', (_what, contextValue) => {
+  ])('plugin menu on a plugin %s: neither track, create record nor compile', (_what, contextValue) => {
     expect(menuOf(contextValue)).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
@@ -925,7 +926,7 @@ describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
     ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
-    ['modbench.record.create', 'modbench.plugin.singleEditableRecordType'],
+    ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
     ['modbench.record.copy', 'modbench.plugin.allRecords'],
   ] as const;

@@ -52,6 +52,7 @@ import {
 } from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { pluginsKeyContext } from './plugins/gestureEntry';
+import { selectCreatedRecords } from './plugins/createdRecordSelection';
 import { errorMessage } from './ports/errorMessage';
 import { applyOrThrow } from './ports/applyOrThrow';
 
@@ -212,6 +213,8 @@ interface PluginListDeps {
   loadDiagnostics: vscode.DiagnosticCollection;
   /** Plugin sync's failure, for the view's message line. */
   pluginSync: SyncMessage;
+  /** The watch's notices, which bring a created record's row. */
+  subscribe: ToolboxClient['subscribe'];
 }
 
 // ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
@@ -242,6 +245,13 @@ function registerPluginListView(
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
+  const createdRecords = own(selectCreatedRecords({
+    subscribe: deps.subscribe,
+    recordRow: (record) => pluginsTree.recordRow(record),
+    reveal: (row, options) => pluginListView.reveal(row, options),
+    fire: (command, ...args) => vscode.commands.executeCommand(command, ...args),
+  }));
+  session.selectCreatedRecord = (record) => { createdRecords.selectWhenListed(record); };
   const isEnabled = (row: PluginNode) =>
     instance.value.plugins.some((p) => p.winning && p.enabled && p.name === row.plugin.name && p.origin === row.origin);
   const showKeyContext = () => {
@@ -516,6 +526,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     own, session, outputChannel, reporterFor, instanceRoot,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
+    subscribe: (kind, listener) => client.subscribe(kind, listener),
   });
   const runModSync = (value: InstanceValue) => syncMods(instanceRoot, value.activeProfile, value.modFolders);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));

@@ -546,7 +546,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleEditableRecordType"
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.singleCreatable"
         },
         {
           "command": "modbench.record.delete",
@@ -905,6 +905,11 @@
           "command": "modbench.plugin.disable",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\benabled\\b/",
           "group": "2_change@1"
+        },
+        {
+          "command": "modbench.record.create",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "group": "3_create@1"
         },
         {
           "command": "modbench.plugin.track",

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
-import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
@@ -32,17 +31,34 @@ export function recordIdentity(arg: unknown): RecordIdentity | undefined {
   return { formKey: n.formKey, plugin: n.plugin, origin: n.origin, editorId: n.editorId };
 }
 
-export interface RecordTypeIdentity {
+/** What create is invoked on: a plugin, and the record type when the caller names it. */
+export interface CreateTarget {
   plugin: string;
   origin?: string;
-  recordType: string;
+  recordType?: string;
 }
 
-export function recordTypeIdentity(arg: unknown): RecordTypeIdentity | undefined {
+/** A group row, or a literal an agent or a key passes. A plugin row states its plugin as an
+ *  entry, not a name, so its surface reads it. */
+export function createTargetOf(arg: unknown): CreateTarget | undefined {
   if (!arg || typeof arg !== 'object') return undefined;
-  const n = arg as { plugin?: string; origin?: string; recordType?: string };
-  if (!n.plugin || !n.recordType) return undefined;
+  const n = arg as { plugin?: unknown; origin?: string; recordType?: string };
+  if (typeof n.plugin !== 'string' || !n.plugin) return undefined;
   return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
+}
+
+/** A record create wrote, which the view selects once the watch lists it. */
+export interface CreatedRecord {
+  plugin: string;
+  origin: string;
+  recordType: string;
+  formKey: string;
+}
+
+/** The view create is offered on: its own rows as the Argument, and the row of a new record. */
+export interface CreateSurface {
+  surfaceTarget(clicked: unknown, selected: readonly unknown[] | undefined): CreateTarget | undefined;
+  selectWhenListed(record: CreatedRecord): void;
 }
 
 // A node's own `origin` when the row already carries it (ADR-0012), else derived from
@@ -105,40 +121,51 @@ async function addressRecords(
   return { addressed, unaddressed };
 }
 
-type RecordLifecycleClient = Pick<MEditClient,
-  | 'createRecord' | 'deleteRecords' | 'getPlugins'
-  // `editRecord`: create's own ESL-flag-removal retry (`offerEslFlagRemoval`), not a record write
-  // of its own.
-  | 'editRecord'>;
+type RecordCreateClient = Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes' | 'getPlugins'>;
 
-/** ADR-0018: xEdit hosts its Add and Remove in its tree's context menu, not the grid. */
+// Esc on the pick is a pick left with nothing: nothing is created and nothing said.
+async function pickRecordType(client: RecordCreateClient, reporter: Reporter): Promise<string | undefined> {
+  let items: (vscode.QuickPickItem & { type: string })[];
+  try {
+    items = (await client.getCreatableRecordTypes()).map(({ type, displayName }) => ({ label: displayName, description: type, type }));
+  } catch (error) {
+    reporter.report('error', 'Could not look up the record types to create.', errorMessage(error));
+    return undefined;
+  }
+  return (await vscode.window.showQuickPick(items, { placeHolder: 'Record type' }))?.type;
+}
+
+/** ADR-0018: xEdit hosts its Add in its tree's context menu. As xEdit's, the new record is blank
+ *  and named afterward by editing its EditorID. */
+export function registerRecordCreateCommand(
+  client: RecordCreateClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter, surface: CreateSurface,
+): vscode.Disposable {
+  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
+  return vscode.commands.registerCommand('modbench.record.create', async (clicked?: unknown, selected?: readonly unknown[]) => {
+    const target = createTargetOf(clicked) ?? surface.surfaceTarget(clicked, selected);
+    if (!target) return;
+    const origin = await resolveOriginOrReport({ origin: target.origin, pluginName: target.plugin });
+    if (!origin) return;
+    const recordType = target.recordType ?? await pickRecordType(client, reporter);
+    if (!recordType) return;
+
+    const result = await client.createRecord(target.plugin, origin, recordType);
+    if (isRefused(result)) { reporter.report('error', result.message); return; }
+    reporter.landed(`Created ${result.formKey}.`);
+    surface.selectWhenListed({ plugin: target.plugin, origin, recordType: result.recordType, formKey: result.formKey });
+  });
+}
+
+type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords' | 'getPlugins'>;
+
+/** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so both take the Plugins selection.
+  // The palette hands no row, so delete takes the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
-  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-
   return [
-    // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
-    // by editing its EditorID, matching xEdit's own gesture.
-    vscode.commands.registerCommand('modbench.record.create', async (arg?: unknown) => {
-      const [only, ...rest] = viewSelection();
-      const identity = recordTypeIdentity(arg ?? (rest.length === 0 ? only : undefined));
-      if (!identity) return;
-      const origin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
-      if (!origin) return;
-
-      const result = await client.createRecord(
-        identity.plugin, origin, identity.recordType, undefined, undefined,
-        message => offerEslFlagRemoval({ name: identity.plugin, origin }, message, 'Create the Record', client, ask, reporter),
-      );
-      if (!result) return; // the ESL prompt was declined — nothing happened
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      reporter.landed(`Created ${result.formKey}.`);
-    }),
-
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
       const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);

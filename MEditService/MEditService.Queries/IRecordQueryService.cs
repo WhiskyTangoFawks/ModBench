@@ -13,5 +13,6 @@ public interface IRecordQueryService
     CompareResult? GetCompare(string formKey);
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
+    IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 }

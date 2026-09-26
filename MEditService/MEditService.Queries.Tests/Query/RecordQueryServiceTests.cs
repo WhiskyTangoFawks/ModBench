@@ -730,6 +730,46 @@ public sealed class RecordQueryServiceTests
         Assert.Empty(result);
     }
 
+    // --- GET /record-types/creatable ---
+
+    [Fact]
+    public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
+    {
+        var result = _svc.GetCreatableRecordTypes();
+
+        Assert.Equal("Non-Player Character", Assert.Single(result, r => r.Type == "npc_").DisplayName);
+    }
+
+    [Theory]
+    [InlineData(PluginHeader.RecordType)]
+    [InlineData("cell")]
+    [InlineData("wrld")]
+    [InlineData("refr")]
+    [InlineData("dial")]
+    [InlineData("info")]
+    public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryContainerOrHeldType(string recordType)
+    {
+        var result = _svc.GetCreatableRecordTypes();
+
+        Assert.DoesNotContain(result, r => r.Type == recordType);
+    }
+
+    [Fact]
+    public void GetCreatableRecordTypes_IsInNameOrder()
+    {
+        var names = _svc.GetCreatableRecordTypes().Select(r => r.DisplayName).ToList();
+
+        Assert.Equal(names.Order(StringComparer.OrdinalIgnoreCase), names);
+    }
+
+    [Fact]
+    public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
+    {
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
+    }
+
     // --- GET /records?type=unknown ---
 
     [Fact]

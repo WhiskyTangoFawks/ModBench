@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -28,6 +30,34 @@ public sealed class CreateRecordHandlerTests
         Assert.NotNull(document);
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
+    }
+
+    // The type pick offers these, so each one it offers must land.
+    [Fact]
+    public void CreateRecord_LandsEveryTypeTheCreatableListNames()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var creatable = CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4);
+
+        var refused = creatable
+            .Select(type => (type, result: mod.CreateHandler.CreateRecord(mod.Plugin, type, editorId: null)))
+            .Where(created => !created.result.Applied)
+            .Select(created => $"{created.type}: {created.result.Message}");
+
+        Assert.Empty(refused);
+    }
+
+    [Theory]
+    [InlineData("cell")]
+    [InlineData("refr")]
+    public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
+    {
+        using var mod = SourceEditFixture.Tracked();
+        Assert.DoesNotContain(recordType, CreatableRecordTypes.Of(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), GameRelease.Fallout4));
+
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, recordType, editorId: null);
+
+        Assert.False(result.Applied);
     }
 
     [Fact]
@@ -202,10 +232,10 @@ public sealed class CreateRecordHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
-        // This plugin is not light at all, so un-flagging ESL is not a way out of a full 0xFFFFFF native
-        // space and the marker must never claim it is.
-        Assert.False(result.EslContradiction);
+        Assert.Contains(BothRemedies, result.Message, StringComparison.Ordinal);
     }
+
+    private const string BothRemedies = "Clear the light flag in the header, or change a record's FormID.";
 
     // An ESL-flagged plugin's local FormID range is 12 bits: the game engine cannot address a higher
     // local ID from a light plugin's slot, so the allocator must refuse rather than continue.
@@ -222,10 +252,8 @@ public sealed class CreateRecordHandlerTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
-    // The same exhaustion, but light-ness is the removable header flag and native space above 0xFFF is
-    // free, so the frontend can offer remove-the-flag-and-retry instead of a dead end.
     [Fact]
-    public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_MarksEslContradiction()
+    public void CreateRecord_OnALightEspPlugin_WhenEslRangeExhausted_NamesBothRemedies()
     {
         using var mod = SourceEditFixture.TrackedLight();
         var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
@@ -233,7 +261,7 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
 
-        Assert.True(result.EslContradiction);
+        Assert.Contains(BothRemedies, result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

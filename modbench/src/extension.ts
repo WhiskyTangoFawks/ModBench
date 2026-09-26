@@ -11,6 +11,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { warnCompileUnfinished } from './plugins/compileUnfinishedWarning';
+import { pluginsCreateTarget } from './plugins/gestureEntry';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -184,6 +185,10 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
+      createSurface: {
+        surfaceTarget: pluginsCreateTarget(() => session.pluginsTreeView?.selection ?? []),
+        selectWhenListed: (record) => session.selectCreatedRecord?.(record),
+      },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),

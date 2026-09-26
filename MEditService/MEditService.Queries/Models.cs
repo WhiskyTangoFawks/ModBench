@@ -105,3 +105,5 @@ public record CompareResult(
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix from the page it has instead of walking children.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
+
+public record CreatableRecordType(string Type, string DisplayName);

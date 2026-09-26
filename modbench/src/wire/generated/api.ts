@@ -215,6 +215,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/record-types/creatable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetCreatableRecordTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -595,6 +611,10 @@ export interface components {
         };
         /** @enum {string} */
         CopyMode: "New" | "Override";
+        CreatableRecordType: {
+            type: string;
+            displayName: string;
+        };
         CreatePluginRequest: {
             name: string;
             path: string;
@@ -1482,6 +1502,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginRecordTypeCount"][];
+                };
+            };
+        };
+    };
+    GetCreatableRecordTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatableRecordType"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

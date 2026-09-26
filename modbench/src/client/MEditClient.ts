@@ -94,6 +94,7 @@ export type RebuildIndexOutcome =
   | { rebuilt: false; heldElsewhere: false; detail: string };
 
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type CreatableRecordType = components['schemas']['CreatableRecordType'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -132,10 +133,7 @@ export interface MEditClient {
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  createRecord(
-    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
-    onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCreateResponse | WriteRefused | undefined>;
+  createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
@@ -157,6 +155,8 @@ export interface MEditClient {
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
+  // The game's, not a plugin's: every plugin of the load order shares it.
+  getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;

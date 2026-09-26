@@ -150,6 +150,16 @@ public sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
+    // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.
+    public IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes()
+    {
+        var schemas = RequireSchemas();
+        return [.. CreatableRecordTypes.Of(schemas, _loadOrder.Require().GameRelease)
+            .Select(type => new CreatableRecordType(type, schemas.DisplayNameFor(type)))
+            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Type, StringComparer.Ordinal)];
+    }
+
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
 

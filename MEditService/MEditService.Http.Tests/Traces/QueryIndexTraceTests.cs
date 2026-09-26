@@ -112,6 +112,27 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AQuestionAboutTheCreatableRecordTypes_NamesTheGamesFlatTypesAndNoContainer()
+    {
+        await Loaded();
+        var types = await Client.GetFromJsonAsync<JsonElement>("/record-types/creatable");
+
+        var names = types.EnumerateArray().ToDictionary(
+            t => t.GetProperty("type").GetString().Require(), t => t.GetProperty("displayName").GetString());
+        Assert.Equal("Non-Player Character", names["npc_"]);
+        Assert.DoesNotContain("cell", names.Keys);
+        Assert.DoesNotContain("wrld", names.Keys);
+    }
+
+    [Fact]
+    public async Task AQuestionAboutTheCreatableRecordTypes_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    {
+        var response = await Client.GetAsync(new Uri("/record-types/creatable", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AGroupsRecords_CarryTheirNameWhenTheyHaveOne()
     {
         await Loaded();

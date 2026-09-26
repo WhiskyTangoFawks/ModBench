@@ -12,6 +12,7 @@ import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
+import { isRecordRow } from './gestureEntry';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -296,8 +297,7 @@ export class PluginsTreeProvider
   // plugins.md, States, story 3: once mEdit names the locked plugins, an unreachable mEdit does not
   // unlock them.
   private lockedNames: readonly string[] | undefined;
-  // Whether the last build had no row at all, which the message line says.
-  private nothingToShow = false;
+  private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
@@ -347,6 +347,11 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  // The view's message line is read on each change of the rows.
+  private rereadMessageLine(): void {
+    this.render();
+  }
+
   /** What the view's message line says about its rows: the game folder not found (common.md,
    *  States, story 5), else no rows at all (plugins.md, States, story 1), else a record filter
    *  that matches nothing (States, story 5). */
@@ -355,7 +360,7 @@ export class PluginsTreeProvider
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    if (this.nothingToShow) return NO_PLUGINS_MESSAGE;
+    if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
     }
@@ -388,15 +393,13 @@ export class PluginsTreeProvider
    *  `await` unchanged. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
     if (row.kind === 'implicitMaster') return Promise.resolve(this.dataFolderFile(row.name));
-    const folded = row.plugin.name.toLowerCase();
-    return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
+    return Promise.resolve(this.winningPluginNamed(row.plugin.name)?.path);
   }
 
-  // The copy the game loads: the one the Mod override order resolves the name to, else the game
-  // folder's.
-  private lockedOriginOf(name: string): string {
+  // The copy the Mod override order resolves the name to.
+  private winningPluginNamed(name: string): InstanceValue['plugins'][number] | undefined {
     const folded = name.toLowerCase();
-    return this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.origin ?? DATA_DIRECTORY_ORIGIN;
+    return this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded);
   }
 
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
@@ -406,22 +409,46 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (!isRow(element)) return this.identified(await (this.records?.getChildren(element) ?? []), this.pluginAbove.get(element));
-    const file = pluginFileOf(element);
-    return this.identified(await this.expandPluginRow(element, file), { name: file, origin: element.origin });
+    const children = isRow(element)
+      ? await this.expandPluginRow(element, pluginFileOf(element))
+      : await (this.records?.getChildren(element) ?? []);
+    return this.adopted(children, element);
   }
 
-  // The plugin row each row beneath it sits under: a record row's identity names that plugin.
-  private readonly pluginAbove = new WeakMap<PluginsTreeNode, PluginAddress>();
+  /** VS Code's walk up from a row it is asked to reveal. */
+  getParent(element: PluginsTreeNode): PluginsTreeNode | undefined {
+    return this.parentOf.get(element);
+  }
 
-  private identified(children: PluginsTreeNode[], plugin: PluginAddress | undefined): PluginsTreeNode[] {
-    if (plugin === undefined) return children;
+  private readonly parentOf = new WeakMap<PluginsTreeNode, PluginsTreeNode>();
+
+  private adopted(children: PluginsTreeNode[], parent: PluginsTreeNode): PluginsTreeNode[] {
+    const pluginRow = this.pluginRowOf(parent);
     for (const child of children) {
-      this.pluginAbove.set(child, plugin);
+      this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
-      if (formKey !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+      if (formKey !== undefined && pluginRow !== undefined) {
+        child.id = rowIdentity(child.kind, { name: pluginFileOf(pluginRow), origin: pluginRow.origin }, formKey);
+      }
     }
     return children;
+  }
+
+  private pluginRowOf(node: PluginsTreeNode): PluginListNode | undefined {
+    let current: PluginsTreeNode | undefined = node;
+    while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
+    return current;
+  }
+
+  /** The row of a record, once mEdit lists it in its plugin's group of its type; the plugin as
+   *  (origin, filename). */
+  async recordRow(record: { plugin: string; origin: string; recordType: string; formKey: string }): Promise<PluginsTreeNode | undefined> {
+    const address = pluginAddressKey(record.plugin, record.origin);
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && pluginAddressKey(row.plugin.name, row.origin) === address);
+    if (pluginRow === undefined) return undefined;
+    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === record.recordType);
+    if (group === undefined) return undefined;
+    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === record.formKey);
   }
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
@@ -457,19 +484,18 @@ export class PluginsTreeProvider
   private async builtRows(): Promise<PluginListNode[]> {
     while (!this.cache) {
       const generation = this.rowsGeneration;
-      this.settleRows(generation, await this.implicitMasters());
+      this.settleRowsUnlessInvalidatedSince(generation, await this.implicitMasters());
     }
     return this.cache.rows;
   }
 
-  // A build that asked mEdit before the rows were last invalidated drops out.
-  private settleRows(generation: number, lockedAnswer: readonly string[] | undefined): void {
+  private settleRowsUnlessInvalidatedSince(generation: number, lockedAnswer: readonly string[] | undefined): void {
     if (generation !== this.rowsGeneration) return;
     const rows = this.buildRows(lockedAnswer);
     this.cache = { rows };
-    if ((rows.length === 0) !== this.nothingToShow) {
-      this.nothingToShow = rows.length === 0;
-      this.render(); // the message line reads it
+    if ((rows.length === 0) !== this.lastBuildHadNoRows) {
+      this.lastBuildHadNoRows = rows.length === 0;
+      this.rereadMessageLine();
     }
   }
 
@@ -496,7 +522,7 @@ export class PluginsTreeProvider
       return true;
     });
     this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
-    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.lockedOriginOf(name), this.dataFolderFile(name)));
+    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.winningPluginNamed(name)?.origin ?? DATA_DIRECTORY_ORIGIN, this.dataFolderFile(name)));
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     return [
       ...lockedRows,
@@ -840,11 +866,9 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
   return element instanceof PluginNode || element instanceof ImplicitMasterNode;
 }
 
-// plugins.md, Menus and keys: a record row is every row a record menu sits on.
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
-  if (row.kind === 'record') return row.record.formKey;
-  if (row.kind === 'worldspace' || row.kind === 'cell' || row.kind === 'placed') return row.formKey;
-  return undefined;
+  if (!isRecordRow(row)) return undefined;
+  return row.kind === 'record' ? row.record.formKey : row.formKey;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

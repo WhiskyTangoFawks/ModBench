@@ -11,7 +11,9 @@ import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
-import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
+import {
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerRecordCreateCommand, type CreateSurface,
+} from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 
@@ -34,11 +36,13 @@ export interface EditorCommandDeps {
   treeSync: RecordTreeSync;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecords' | 'copyRecords'
+    | 'createRecord' | 'getCreatableRecordTypes' | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
+  // Plugins, the one view create is offered on.
+  createSurface: CreateSurface;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like mergedTreeSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
@@ -98,6 +102,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     }),
     // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
+    registerRecordCreateCommand(meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.createSurface),
     ...registerRecordLifecycleCommands(
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(

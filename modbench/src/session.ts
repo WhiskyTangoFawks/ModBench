@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
+import type { CreatedRecord } from './plugins/createdRecordSelection';
 import type { LoadOrderSender, RecordFilter } from './client';
 import type { NameFilter } from './nameFilter';
 import { say } from './editingTeardown';
@@ -22,6 +23,8 @@ export interface ExtensionSession {
   /** The same view's name filter — a second, independent narrowing axis from the record filter,
    *  which has to be able to add itself to this view's readout. */
   pluginsNameFilter?: NameFilter;
+  /** The same view's selection of a record create wrote, once the watch lists it. */
+  selectCreatedRecord?: (record: CreatedRecord) => void;
   /** Plugin filename → the `vscode.git` `Repository` for that plugin's mod folder. Kept so a
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
