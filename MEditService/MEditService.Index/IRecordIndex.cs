@@ -83,9 +83,9 @@ internal interface IRecordIndex : IDisposable
     /// held at either ref.</summary>
     void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
-    /// <summary>Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the
-    /// one door SQL crosses this seam through (ADR-0007). Throws if the SQL returns no
-    /// <c>form_key</c> column; state is unchanged on failure.</summary>
+    /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
+    /// clears both), the one door SQL crosses this seam through (ADR-0007). Throws if the SQL returns
+    /// no <c>form_key</c> column.</summary>
     void SetFilter(string? sql);
 
     /// <summary>ADR-0015 invariant 3: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at

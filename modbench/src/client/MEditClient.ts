@@ -95,7 +95,8 @@ export type RebuildIndexOutcome =
 
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
-export type CellPage = components['schemas']['CellSummaryPagedResult'];
+export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
+export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
 
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
@@ -165,7 +166,7 @@ export interface MEditClient {
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
-  getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
+  getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]>;
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
   /** Null when mEdit took the filter, or the reason it did not. */

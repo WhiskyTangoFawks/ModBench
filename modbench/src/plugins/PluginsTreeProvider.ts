@@ -307,8 +307,6 @@ export class PluginsTreeProvider
       this.instanceValue = value;
       this.invalidate();
     }));
-    // Forwarded with the element intact, so a targeted refresh (a "Load more…" landing under one
-    // record type) stays targeted.
     if (options.records) {
       this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     }

@@ -30,7 +30,7 @@ import {
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
-  registerLoadMoreCommand, registerFilterCommands, makeShowRecordFilter, type FilterScripts,
+  registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 import { errorMessage } from './ports/errorMessage';
@@ -174,7 +174,6 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
-    registerLoadMoreCommand(treeProvider),
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },

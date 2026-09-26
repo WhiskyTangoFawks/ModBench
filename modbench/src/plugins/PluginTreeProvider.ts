@@ -3,7 +3,7 @@ import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
-  ContainerChildSummary, MEditClient, PluginAddress, PluginRecordTypeCount,
+  ContainerChildSummary, MEditClient, PluginAddress, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
 import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -11,11 +11,6 @@ import { pluginAddressKey } from './trackedRepositories';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
 export { headerFormKeyFor } from './formKeyIdentity';
-
-// Interior-cell listing is the only surface that pages — record-type children (below) load in
-// one call (plugins.md, The tree, story 10). Measured, that costs nothing noticeable even at the
-// realistic worst case (see fetchRecords).
-const PAGE_SIZE = 50;
 
 // The backend's `/records` `limit` query param is a plain `int`, no upper bound enforced —
 // Int32.MaxValue as "no limit" fetches every record of a type in one call.
@@ -45,6 +40,15 @@ function describeRecordRow(item: vscode.TreeItem, record: RecordRowFacts): void 
   const failure = record.hasParseFailure ? failureNote('This record', record.parseDiagnosis) : undefined;
   const lines = [record.fullName, failure].filter(line => !!line);
   item.tooltip = lines.length > 0 ? lines.join('\n') : undefined;
+}
+
+// A group with no record beneath it has no expander (plugins.md, The tree, story 8).
+function groupCollapsibleState(count: number): vscode.TreeItemCollapsibleState {
+  return count > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+}
+
+function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState {
+  return hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
@@ -81,7 +85,7 @@ export class RecordTypeNode extends vscode.TreeItem {
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
-    super(displayName, vscode.TreeItemCollapsibleState.Collapsed);
+    super(displayName, groupCollapsibleState(count));
     this.description = count.toLocaleString();
     this.contextValue = conditionedContextValue('recordType', conditions);
     if (hasParseFailure) markFailure(this, failureNote(displayName, null));
@@ -135,7 +139,7 @@ export class WorldspacesNode extends vscode.TreeItem {
     public readonly plugin: string, typeName: string, count: number, public readonly origin?: string,
     hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
-    super(typeName, vscode.TreeItemCollapsibleState.Collapsed);
+    super(typeName, groupCollapsibleState(count));
     this.description = count.toLocaleString();
     this.contextValue = 'worldspaces';
     if (hasParseFailure) markFailure(this, failureNote(typeName, null));
@@ -151,7 +155,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     const label = worldspace.editorId ?? worldspace.formKey;
-    super(label, vscode.TreeItemCollapsibleState.Collapsed);
+    super(label, collapsibleWhen(worldspace.hasChildren));
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
     this.contextValue = conditionedContextValue('worldspace', conditions);
@@ -203,7 +207,7 @@ export class CellNode extends vscode.TreeItem {
   ) {
     const label = cell.editorId
       ?? (cell.cellX != null ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>` : cell.formKey);
-    super(label, vscode.TreeItemCollapsibleState.Collapsed);
+    super(label, collapsibleWhen(cell.hasChildren));
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
     this.contextValue = conditionedContextValue('cell', conditions);
@@ -257,19 +261,36 @@ export class InteriorCellsNode extends vscode.TreeItem {
     public readonly plugin: string, typeName: string, count: number, public readonly origin?: string,
     hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
-    super(typeName, vscode.TreeItemCollapsibleState.Collapsed);
+    super(typeName, groupCollapsibleState(count));
     this.description = count.toLocaleString();
     this.contextValue = 'interiorCells';
     if (hasParseFailure) markFailure(this, failureNote(typeName, null));
   }
 }
 
-export class InteriorLoadMoreNode extends vscode.TreeItem {
-  readonly kind = 'interiorLoadMore' as const;
-  constructor(public readonly parentNode: InteriorCellsNode, remaining: number) {
-    super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'loadMore';
-    this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
+// xEdit's TwbGroupRecord.GetShortName (wbImplementation.pas), group types 2/3: 'Block ' + Label /
+// 'Sub-Block ' + Label.
+export class InteriorBlockNode extends vscode.TreeItem {
+  readonly kind = 'interiorBlock' as const;
+  constructor(
+    public readonly plugin: string, public readonly block: InteriorCellBlock, public readonly origin?: string,
+    public readonly conditions: PluginConditions = NOT_EDITABLE,
+  ) {
+    super(`Block ${block.number}`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.contextValue = 'block';
+    if (block.hasParseFailure) markFailure(this, failureNote('This block', null));
+  }
+}
+
+export class InteriorSubBlockNode extends vscode.TreeItem {
+  readonly kind = 'interiorSubBlock' as const;
+  constructor(
+    public readonly plugin: string, public readonly subBlock: InteriorCellSubBlock, public readonly origin?: string,
+    public readonly conditions: PluginConditions = NOT_EDITABLE,
+  ) {
+    super(`Sub-Block ${subBlock.number}`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.contextValue = 'subBlock';
+    if (subBlock.hasParseFailure) markFailure(this, failureNote('This sub-block', null));
   }
 }
 
@@ -287,7 +308,7 @@ export class IndexingNode extends vscode.TreeItem {
 export type PluginTreeNode =
   | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
-  | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
+  | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorBlockNode | InteriorSubBlockNode
   | ErrorNode | IndexingNode;
 
 const SPATIAL_GROUP_FACTORIES: Record<
@@ -299,9 +320,6 @@ const SPATIAL_GROUP_FACTORIES: Record<
   cell: (pluginName, g, origin, conditions) =>
     new InteriorCellsNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure, conditions),
 };
-
-// refr/achr nest under the cell hierarchy (fetchCellGroups) rather than being a group of their own.
-const NESTED_TYPES = new Set(['refr', 'achr']);
 
 // Which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
 // expands via fetchContainerChildren) — a Quest's dialog topics/branches/scenes, a Dialog Topic's
@@ -327,7 +345,6 @@ class PluginAddressSet {
 
 type RecordPage = { items: RecordSummary[]; total: number };
 type PageCache = Map<string, RecordPage>;
-type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
 
 type RecordBrowserClient = Pick<
   MEditClient,
@@ -340,13 +357,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly pageCache: PageCache = new Map();
-  private readonly interiorCache: CellPageCache = new Map();
+  private readonly interiorCache = new Map<string, InteriorCellBlock[]>();
   private readonly refCache = new Map<string, CellReferences>();
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
-  // Last load-more failure per parent, keyed by pluginAddressKey alone — interior cells are the only
-  // surface that pages. Cleared on a successful retry;
-  // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
-  private readonly interiorLoadMoreFailures = new Map<string, string>();
   // The load order's immutable plugins, pushed in from the tree's own `GET /plugins` read —
   // record rows under one state it read-only, which the record edits' `when` clauses read.
   private readonly immutablePlugins = new PluginAddressSet();
@@ -392,7 +405,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.interiorCache.clear();
     this.refCache.clear();
     this.containerChildCache.clear();
-    this.interiorLoadMoreFailures.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -470,25 +482,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         new PlacedNode(element.plugin, p, element.origin, element.conditions));
     }
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
-    return [];
-  }
-
-  // The only pagination in this provider — record-type children load in one
-  // getChildren call (see fetchRecords).
-  async loadMore(node: InteriorLoadMoreNode): Promise<void> {
-    const parent = node.parentNode;
-    const cacheKey = pluginAddressKey(parent.plugin, parent.origin);
-    const cached = this.interiorCache.get(cacheKey) ?? { items: [], total: 0 };
-    try {
-      const result = await this.repository.getInteriorCells(parent.plugin, cached.items.length, PAGE_SIZE, parent.origin);
-      this.interiorCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
-      this.interiorLoadMoreFailures.delete(cacheKey);
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}) failed: ${message}`);
-      this.interiorLoadMoreFailures.set(cacheKey, message);
+    if (element instanceof InteriorBlockNode) {
+      return element.block.subBlocks.map(s => new InteriorSubBlockNode(element.plugin, s, element.origin, element.conditions));
     }
-    this._onDidChangeTreeData.fire(parent);
+    if (element instanceof InteriorSubBlockNode) {
+      return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
+    }
+    return [];
   }
 
   private cacheKey(node: RecordTypeNode): string {
@@ -530,7 +530,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
       return types
-        .filter(t => !NESTED_TYPES.has(t.type))
         .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin, conditions)
           ?? new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure, conditions));
     });
@@ -576,18 +575,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
+  // Every interior cell in one call (plugins.md, The tree, story 10).
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
-      const cacheKey = pluginAddressKey(node.plugin, node.origin);
-      const cached = await this.getOrLoad(this.interiorCache, cacheKey,
-        () => this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin));
-      const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin, node.conditions));
-      if (cached.total > cached.items.length) {
-        nodes.push(new InteriorLoadMoreNode(node, cached.total - cached.items.length));
-      }
-      const failure = this.interiorLoadMoreFailures.get(cacheKey);
-      if (failure) nodes.push(new ErrorNode(failure));
-      return nodes;
+      const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(node.plugin, node.origin),
+        () => this.repository.getInteriorCells(node.plugin, node.origin));
+      return blocks.map(b => new InteriorBlockNode(node.plugin, b, node.origin, node.conditions));
     });
   }
 

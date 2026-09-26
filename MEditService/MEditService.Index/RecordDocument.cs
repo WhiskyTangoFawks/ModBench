@@ -35,8 +35,8 @@ public record OverrideStackEntry(
 /// not a collection.</summary>
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
-/// <summary>Filters and paging only; ordering is fixed. Null or empty <c>RecordTypes</c> means
-/// every type; <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
+/// <summary>A <c>Search</c> term's matches list by EditorID, and a listing without one in FormID
+/// order. <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
