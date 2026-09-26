@@ -32,7 +32,7 @@ describe('onPluginCheckboxChanged', () => {
     const reporter = recordingReporter();
 
     await onPluginCheckboxChanged(
-      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }), 1]] },
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'), 1]] },
       '/instance', profile, reporter, invalidate,
     );
 
@@ -51,8 +51,8 @@ describe('onPluginCheckboxChanged', () => {
     await onPluginCheckboxChanged(
       {
         items: [
-          [new PluginNode({ name: 'A.esp', enabled: true }), 1],
-          [new PluginNode({ name: 'B.esp', enabled: true }), 1],
+          [new PluginNode({ name: 'A.esp', enabled: true }, 'SomeMod'), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 1],
         ],
       },
       '/instance', profile, reporter, invalidate,
@@ -73,8 +73,8 @@ describe('onPluginCheckboxChanged', () => {
     await onPluginCheckboxChanged(
       {
         items: [
-          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
-          [new PluginNode({ name: 'B.esp', enabled: true }), 0],
+          [new PluginNode({ name: 'A.esp', enabled: false }, 'SomeMod'), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
       '/instance', profile, reporter, vi.fn(),
@@ -92,7 +92,7 @@ describe('onPluginCheckboxChanged', () => {
     const reporter = recordingReporter();
 
     await onPluginCheckboxChanged(
-      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }), 0]] },
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }, 'SomeMod'), 0]] },
       '/instance', profile, reporter, invalidate,
     );
 
@@ -107,8 +107,8 @@ describe('onPluginCheckboxChanged', () => {
     await onPluginCheckboxChanged(
       {
         items: [
-          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
-          [new PluginNode({ name: 'B.esp', enabled: true }), 0],
+          [new PluginNode({ name: 'A.esp', enabled: false }, 'SomeMod'), 1],
+          [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
       '/instance', profile, reporter, vi.fn(),
@@ -128,8 +128,8 @@ describe('onPluginCheckboxChanged', () => {
     await onPluginCheckboxChanged(
       {
         items: [
-          [new PluginNode({ name: 'A.esp', enabled: false }), 1],
-          [new PluginNode({ name: 'B.esp', enabled: false }), 1],
+          [new PluginNode({ name: 'A.esp', enabled: false }, 'SomeMod'), 1],
+          [new PluginNode({ name: 'B.esp', enabled: false }, 'SomeMod'), 1],
         ],
       },
       '/instance', profile, reporter, invalidate,

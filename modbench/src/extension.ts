@@ -237,7 +237,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
+      client, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(
           client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);

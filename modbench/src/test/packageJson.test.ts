@@ -27,6 +27,7 @@ vi.mock('vscode', () => ({
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
+import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -619,6 +620,36 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   // The menu VS Code draws for a row: every entry whose `when` holds for the row's contextValue.
   const menuOf = (contextValue: string): [string, string][] => placed(
     inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue })));
+
+  // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
+  it('title bar: filter or clear, sort direction, filter records or clear, then create plugin, as icons', () => {
+    expect(inPluginsView('view/title').map((e) => [e.command, e.group])).toEqual(expect.arrayContaining([
+      ['modbench.plugin.sortWinningAtTop', 'navigation@2'],
+      ['modbench.plugin.sortLosingAtTop', 'navigation@2'],
+    ]));
+    expect(placed(inPluginsView('view/title'))).toEqual([
+      ['modbench.plugin.filter', 'navigation'],
+      ['modbench.plugin.clearFilter', 'navigation'],
+      ['modbench.plugin.sortWinningAtTop', 'navigation'],
+      ['modbench.plugin.sortLosingAtTop', 'navigation'],
+      ['modbench.record.filter', 'navigation'],
+      ['modbench.record.clearFilter', 'navigation'],
+      ['modbench.plugin.create', 'navigation'],
+    ]);
+  });
+
+  it('title bar: slot 2 shows the one direction the view is not in', () => {
+    const when = (command: string) =>
+      present(inPluginsView('view/title').find((e) => e.command === command), command).when;
+    expect(when('modbench.plugin.sortWinningAtTop')).toBe(`${PLUGINS_VIEW} && !modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
+    expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
+  });
+
+  it('the empty list\'s message names the title bar\'s create plugin', () => {
+    const create = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.create'), 'create plugin');
+    expect(NO_PLUGINS_MESSAGE).toContain(create.title);
+    expect(NO_PLUGINS_MESSAGE).toContain('title bar');
+  });
 
   it('plugin menu: reveal, enable or disable, track, compile, compile from main, copy value', () => {
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
