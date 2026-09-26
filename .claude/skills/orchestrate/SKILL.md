@@ -1,12 +1,12 @@
 ---
 name: orchestrate
-description: Work a PRD's ticket stack from a single go. Lane the tickets by file surface, dispatch executors to worktrees, land serially, report on the PRD.
+description: Work an epic's ticket stack from a single go. Lane the tickets by file surface, dispatch executors to worktrees, land serially, report on the epic.
 disable-model-invocation: true
 ---
 
 # Orchestrate
 
-Your goal is the delivery of the PRD. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
+Your goal is the delivery of the epic. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
 
 Read tickets and reports, avoid reading source. Every file you open is context you will not have later in the run- spend your context wisely.
 
@@ -18,9 +18,9 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 ## 1. Lane
 
-The stack is a PRD's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. File surface decides what can run beside what.
+The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. File surface decides what can run beside what.
 
-Read each ticket once, with its comments and its PRD's comments, and name the files it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets sharing a file share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
+Read each ticket once, with its comments and its epic's comments, and name the files it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets sharing a file share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
 **Criterion:** every ticket sits in one lane, and no two lanes name the same file.
 
@@ -34,7 +34,7 @@ For each ticket, assign yourself and start one fresh `general-purpose` agent wit
 
 Keep the agentId, because `SendMessage` carries every later exchange. Within a minute, confirm the agent's transcript is still growing: one that stopped at its first tool call is dead, and a message to a dead agent is queued, never delivered, so respawn rather than wait. The prompt is `BRIEF.md` verbatim, followed by the fillings it needs:
 
-- the ticket number, its body, and every comment on the ticket and on its PRD, oldest first (`gh issue view <n> --comments`). The body is the ticket, and the comments are its context.
+- the ticket number, its body, and every comment on the ticket and on its epic, oldest first (`gh issue view <n> --json number,title,body,labels,comments`). The ticket's spec lines are its work, and the comments are context.
 - **landed since**, the list of what this run has already merged only if it changes the ticket's ground
 - the branch name to create; the worktree is the agent's working directory
 
@@ -57,12 +57,12 @@ When an executor reports committed, work through these in order.
    - When a named surface was wired, retired or renamed, grep `CLAUDE.md`, the specs and adjacent doc comments for present-tense claims about it. A stale doc comment is fixed; a stale claim in a maintainer's document is a break for the drain.
 6. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
 7. Where the outcome leaves a maintainer's document out of step with the code, such as a status that should flip, quote it as a break for the drain.
-8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the PRD.
+8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
 9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
 10. Tell the other executor what landed and the new baseline test count, in one line.
-11. Sort the report's **findings**. A defect the run finds is the run's to fix, whatever ticket or PRD it sits under and however old it is. Each finding takes one of four routes:
-   - A defect, or a finding that serves the PRD, inside the reporting executor's surface: message that executor the finding along with landed-since, and it lands with the ticket.
-   - A defect, or a finding that serves the PRD, outside that surface: start a fresh executor with a brief you write.
+11. Sort the report's **findings**. A defect the run finds is the run's to fix, whatever ticket or epic it sits under and however old it is. Each finding takes one of four routes:
+   - A defect, or a finding that serves the epic, inside the reporting executor's surface: message that executor the finding along with landed-since, and it lands with the ticket.
+   - A defect, or a finding that serves the epic, outside that surface: start a fresh executor with a brief you write.
    - A finding whose root lives in a maintainer's document: a break or a strategic question for the drain, in the chain of authority's form.
    - Anything else is dropped.
 
@@ -74,13 +74,13 @@ The tracker is yours to read, assign, close and comment on. Tickets come from th
 
 ## 4. Drain
 
-The run ends when the PRD is achieved. Post one comment on the PRD. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The PRD is the user's review surface.
+The run ends when the epic is achieved. Post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface.
 
 **Criterion:** the comment is posted, no worktree remains, and `main` is clean.
 
 ## Unattended mechanics
 
-When an executor parks, comment its question on the ticket, unassign, and continue the lane. The user answers by editing the ticket's or the PRD's body. If an answer lands before the drain, the ticket re-queues at the back.
+When an executor parks, comment its question on the ticket, unassign, and continue the lane. The user answers in a session, and the answer lands where its root lives. If an answer lands before the drain, the ticket re-queues at the back.
 
 The transcript carries one artifact, a status line, printed on each status change: `#542 building | #538 landing | #540 landed — 3 queued`. Send a `PushNotification` on a park, a land, and the drain.
 

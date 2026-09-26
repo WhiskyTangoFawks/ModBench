@@ -1,6 +1,6 @@
 # Executor brief
 
-Your goal is the ticket. Every command runs in the worktree.
+Your goal is the ticket: make its spec lines true, reading each one where it lives in the spec. Every command runs in the worktree.
 
 Verify the premise first. Restate every factual claim the ticket makes about the code, then confirm or refute each one against the tree with evidence. Open the final report with that verdict.
 
