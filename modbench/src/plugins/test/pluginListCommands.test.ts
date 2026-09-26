@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import {
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
+} from '../../test/vscodeMock';
 
 // Captures every registerCommand(id, handler) so the row's handler can be invoked directly.
 const {
@@ -22,7 +24,7 @@ vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
   window: { showInputBox, showQuickPick },
   Uri: { file: (p: string) => ({ fsPath: p }), from: uriFrom },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
 }));
 
 vi.mock('../../pluginsCommands/plugins', () => ({ appendPlugin: vi.fn() }));
@@ -33,12 +35,14 @@ import {
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
-import { ImplicitMasterNode, PluginNode, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
+import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { appendPlugin } from '../../pluginsCommands/plugins';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { expectInstancesOf } from '../../test/expectInstanceOf';
 
 beforeEach(() => {
   handlers.clear();
@@ -53,7 +57,6 @@ function makeMo2() {
       }),
     },
     instanceRoot: '/instance',
-    pluginsTree: { invalidate: vi.fn() },
   };
 }
 
@@ -119,6 +122,36 @@ describe('registerCreatePluginCommand', () => {
       detail: 'plugins.txt is read-only',
     }]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  // ADR-0015 invariant 2: create plugin writes and returns, and the new row arrives with the
+  // Instance loader's next value.
+  it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite', slot: null, version: 1 });
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockResolvedValue({ choice: 'overwrite' });
+    vi.mocked(appendPlugin).mockResolvedValue({ applied: true, wrote: true });
+    const mo2 = makeMo2();
+    const instance = new FakeInstance(mo2.instance.value);
+    const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve() } });
+    expect(await tree.getChildren()).toEqual([]);
+    let changes = 0;
+    tree.onDidChangeTreeData(() => { changes++; });
+
+    const { run } = invoke(client, { ...mo2, instance });
+    await run();
+
+    expect(changes).toBe(0);
+    expect(await tree.getChildren()).toEqual([]);
+
+    instance.publish(instanceValueFixture({
+      ...mo2.instance.value,
+      plugins: [{ name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite', slot: 0, enabled: true, winning: true }],
+    }));
+
+    expect(changes).toBeGreaterThan(0);
+    expect(expectInstancesOf(await tree.getChildren(), PluginNode).map((row) => row.plugin.name)).toEqual(['MyPatch.esp']);
   });
 
   it('reports the missing-workspace refusal at error and prompts for nothing', async () => {

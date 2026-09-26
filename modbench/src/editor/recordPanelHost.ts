@@ -71,7 +71,7 @@ function recordPanelWriteDeps(
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync, meditClient,
-    outputChannel, mergedTreeSelection, refreshMatchingPlugins,
+    outputChannel, mergedTreeSelection,
   } = deps;
   // One decoration provider per activation: its lookup reads treeSync's cache live, so it
   // needs no copy of that state.
@@ -101,11 +101,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (create/delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins,
-      mergedTreeSelection),
+      meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
-      meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, treeSync, refreshMatchingPlugins,
-      mergedTreeSelection),
+      meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });

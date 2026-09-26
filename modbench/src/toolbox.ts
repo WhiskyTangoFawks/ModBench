@@ -260,7 +260,7 @@ function registerPluginListView(
     new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-    e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
+    e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'))));
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
   ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(

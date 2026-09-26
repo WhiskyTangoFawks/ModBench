@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
-import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
+import { headerFormKeyFor } from './PluginTreeProvider';
 import { resolveCompileTarget, type ResolveCompileTargetDeps } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
@@ -70,7 +70,7 @@ function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined>
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
   progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
-  reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
+  reporter: Reporter, onTracked: () => Promise<void>,
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
@@ -96,12 +96,8 @@ export function registerTrackCommand(
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
       const outcome = result;
-      if (outcome.landed.length > 0) {
-        // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
-        // menu entry's opposite. Not the filter-match set: tracking changes no record.
-        treeProvider.refresh();
-        await onTracked();
-      }
+      // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
+      if (outcome.landed.length > 0) await onTracked();
       const [only, ...more] = outcome.landed;
       if (outcome.refused.length > 0) report(outcome);
       else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);

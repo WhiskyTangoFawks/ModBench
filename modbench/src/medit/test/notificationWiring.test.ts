@@ -92,35 +92,43 @@ describe('subscribeRecordPanelsToNotifications', () => {
 });
 
 describe('subscribeTreeToNotifications', () => {
-  it('refreshes on rows-changed', () => {
+  // ADR-0015 invariant 3: a record written from Plugins, by hand or by another tool reaches the view
+  // here, the records and the plugin facts a record filter's match reads alike.
+  it('re-reads the records and the plugin facts on rows-changed', () => {
     const client = new InMemoryMEditClient();
     const tree = { refresh: vi.fn() };
-    subscribeTreeToNotifications(client, tree);
+    const refreshPluginFacts = vi.fn();
+    subscribeTreeToNotifications(client, tree, refreshPluginFacts);
 
     client.emit(rowsChanged(['000001:Test.esp']));
 
     expect(tree.refresh).toHaveBeenCalledTimes(1);
+    expect(refreshPluginFacts).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes on plugin-changed', () => {
+  it('re-reads the records and the plugin facts on plugin-changed', () => {
     const client = new InMemoryMEditClient();
     const tree = { refresh: vi.fn() };
-    subscribeTreeToNotifications(client, tree);
+    const refreshPluginFacts = vi.fn();
+    subscribeTreeToNotifications(client, tree, refreshPluginFacts);
 
     client.emit(pluginChanged());
 
     expect(tree.refresh).toHaveBeenCalledTimes(1);
+    expect(refreshPluginFacts).toHaveBeenCalledTimes(1);
   });
 
   it('unsubscribing stops both subscriptions', () => {
     const client = new InMemoryMEditClient();
     const tree = { refresh: vi.fn() };
-    const unsubscribe = subscribeTreeToNotifications(client, tree);
+    const refreshPluginFacts = vi.fn();
+    const unsubscribe = subscribeTreeToNotifications(client, tree, refreshPluginFacts);
 
     unsubscribe();
     client.emit(rowsChanged(['000001:Test.esp']));
     client.emit(pluginChanged());
 
     expect(tree.refresh).not.toHaveBeenCalled();
+    expect(refreshPluginFacts).not.toHaveBeenCalled();
   });
 });
