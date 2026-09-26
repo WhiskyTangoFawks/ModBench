@@ -86,8 +86,8 @@ sits.
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: show excluded, or hide excluded while shown. Overflow: sort. |
-| Row menu | install · view on Nexus · open · open `.meta` · exclude or include · delete |
-| Keys | Delete: delete. |
+| Row menu | install · view on Nexus · open · open `.meta` · exclude or include · copy value · delete |
+| Keys | Ctrl+C: copy value. Delete: delete. |
 
 As a user, I want:
 
@@ -101,6 +101,7 @@ As a user, I want:
    in that state is left alone. *MO2's Hide All; Doing nothing is not an error*
 5. To install only from the row menu. A double click, Enter or a drag onto the Mods view installs
    nothing. *ruling; mo2.md, Downloaded file*
+6. Copy value to copy each selected file's file name, one to a line. *catalog `copy value`*
 
 ## Pickers and confirmations
 

@@ -1231,6 +1231,14 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
   {
     gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
     outOfPalette: ['modbench.pluginListTree.compileAtMain'],
+  },  { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },
+  {
+    gesture: 'copy value and the name filter', removedBy: '#1096',
+    ids: [
+      'modbench.record.copyValue', 'modbench.mod.filter', 'modbench.mod.clearFilter', 'modbench.plugin.filter',
+      'modbench.plugin.clearFilter', 'modbench.downloadedFile.filter', 'modbench.downloadedFile.clearFilter',
+    ],
+    outOfPalette: [],
   },
 ];
 

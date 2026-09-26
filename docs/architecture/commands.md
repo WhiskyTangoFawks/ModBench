@@ -33,7 +33,8 @@ A gesture this file has and the model cannot hold is a ticket.
 - **Command ID**: the registered interface and the source of truth, which the code reflects. It is
   `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`,
   `modbench.downloadedFile.delete`). `-` means the gesture has none. A toggle or opposite pair has one
-  ID per direction.
+  ID per direction. A gesture every list view does to whatever it shows is `modbench.<verb>`, in
+  Every view.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
@@ -89,7 +90,8 @@ own item to the Argument.
   result, as a click on a plugin row opens its header. A gesture that needs another box's work as
   a step, and acts on its outcome, calls that box through a reference the reference view draws.
 - **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb
-  the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod").
+  the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod"),
+  or the verb alone for a gesture in Every view ("Modbench: Copy Value").
   Keep the ID's verb and the user's verb the same words. Prefer existing software-development
   language, and keep both short. A verb that needs more than three words means the concept lacks a
   term, so define the term first.
@@ -190,6 +192,17 @@ Every view is always present. A view with nothing to show renders its own empty 
 view hides itself. Referenced By is a Panel view because it follows the active record, and a
 sidebar view cannot sit beside an editor tab.
 
+## Every view
+
+What every list view does to whatever it shows, whatever the object. common.md says how each
+behaves, and each surface says what its rows copy. The Toolbox is a readout, not a list, and offers
+neither.
+
+| Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|---|
+| copy value | reads | Mods, Plugins, Downloads: context menu, key; Editor: context menu, key | `modbench.copyValue` | selection | - | MO2 mod list, plugin list and Downloads; xEdit navigator, Referenced By and View grid | Copy the selection to the clipboard as text, one item to a line, each as its surface says. | none |
+| filter | reads | Mods, Plugins, Downloads: title icon; Editor: title icon (on Referenced By) | `modbench.filter`, `modbench.clearFilter` | - | - | MO2 mod list, plugin list and Downloads; xEdit navigator and Referenced By | Narrow the focused list by name. | none |
+
 ## Instance
 
 Offered on Toolbox.
@@ -228,7 +241,6 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | - |
 | track | writes | Mods: context menu (mod holds an untracked plugin); Plugins: context menu (plugin untracked, in a mod); Editor: context menu (column of an untracked plugin in a mod) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put every untracked plugin the mod holds under git. It fires `decompile plugin` with the repository as the destination: it creates the repository if the mod has none, commits each plugin's baseline to `main` as its own commit, and checks out the edit branch. A plugin row or an Editor column fires it for the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
-| filter | reads | Mods: title icon | `modbench.mod.filter`, `modbench.mod.clearFilter` | - | - | MO2 mod list | Narrow the mod list by name. | none |
 | open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in the native file tab, decorated by conflict status (planned; today the file explorer). The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | Mods: context menu (mod has a Nexus id); Downloads: context menu (file has a Nexus id) | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
 | publish | writes | Mods: context menu | - | mod | - | none | Publish an update for a mod the user owns, through the Nexus API. | - |
@@ -255,7 +267,6 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. A failed compile says so, and compiling again rebuilds the binary. | compile-plugin |
 | repair | writes | Plugins: context menu | - | plugins | - | none | Rewrite a malformed plugin into its canonical form. | - |
 | validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | - |
-| filter | reads | Plugins: title icon | `modbench.plugin.filter`, `modbench.plugin.clearFilter` | - | - | MO2 plugin list; xEdit navigator | Narrow the plugin list by name. | none |
 | sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | none |
 | highlight origin | reads | Plugins: automatic; Mods: automatic | - | plugins, or mods | - | MO2 plugin list | Selecting a plugin marks its origin mod and its masters. Selecting a mod marks the plugins it provides. | - |
@@ -279,7 +290,6 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 | filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 | show referenced by | reads | Editor: automatic | `modbench.record.showReferencedBy` | active record | - | xEdit Referenced By tab | The Referenced By list follows the active record and shows the records that reference it. It has no menu entry; the command only focuses the view. | query-index |
 | hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | - |
-| copy value | reads | Mods: context menu, key; Plugins: context menu, key; Editor: context menu, key | `modbench.record.copyValue` | selection | - | xEdit navigator, Referenced By, View grid; MO2 mod list | Copy the selected rows, or a focused cell value, to the clipboard. Each surface says what a row copies. | none |
 
 ## Referrer
 
@@ -287,7 +297,6 @@ Offered on Editor, in Referenced By. A referrer is a record, listed because it r
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| filter | reads | Editor: title icon (on Referenced By) | `modbench.referrer.filter`, `modbench.referrer.clearFilter` | - | - | xEdit Referenced By | Narrow the Referenced By list by name. | none |
 | sort direction | reads | Editor: title icon (on Referenced By) | `modbench.referrer.sortAscending`, `modbench.referrer.sortDescending` | - | - | xEdit Referenced By | List referrers by record type, then label, or in reverse. | none |
 
 ## Downloaded file
@@ -303,7 +312,6 @@ Offered on Downloads.
 | open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | none |
 | query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | - |
-| filter | reads | Downloads: title icon | `modbench.downloadedFile.filter`, `modbench.downloadedFile.clearFilter` | - | - | MO2 Downloads | Narrow the downloaded files by name. | none |
 | sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | none |
 | show excluded | reads | Downloads: title icon | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | none |
 | reveal installed mod | reads | Downloads: context menu | - | downloaded file | - | none | Show the mod that a downloaded file was installed as. | - |

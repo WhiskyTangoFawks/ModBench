@@ -28,6 +28,8 @@ As a user, I want:
    only makes sense for one row, which its Argument in the catalog says. *ruling*
 7. Every list to reverse its order from its title bar. The direction never changes what the order
    means, such as which item wins. *ruling; CONTEXT.md, Sort direction*
+8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its
+   surface says it copies. *catalog `copy value`*
 
 ## The name filter
 
