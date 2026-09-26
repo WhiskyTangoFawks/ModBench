@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -25,25 +26,24 @@ public sealed class CopyRecordHandlerTests
             [new CopyItem(npc, mod.SourcePlugin), new CopyItem(faction, mod.SourcePlugin)],
             result.Refused.Select(refused => refused.Item));
         Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal));
-        Assert.All(result.Applied, landed => Assert.NotNull(
-            mod.Document(mod.DestinationPlugin, landed.NewFormKey ?? landed.Item.Record.FormKey)));
     }
 
     [Fact]
-    public void CopyingAsNew_AnswersEachLandedItemWithItsNewFormKey()
+    public void CopyingAsNew_AnswersEachLandedItemWithItsNewFormKey_WhereTheDuplicateLands()
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
 
         var result = mod.CopyHandler.Copy([npc], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        var landed = Assert.Single(result.Applied);
-        Assert.NotNull(landed.NewFormKey);
-        Assert.NotEqual(npc.FormKey, landed.NewFormKey);
+        var newFormKey = Assert.Single(result.Applied).NewFormKey;
+        Assert.NotNull(newFormKey);
+        Assert.NotEqual(npc.FormKey, newFormKey);
+        Assert.NotNull(mod.Document(mod.DestinationPlugin, newFormKey));
     }
 
     [Fact]
-    public void CopyingAsOverride_AnswersEachLandedItemWithNoNewFormKey()
+    public void CopyingAsOverride_AnswersEachLandedItemWithNoNewFormKey_AndLandsUnderItsOwn()
     {
         using var mod = CopyFixture.Create();
         var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
@@ -51,7 +51,29 @@ public sealed class CopyRecordHandlerTests
         var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
         Assert.Null(Assert.Single(result.Applied).NewFormKey);
+        Assert.NotNull(mod.Document(mod.DestinationPlugin, npc.FormKey));
     }
+
+    // commands.md, Doing nothing is not an error: a record's own plugin already is that copy, so
+    // an override into it writes nothing, with or without the replace Option.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CopyingAsOverride_IntoTheRecordsOwnPlugin_WritesNothing_AndIsNoRefusal(bool replace)
+    {
+        using var mod = CopyFixture.Create(trackSource: true);
+        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
+        LeaveTextTheCodecWouldRespell(mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId));
+        var before = TreeSnapshot.Of(mod.SourceModFolder);
+
+        var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.SourcePlugin], replace);
+
+        Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Applied.Select(landed => landed.Item));
+        Assert.Empty(result.Refused);
+        Assert.Equal(before, TreeSnapshot.Of(mod.SourceModFolder));
+    }
+
+    private static void LeaveTextTheCodecWouldRespell(string document) => File.AppendAllText(document, "\n\n");
 
     [Fact]
     public void ARecordAndADestinationNamedTwice_AreCopiedOnce()

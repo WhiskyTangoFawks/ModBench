@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
@@ -38,36 +37,16 @@ public sealed class CopyRecordHandler
             foreach (var destination in distinctDestinations)
             {
                 var item = new CopyItem(record, destination);
-                var result = CopyOrRefuseTheWriteFailure(item, mode, replace);
+                var result = ItemWrite.RefusingTheWriteFailure(
+                    () => mode == CopyMode.Override
+                        ? _override.Copy(record.Plugin, record.FormKey, destination, replace)
+                        : _new.Copy(record.Plugin, record.FormKey, destination),
+                    $"Could not write the copy of {record.FormKey} into {destination.Name} ({destination.Origin})",
+                    _logger);
                 if (result.Applied) applied.Add(new CopyLanded(item, result.NewFormKey));
                 else refused.Add(new CopyRefused(item, result.Refusal, result.Message));
             }
         }
         return new PerCopyResult(applied, refused);
-    }
-
-    // A tree another tool changed, or a file system that refused the write, is this item's answer,
-    // not the batch's: an exception here would hide the items already copied before it.
-    private RecordEditResult CopyOrRefuseTheWriteFailure(CopyItem item, CopyMode mode, bool replace)
-    {
-        var ((source, formKey), destination) = (item.Record, item.Destination);
-        try
-        {
-            return mode == CopyMode.Override
-                ? _override.Copy(source, formKey, destination, replace)
-                : _new.Copy(source, formKey, destination);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            return RecordEditResult.Refused(RecordEditRefusal.AmbiguousSourceUnit, ex.Message);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogError(ex, "Could not write the copy of {FormKey} into {Plugin} ({Origin})",
-                formKey, destination.Name, destination.Origin);
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceWriteFailed,
-                $"Could not write the copy of {formKey} into {destination.Name}: {ex.Message}");
-        }
     }
 }
