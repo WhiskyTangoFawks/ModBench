@@ -24,8 +24,9 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     private const string ChangedAsset = "Meshes/Thing.nif";
     private const string DeletedAsset = "Meshes/Gone.nif";
 
-    // A safety bound against a hang, never the proof: the proof is the settle line itself.
-    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(20);
+    // A safety bound against a hang, never the proof: the proof is the settle line itself. Wide
+    // because file-system event delivery can stall under load.
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     private readonly List<LogEntry> _logs = [];
 
