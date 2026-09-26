@@ -4,7 +4,7 @@ Issues live as GitHub issues. Use `gh` for all operations.
 
 ## The shape of the backlog
 
-Three kinds of open issue, nothing else:
+Four kinds of open issue, nothing else:
 
 - **Epic** (`epic` label) — the bounded scope of one batch of work, drawn as pointers
   into the specs, minted only by the maintainer's grill → `/to-epic` pipeline. Always
@@ -13,26 +13,27 @@ Three kinds of open issue, nothing else:
   match them.
 - **Implementation ticket** — a slice of an epic, minted by `/to-tickets` run against
   that epic; a native sub-issue of it, pointing at the spec lines it makes true, with
-  native blocked-by edges. No
-  parentless implementation tickets.
-- **`speculative`** — proto-epic parked during the 2026-09 backlog migration; a
-  grilling session turns it into an epic or discards it. Migration-era stock only:
-  nothing new gets this label.
+  native blocked-by edges. No parentless implementation tickets.
+- **Enhancement** (`enhancement` label) — a request for new behaviour that no spec
+  draws yet, from the maintainer or a user. A grill turns it into spec and then an
+  epic, or it closes. It carries no tickets.
+- **Bug** (`bug` label) — something doesn't work, reported by the maintainer or a
+  user. Triage verifies it; the fix is an in-loop fix or an epic.
 
-**Agents never create bug or tech-debt issues — the tracker holds no standing
-bug/tech-debt backlog.** A finding met mid-task is fixed in the same session,
+Every open issue carries one state label (`triage-labels.md`).
+
+**Agents never create issues outside `/to-epic` and `/to-tickets` — the tracker
+holds no agent-filed findings.** A finding met mid-task is fixed in the same session,
 reported to the maintainer in the session summary, or dropped. Only the maintainer
 escalates a finding into tracked work, through grill → `/to-epic` → `/to-tickets`.
-The `bug`/`tech debt` tickets still open on `1 — Alpha` are grandfathered
-legacy-orchestrate stock, burning down to zero — a closed set, never added to.
 
 ## Milestones = releases
 
 Exactly four: `1 — Alpha`, `2 — v1`, `3 — v2` — releases, priority-ordered by
 numeric title prefix — and `Mutagen Bugs`, the unnumbered parking lot for upstream
 Mutagen defects (paired with the `mutagen` label). Assigning a milestone schedules
-an issue for that release. Every open issue carries a milestone except
-`speculative` ones, which are by definition unscheduled.
+an issue for that release. Every open issue carries a milestone except one
+that needs triage, which may be unscheduled.
 
 Traverse with `gh`:
 
