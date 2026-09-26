@@ -15,7 +15,7 @@ The Editor surface has three more files:
 - [editor-referenced-by.md](editor-referenced-by.md): the Referenced By view.
 
 The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it.
-Its Reporting table does.
+Its States, Unconfirmed writes and Reporting do.
 
 Each story cites its source. A story with no source is owned here.
 
