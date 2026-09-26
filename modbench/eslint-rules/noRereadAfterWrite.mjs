@@ -105,7 +105,19 @@ function namedFunctions(program, keys) {
     return helpers;
 }
 
-/** @typedef {{ writes: boolean, rereads: CallExpression[] }} Frame */
+const CONTINUATIONS = new Set(['then', 'catch', 'finally']);
+
+/**
+ * @param {CallExpression} call
+ * @returns {Node | undefined} what a `.then`, `.catch` or `.finally` call is chained on
+ */
+function chainedOn(call) {
+    const { callee } = call;
+    if (callee.type !== 'MemberExpression' || callee.computed || callee.property.type !== 'Identifier') return undefined;
+    return CONTINUATIONS.has(callee.property.name) ? callee.object : undefined;
+}
+
+/** @typedef {{ writes: boolean, rereads: CallExpression[], continuesCaller: boolean }} Frame */
 
 /** @type {Rule.RuleModule} */
 export const noRereadAfterWrite = {
@@ -120,14 +132,41 @@ export const noRereadAfterWrite = {
     create(context) {
         /** @type {Frame[]} */
         const frames = [];
+        /** @type {Set<CallExpression>} */
+        const reported = new Set();
         /** @type {Map<string, Effects>} */
         let helpers = new Map();
 
-        const enter = () => { frames.push({ writes: false, rereads: [] }); };
+        /** @param {CallExpression} call */
+        const effectsOf = (call) => {
+            const name = calleeName(call);
+            if (name === undefined) return undefined;
+            const helper = call.callee.type === 'Identifier' ? helpers.get(name) : undefined;
+            return { writes: WRITES.has(name) || (helper?.writes ?? false), rereads: VIEW_REREADS.has(name) || (helper?.rereads ?? false) };
+        };
+
+        // A function handed straight to a write, or chained on one with `.then`, `.catch` or
+        // `.finally`, runs as the rest of that write: its calls are the caller's too.
+        /** @param {Node & Rule.NodeParentExtension} fn */
+        const continuesCaller = (fn) => {
+            const { parent } = fn;
+            if (parent.type !== 'CallExpression' || !parent.arguments.some((argument) => argument === fn)) return false;
+            /** @type {Node | undefined} */
+            let target = chainedOn(parent) ?? parent;
+            while (target?.type === 'CallExpression' && chainedOn(target) !== undefined) target = chainedOn(target);
+            return target?.type === 'CallExpression' && (effectsOf(target)?.writes ?? false);
+        };
+
+        /** @param {Node & Rule.NodeParentExtension} fn */
+        const enter = (fn) => { frames.push({ writes: false, rereads: [], continuesCaller: continuesCaller(fn) }); };
         const exit = () => {
             const frame = frames.pop();
             if (!frame?.writes) return;
-            for (const node of frame.rereads) context.report({ node, messageId: 'reread' });
+            for (const node of frame.rereads) {
+                if (reported.has(node)) continue;
+                reported.add(node);
+                context.report({ node, messageId: 'reread' });
+            }
         };
 
         return {
@@ -139,12 +178,14 @@ export const noRereadAfterWrite = {
             'FunctionExpression:exit': exit,
             'ArrowFunctionExpression:exit': exit,
             CallExpression(node) {
-                const frame = frames.at(-1);
-                const name = calleeName(node);
-                if (frame === undefined || name === undefined) return;
-                const helper = node.callee.type === 'Identifier' ? helpers.get(name) : undefined;
-                if (WRITES.has(name) || helper?.writes) frame.writes = true;
-                if (VIEW_REREADS.has(name) || helper?.rereads) frame.rereads.push(node);
+                const effects = effectsOf(node);
+                if (effects === undefined) return;
+                for (let depth = frames.length - 1; depth >= 0; depth--) {
+                    const frame = /** @type {Frame} */ (frames[depth]);
+                    if (effects.writes) frame.writes = true;
+                    if (effects.rereads) frame.rereads.push(node);
+                    if (!frame.continuesCaller) break;
+                }
             },
         };
     },
