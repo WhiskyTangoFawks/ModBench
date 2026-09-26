@@ -30,15 +30,12 @@ public static class PluginFlagPredicates
     // 0x800 'Blueprint' in Starfield's TES4 header, and no other game gives the bit that meaning.
     private const int StarfieldBlueprintFlag = 0x800;
 
-    // Bit 0 is Master in every game's header flag enum.
-    private const int MasterFlag = 0x1;
+    public static bool HasBlueprintPlugins(GameRelease release) =>
+        release.ToCategory() == GameCategory.Starfield;
 
     /// <summary>MO2's rule (pluginlist.cpp, ESPInfo): the blueprint bit counts only on a
     /// master-flagged plugin, or one named .esm or .esl.</summary>
-    public static bool IsBlueprint(GameRelease release, int headerFlags, string fileName) =>
-        release.ToCategory() == GameCategory.Starfield
-        && (headerFlags & StarfieldBlueprintFlag) != 0
-        && ((headerFlags & MasterFlag) != 0
-            || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase));
+    public static bool IsBlueprint(IModFlagsGetter mod, string fileName, int headerFlags) =>
+        (headerFlags & StarfieldBlueprintFlag) != 0
+        && (IsMaster(mod, fileName) || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase));
 }

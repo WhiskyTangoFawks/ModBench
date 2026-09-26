@@ -281,8 +281,8 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
-  // plugins.txt's lines as last rendered, which a drop's order check reads: the order the user
-  // dragged against.
+  // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
+  // order the user dragged against.
   private lastOrder: { name: string; origin: string }[] = [];
   private filterText = '';
   private filterLower = '';
@@ -433,11 +433,11 @@ export class PluginsTreeProvider
     const listed = this.instanceValue.plugins
       .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
       .sort((a, b) => a.slot - b.slot);
-    this.lastOrder = listed.map(({ name, origin }) => ({ name, origin }));
 
-    // A name in both sets renders once, as the implicit row. Display order only:
-    // `this.lastOrder` stays plugins.txt's raw order, which write positions are computed against.
+    // A name in both sets renders once, as the implicit row: the game loads it first, wherever
+    // its line sits.
     const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
+    this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
     if (implicitNames.length + dedupedOrder.length === 0) return { kind: 'empty' };
 
     const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.dataFolderFile(name)));
@@ -710,7 +710,10 @@ export class PluginsTreeProvider
   // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
   // the client's answer names no plugin for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    const origin = row.kind === 'plugin' ? row.origin : undefined;
+    return this.heldOrigin(file, row.kind === 'plugin' ? row.origin : undefined);
+  }
+
+  private heldOrigin(file: string, origin: string | undefined): string | undefined {
     return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
   }
 
@@ -753,13 +756,13 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0012: the plugins.txt line's own plugin, by its origin, else the one held by that name.
+  // ADR-0012 invariant 1: only the line's own plugin, by its origin; another plugin of the name
+  // is not it.
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {
-      const origin = originOf.get(name);
-      const joined = origin !== undefined && this.facts?.has(name, origin) === true ? origin : undefined;
-      return this.facts?.get(name, joined)?.order;
+      const origin = this.heldOrigin(name, originOf.get(name));
+      return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
     };
   }
 

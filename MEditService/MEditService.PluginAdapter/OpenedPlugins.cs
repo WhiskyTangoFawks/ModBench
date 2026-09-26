@@ -8,14 +8,14 @@ namespace MEditService.PluginAdapter;
 internal static class OpenedPlugins
 {
     internal static (PluginContent Content, Exception? Unreachable) ContentIn(
-        IModGetter mod, string pluginName, int headerFlags)
+        IModGetter mod, string pluginName, bool isBlueprint)
     {
         var (recordCount, unreachable) = ReachableRecordCount(mod);
         return (
             new PluginContent(
                 IsLight: PluginFlagPredicates.IsLight(mod, pluginName),
                 IsMaster: PluginFlagPredicates.IsMaster(mod, pluginName),
-                IsBlueprint: PluginFlagPredicates.IsBlueprint(mod.GameRelease, headerFlags, pluginName),
+                IsBlueprint: isBlueprint,
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
                 RecordCount: recordCount),
             unreachable);

@@ -24,7 +24,6 @@ function positions(order: readonly string[]): Map<string, number> {
   return new Map(order.map((name, at) => [name, at] as const));
 }
 
-// Whether `first` loaded before `second`, and the move puts it after.
 type MovesBehind = (first: string, second: string) => boolean;
 
 function movesBehindIn(before: readonly string[], after: readonly string[]): MovesBehind {

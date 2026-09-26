@@ -836,6 +836,35 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
     expect(reports).toEqual([]);
   });
 
+  // ADR-0012 invariant 1: another plugin of the same name is not this line's plugin.
+  it('fires the move when mEdit holds the dependant\'s name only from another origin', async () => {
+    const { calls } = await dropAfterReconcile(
+      ['A.esp'], node('D.esp'), heldAll({ 'B.esp': { origin: 'OtherMod', masters: ['A.esp'] } }));
+    expect(calls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
+  });
+
+  // A plugins.txt line for a locked plugin does not place it: the game loads it first.
+  it('fires a drop on a locked row for a plugin whose master is a locked plugin with a line of its own', async () => {
+    const source = new FakeSource();
+    const reporter = recordingReporter();
+    const h = makeTree([
+      plugin({ name: 'DLCRobot.esm', slot: 0, origin: 'Data' }),
+      plugin({ name: 'A.esp', slot: 1 }),
+      plugin({ name: 'X.esp', slot: 2 }),
+    ], { source, reporter, implicitMasters: () => Promise.resolve(['Fallout4.esm', 'DLCRobot.esm']) });
+    await reconcile(h, [
+      held('DLCRobot.esm', { origin: 'Data' }), held('A.esp'), held('X.esp', { masters: ['Fallout4.esm', 'DLCRobot.esm'] }),
+    ]);
+    await h.tree.getChildren();
+    const dt = new DataTransfer();
+    h.tree.handleDrag([node('X.esp')], dt, NONE);
+
+    await h.tree.handleDrop(new ImplicitMasterNode('Fallout4.esm'), dt, NONE);
+
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['X.esp'], drop: { kind: 'losingEnd' } }]);
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('refuses a drop that puts a blueprint master below a blueprint plugin that depends on it', async () => {
     const { calls, reports } = await dropAfterReconcile(
       ['D.esp'], undefined, heldAll({ 'D.esp': { isBlueprint: true }, 'E.esp': { isBlueprint: true, masters: ['D.esp'] } }));

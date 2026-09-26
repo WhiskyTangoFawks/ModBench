@@ -83,9 +83,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {
         using var loaded = OpenForRead(modPath, gameRelease, strings);
-        // A game's header flags are its own enum; the raw bits are what every game's plugin carries.
-        var headerFlags = ModHeaderFrame.FromPath(modPath, gameRelease).Flags;
-        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String, headerFlags);
+        var name = modPath.ModKey.FileName.String;
+        // Mutagen's game-agnostic getter carries no raw header flags and names no blueprint bit, so
+        // only a game with blueprint plugins reads its header a second time.
+        var isBlueprint = PluginFlagPredicates.HasBlueprintPlugins(gameRelease)
+            && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, gameRelease).Flags);
+        return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
     }
 
     public LinkAnswers LinkTargets(
