@@ -30,13 +30,28 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 - `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen
   (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
 
+## The chain of authority
+
+principle > ADR > spec (`docs/architecture/`) > PRD > ticket > code. The higher level wins. A PRD
+or ticket is its issue body. The divergence registers in `docs/out-of-scope/` rank with the ADR
+each serves.
+
+@docs/principles.md
+
+- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect:
+  fix it. Everything the list below does not name is tactical: decide it, and give the reason in
+  the commit message.
+- Stop and ask when the work adds or changes a gesture or a view state no spec draws, needs a
+  module, arrow, port, payload, public type or project reference `docs/architecture/` does not
+  draw, or meets two documents at one level that disagree.
+- Report every break: two documents in the chain that disagree about the work. Build to the higher
+  one. A break report and a stop quote the texts at stake, name their levels and say what you
+  built; the maintainer decides every change to their documents.
+- CONTEXT.md is the maintainer's vocabulary, outside the chain. Use its words, the reference tool's
+  words or plain words.
+
 ## Rules that matter
 - Generalize across Bethesda games. Each bounded context's scan holds the game-name literals and namespaces; what no scan can hold is a design that assumes one game's shape, so an FO4-concrete path or fixture is a fixture choice and never a platform lock.
 - Generalize across mod managers. The game owns the format of `plugins.txt`. The mod manager owns the rest. MO2 is one implementation behind the Instance adapter. A scan holds the names. No scan can catch a design that assumes MO2's shape.
 - A plugin is `(origin, filename)` on every seam, payload, map key, tree row and temp path (ADR-0012 invariant 1). Keyed on the filename alone, two plugins that share a filename collapse into one and nothing fails. The backend scan sees only a public `string` member named `…plugin` with no `…origin` beside it; map keys, return values and all of modbench go unchecked.
-- Never assume exclusive ownership of a file on disk (ADR-0003). Detection is gated; recovery is not — anything that holds disk-derived state must recover when a file changed without Modbench's knowledge.
-- The specification is the source and the code follows it: `docs/architecture/` (the diagrams,
-  surfaces, traces and `commands.md`) and the ADRs say what the code must be, and code that
-  disagrees with them is the defect. Never edit a spec to match the code; a spec that looks wrong
-  stops and asks the maintainer.
-- The target architecture in `docs/architecture/` and every reference list, csproj `ProjectReference` and tsconfig `references`, are the maintainer's. An implementation that needs a module, an arrow, a payload or a public type not drawn there stops and asks; it never adds one.
+- Detection of an external change is gated; recovery is not. Anything that holds disk-derived state recovers when a file changed without Modbench's knowledge (ADR-0003).

@@ -28,11 +28,13 @@ class SubagentFileTools(unittest.TestCase):
         out = hook("Edit", file_path=f"{MAIN}/docs/adr/0012-plugin-identity.md", old_string="a", new_string="b")
         self.assertEqual(out["permissionDecision"], "deny")
         self.assertIn("maintainer's source of truth", out["permissionDecisionReason"])
-        self.assertIn("exact before/after text in your report", out["permissionDecisionReason"])
+        self.assertIn("chain of authority", out["permissionDecisionReason"])
+        self.assertNotIn("before/after", out["permissionDecisionReason"])
 
     def test_every_protected_file_is_denied_in_every_checkout(self):
         for root in (MAIN, f"{MAIN}/.claude/worktrees/agent-1", "/home/x/mEdit-fix-9"):
             for rel in ("docs/architecture/surfaces/mods.md", "docs/adr/0003-no-exclusive-ownership.md",
+                        "docs/principles.md", "docs/out-of-scope/mo2.md",
                         "CONTEXT.md", "CLAUDE.md", "modbench/src/mods/CLAUDE.md"):
                 with self.subTest(path=f"{root}/{rel}"):
                     self.assertEqual(decision("Write", file_path=f"{root}/{rel}", content="x"), "deny")
@@ -45,7 +47,8 @@ class SubagentFileTools(unittest.TestCase):
 
     def test_code_and_neighbouring_docs_pass(self):
         for rel in ("modbench/src/mods/index.ts", "docs/agents/issue-tracker.md", "docs/adrs.md",
-                    "docs/research/adr-notes.md", "NOT-CLAUDE.md", "CLAUDE.md.bak", ".claude/skills/validate/SKILL.md"):
+                    "docs/research/adr-notes.md", "NOT-CLAUDE.md", "CLAUDE.md.bak", ".claude/skills/validate/SKILL.md",
+                    "docs/principles.md.bak", "docs/research/principles.md", "docs/out-of-scope-notes.md"):
             with self.subTest(path=rel):
                 self.assertIsNone(decision("Write", file_path=f"{MAIN}/{rel}", content="x"))
 
@@ -58,6 +61,7 @@ class SubagentFileTools(unittest.TestCase):
                     self.assertEqual(out["permissionDecision"], "deny")
                     self.assertIn("settings and hooks", out["permissionDecisionReason"])
                     self.assertNotIn("you build from them", out["permissionDecisionReason"])
+                    self.assertNotIn("before/after", out["permissionDecisionReason"])
 
 
 class SubagentShellWrites(unittest.TestCase):
@@ -69,7 +73,8 @@ class SubagentShellWrites(unittest.TestCase):
     def test_sed_in_place(self):
         self.assert_denied("sed -i 's/a/b/' docs/adr/0001.md", "sed -i.bak -e 's/a/b/' CONTEXT.md",
                            "sed --in-place 's/a/b/' docs/architecture/commands.md", "sed -Ei 's/a/b/' CLAUDE.md",
-                           f"sed -i 's/a/b/' {MAIN}/.claude/worktrees/agent-1/docs/adr/0001.md")
+                           f"sed -i 's/a/b/' {MAIN}/.claude/worktrees/agent-1/docs/adr/0001.md",
+                           "sed -i 's/a/b/' docs/principles.md", "sed -i 's/a/b/' docs/out-of-scope/xedit.md")
 
     def test_redirection_into_a_protected_file(self):
         self.assert_denied("echo x > docs/adr/0001.md", "echo x >> CONTEXT.md", "printf x >| CLAUDE.md",
@@ -87,7 +92,9 @@ class SubagentShellWrites(unittest.TestCase):
                            "git restore --source evil -- CONTEXT.md", "git -C /home/x/mEdit checkout HEAD~1 -- CLAUDE.md")
 
     def test_git_apply_of_a_patch_that_names_a_protected_file(self):
-        self.assert_denied("git apply <<'EOF'\n--- a/docs/adr/0001.md\n+++ b/docs/adr/0001.md\n@@ -1 +1 @@\n-a\n+b\nEOF")
+        self.assert_denied("git apply <<'EOF'\n--- a/docs/adr/0001.md\n+++ b/docs/adr/0001.md\n@@ -1 +1 @@\n-a\n+b\nEOF",
+                           "git apply <<'EOF'\n--- a/docs/principles.md\n+++ b/docs/principles.md\n@@ -1 +1 @@\n-a\n+b\nEOF",
+                           "python3 -c \"open('docs/out-of-scope/mo2.md', 'w').write('x')\"")
 
     def test_python_or_perl_writing_a_protected_file(self):
         self.assert_denied("python3 -c \"open('docs/adr/0001.md', 'w').write('x')\"",

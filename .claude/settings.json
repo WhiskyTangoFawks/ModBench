@@ -54,6 +54,8 @@
     "ask": [
       "Edit(//**/docs/architecture/**)",
       "Edit(//**/docs/adr/**)",
+      "Edit(//**/docs/out-of-scope/**)",
+      "Edit(//**/docs/principles.md)",
       "Edit(//**/CONTEXT.md)",
       "Edit(//**/CLAUDE.md)",
       "Edit(//**/.claude/settings*.json)",

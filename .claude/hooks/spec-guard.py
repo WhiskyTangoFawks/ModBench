@@ -13,9 +13,11 @@ import sys
 
 from hook_caller import is_subagent
 
-SPEC = re.compile(r"(?:^|/)(?:docs/(?:adr|architecture)(?:/|$)|(?:CONTEXT|CLAUDE)\.md$)")
+SPEC = re.compile(r"(?:^|/)(?:docs/(?:adr|architecture|out-of-scope)(?:/|$)|docs/principles\.md$"
+                  r"|(?:CONTEXT|CLAUDE)\.md$)")
 GUARD = re.compile(r"(?:^|/)\.claude/(?:settings[^/]*\.json$|hooks(?:/|$))")
-MENTION = re.compile(r"(?<![\w-])(?:docs/(?:adr|architecture)(?:/[\w.-]+)*|(?:CONTEXT|CLAUDE)\.md"
+MENTION = re.compile(r"(?<![\w-])(?:docs/(?:adr|architecture|out-of-scope)(?:/[\w.-]+)*|docs/principles\.md"
+                     r"|(?:CONTEXT|CLAUDE)\.md"
                      r"|\.claude/(?:settings[\w.-]*\.json|hooks(?:/[\w.-]+)*))(?![\w-]|\.\w)")
 HEREDOC = re.compile(r"(<<-?\s*(['\"]?)(\w+)\2[^\n]*\n)(.*?)^\s*\3\s*$", re.S | re.M)
 SCRIPT_WRITE = re.compile(r"open\([^)]*['\"][wax+][bt+]?['\"]|open\([^)]*['\"]\s*>|\.write_(?:text|bytes)\("
@@ -27,11 +29,11 @@ PREFIXES = {"sudo", "env", "command", "time", "nohup", "exec"}
 OPERAND_WRITERS = {"mv", "rm", "rmdir", "unlink", "truncate", "shred", "tee"}
 GIT_PATH_WRITERS = {"checkout", "restore", "rm", "mv"}
 OPERATOR = set(";&|()\n")
-REPORT = "Put the exact before/after text in your report for the maintainer's approval."
-SPEC_FLOW = ("docs/architecture, the ADRs, CONTEXT.md and every CLAUDE.md are the maintainer's source of "
-             f"truth, and you build from them. Never edit them. {REPORT}")
+SPEC_FLOW = ("docs/principles.md, the ADRs, docs/architecture, docs/out-of-scope, CONTEXT.md and every "
+             "CLAUDE.md are the maintainer's source of truth, and you build from them. Where your work "
+             "disagrees with one, report the break as root CLAUDE.md's chain of authority says.")
 GUARD_FLOW = ("The Claude Code settings and hooks guard the maintainer's source of truth and are the "
-              f"maintainer's to change. Never edit them. {REPORT}")
+              "maintainer's to change. Report what the guard blocked and what your work needed.")
 
 
 def protected(path):
