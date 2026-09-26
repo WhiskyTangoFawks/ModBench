@@ -16,6 +16,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
     loadOrderIndex: 0,
     isLight: false,
     isMaster: false,
+    isBlueprint: false,
     masters: [],
     recordCount: 0,
     isImmutable: false,

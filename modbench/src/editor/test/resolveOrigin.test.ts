@@ -9,6 +9,7 @@ function makePlugins(count: number): PluginMetadata[] {
     loadOrderIndex: i,
     isLight: false,
     isMaster: false,
+    isBlueprint: false,
     masters: [],
     recordCount: 10,
     isImmutable: false,

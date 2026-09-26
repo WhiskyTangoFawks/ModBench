@@ -12,7 +12,7 @@ namespace MEditService.Queries.Tests.Query;
 public class MasterResolutionTests
 {
     private static (PluginAddress Key, PluginContent Content) Plugin(string name, params string[] masters) =>
-        (new PluginAddress(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
+        (new PluginAddress(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, masters, RecordCount: 0));
 
     private static IReadOnlyList<PluginRow> GetPlugins(
         (PluginAddress Key, PluginContent Content)[] plugins, LoadOrderState state = LoadOrderState.Ready,
@@ -51,9 +51,9 @@ public class MasterResolutionTests
     public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
     {
         var missingAMaster = (new PluginAddress("Patch.esp", "WinningMod"),
-            new PluginContent(IsLight: false, IsMaster: false, ["Ghost.esm"], RecordCount: 0));
+            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, ["Ghost.esm"], RecordCount: 0));
         var complete = (new PluginAddress("Patch.esp", "LosingMod"),
-            new PluginContent(IsLight: false, IsMaster: false, [], RecordCount: 0));
+            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, [], RecordCount: 0));
 
         var rows = GetPlugins([missingAMaster, complete]);
 

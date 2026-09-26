@@ -60,15 +60,15 @@ describe('dropIndexForMove — pre-removal drop target → post-removal toIndex'
 describe('dropIndexIn — a drop in a tree\'s terms → the index a splice writes at', () => {
   const order = ['A', 'B', 'C', 'D', 'E'];
 
-  it('the winning end is index 0, whatever else the list holds', () => {
-    expect(dropIndexIn(order, ['D'], { kind: 'winningEnd' })).toBe(0);
-    expect(dropIndexIn(order, ['A', 'B'], { kind: 'winningEnd' })).toBe(0);
-    expect(dropIndexIn([], [], { kind: 'winningEnd' })).toBe(0);
+  it('the losing end is index 0, whatever else the list holds', () => {
+    expect(dropIndexIn(order, ['D'], { kind: 'losingEnd' })).toBe(0);
+    expect(dropIndexIn(order, ['A', 'B'], { kind: 'losingEnd' })).toBe(0);
+    expect(dropIndexIn([], [], { kind: 'losingEnd' })).toBe(0);
   });
 
-  it('the losing end is past the last row that survives the move', () => {
-    expect(dropIndexIn(order, ['B'], { kind: 'losingEnd' })).toBe(4);
-    expect(dropIndexIn(order, ['A', 'B'], { kind: 'losingEnd' })).toBe(3);
+  it('the winning end is past the last row that survives the move', () => {
+    expect(dropIndexIn(order, ['B'], { kind: 'winningEnd' })).toBe(4);
+    expect(dropIndexIn(order, ['A', 'B'], { kind: 'winningEnd' })).toBe(3);
   });
 
   it('before a row is that row\'s own post-removal index', () => {
