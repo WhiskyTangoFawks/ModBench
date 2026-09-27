@@ -1,13 +1,7 @@
 # xEdit UX Audit — the right-pane compare grid
 
-An audit of how xEdit's **View** pane actually behaves, read from source, to serve as the reference
-model for mEdit's record editor. mEdit's goal is to port xEdit's interaction model into VS Code as
-closely as the platform allows, so this document is the thing mEdit is measured *against* — it
-describes xEdit, not mEdit, and takes no position on what mEdit should do.
-
-Exists because specifying from memory of xEdit once produced **single-click-to-edit** — which xEdit
-does not do — and that one wrong assumption cascaded into gesture conflicts. Audit first; it is
-cheaper.
+An audit of how xEdit's **View** pane actually behaves, read from source. It describes xEdit, not
+mEdit, and takes no position on what mEdit should do.
 
 ## Sources
 
@@ -169,13 +163,13 @@ and the keys are accelerators onto it.
 > its list. Double click opens the fullest editor the type has. Ctrl turns references into links.
 > Drag copies values between columns. Nothing is activated by a single click.
 
-## Summary composition, ruled rather than read
+## Summary composition, inferred from the definitions
 
 `wbDefinitionsFO4.pas` calls `SetSummaryKey` 74 times and `SetSummaryPassthroughMaxLength` twice,
 but `Core/wbInterface.pas` declares no `Summary` member and `Core/wbImplementation.pas` has no
 `SetSummaryKey`, `SetSummaryDelimiter` or `SetSummaryPassthroughMaxDepth`. The definitions are
 facts about the format; the machinery that consumes them is absent from the clone. One
-composition rule was ruled from the definitions alone: a `wbStructSK([n])`'s sort-key member leads
+composition rule is inferred from the definitions alone: a `wbStructSK([n])`'s sort-key member leads
 its summary unless the definition sets `dfSummaryNoSortKey`, and a definition sets that flag
 exactly when member `n` already appears inside its own `SetSummaryKey`. Eight sites carry the flag
 in `wbDefinitionsFO4.pas` and all eight hold. It is why a script reads under its own name and a

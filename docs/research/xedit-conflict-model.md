@@ -1,7 +1,6 @@
 # xEdit's conflict model, read from the TES5Edit source
 
-Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas` that inform
-[ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) invariant 4 and divergences 6 and 9.
+Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas`.
 
 ## Two independent axes
 
@@ -50,8 +49,7 @@ Every field definition carries a `ConflictPriority` the algorithm consults befor
 
 Injected records, a FormKey from a master the plugin does not declare, are treated as
 `cpCritical`. The priority system exists because xEdit works at the raw binary level and must
-paper over redundant count fields, unused bytes and internal bookkeeping. Mutagen abstracts those
-away, so the fields a priority table would annotate do not exist in Modbench's schema.
+paper over redundant count fields, unused bytes and internal bookkeeping.
 
 ## Comparison uses resolved display values, not raw bytes
 
@@ -62,8 +60,7 @@ target across different load-order slots.
 ## Partial forms are sparse by design
 
 A record with the `IsPartialForm` header flag omits fields it does not override. Those absent
-fields are treated as `cpIgnore`, not as empty values that differ from the master. Displaying them
-as blank cells would read as the plugin setting those fields to null.
+fields are treated as `cpIgnore`, not as empty values that differ from the master.
 
 ## Sorted versus unsorted arrays
 
