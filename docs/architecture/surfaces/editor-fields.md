@@ -26,9 +26,9 @@ As a user, I want:
    EditValue*
 5. Ctrl+V to take the text on the clipboard as if I had typed it. Text the field cannot hold is
    refused, naming the field, and nothing changes. *xEdit; Refuse, do not repair*
-6. Ctrl+X, and Delete on a field that is not an element, to clear the value: it reads as the field's
-   default afterwards. A value already at its default changes nothing. *xEdit's Clear; Doing nothing
-   is not an error*
+6. Ctrl+X, and Delete on a field that is not an element, to clear the value, which then reads as
+   story 2 says. A value already cleared changes nothing. *xEdit's Clear; Doing nothing is not an
+   error*
 7. A field the schema marks read-only to open no editor, as a column that cannot be edited does,
    with the reason in its tooltip. *ADR-0005, invariant 6*
 
