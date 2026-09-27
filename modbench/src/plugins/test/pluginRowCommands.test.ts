@@ -431,7 +431,7 @@ describe('registerSaveAndCompileCommand', () => {
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
-  // plugins.md, Compile, story 5: from the palette, a pick. An extension cannot tell whether the
+  // plugins.md, Compile, story 3: from the palette, a pick. An extension cannot tell whether the
   // Plugins view has focus, so the selection is never compiled unasked; a selected compilable
   // plugin leads the pick.
   it('asks from the palette, leading the pick with the one selected compilable plugin', async () => {

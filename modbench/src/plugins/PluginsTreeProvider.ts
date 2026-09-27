@@ -521,7 +521,7 @@ export class PluginsTreeProvider
     return element;
   }
 
-  // plugins.md, A row story 5: a disabled plugin's records are not the game's to load, so there
+  // plugins.md, The tree, story 5: a disabled plugin's records are not the game's to load, so there
   // is nothing behind the row to expand into.
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
     if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;

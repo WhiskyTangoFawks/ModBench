@@ -233,8 +233,8 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allRecords).toBe(false);
   });
 
-  // mods.md, Menus and keys, story 2, which plugins.md story 3 follows: Space takes the focused
-  // row's direction, and a selection of one row stands for the focused row.
+  // mods.md, Menus and keys, story 2, which plugins.md, Menus and keys, story 3 follows: Space
+  // takes the focused row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
     expect(context([alpha, beta]).selectionToggle).toBe('disable');
     expect(context([beta, alpha]).selectionToggle).toBe('enable');

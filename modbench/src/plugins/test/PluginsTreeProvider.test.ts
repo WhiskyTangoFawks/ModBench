@@ -1438,7 +1438,7 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
   });
 });
 
-// plugins.md, A row story 5: the game does not load a disabled plugin's records, so there is
+// plugins.md, The tree, story 5: the game does not load a disabled plugin's records, so there is
 // nothing behind the row to expand into — same as an overridden plugin, viewing it is deferred.
 describe('PluginsTreeProvider — a disabled plugin row has no expander', () => {
   it('renders TreeItemCollapsibleState.None for a disabled plugin, before any reconcile', async () => {

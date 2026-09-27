@@ -157,7 +157,7 @@ describe('syncActiveFilter', () => {
     expect(deps.warn).not.toHaveBeenCalled();
   });
 
-  // plugins.md, Order and view state, story 5: the filter clears only on purpose, so a read that
+  // plugins.md, Order and view state, story 3: the filter clears only on purpose, so a read that
   // failed says nothing about whether mEdit still filters.
   it('logs and warns a read failure, and keeps showing the last known filter', async () => {
     const deps = makeSyncDeps();
