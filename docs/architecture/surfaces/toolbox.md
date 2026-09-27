@@ -25,6 +25,9 @@ disagrees with the views below it. *ADR-0015*
 | Row | Description | Icon | Tooltip | Click |
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
+
+The game folder is the one my setting names, else the one the mod manager's configuration names,
+else the game's install, found as Steam or Wine installs it.
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
 
 ## States
@@ -47,7 +50,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 ### Switch profile
 
 As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to
-it; Esc switches nothing. *catalog `switch`; update-load-order-file, profile switch*
+it; Esc switches nothing. *catalog `switch`*
 
 ### Refresh
 
@@ -61,7 +64,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A refresh refused because another window holds the index to say "This instance's index is open
    in another Modbench window", and to name the instance. Modbench cannot name the other window.
    *catalog `refresh`; ADR-0009*
-2. A failed refresh to say why. *load-instance*
+2. A failed refresh to say why.
 
 ## Test seam
 

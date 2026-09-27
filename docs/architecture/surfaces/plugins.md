@@ -46,6 +46,8 @@ As a user, I want:
 9. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
    is on screen.
 10. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
+11. Disabling a mod to drop its plugins' lines, and enabling it again to add them back at the
+    winning end: their place in plugin order is lost. *MO2; catalog `plugin sync`*
 
 ## A row
 
@@ -67,7 +69,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (ADR-0012, invariant 4); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
-| Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote | `$(warning)` yellow | changed outside Modbench |
+| Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I
@@ -75,10 +77,11 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not
   no issues.
 - A later snapshot keeps the last statuses until the new ones land.
+- A plugin that failed to read stays failed until its bytes change or I refresh.
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. *commands.md,
   Surfaces and their templates*
 - A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin
-  file, while its bytes differ from what Modbench last wrote. *detect-external-change*
+  file, while its bytes differ from what Modbench last wrote. *ADR-0003, invariant 3*
 
 ### A plugin the game loads with no line
 
@@ -130,8 +133,9 @@ As a user, I want:
    keep their order. *common, A view, story 7; MO2's priority sort*
 2. The name filter to match plugin rows. *common, The name filter*
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
-   becomes a clear icon while it is active. It is its own filter, beside the name filter. *catalog
-   `filter` under Record; Chrome*
+   becomes a clear icon while it is active. It is its own filter, beside the name filter. It narrows
+   the groups' counts too, and applies again after every change to the index. It never narrows the
+   Editor or Referenced By. *catalog `filter` under Record; Chrome*
 4. A plugin with no record left under the record filter hidden while the record filter is active. A
    later snapshot keeps the rows the record filter hides until the new ones land.
 
@@ -153,7 +157,8 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
    filter, story 6*
 6. When indexing the snapshot fails, the view's message line to name the failure, with one line
    in the Output. A row whose plugin was not reached expands to the error row naming the failure,
-   never to "Still indexing…" for ever. *index-load-order, Refusals and failures*
+   never to "Still indexing…" for ever. The plugins read before the failure keep their records, and
+   the next change to the instance tries again.
 
 ## Menus and keys
 
@@ -194,7 +199,7 @@ As a user, I want:
 3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a
    plugin that is not one, refused, naming the plugin and the master. While mEdit cannot say which
    masters a plugin has, the drop lands, and the master status flags it once mEdit answers.
-   *update-load-order-file, Refusals; ADR-0012, invariant 4*
+   *ADR-0012, invariant 4*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
 5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from
@@ -206,20 +211,34 @@ As a user, I want:
 
 As a user, I want:
 
-1. A prompt for the name. It refuses an empty name, and a name that does not end `.esp`, `.esm` or
-   `.esl`.
+1. A prompt for the name. It refuses an empty name, a name that does not end `.esp`, `.esm` or
+   `.esl`, and `.esl` when the game has no light plugins.
 2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog `create`,
    place Option*
 3. A place that already holds a plugin of that name left out of the pick. The same name in another
    place is not checked. *No dead entries*
 4. Esc at either step to create nothing. *Esc changes nothing*
-5. The new plugin to appear at the winning end of the list, disabled. *create-plugin, Hand-off*
+5. The new plugin to appear at the winning end of the list, disabled. *catalog `plugin sync`*
+6. The new plugin empty: a header with no records and no masters, flagged by its extension: `.esm` a
+   master, `.esl` a light plugin.
 
 ### Track
 
-As a user, I want a pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a
-line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod
-and the phase. *catalog `track`; decompile-plugin, The flow, step 4*
+As a user, I want:
+
+1. A pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a line saying
+   what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod and the
+   phase. *catalog `track`*
+2. `Edits` to track `source/` and `.gitignore`, and `Everything` every file except the plugin
+   binaries.
+3. The history to read as one commit `Track <mod>` with the mod's own files, then one baseline
+   commit per plugin, `Track Foo.esp 1.2.3`, with the trailers `Plugin`, `Upstream-Version` and
+   `Binary-SHA256`. A version the mod manager does not record is left out. *ADR-0007, invariants 2
+   and 6*
+4. Each file's line endings kept as written.
+5. A track that refuses every plugin to leave no repository. A plugin refused part way leaves the
+   commits before it, and the rest go on. This is an exception to *A failed gesture writes
+   nothing*.
 
 ### Decompile
 
@@ -233,31 +252,42 @@ As a user, I want:
 1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is
    the truth, and compile builds the plugin from it.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
-   panel when it left diagnostics.
+   panel when it left diagnostics. The diagnostics sit on the plugin source files.
 3. From the palette with no plugin, a pick of the tracked plugins. *No dead entries*
+4. A light plugin whose records fall outside the light range refused, naming the records and the
+   remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
+5. An interrupted compile of a localized plugin to be free to leave its strings written without its
+   binary. Compiling again fixes it. This is an exception to *A failed gesture writes nothing*.
 
 ### Create record
 
 As a user, I want, on a group, a new record of that type with no prompt, and on a plugin a pick of the
 record type first. The new record is selected and opens in the record panel. *catalog `create`
-under Record, record type Option; xEdit selects what it adds*
+under Record, record type Option; xEdit selects what it adds* It takes the next free FormID that
+neither the working tree nor the last commit uses, and a fresh EditorID unique in the plugin. When
+no FormID is free, it is refused, naming the remedies: clear the light flag, or change a record's
+FormID.
 
 ### Copy
 
 As a user, I want a pick of the mode, then a pick of the destination: the plugins I can edit, each
 with its load index. A destination that already holds a copy asks whether to replace it. Esc on
-either copies nothing. *catalog `copy`; edit-record contract*
+either copies nothing. *catalog `copy`* A copy as new takes the next free FormID. Its child records
+get new FormKeys, a reference to itself follows it, and a container the destination lacks is
+created bare, as a Partial Form.
 
 ### Delete
 
 As a user, I want one confirmation listing everything selected, saying the records leave their
-plugin source as working-tree changes I can review. *catalog `delete`; Confirm what destroys*
+plugin source as working-tree changes I can review. *catalog `delete`; Confirm what destroys* The
+records that reference a deleted record are left as they are, and compile reports them.
 
 ### Record filter
 
 As a user, I want a pick of the `.sql` files in my scripts folder, then "New filter…", which opens an
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
-that it is active and clears it. *catalog `filter`, query Option*
+that it is active and clears it. *catalog `filter`, query Option* A query that returns no FormKey
+column, or cannot run, is refused with the database's reason.
 
 ## Reporting
 
@@ -267,13 +297,13 @@ By [common.md](common.md#reporting). As a user, I want:
    status: my picture of my records would otherwise be wrong. *ADR-0019, invariant 1*
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
    the result, with a line in the Output. When a folder cannot be listed, the reason in the view's
-   message line and the Output. *update-load-order-file, Refusals*
+   message line and the Output.
 3. Every message to name a gesture that exists and a view by its name.
 4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
    the plugins. It offers nothing to do. It comes once in a session for each new state of a
-   plugin's bytes. *detect-external-change; ADR-0003, invariant 3*
+   plugin's bytes. *ADR-0003, invariant 3*
 5. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
-   at decompile. *detect-external-change*
+   at decompile.
 
 ## Test seam
 

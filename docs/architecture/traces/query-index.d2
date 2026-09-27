@@ -1,4 +1,4 @@
-# Query the record index, purple. Contract: query-index.md.
+# Query the record index, purple.
 ...@../styles
 shape: sequence_diagram
 views: "Plugins · Editor" {class: driving}
@@ -20,7 +20,7 @@ http -> client: answer {class: query}
 client -> views: records, cells, plugin-keyed status {class: query}
 
 refused: "refused: the filter" {
-  queries -> http: "the refusal, as the contract's Refusals list it" {class: query}
+  queries -> http: "the refusal" {class: query}
   http -> client: the refusal {class: query}
   client -> views: the refusal {class: query}
 }

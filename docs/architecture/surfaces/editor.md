@@ -47,7 +47,8 @@ FormKey alone when there is no EditorID. It holds no controls.
 ## The FormID
 
 As a user, I want the record's FormKey as the first row of the grid, under Record Header, with
-xEdit's label FormID. It edits as any field does, and edit-record says what the write changes. A
+xEdit's label FormID. It edits as any field does. The FormID of an override is refused, naming its
+master: it changes where the record is native. A
 plugin header's FormID is read-only. *xedit.md, divergences 9 and 16*
 
 ## Columns
@@ -155,7 +156,7 @@ As a user, I want:
    stay open. *ADR-0012*
 6. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
-   scroll stay. *ADR-0015, invariant 3; edit-record, Hand-off*
+   scroll stay. *ADR-0015, invariant 3*
 7. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
    the last good read:" and the reason. *common, States, story 6*
 

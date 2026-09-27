@@ -95,6 +95,7 @@ As a user, I want:
 2. To install only from the row menu. A double click, Enter or a drag onto the Mods view installs
    nothing. *mo2.md, Downloaded file*
 3. Copy value to copy each selected file's file name. *catalog `copy value`*
+4. Exclude on a file with no `.meta` to create one.
 
 ## Pickers and confirmations
 

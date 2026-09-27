@@ -1,4 +1,4 @@
-# Decompile plugin, green. Contract: decompile-plugin.md.
+# Decompile plugin, green.
 ...@../styles
 shape: sequence_diagram
 plugins: @../target-architecture.modbench_driving.plugins
@@ -45,7 +45,7 @@ sourceadapter -> indexer: documents (tracked) {class: query}
 
 
 refused: "refused, nothing of that plugin written" {
-  commands -> http: "the refusal, as the contract's Refusals list it" {class: edit}
+  commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}
 }
