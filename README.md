@@ -149,8 +149,8 @@ The repo is set up to be worked on by people and coding agents alike:
   files under `modbench/` and `MEditService/` carry each side's own.
 - [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per gesture.
 - [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do
-  register; [docs/research/xedit-ux-audit.md](docs/research/xedit-ux-audit.md) — required reading
-  before touching any record-editing interaction.
+  register; [docs/research/](docs/research/) — audits of MO2 and xEdit read from their source: the
+  evidence behind the registers and the Template column.
 - [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones) and triage
   labels.
 
