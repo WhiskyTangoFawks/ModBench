@@ -35,7 +35,7 @@ As a user, I want:
 4. Several records opened at once each to open in a tab of its own. *catalog `open`*
 5. The tab titled with the EditorID, or the FormKey when there is none. A plugin header's tab is
    titled with the plugin's file name. *catalog `open`: a plugin header is a record*
-6. Open from the palette, with no record given, to ask for one by FormID or EditorID. *catalog
+6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. *catalog
    `open`*
 7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I
    collapsed, the focused cell and the scroll. *VS Code keeps a tab's place*

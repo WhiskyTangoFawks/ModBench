@@ -72,7 +72,7 @@ As a user, I want:
 
 1. The record picker to be VS Code's quick pick, opened on the current reference, with that record
    selected. *xedit.md, divergence 1*
-2. Typing to search by EditorID, or by FormKey. When the field allows one record type, the search
+2. Typing to search by EditorID, FormID or FormKey. When the field allows one record type, the search
    is among that type only. *xEdit; mEdit's answer*
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone
    stale still finds the right record.

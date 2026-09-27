@@ -24,17 +24,16 @@ inverse of `compile`. The gesture `track` fires it.
    trip: every record has a model-identical counterpart, and no subrecord is lost (ADR-0006,
    invariant 2). Nothing of the plugin is written before its check passes.
 4. Commands publishes track progress, per plugin and phase, through Ports.
-5. The Source adapter puts the plugin's documents in the mod's repository. In a mod with no
-   repository, once the first plugin passes its check, it creates one with the preset's
-   `.gitignore`, keeping line endings as written, and commits the mod's own files in a commit of
-   their own (`Track <mod>`): the `.gitignore` and, under `Everything`, the assets. It then commits
-   the plugin's documents to `main` as the plugin's baseline (`Track Foo.esp 1.2.3`), with no
-   checkout.
+5. The Source adapter puts the plugin's documents in the mod's repository:
+   - **A mod with no repository.** Once the first plugin passes its check, it creates one on `main`
+     with the preset's `.gitignore`, keeping line endings as written, and commits the mod's own
+     files in a commit of their own (`Track <mod>`): the `.gitignore` and, under `Everything`, the
+     assets. It then commits the plugin's documents as the plugin's baseline
+     (`Track Foo.esp 1.2.3`).
+   - **A mod with a repository.** It writes the plugin's documents into the working tree of the
+     checked-out branch, and commits nothing.
 6. Commands records each plugin's bytes as what Modbench last wrote.
-7. After the last plugin, in a repository this run created, the Source adapter creates the edit
-   branch at `main` and checks it out. Otherwise the edit branch does not move: the user rebases it
-   onto the new baselines with git, in VS Code's Source Control (ADR-0007, invariant 5).
-8. Commands answers applied or the refusal, per plugin.
+7. Commands answers applied or the refusal, per plugin.
 
 A baseline commit's message follows git's convention: the subject, a blank line, then the trailers
 `Plugin`, `Upstream-Version` and `Binary-SHA256` (ADR-0007, invariant 6). A version the mod

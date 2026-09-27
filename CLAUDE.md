@@ -6,7 +6,7 @@ Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# ser
 
 ## Status: pre-alpha, unreleased, zero users
 
-**No backwards compatibility** — no migrations (re-Track is the migration), no shims, no "existing users" reasoning, no deprecation periods. Rename and delete freely; when an old form has no live consumer, remove it and its tests.
+**No backwards compatibility** — no migrations, no shims, no "existing users" reasoning, no deprecation periods. Rename and delete freely; when an old form has no live consumer, remove it and its tests.
 
 ## Tools
 

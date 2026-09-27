@@ -33,7 +33,7 @@ commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
 baseline: "the repository" {
-  sourceadapter."one baseline commit per plugin, by plumbing, trailers from the request; the edit branch moves only in a repository this run created"
+  sourceadapter."a new repository: one baseline commit per plugin, trailers from the request · an existing one: the working tree, no commit"
 }
 
 commands -> http: "applied or refusal, per item" {class: edit}

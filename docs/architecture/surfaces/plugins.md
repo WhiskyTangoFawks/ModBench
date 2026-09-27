@@ -230,7 +230,8 @@ As a user, I want:
 ### Track
 
 As a user, I want a pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a
-line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod
+line saying what it keeps. In a mod that has a repository, no pick: the preset shapes only a new
+repository's `.gitignore`. Esc tracks nothing. While it runs, the view's message line names the mod
 and the phase. *catalog `track`; decompile-plugin, The command, step 4*
 
 ### Compile

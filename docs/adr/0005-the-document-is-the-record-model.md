@@ -24,9 +24,10 @@
    is never in a table, because the table would drift from it silently. Adding a game is additive
    in one place.
 5. **Nothing is dropped in silence.** A record the codec cannot read is indexed read-only with
-   its diagnosis. A shape the type walk cannot place is named and counted. A fact a document does
-   not carry, a placed reference's cell or a cell's block, is GRUP structure read into tables
-   beside the records at ingest, so placement is read-only. A write that cannot be honored leaves
+   its diagnosis. A shape the type walk cannot place is named and counted. A fact a record's own
+   fields do not carry, a placed reference's cell or a cell's block, is read from the container
+   document that holds it ([ADR-0006](0006-decompilation-is-provably-faithful.md)) into tables
+   beside the records at ingest. No gesture changes placement. A write that cannot be honored leaves
    the file and the record index exactly as they were.
 6. **The webview owns the view and decides nothing.** It derives what it shows from what it is
    given: the metadata, the values and the lists mEdit sends. It renders a cell from the metadata,
