@@ -21,8 +21,7 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
    every watch, so a burst of changes is one read. Activation, refresh and the window regaining
    focus start the same read. A lost event delays a change, and the next read finds it (ADR-0015,
    invariant 4). A folder created, renamed or deleted under `mods/` restarts the watch, because the
-   watcher can lose the folders inside a moved one. This watch is the only one on the instance:
-   mEdit watches nothing (ADR-0015, invariant 7).
+   watcher can lose the folders inside a moved one.
 2. The Instance loader reads, through the Instance adapter, `ModOrganizer.ini` first: the active
    profile, the game, and where the downloads are. Then it reads the profile's `modlist.txt` and
    `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
@@ -33,8 +32,7 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
 5. The value goes to every view. The Instance loader derives the snapshot from it: every plugin
    in the instance, and the active plugins, in load order (ADR-0013, invariants 2 and 3). It hands the snapshot to instance commands at every recompute, changed or
-   not, and they send it to mEdit ([index-load-order](index-load-order.md)). The snapshot is also
-   mEdit's signal that a file may have changed (ADR-0013, invariant 1).
+   not, and they send it to mEdit ([index-load-order](index-load-order.md)).
 
 ## refresh
 

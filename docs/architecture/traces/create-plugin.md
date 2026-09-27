@@ -32,10 +32,9 @@ This flow waits for no hand-off.
   flow is plugin sync in [update-load-order-file](update-load-order-file.d2), which adds the line
   at the end, disabled. The next snapshot names the plugin, and
   [index-load-order](index-load-order.d2) indexes it, with or without a line.
-- In a tracked mod, the next snapshot's check finds a plugin that the mod's repository does not
-  track. From
-  there the flow is [detect-external-change](detect-external-change.d2), which warns. Decompiling
-  it is the user's gesture.
+- In a tracked mod, the next snapshot starts [detect-external-change](detect-external-change.d2),
+  which warns of a plugin the mod's repository does not track. Decompiling it is the user's
+  gesture.
 
 ## Refusals
 

@@ -42,7 +42,7 @@ bad binary, and compiling again rebuilds it.
 
 This flow waits for no hand-off.
 
-- The next snapshot carries the new bytes. They match what Modbench last wrote, so
+- At the next snapshot, the bytes match what Modbench last wrote, so
   [detect-external-change](detect-external-change.md) finds no change.
   The Indexer validates the plugin by its hash ([index-load-order](index-load-order.d2)).
 - Plugins puts the diagnostics in the Problems panel, on the source files.

@@ -24,13 +24,13 @@ file may have changed (ADR-0013, invariant 1).
    follows.
 3. Load order state tells the Indexer that a snapshot arrived, and the Indexer reconciles.
 4. The Indexer compares each half of the snapshot with the one it last reconciled, and validates
-   every plugin it holds (ADR-0009, invariant 4). A file whose size, mtime and ctime held since its
-   last hash is not read (ADR-0009, Derived tactical observations).
+   every plugin it holds (ADR-0009, invariant 4). The Indexer skips a file whose stamp held since
+   its last hash (ADR-0009).
    - A plugin whose file left loses its rows.
    - A plugin that arrived is read only when the index holds no rows for its content, by hash.
    - A plugin whose bytes changed is read again.
-   - A tracked plugin's source documents are compared the same way, and each one that changed is
-     read again by key. When the repository's HEAD moved, the committed rows are compared too.
+   - The Indexer compares a tracked plugin's source documents the same way, and reads each
+     changed one again by key. When HEAD moved, it compares the committed rows too.
    - A plugin that became tracked or untracked is read again, from its new source.
    - Changed active plugins read and drop no row.
 5. For each plugin it reads, one at a time, the Indexer reads the documents through the Source
@@ -41,7 +41,7 @@ file may have changed (ADR-0013, invariant 1).
 7. Through Ports, the Indexer publishes the index status at each plugin: reconciling, with the count
    done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
    The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3). A snapshot
-   that changes nothing publishes nothing.
+   that changes nothing publishes no status and no rows.
 
 ## Hand-off
 

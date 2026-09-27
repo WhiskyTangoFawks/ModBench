@@ -23,7 +23,7 @@ under a minute; only not redoing the work does.
    the key is valid at; every profile in the instance shares the file. It sits beside MO2's own
    working files, never inside `mods/`, `profiles/`, `overwrite/` or `downloads/`, which a
    reinstall or a sweep would take the record index with.
-4. **Validity is by content, and every reconcile checks every file.** The index records each file's
+4. **Validity is by content, and every reconcile validates every file.** The index records each file's
    content hash and the codec and schema version its rows were written under. A hash mismatch
    re-indexes the plugin, a missing file removes its rows, and a version change invalidates the
    whole file. This is the ownership rule
@@ -37,9 +37,9 @@ under a minute; only not redoing the work does.
 
 ## Derived tactical observations
 
-- A file whose size, mtime and ctime match its last hash keeps that hash without a read. ctime
-  moves on every write and on every change to mtime, so a tool that preserves mtime is still seen.
-  Open hashes every file.
+- A file's stamp is its size, modification time and change time. A file whose stamp matches its
+  last hash keeps that hash without a read. Change time is in the stamp because tools set
+  modification time. At open, the index hashes every file.
 
 ## Alternatives rejected
 

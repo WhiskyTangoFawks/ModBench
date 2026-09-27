@@ -44,9 +44,9 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
 
 ## Hand-off
 
-This flow waits for no hand-off. The Instance loader's watch sees the source change, and the next
-snapshot starts [index-load-order](index-load-order.md): the Indexer reads the changed documents
-again by key, and the Store publishes the rows that changed. Every view reads again then, and not
+This flow waits for no hand-off. The next snapshot starts [index-load-order](index-load-order.md).
+The Indexer reads the changed documents again by key, and the Store publishes the rows that
+changed. Every view reads again then, and not
 before (ADR-0015, invariant 3). A plugin's masters change at its next compile (ADR-0008).
 
 ## Refusals

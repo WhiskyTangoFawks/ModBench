@@ -13,9 +13,8 @@ binary changed outside Modbench, and it ends there. The user decides what to do 
 
 ## The flow
 
-1. The Instance loader's watch sees the change, and the next snapshot reaches Commands
-   ([index-load-order](index-load-order.md), step 1). Commands checks every tracked mod at each
-   snapshot, the first one after load included.
+1. Each snapshot reaches Commands ([index-load-order](index-load-order.md), step 1), the first
+   after load included. Commands checks every tracked mod at each one.
 2. Commands compares each tracked plugin's bytes with what Modbench last wrote
    ([compile-plugin](compile-plugin.md), step 5; [decompile-plugin](decompile-plugin.md), step 6).
    A plugin whose bytes differ changed outside Modbench.

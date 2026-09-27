@@ -47,8 +47,8 @@ This flow waits for no hand-off. Install writes no `modlist.txt` line.
   plugin, so its plugins get lines only when the mod is enabled.
 - The next snapshot names the mod's plugins, and [index-load-order](index-load-order.md) indexes
   them while the mod is still disabled.
-- For a tracked mod, the next snapshot carries the new bytes, and
-  [detect-external-change](detect-external-change.md) tells the user which plugins changed outside
+- For a tracked mod, the next snapshot starts
+  [detect-external-change](detect-external-change.md), which tells the user which plugins changed outside
   Modbench.
 
 ## Refusals
