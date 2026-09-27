@@ -27,7 +27,7 @@ it is handed and never reloads.
    is never a stored column and no SQL re-spells it. Only participating rows compete for winner
    or count in a conflict; a non-participating row is hidden by default and shown on request
    with the reason.
-4. **The load order is a value in Editing's shared kernel, written by the API alone and read by
+4. **The load order is a value in Editing's shared kernel, written only through put load order and read by
    both sides and the adapters.** There is no session: nothing is loaded, reloaded or exited, and
    a plugin that fails to parse is a row in an error state, the way a file with a diagnostic is
    still a file.

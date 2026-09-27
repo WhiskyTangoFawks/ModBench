@@ -92,8 +92,8 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
 file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for a load order
-([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)); the MO2 side works with no
-backend at all.
+([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)); the Mods, Downloads and Toolbox views
+never call the backend.
 
 The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit
 ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every
@@ -124,7 +124,7 @@ npm run test:unit
 ```
 
 You don't run the backend yourself — the extension spawns it at activation and hands it the
-active modlist as the load order. For the API on its own:
+load order snapshot. For the API on its own:
 `dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
 
 **Launch the extension** from the repo root (F5 is unreliable in this environment; use the CLI):
