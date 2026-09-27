@@ -15,10 +15,10 @@ the binary is a build artifact that compile regenerates from it.
    blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
 2. **A plugin is tracked when its plugin source is in a git repository in its mod's folder, and
-   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod and tracks every untracked plugin it holds; a plugin's row and its Editor column offer it for the plugin's mod. Each
+   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod with no repository; a plugin's row and its Editor column offer it for the plugin's mod. Each
    plugin is serialized and verified by the round-trip gate over the tree it wrote. In a mod with
    no repository, Track creates one and writes its `.gitignore`, then commits the mod's own files
-   and each plugin as its own baseline commit. In a mod that has a repository, Track writes each
+   and each plugin as its own baseline commit. In a tracked mod, the decompile gesture writes a
    plugin's source into the working tree, and the user commits it. A repo destroyed outside Modbench reads as untracked the next time
    anyone looks.
 3. **The source is complete, and a tracked plugin loads from it.** Ingest reads both the working

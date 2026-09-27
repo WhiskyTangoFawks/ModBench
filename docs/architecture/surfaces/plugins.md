@@ -168,7 +168,7 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track… · compile · copy value |
+| Plugin menu | reveal · enable or disable · create record… · track… · decompile · compile · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
@@ -187,11 +187,12 @@ As a user, I want:
    its header, which is a record. A click on a disabled plugin row only selects it. *catalog `open`*
 5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
    stories 3 and 5). *mods.md*
-6. `track` and `compile`, each offered only where the catalog's condition holds: track on an
-   untracked plugin in a mod, and compile on a tracked, editable plugin. *catalog
-   Where*
+6. `track`, `decompile` and `compile`, each offered only where the catalog's condition holds: track
+   on a plugin in a mod with no repository, decompile on a plugin in a tracked mod, and compile on
+   a tracked, editable plugin. *catalog Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record and
-   delete, and the plugin as a copy destination. Track is on its row. *No dead entries*
+   delete, and the plugin as a copy destination. Track or decompile is on its row. *No dead
+   entries*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
    file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
@@ -230,9 +231,13 @@ As a user, I want:
 ### Track
 
 As a user, I want a pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a
-line saying what it keeps. In a mod that has a repository, no pick: the preset shapes only a new
-repository's `.gitignore`. Esc tracks nothing. While it runs, the view's message line names the mod
+line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod
 and the phase. *catalog `track`; decompile-plugin, The command, step 4*
+
+### Decompile
+
+As a user, I want one confirmation for the selection, naming the plugins and saying their source in
+the working tree is replaced from their bytes. *catalog `decompile`; Confirm what destroys*
 
 ### Compile
 
@@ -282,7 +287,7 @@ By [common.md](common.md#reporting). As a user, I want:
    the plugins. It offers nothing to do. It comes once in a session for each new state of a
    plugin's bytes. *detect-external-change; ADR-0003, invariant 3*
 6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
-   at Track. *detect-external-change*
+   at decompile. *detect-external-change*
 
 ## Test seam
 

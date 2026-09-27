@@ -1,8 +1,8 @@
 # decompile-plugin: contract
 
-Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog row: `track` under Mod, in
-[commands.md](../commands.md). What the user picks is in [plugins.md](../surfaces/plugins.md):
-Track. Governed by
+Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under Mod and
+`decompile` under Plugin, in [commands.md](../commands.md). What the user picks and confirms is in
+[plugins.md](../surfaces/plugins.md): Track and Decompile. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
 [ADR-0006](../../adr/0006-decompilation-is-provably-faithful.md),
 [ADR-0007](../../adr/0007-plugin-edits-are-git-working-tree-changes.md),
@@ -10,12 +10,13 @@ Track. Governed by
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 `decompile plugin` reads a plugin's bytes into plugin source in its mod's repository. It is the
-inverse of `compile`. The gesture `track` fires it.
+inverse of `compile`. Two gestures fire it: `track` in a mod with no repository, and `decompile` in
+a tracked mod.
 
 ## The command
 
 1. Plugins sends `decompile plugin` to Commands, through the mEdit client and the HTTP endpoints:
-   the plugins, each as origin and file name, and the preset. Each plugin carries its mod's
+   the plugins, each as origin and file name, and, from `track`, the preset. Each plugin carries its mod's
    upstream version, as the mod manager records it.
 2. For each plugin in turn, the Plugin adapter reads its bytes, and Commands reads every record
    into documents. A localized plugin's strings come from the mod's `Strings/` folder, then from
@@ -25,13 +26,13 @@ inverse of `compile`. The gesture `track` fires it.
    invariant 2). Nothing of the plugin is written before its check passes.
 4. Commands publishes track progress, per plugin and phase, through Ports.
 5. The Source adapter puts the plugin's documents in the mod's repository:
-   - **A mod with no repository.** Once the first plugin passes its check, it creates one on `main`
+   - **`track`, in a mod with no repository.** Once the first plugin passes its check, it creates one on `main`
      with the preset's `.gitignore`, keeping line endings as written, and commits the mod's own
      files in a commit of their own (`Track <mod>`): the `.gitignore` and, under `Everything`, the
      assets. It then commits the plugin's documents as the plugin's baseline
      (`Track Foo.esp 1.2.3`).
-   - **A mod with a repository.** It writes the plugin's documents into the working tree of the
-     checked-out branch, and commits nothing.
+   - **`decompile`, in a tracked mod.** It writes the plugin's documents into the working tree of
+     the checked-out branch, in place of the plugin's source there, and commits nothing.
 6. Commands records each plugin's bytes as what Modbench last wrote.
 7. Commands answers applied or the refusal, per plugin.
 
@@ -63,7 +64,7 @@ Commands names the cause.
 |---|---|
 | Git is not on the PATH, once for the whole selection | No plugin can escape it. |
 | The plugin is in no mod: the game folder or Overwrite | A repository lives in a mod's folder. The refusal points at a patch plugin. |
-| The plugin is already tracked | |
+| `track` in a mod that has a repository, or `decompile` in a mod that has none | Each gesture's condition is its mod's repository. |
 | The bytes cannot be read or parsed | Diagnosed, never repaired (ADR-0006, invariant 7). |
 | A record fails the round trip, naming the record and what was lost | ADR-0006, invariant 2. |
 | A localized plugin's strings file is missing, naming the file and where Modbench looked | |
