@@ -1,5 +1,7 @@
 # MO2 UI Surface Audit
 
+Read from `references/modorganizer` at `efe2a02d`.
+
 An audit of what Mod Organizer 2's UI surfaces offer and what each gesture does, read from source.
 It describes MO2 only and takes no position on any other tool.
 

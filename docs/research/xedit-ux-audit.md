@@ -1,5 +1,7 @@
 # xEdit UX Audit — the right-pane compare grid
 
+Read from `references/TES5Edit` at `fd1e3602`.
+
 An audit of how xEdit's **View** pane actually behaves, read from source. It describes xEdit, not
 mEdit, and takes no position on what mEdit should do.
 

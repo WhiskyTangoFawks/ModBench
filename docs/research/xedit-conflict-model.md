@@ -1,5 +1,7 @@
 # xEdit's conflict model, read from the TES5Edit source
 
+Read from `references/TES5Edit` at `fd1e3602`.
+
 Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas`.
 
 ## Two independent axes
