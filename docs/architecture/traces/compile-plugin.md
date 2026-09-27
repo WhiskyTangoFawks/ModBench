@@ -42,7 +42,8 @@ bad binary, and compiling again rebuilds it.
 
 This flow waits for no hand-off.
 
-- The Mod watcher sees the new bytes. They match what Modbench last wrote, so no question opens.
+- The Mod watcher sees the new bytes. They match what Modbench last wrote, so
+  [detect-external-change](detect-external-change.md) finds no change.
   The Indexer validates the plugin by its hash ([index-load-order](index-load-order.d2)).
 - Plugins puts the diagnostics in the Problems panel, on the source files.
 
@@ -52,7 +53,6 @@ Commands refuses before any write, and names the cause.
 
 | Refusal | Why |
 |---|---|
-| A question is open on the mod | A compile would overwrite the evidence (ADR-0003, invariant 3). |
 | The plugin is not tracked | There is no source to compile. |
 | The source holds no tree for the plugin | There is nothing to compile. |
 | A source file cannot be opened, naming it | Another program may hold it. |
@@ -66,7 +66,7 @@ Commands refuses before any write, and names the cause.
 - **A failed write** says so, and names the plugin. The source is untouched, so compiling again
   rebuilds the binary.
 - **An interrupted compile** leaves the old binary or the new one, and each is what Modbench last
-  wrote (step 7), so no question opens. Compiling again builds the binary.
+  wrote (step 7), so no change is detected. Compiling again builds the binary.
 
 Exceptions to commands.md's rules:
 
@@ -79,4 +79,4 @@ Exceptions to commands.md's rules:
   masters and strings, what Modbench last wrote, and the diagnostics; or the refusal and nothing
   written.
 - **Commands, at a settle:** given the bytes a compile wrote, or the binary before them, no
-  question.
+  change detected.

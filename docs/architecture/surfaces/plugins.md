@@ -73,13 +73,15 @@ A plugin's statuses, the first in this order sets the icon, and the tooltip list
 | Failed to load | mEdit could not load it | `$(error)` red | failed to load |
 | Master issues | a master it lists is missing or cannot be loaded, once the load order is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
+| Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 A master issue never disables the plugin or cascades to its dependants: the check box stays as I set
 it (ADR-0012, invariant 4). Before the load order is indexed, a plugin has no master verdict, so no
 badge means not yet asked. A later reload of the load order keeps the last statuses, and the rows
 the record filter hides, until the new ones land. A malformed plugin's reasons are also in the
-Problems panel, on the plugin file. *ADR-0019*
+Problems panel, on the plugin file. *ADR-0019* A plugin that changed outside Modbench is also a
+warning in the Problems panel, on the plugin file, while it differs. *detect-external-change*
 
 ### A plugin the game loads with no line
 
@@ -260,22 +262,6 @@ As a user, I want a pick of the `.sql` files in my scripts folder, then "New fil
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
 that it is active and clears it. *catalog `filter`: input box, or a document*
 
-### External change
-
-As a user, I want:
-
-1. One dialog for each tracked mod that changed outside Modbench, one mod at a time. *ADR-0003,
-   invariant 3*
-2. The dialog to name the mod, list the changed plugins and the changed tracked files.
-3. Two answers, `Commit to main as new baseline` first, as the default, and
-   `Apply to working tree on <branch>`. *ADR-0003, invariant 3*
-4. Esc to change nothing, and the dialog to come back at the next check while the change is still
-   there. *Esc changes nothing; decompile-plugin, The trigger*
-5. A write refused while a question is open to name the question and its two answers.
-   *decompile-plugin, The trigger*
-6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
-   at Track.
-
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
@@ -287,6 +273,11 @@ By [common.md](common.md#reporting). As a user, I want:
    the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
    the reason in the view's message line and the Output. *update-load-order-file, Refusals*
 4. Every message to name a gesture that exists and a view by its name.
+5. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
+   the plugins. It offers nothing to do. It comes once in a session for each new state of a
+   plugin's bytes. *detect-external-change; ADR-0003, invariant 3*
+6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
+   at Track. *detect-external-change*
 
 ## Test seam
 

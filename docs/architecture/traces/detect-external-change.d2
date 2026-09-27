@@ -1,0 +1,29 @@
+# Detect an external change, grey. Contract: detect-external-change.md.
+...@../styles
+shape: sequence_diagram
+tools: "MO2 · another tool · the user" {class: other}
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "the mod's folder"
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+client: @../target-architecture.modbench_driven.client
+client.label: mEdit client
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+
+tools -> mo2: bytes, at any time {class: outside}
+mo2 -> watcher: changed paths {class: signal}
+watcher."settle per mod"
+watcher -> commands: a tracked mod settled {class: signal}
+commands."each tracked plugin's bytes against what Modbench last wrote; keeps nothing"
+commands -> port: "external change: the mod, its changed plugins · untracked plugins" {class: push}
+port -> http: publish {class: push}
+http -> client: stream {class: push}
+client -> plugins: "external change · untracked plugins" {class: push}
+plugins."a notification per mod · the row status and a Problems warning per changed plugin · a warning per untracked plugin"
