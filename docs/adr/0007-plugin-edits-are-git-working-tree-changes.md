@@ -20,10 +20,9 @@ the binary is a build artifact that compile regenerates from it.
    by the round-trip gate over the tree it wrote, and committed to `main` as its own baseline
    commit; the edit branch is checked out once, after the last. A repo destroyed outside Modbench reads as untracked the next time
    anyone looks.
-3. **The source is complete, and a tracked plugin loads from it.** Ingest deserializes the
-   working tree as Effective and `HEAD` as Head and never consults the binary for content; an
-   untracked plugin keeps the binary ingest and yields the same document shape, so the read model
-   never sees a dialect.
+3. **The source is complete, and a tracked plugin loads from it.** Ingest reads both the working
+   tree and `HEAD`, and never consults the binary for content; an untracked plugin keeps the binary
+   ingest and yields the same document shape, so the read model never sees a dialect.
 4. **Every edit writes working-tree text; compile writes the binary.** Compile behaves like
    a compiler: it derives what the format forces it to derive, the masters list
    ([ADR-0008](0008-masters-are-derived-from-content.md)) and the header's counters, refuses

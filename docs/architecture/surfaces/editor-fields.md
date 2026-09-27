@@ -157,8 +157,8 @@ edit as any record's. *xEdit; mEdit's answer*
 
 ## A plugin's header
 
-A plugin's header is a record, and reads and edits as one. Its masters are the Effective masters,
-and are never edited. *ADR-0008, invariant 2; catalog `edit field`*
+A plugin's header is a record, and reads and edits as one. Its masters are the masters the working
+tree's content requires, and are never edited. *ADR-0008, invariant 2; catalog `edit field`*
 
 ## Test seam
 
