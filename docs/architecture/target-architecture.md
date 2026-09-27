@@ -58,8 +58,8 @@ maintainer, never a line an agent adds.
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them, built only by
-watching: the record index over the plugin files and the source tree, the instance value over MO2's
-files. A command writes a file and forgets, so a change from another tool and a change from
+watching: the record index over the plugin files and the source tree, the instance value over the mod
+manager's files. A command writes a file and forgets, so a change from another tool and a change from
 Modbench are the same signal in both
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
 draws that signal on its own, because there is no separate path: it is the watch that opens
@@ -73,7 +73,7 @@ Change flows up only through watchers and the notification port. mEdit watches o
 mod, and the Source adapter names the paths inside it, so layout has one owner; on the
 Modbench side the Instance adapter is that owner, the one box that reads or writes the instance: the mod
 manager's configuration, the load order, and which game it is for. Deployment is a boundary of its own: it makes the game see the instance's resolved files, and hides how. The instance decides which file wins each path; deployment decides nothing, and writes only into the game folder, where it removes only what it wrote. A command hands the Instance adapter the change, and the adapter splices it through the file's codec and writes the file whole. The mod manager's codecs are inside its implementation; the game's `plugins.txt` codec is in the kernel. No command reads the
-Instance loader; a value a command needs, the mod lines and plugin lines to sync, or the winners
+Instance loader; a value a command needs, the mods and plugins to sync, or the winners
 to deploy, arrives as an argument.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
 keeps the last value on a read failure, and publishes the reason beside it. It validates on activation and on refresh, through the

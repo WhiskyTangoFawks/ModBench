@@ -11,15 +11,15 @@ own.
 
 1. **The on-disk format is MO2's, worked on in place, never imported.** A mod is a `mods/<name>/`
    folder. Enable state and mod order are a profile's `modlist.txt`, with a `+` or
-   `-` prefix and the top of the file as the winning end. Load order is `plugins.txt`, per-mod
-   Nexus metadata is `meta.ini`, and the instance conventions are inherited whole. Point Modbench
+   `-` prefix and the top of the file as the winning end. Each profile keeps its plugin order in
+   its own `plugins.txt`, in the game's format; per-mod Nexus metadata is `meta.ini`, and the
+   instance conventions are inherited whole. Point Modbench
    at an MO2 folder and it works on that modlist: edits round-trip, and a user alternates between
    MO2 and Modbench on one instance with no conversion and no divergence.
 2. **Writes are byte-faithful surgical edits.** One read-modify-write of one MO2 file, with
-   separators, comments and metadata preserved verbatim. Each file's format lives in one codec,
-   inside the Instance adapter's MO2 implementation
-   ([ADR-0014](0014-modules-are-layered-and-call-adjacent-layers-through-ports.md);
-   [ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)).
+   separators, comments and metadata preserved verbatim. Each MO2 file's format lives in one codec,
+   inside the Instance adapter's MO2 implementation; `plugins.txt`'s format is the game's, and its
+   codec is the kernel's ([ADR-0014](0014-modules-are-layered-and-call-adjacent-layers-through-ports.md)).
 3. **MO2's panels map onto native VS Code surfaces.** Mods, Plugins and Downloads are native tree
    views stacked in the `modbench` container the way Explorer stacks its sections: independently
    collapsible, resizable, simultaneously visible, with native checkbox, drag-reorder and keyboard

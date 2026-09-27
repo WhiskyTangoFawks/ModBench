@@ -1,10 +1,7 @@
 # instanceLoader
 
-Instance loader. Owns the instance value, which carries which game the instance is for: it builds
-the value from disk and nothing else, and rebuilds the whole value on every change. It hides every
-watcher on the instance's files, the debounce, the winner and participation rules, and a downloaded
-file's status; a parse failure keeps the last value. It writes nothing.
-
-- Every read in a recompute treats only ENOENT (`errnoCode(err) === 'ENOENT'`) as empty and
-  rethrows the rest. A bare `catch` publishes a permission error as an empty field, where failing
-  the recompute would keep the last value.
+Instance loader. Owns the instance value, which carries which game the instance is for. It builds
+the value from the Instance adapter's parsed reads and nothing else, and rebuilds the whole value on
+every change. It hides every watcher on the instance, armed on what the adapter says to watch, the
+debounce, which file wins each path, and a downloaded file's status. A read failure keeps the last
+value and publishes the reason beside it. It writes nothing.

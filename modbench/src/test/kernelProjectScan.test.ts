@@ -120,7 +120,7 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject('instanceAdapter')).options.types).toEqual(['node']);
   });
 
-  // The Instance owns every MO2-side watcher, and a watcher is VS Code's — the one driven box
+  // The Instance owns every watcher on the instance, and a watcher is VS Code's — the one driven box
   // that sees the extension host.
   it('instanceLoader sees the Node and VS Code types and no others', () => {
     expect(parsed(boxProject('instanceLoader')).options.types).toEqual(['node', 'vscode']);
