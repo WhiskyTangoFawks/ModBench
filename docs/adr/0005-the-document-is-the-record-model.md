@@ -24,10 +24,10 @@
    is never in a table, because the table would drift from it silently. Adding a game is additive
    in one place.
 5. **Nothing is dropped in silence.** A record the codec cannot read is indexed read-only with
-   its diagnosis. A shape the type walk cannot place is named and counted. A fact a record's own
-   fields do not carry, a placed reference's cell or a cell's block, is read from the container
-   document that holds it ([ADR-0006](0006-decompilation-is-provably-faithful.md)) into tables
-   beside the records at ingest. No gesture changes placement. A write that cannot be honored leaves
+   its diagnosis. A shape the type walk cannot place is named and counted. Some facts are not in a
+   record's own fields, such as a placed reference's cell or a cell's block. Ingest reads each one
+   from the container document that holds it ([ADR-0006](0006-decompilation-is-provably-faithful.md))
+   into tables beside the records. No gesture changes placement. A write that cannot be honored leaves
    the file and the record index exactly as they were.
 6. **The webview owns the view and decides nothing.** It derives what it shows from what it is
    given: the metadata, the values and the lists mEdit sends. It renders a cell from the metadata,
@@ -35,8 +35,7 @@
    asked for. The codec and
    a short closed list of pre-checks that need only the schema refuse on the server; anything not
    on that list is not a check. A value's resolution arrives with it, because a link affordance is
-   decided before the hover
-   ([ADR-0019](0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)).
+   decided before the hover.
 7. **A cascade idles by removing.** When a governing member's change puts a sibling out of use,
    the write side removes that member, so it reads as its declared default and never the CLR
    default. The webview never reproduces the cascade.

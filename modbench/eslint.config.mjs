@@ -95,13 +95,6 @@ export default defineConfig(
         },
     },
 
-    // Mod Management never calls the backend (CONTEXT.md).
-    {
-        files: ['src/modmanager/**/*.ts'],
-        rules: {
-            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/client/**'], message: 'Mod Management never calls the backend.' }] }],
-        },
-    },
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
     // The views are README's driving band: Toolbox, Mods, Plugins, Downloads and Editor.

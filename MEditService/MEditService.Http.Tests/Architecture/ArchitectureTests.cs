@@ -337,7 +337,7 @@ public sealed class ArchitectureTests
     // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
-    // ADR-0005 rule 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
+    // ADR-0005 invariant 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
     // where the backup-first discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()

@@ -68,7 +68,7 @@ The install box refuses before it writes to `mods/`, and names the cause.
 Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** An upgrade that fails after the old files are removed is not
-  rolled back. It says so, naming the folder and what failed. Installing the download again is the
+  rolled back. It says so, naming the folder and what failed. Installing the downloaded file again is the
   recovery, and a tracked mod's source stays in git.
 
 ## Test seam

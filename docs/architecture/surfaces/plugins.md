@@ -81,7 +81,8 @@ it (ADR-0012, invariant 4). Before the load order is indexed, a plugin has no ma
 badge means not yet asked. A later reload of the load order keeps the last statuses, and the rows
 the record filter hides, until the new ones land. A malformed plugin's reasons are also in the
 Problems panel, on the plugin file. *ADR-0019* A plugin that changed outside Modbench is also a
-warning in the Problems panel, on the plugin file, while it differs. *detect-external-change*
+warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last
+wrote. *detect-external-change*
 
 ### A plugin the game loads with no line
 
@@ -158,7 +159,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 7. When indexing the load order fails, the view's message line to name the failure, with one line
    in the Output. The plugins read before it keep their records. A row whose plugin was not reached
    expands to the error row naming the failure, never to "Still indexing…" for ever. The next load
-   order tries again. *index-load-order, Failure*
+   order starts indexing again. *index-load-order, Failure*
 
 ## Menus and keys
 
@@ -236,8 +237,8 @@ and the phase. *catalog `track`; decompile-plugin, The command, step 4*
 
 ### Decompile
 
-As a user, I want one confirmation for the selection, naming the plugins and saying their source in
-the working tree is replaced from their bytes. *catalog `decompile`; Confirm what destroys*
+As a user, I want one confirmation for the selection, naming the plugins and saying that decompile
+replaces their source in the working tree from their bytes. *catalog `decompile`; Confirm what destroys*
 
 ### Compile
 

@@ -2,7 +2,7 @@
 
 The picture is [docs/architecture/](../architecture/target-architecture.md): one grid, six rows
 for the layers, two columns for the processes, each box a module with its interface and what it
-hides. The build enforces the arrows the diagram draws. Architecture words live in `docs/architecture/`; the glossary
+hides. The build enforces the arrows the diagram draws. Architecture words live in `docs/architecture/`. The glossary
 holds the domain words whose usual meaning would mislead.
 
 ## Strategic invariants
@@ -32,7 +32,7 @@ holds the domain words whose usual meaning would mislead.
 
 ## Alternatives rejected
 
-- **Every module knows every other**, the service this replaced: the write path pushed rows into
+- **Every module knows every other:** the write path pushed rows into
   the index, queries re-read the source tree, and the load order, index and ingest were one type.
 - **An architecture test library or an import-boundaries lint** to hold the layers. Project
   references make the compiler the sweep on both sides: `ProjectReference` between the service's

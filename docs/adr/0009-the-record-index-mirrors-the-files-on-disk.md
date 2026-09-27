@@ -2,8 +2,8 @@
 
 The record index holds what the plugin files and the source trees say, and nothing else. It is one
 DuckDB file per MO2 instance, and a load order is a set of registrations over its rows, never a
-reason to rebuild them. The vanilla masters never change, so re-indexing them on every launch was
-most of a launch, and no per-record speedup gets under a minute; only not redoing the work does.
+reason to rebuild them. The vanilla masters never change, so re-indexing them on every launch would
+be most of a launch, and no per-record speedup gets under a minute; only not redoing the work does.
 
 ## Strategic invariants
 

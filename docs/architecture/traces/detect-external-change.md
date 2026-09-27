@@ -1,7 +1,7 @@
 # detect-external-change: contract
 
-Diagram: [detect-external-change.d2](detect-external-change.d2). No catalog row: the disk starts
-this flow, and no gesture or command does. What the user sees is in
+Diagram: [detect-external-change.d2](detect-external-change.d2). No catalog row names this flow. A
+change on disk starts it, never a gesture or a command. What the user sees is in
 [plugins.md](../surfaces/plugins.md): A row, Plugin, and Reporting. Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
@@ -9,7 +9,7 @@ this flow, and no gesture or command does. What the user sees is in
 A tracked plugin exists twice in its mod: the binary, which the game and every other tool read and
 write, and its plugin source, which git versions. Git shows every change to the source and to every
 other tracked file. The binary is the one copy git cannot see. This flow tells the user that a
-binary changed outside Modbench, and it ends there. What the user does next is the user's.
+binary changed outside Modbench, and it ends there. The user decides what to do next.
 
 ## The flow
 
@@ -33,8 +33,8 @@ This flow waits for no hand-off.
 
 ## Failure
 
-- **A plugin whose file is gone or cannot be read** counts as changed, and the notice names why.
-- **A missing record of what Modbench last wrote** counts as changed. The flow never guesses
+- **A plugin whose file is gone or cannot be read** counts as changed, and the notice names the reason.
+- **A plugin whose parked ref is missing or orphaned** counts as changed. The flow never guesses
   (ADR-0003, Derived tactical observations).
 
 ## Test seam

@@ -24,8 +24,8 @@ treats a plugin the way an IDE treats a program:
 - **Compile** writes the binary from the source when you say so. The compiler refuses what 
   it can't emit and reports the rest as Problems.
 - **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
-  everything else see. Modbench never assumes exclusive ownership of any file — when a tracked
-  plugin changes outside it, Modbench tells you, and what you do next is yours.
+  everything else see. Modbench never assumes exclusive ownership of any file. When a tracked
+  plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
 The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md)
 and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).
@@ -68,7 +68,7 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/install/       install — a new mod, or an upgrade over one
   src/deploy/        deploy commands — makes the game see the instance's resolved files (drawn, not built yet)
   src/client/        the mEdit client — one port over the backend's commands, queries,
-                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0014)
+                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0002)
   src/mo2Codecs/, src/wire/, src/tables/, src/ports/
                      the kernel — the MO2 file codecs, the generated API types and webview
                      protocol, the per-release tables, and the report / ask / trash port
@@ -92,7 +92,7 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
 file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for a load order
-([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)); the Mods, Downloads and Toolbox views
+([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)). The Mods, Downloads and Toolbox views
 never call the backend.
 
 The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit
@@ -147,10 +147,11 @@ The repo is set up to be worked on by people and coding agents alike:
 
 - [CLAUDE.md](CLAUDE.md) — the tool commands and the rules no gate can express; the module
   files under `modbench/` and `MEditService/` carry each side's own.
-- [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per gesture.
-- [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do
-  register; [docs/research/](docs/research/) — audits of MO2 and xEdit read from their source: the
-  evidence behind the registers and the Template column.
+- [docs/architecture/](docs/architecture/) — the specification the code is built against: the target architecture, one surface spec per view, one trace per flow.
+- [docs/adr/](docs/adr/) — decisions.
+- [docs/out-of-scope/](docs/out-of-scope/) — the divergence registers, one for each reference tool.
+- [docs/research/](docs/research/) — audits of MO2 and xEdit, read from their source. They are the
+  evidence behind the registers and commands.md's Template column.
 - [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones) and triage
   labels.
 

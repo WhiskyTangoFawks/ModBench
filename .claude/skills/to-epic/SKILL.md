@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation and the repo's specs and produces an epic: the scope of one batch of work. The specs in `docs/architecture/` hold the behaviour. The epic says which of it this batch makes true, and nothing more. Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the triage labels in `docs/agents/triage-labels.md`.
 
 ## Process
 

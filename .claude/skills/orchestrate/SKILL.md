@@ -52,11 +52,11 @@ When an executor reports committed, work through these in order.
 4. Dispatch a reviewer with [`REVIEW.md`](REVIEW.md) as its brief and the breaks the report names. Merge on MERGE. On HOLD, send the blocking findings to the executor, and re-verify with the same reviewer after the fix commit. You read the verdict, never the code.
 5. Run the tripwires:
    - When the report says "no behaviour change", diff the wire format and the public signatures.
-   - Check whether the spec now claims Implemented for anything this ticket did not build.
+   - Check whether README's status table now claims Implemented for anything this ticket did not build.
    - For a new cross-boundary import, name what it drags with it.
    - When a named surface was wired, retired or renamed, grep `CLAUDE.md`, the specs and adjacent doc comments for present-tense claims about it. A stale doc comment is fixed; a stale claim in a maintainer's document is a break for the drain.
 6. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
-7. Where the outcome leaves a maintainer's document out of step with the code, such as a status that should flip, quote it as a break for the drain.
+7. Where the outcome leaves a maintainer's document out of step with the code, such as a README status that should flip, quote it as a break for the drain.
 8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
 9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
 10. Tell the other executor what landed and the new baseline test count, in one line.

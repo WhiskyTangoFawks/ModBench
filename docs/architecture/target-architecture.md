@@ -57,15 +57,15 @@ maintainer, never a line an agent adds.
 
 ## Why the two columns match
 
-Each process has its own systems of record and one read model over them, built only by
-watching: the record index over the plugin files and the source tree, the instance value over the mod
-manager's files. A command writes a file and forgets, so a change from another tool and a change from
+Each process has its own systems of record and one read model over them. Only watching builds
+the read model. In mEdit it is the record index, over the plugin files and the source tree. In
+Modbench it is the instance value, over the mod manager's files. A command writes a file and forgets, so a change from another tool and a change from
 Modbench are the same signal in both
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
-draws that signal on its own, because there is no separate path: it is the watch that opens
+draws that signal on its own, because it has no separate path. The watch opens
 [load-instance](traces/load-instance.d2) and [index-load-order](traces/index-load-order.d2), and the
-settle that opens [detect-external-change](traces/detect-external-change.d2). mEdit is always running, so no view has a mode
-for its absence; a disconnect is an error the views surface.
+settle opens [detect-external-change](traces/detect-external-change.d2). mEdit is always running, so
+no view has a mode for its absence. A disconnect is an error that the views surface.
 
 ## Rules the Modbench column draws
 

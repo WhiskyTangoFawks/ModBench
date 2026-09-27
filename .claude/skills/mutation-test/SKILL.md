@@ -1,6 +1,6 @@
 ---
 name: mutation-test
-description: Suite review — mutation testing as a third code-review axis. A triage subagent runs the mutation tool and returns review findings with recommended dispositions; mutation results are review target sites, never a bar to pass. Use only when explicitly requested — a full run costs real wall-clock time (current figures in stryker/stryker.md and stryker/stryker-js.md); dispatch or receive the Suite axis during an orchestrated review (/orchestrate), or review mutation results after a TDD implementation.
+description: Suite review — mutation testing as a third code-review axis. A triage subagent runs the mutation tool and returns review findings with recommended dispositions; mutation results are review target sites, never a bar to pass. Use only when explicitly requested — a full run costs real wall-clock time (current figures in stryker/stryker.md and stryker/stryker-js.md), or to review mutation results after a TDD implementation.
 ---
 
 The **Suite axis**: third axis of a code review, alongside `/code-review`'s Standards

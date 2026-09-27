@@ -12,8 +12,8 @@ file re-read, which is what lets the editor follow a mod change as it happens
 
 1. **A plugin is identified by `(origin, filename)`.** Once every plugin is indexed, one filename
    can name several plugins, so it cannot be the key. `origin` is the mod folder that provides
-   the file, with reserved values for the game's `Data/` directory and MO2's `overwrite/`;
-   vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component. A
+   the file, with reserved values for the game's `Data/` directory and MO2's `overwrite/`.
+   Vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component. A
    filename compares as the game compares it, ignoring case, on every platform.
 2. **The column is named `origin`, not `mod`.** The game's `Data/` folder and Overwrite are origins
    and not mods. An origin that is a mod is that mod's folder, where its repository lives.
@@ -38,7 +38,7 @@ file re-read, which is what lets the editor follow a mod change as it happens
 - **Register only the winning plugins and load overridden plugins on demand.** A second loading
   path and a second identity story for what is, to the user, the same gesture as a disabled
   plugin, and a mod-order change becomes a file re-read instead of a flag.
-- **Bare filename as identity**, the original key. It holds only while one physical file can
+- **Bare filename as identity.** It holds only while one physical file can
   answer to a name.
 - **Absolute path as identity.** Unstable across an instance move, unreadable, and it leaks the
   user's filesystem into every wire message.

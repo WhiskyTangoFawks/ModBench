@@ -707,7 +707,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         IndexFromBinary(held, index, plugin);
     }
 
-    // ADR-0005 rule 2: the binary reaches the index as documents, through the adapter's own door,
+    // ADR-0005 invariant 2: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
     private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {

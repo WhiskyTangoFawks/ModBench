@@ -5,7 +5,7 @@ developer already uses every day, an IDE with version control and tooling, for m
 Modbench is a VS Code extension, not a standalone application. That buys, free and open source:
 
 - the bulk of the UI, with every configuration and customization VS Code supports;
-- program lifecycle and Linux compatibility;
+- program lifecycle, on Windows and Linux alike;
 - a battle-tested base millions of people use daily;
 - VS Code's agent framework;
 - extensibility through other extensions.

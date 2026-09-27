@@ -32,8 +32,9 @@ first is the Mod watcher's, and it ends in the same tail.
 5. For each plugin it reads, one at a time, the Indexer reads the documents through the Source
    adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
    not. It takes the schema from the Codec, and writes the plugin's rows to the Store.
-6. After the last plugin, the Indexer takes the participating plugins from Load order state, winning,
-   and either listed and enabled or loaded by the game with no line (ADR-0013, invariant 3), and computes each FormKey's winner once.
+6. After the last plugin, the Indexer takes the participating plugins from Load order state and
+   computes each FormKey's winner once. A participating plugin is winning, and either listed and
+   enabled or loaded by the game with no line (ADR-0013, invariant 3).
 7. Through Ports, the Indexer publishes the index status at each plugin: reconciling, with the count
    done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
    The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3).

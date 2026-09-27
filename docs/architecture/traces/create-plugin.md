@@ -17,7 +17,7 @@ Diagram: [create-plugin.d2](create-plugin.d2). Catalog row: `create` under Plugi
    picked. The origin and the file name together are the plugin (ADR-0012, invariant 1).
 2. Commands takes the game release from the load order snapshot it holds.
 3. Commands asks the Plugin adapter for an empty plugin in that release: a header, no records and
-   no masters. The extension sets the header flags: `.esm` is a master, `.esl` is a light plugin,
+   no masters. The file extension sets the header flags: `.esm` is a master, `.esl` is a light plugin,
    and `.esp` is neither.
 4. The Plugin adapter writes the file whole or not at all, then forgets it.
 5. Commands answers applied, or the refusal. It changes nothing else: no `plugins.txt` line, no
@@ -32,7 +32,7 @@ This flow waits for no hand-off.
   flow is plugin sync in [update-load-order-file](update-load-order-file.d2), which adds the line
   at the end, disabled. Then [index-load-order](index-load-order.d2) indexes the plugin.
 - In a tracked mod, the Mod watcher finds a plugin that the mod's repository does not track. From
-  there the flow is [detect-external-change](detect-external-change.d2), which warns. Tracking
+  there the flow is [detect-external-change](detect-external-change.d2), which warns. Decompiling
   it is the user's gesture.
 
 ## Refusals
