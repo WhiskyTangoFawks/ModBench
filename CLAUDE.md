@@ -47,8 +47,9 @@ serves.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher
   one. A break report and a stop quote the texts at stake, name their levels and say what you
   built; the maintainer decides every change to their documents.
-- CONTEXT.md is the maintainer's vocabulary, outside the chain. Use its words, the reference tool's
-  words or plain words.
+- CONTEXT.md is the maintainer's modding vocabulary, outside the chain. Use its words, or the
+  reference tool's. A concept with neither is described, never named: when it needs a name, ask the
+  maintainer whether it has one and what it is.
 
 ## Rules that matter
 - Generalize across Bethesda games. Each bounded context's scan holds the game-name literals and namespaces; what no scan can hold is a design that assumes one game's shape, so an FO4-concrete path or fixture is a fixture choice and never a platform lock.
