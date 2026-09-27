@@ -14,8 +14,7 @@ A gesture this file has and the model cannot hold is a ticket.
 - **Gesture**: one thing the user does to an object. One row in the tables below, under the
   object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
 - **Exclude and hide**: to exclude is to mark an object durably on disk, so it is left out of
-  something until include clears the mark: a downloaded file out of its list, a mod's file out of
-  deployment. To hide is a view's own lens: it changes nothing on disk and ends with the window,
+  something until include clears the mark, as a downloaded file is left out of its list. To hide is a view's own lens: it changes nothing on disk and ends with the window,
   like hide excluded or a name filter.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
@@ -38,8 +37,8 @@ A gesture this file has and the model cannot hold is a ticket.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
-- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin
-  name or a FormKey. For a gesture that creates an object, it identifies the container, when the
+- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin,
+  as origin and file name, or a FormKey. For a gesture that creates an object, it identifies the container, when the
   entry point is on the container's row. A create from a title icon has none, and its container is
   an Option. It is the same on every surface that offers the gesture. Singular means the clicked
   row, and plural means the whole selection.
@@ -82,6 +81,8 @@ own item to the Argument.
 - **A gesture is atomic.** It does one thing the user intends, however many steps it takes inside. A
   chain of gestures the user already has, such as installing and then moving, is a script the user
   writes.
+- **An *all* variant is select all, then the gesture.** A gesture over a selection needs no
+  second gesture for everything.
 - **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
   can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
   command, not a second gesture.
@@ -214,8 +215,6 @@ Offered on Toolbox.
 |---|---|---|---|---|---|---|---|---|
 | open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
 | refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive, and it clears every unconfirmed mark (common.md, Unconfirmed writes). It is refused while another window holds the index. | load-instance |
-| log in | writes | Toolbox: dialog answer | - | - | - | MO2 settings | Store a Nexus API key in VS Code's secret storage. | - |
-| cancel | ? | Toolbox: context menu, key; Downloads: context menu, key | - | a running operation: a download, Track, a large copy | - | MO2 Downloads | Stop a running operation. | - |
 
 ## Profile
 
@@ -223,8 +222,7 @@ Offered on Toolbox. A Profile is part of the Instance.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| switch | writes | Toolbox: row click | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. With no Argument, a picker lists the profiles. | update-load-order-file |
-| create | writes | Toolbox: dialog answer | ? | source profile, or none | - | MO2 Profiles dialog | Create a profile, empty or copied from another. | - |
+| switch | writes | Toolbox: row click, context menu, key (Enter) | `modbench.profile.switch` | profile | - | MO2 profile combo | Change the active MO2 profile. With no Argument, a picker lists the profiles. | update-load-order-file |
 
 ## Mod
 
@@ -233,20 +231,14 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Mods: check box, key, context menu | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's line in `modlist.txt`. Enable all is select all, then this gesture. | update-load-order-file |
-| move | writes | Mods: drag, context menu | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end; top, bottom, priority N, first or last conflict | MO2 mod list | Move mods in mod order. | update-load-order-file |
+| move | writes | Mods: drag, context menu | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
-| rename | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | - |
-| create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | position | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
-| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | position; target mod, for an upgrade; reinstall from the recorded archive; installer: quick, manual or FOMOD | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | install-mod |
-| open details | reads | Mods: context menu; Plugins: context menu | - | mod, separator, or a plugin's origin mod | tab | MO2 mod list; MO2 plugin list | Open the mod details view. Its conflicts tab lists the conflicting mods and opens each one. | - |
-| highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | - |
-| exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. | - |
-| check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | - |
+| create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
+| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | install-mod |
 | track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git. It fires `decompile plugin`, which creates the mod's repository and commits the mod's own files, then each plugin's baseline as its own commit. A plugin row or an Editor column fires it for the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
-| open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in the native file tab, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
+| open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in VS Code's Explorer, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | Mods: context menu (mod has a Nexus id); Downloads: context menu (file has a Nexus id) | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
-| publish | writes | Mods: context menu | - | mod | - | none | Publish an update for a mod the user owns, through the Nexus API. | - |
 
 ## Separator
 
@@ -254,27 +246,23 @@ Offered on Mods. A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods; inside | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
+| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
 | rename | writes | Mods: context menu, key (F2) | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | update-load-order-file |
 | delete | writes | Mods: context menu, key (Delete) | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | update-load-order-file |
 
 ## Plugin
 
-Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offers the reduced mod set: open the origin folder and the origin's information. Tracking gates every edit. An untracked plugin is read-only in the Editor, whose column names Track, or decompile in a tracked mod, so each is offered where the user meets that refusal.
+Offered on Plugins. The Plugins surface shows a plugin's origin mod, and its origin. Tracking gates every edit. An untracked plugin is read-only in the Editor, whose column names Track, or decompile in a tracked mod, so each is offered where the user meets that refusal.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
-| move | writes | Plugins: drag, context menu | `modbench.plugin.move` | plugins | target: top, bottom, priority N. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
-| create | writes | Plugins: title icon | `modbench.plugin.create` | - | place: Overwrite or an enabled mod; a new mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
+| move | writes | Plugins: drag | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
+| create | writes | Plugins: title icon | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
 | compile | writes | Plugins: context menu (plugin tracked and editable); Editor: context menu (plugin tracked and editable) | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. A failed compile says so, and compiling again rebuilds the binary. | compile-plugin |
 | decompile | writes | Plugins: context menu (plugin in a tracked mod); Editor: context menu (column of a plugin in a tracked mod) | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
-| repair | writes | Plugins: context menu | - | plugins | - | none | Rewrite a malformed plugin into its canonical form. | - |
-| validate | reads | Plugins: context menu, automatic; Toolbox: context menu, automatic | - | plugins, or the instance | check kinds | xEdit navigator | Report problems in the Problems panel: structural, load order, missing assets. | - |
 | sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
-| reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the file explorer. | none |
-| highlight origin | reads | Plugins: automatic; Mods: automatic | - | plugins, or mods | - | MO2 plugin list | Selecting a plugin marks its origin mod and its masters. Selecting a mod marks the plugins it provides. | - |
-| rename | writes | Plugins: context menu | - | plugin | new name | none | Rename a plugin and its source tree. Updating the master reference in every dependent is a script. | - |
+| reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
 
 ## Record
 
@@ -282,17 +270,16 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field: a new one changes the record's FormKey and nothing else, and updating the records that reference it is a script. | edit-record |
+| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field: a new one changes the record's FormKey and nothing else, and updating the records that reference it is a script. | edit-record |
 | add element | writes | Editor: context menu | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container | xEdit navigator | Add a record to a plugin. | edit-record |
 | delete | writes | Plugins: context menu, key (Delete); Editor: context menu, key (Delete, on Referenced By) | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
-| copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride; destination plugins; replace, for a destination that holds the record; deep, for containers | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | edit-record |
+| copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | edit-record |
 | open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click, context menu, key (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
-| open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
-| filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
-| hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | - |
+| open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
+| filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 
 ## Referrer
 
@@ -310,14 +297,10 @@ Offered on Downloads.
 |---|---|---|---|---|---|---|---|---|
 | exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | update-load-order-file |
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | update-load-order-file |
-| download | writes | automatic | - | - | source: an nxm:// link | MO2 download manager | Fetch a mod file into `downloads/`. | - |
-| pause / resume | writes | Downloads: context menu, key | - | downloaded files (running downloads) | - | MO2 Downloads | Pause a running download, or resume it. | - |
 | open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | none |
-| query info | writes | Downloads: context menu | - | downloaded files | - | MO2 Downloads | Look a downloaded file up on Nexus by hash and fill its `.meta`. | - |
 | sort | reads | Downloads: title overflow | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | none |
 | show excluded | reads | Downloads: title icon | `modbench.downloadedFile.showExcluded`, `modbench.downloadedFile.hideExcluded` | - | - | MO2 Downloads | Show or hide the excluded downloaded files. | none |
-| reveal installed mod | reads | Downloads: context menu | - | downloaded file | - | none | Show the mod that a downloaded file was installed as. | - |
 
 ## System commands
 
@@ -325,9 +308,9 @@ Commands Modbench runs itself. No user starts them and no surface owns them, so 
 gesture and sit outside the object tables. The first column is the trigger that fires each one.
 Each is a command for the same reason a gesture is: one handler, and one identity. Each is
 registered under its Command ID, internal. A system command
-keeps one file in line with what is on disk. Its trigger is the instance value disagreeing with the
-disk, it takes the value as its Argument, and it writes the file once, in every direction the
-disagreement needs.
+keeps the disk and mEdit in line with the instance value. Its trigger is a disagreement between
+them. It takes the value, or the slice it needs, as its Argument, and it acts once, in every
+direction the disagreement needs.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
