@@ -6,13 +6,13 @@ user arrives fluent in it. [The xEdit UX audit](../research/xedit-ux-audit.md) a
 
 ## Strategic invariants
 
-1. **xEdit decides what, VS Code decides how**, as the principle *Mutagen's data, the reference's
-   behaviour, VS Code's interaction* says ([principles](../principles.md)). A departure from xEdit's
-   what needs a platform limitation or a maintainer ruling, and is on [the
-   register](../out-of-scope/xedit.md). Nicer, cleaner or more modern is not a reason. An xEdit
-   gesture that VS Code already provides, or that only repeats another, is an omission on the
-   register. Mod Management has no xEdit counterpart and follows MO2
-   ([ADR-0017](0017-mo2-is-the-reference-for-mod-management.md)).
+1. **xEdit decides the behaviour, VS Code decides the interaction.** This is the principle
+   *Mutagen's data, the reference's behaviour, VS Code's interaction* ([principles](../principles.md)),
+   applied to record editing. Every departure from xEdit's behaviour is a row on [the
+   register](../out-of-scope/xedit.md). A divergence changes the behaviour. Its reason is a platform
+   limitation, a principle ranked above this one, or a maintainer ruling. An omission leaves the
+   behaviour out. Its reason is a row of the register's *Omissions by reason* table. Mod Management
+   has no xEdit counterpart. It follows MO2 ([ADR-0017](0017-mo2-is-the-reference-for-mod-management.md)).
 2. **Baseline, not ceiling.** The rule governs replacing xEdit's answers, not adding what xEdit
    never had. An addition is opt-in behind an explicit affordance, the default stays xEdit's, no
    xEdit gesture or meaning is redefined to reach it, and where it overlaps xEdit's ground it
