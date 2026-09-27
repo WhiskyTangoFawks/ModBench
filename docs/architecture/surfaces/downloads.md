@@ -95,7 +95,6 @@ As a user, I want:
 2. To install only from the row menu. A double click, Enter or a drag onto the Mods view installs
    nothing. *mo2.md, Downloaded file*
 3. Copy value to copy each selected file's file name. *catalog `copy value`*
-4. Exclude on a file with no `.meta` to create one.
 
 ## Pickers and confirmations
 
@@ -126,7 +125,7 @@ target pick: candidates by Nexus id, always confirmed"). As a user, I want:
 5. Esc to install nothing. *Esc changes nothing*
 6. A new mod to go on to the name prompt, and an upgrade not to.
 
-What install then does is in [mods.md](mods.md), What install does.
+What install then does is in [mods.md](mods.md#what-install-does).
 
 ## Reporting
 

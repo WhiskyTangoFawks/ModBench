@@ -63,8 +63,9 @@ As a user, I want:
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The
    Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows
    need the game folder says so in its message line. One line in the Output. No notification; this
-   is the background tier. Rows that do not need the game folder still show, and mEdit keeps the
-   records it indexed. A configuration that names no game is story 2; no configuration is story 4. *ADR-0019, invariant 2*
+   is the background tier. Rows that do not need the game folder still show, and the records mEdit
+   shows stay as they were until the folder is found. A configuration that names no game is story
+   2; no configuration is story 4. *ADR-0019, invariant 2*
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing
    the last good read:" and the reason, with one line in the Output. No notification. The next
    good read clears it. *ADR-0015, invariant 7; ADR-0019, invariant 1*
@@ -114,6 +115,6 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | A gesture I started failed, or was refused | a notification saying why, and a line in the Output |
 | A gesture landed, but part of it failed, so a view would show something untrue | a notification naming the part that failed, and a line in the Output. The gesture is not reported as failed. |
 | A gesture over a selection landed for some items and failed for others | one notification naming each item that failed and why, and a line in the Output. The items that landed are not reported as failed. |
-| Something Modbench does on its own, such as a sync, fails | a line in the Output once, and again only when the reason changes |
+| Something Modbench does on its own, such as a sync, fails | the view's message line, and a line in the Output, once, and again only when the reason changes |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
 

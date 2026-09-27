@@ -46,8 +46,6 @@ As a user, I want:
 9. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
    is on screen.
 10. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
-11. Disabling a mod to drop its plugins' lines, and enabling it again to add them back at the
-    winning end: their place in plugin order is lost. *MO2; catalog `plugin sync`*
 
 ## A row
 
@@ -230,11 +228,10 @@ As a user, I want:
    what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod and the
    phase. *catalog `track`*
 2. `Edits` to track `source/` and `.gitignore`, and `Everything` every file except the plugin
-   binaries.
-3. The history to read as one commit `Track <mod>` with the mod's own files, then one baseline
-   commit per plugin, `Track Foo.esp 1.2.3`, with the trailers `Plugin`, `Upstream-Version` and
-   `Binary-SHA256`. A version the mod manager does not record is left out. *ADR-0007, invariants 2
-   and 6*
+   binaries. Neither tracks `meta.ini`. *ADR-0007, invariant 7*
+3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`,
+   `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out.
+   *ADR-0007, invariant 6*
 4. Each file's line endings kept as written.
 5. A track that refuses every plugin to leave no repository. A plugin refused part way leaves the
    commits before it, and the rest go on. This is an exception to *A failed gesture writes
@@ -256,38 +253,47 @@ As a user, I want:
 3. From the palette with no plugin, a pick of the tracked plugins. *No dead entries*
 4. A light plugin whose records fall outside the light range refused, naming the records and the
    remedies: clear the light flag, rename the plugin off `.esl`, or change the records' FormIDs.
-5. An interrupted compile of a localized plugin to be free to leave its strings written without its
-   binary. Compiling again fixes it. This is an exception to *A failed gesture writes nothing*.
+5. An interrupted compile to leave the old binary or the new one, and neither to read as changed
+   outside Modbench. A localized plugin can be left with its strings written without its binary.
+   Compiling again fixes it. This is an exception to *A failed gesture writes nothing*.
 
 ### Create record
 
-As a user, I want, on a group, a new record of that type with no prompt, and on a plugin a pick of the
-record type first. The new record is selected and opens in the record panel. *catalog `create`
-under Record, record type Option; xEdit selects what it adds* It takes the next free FormID that
-neither the working tree nor the last commit uses, and a fresh EditorID unique in the plugin. When
-no FormID is free, it is refused, naming the remedies: clear the light flag, or change a record's
-FormID.
+As a user, I want:
+
+1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type
+   first. The pick lists the types the game can create, and no container record. The new record is
+   selected and opens in the record panel. *catalog `create` under Record, record type Option;
+   xEdit selects what it adds*
+2. The new record to take the next free FormKey that neither the working tree nor the last commit
+   uses, and a fresh EditorID unique in the plugin.
+3. When no FormKey is free, a refusal naming the remedies: clear the light flag, or change a
+   record's FormID.
 
 ### Copy
 
-As a user, I want a pick of the mode, then a pick of the destination: the plugins I can edit, each
-with its load index. A destination that already holds a copy asks whether to replace it. Esc on
-either copies nothing. *catalog `copy`* A copy as new takes the next free FormID. Its child records
-get new FormKeys, a reference to itself follows it, and a container the destination lacks is
-created bare, as a Partial Form.
+As a user, I want:
+
+1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load
+   index. A destination that already holds a copy asks whether to replace it. Esc on either copies
+   nothing. *catalog `copy`*
+2. A copy as new to take the next free FormKey. Its child records get new FormKeys, a reference to
+   itself follows it, and a container the destination lacks is created bare, as a Partial Form.
+3. A copy as override into a plugin that loads before the source refused: that is an underride. A
+   cell or a worldspace copied as new refused.
 
 ### Delete
 
 As a user, I want one confirmation listing everything selected, saying the records leave their
-plugin source as working-tree changes I can review. *catalog `delete`; Confirm what destroys* The
-records that reference a deleted record are left as they are, and compile reports them.
+plugin source as working-tree changes I can review. A deleted record's referrers are left as they
+are, and compile reports them. *catalog `delete`; Confirm what destroys*
 
 ### Record filter
 
 As a user, I want a pick of the `.sql` files in my scripts folder, then "New filter…", which opens an
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
-that it is active and clears it. *catalog `filter`, query Option* A query that returns no FormKey
-column, or cannot run, is refused with the database's reason.
+that it is active and clears it. A query that returns no FormKey column is refused, and one that
+cannot run is refused with the database's reason. *catalog `filter`, query Option*
 
 ## Reporting
 
@@ -296,8 +302,8 @@ By [common.md](common.md#reporting). As a user, I want:
 1. When mEdit cannot read active plugins, one notification naming them, beside each row's
    status: my picture of my records would otherwise be wrong. *ADR-0019, invariant 1*
 2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
-   the result, with a line in the Output. When a folder cannot be listed, the reason in the view's
-   message line and the Output.
+   the result, with a line in the Output. When a folder cannot be listed, or the game folder is not
+   found, `plugins.txt` untouched, and the reason in the view's message line and the Output.
 3. Every message to name a gesture that exists and a view by its name.
 4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
    the plugins. It offers nothing to do. It comes once in a session for each new state of a

@@ -176,10 +176,9 @@ As a user, I want:
 
 Install is offered here and on Downloads (catalog `install`). As a user, I want:
 
-1. A new mod whose folder already exists refused, naming it and pointing at an upgrade. Install
-   never merges into a folder or replaces one by surprise.
+1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`
-   does. *catalog `mod sync`*
+   does.
 3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
    its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
 4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
@@ -200,9 +199,11 @@ By [common.md](common.md#reporting). As a user, I want:
 
 1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
    because the installer's own steps did not run. *ADR-0019, invariant 1*
-2. When `mods/` cannot be listed, the reason in the view's message line and the Output.
+2. When `mods/` cannot be listed, `modlist.txt` untouched, and the reason in the view's message line
+   and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported
-   as done: `mod sync` drops the line. This is an exception to *A failed gesture writes nothing*.
+   as done, with a line in the Output: `mod sync` drops the line. This is an exception to *A failed
+   gesture writes nothing*.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported
    as failed. The failed `.meta` write is a line in the Output.
 

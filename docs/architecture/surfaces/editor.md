@@ -47,9 +47,9 @@ FormKey alone when there is no EditorID. It holds no controls.
 ## The FormID
 
 As a user, I want the record's FormKey as the first row of the grid, under Record Header, with
-xEdit's label FormID. It edits as any field does. The FormID of an override is refused, naming its
-master: it changes where the record is native. A
-plugin header's FormID is read-only. *xedit.md, divergences 9 and 16*
+xEdit's label FormID. It edits as any field does. A plugin header's FormID is read-only, and an
+override's is refused, naming its master, where the record is native. *xedit.md, divergences 9 and
+16*
 
 ## Columns
 

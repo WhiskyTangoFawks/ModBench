@@ -25,10 +25,10 @@ disagrees with the views below it. *ADR-0015*
 | Row | Description | Icon | Tooltip | Click |
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
-
-The game folder is the one my setting names, else the one the mod manager's configuration names,
-else the game's install, found as Steam or Wine installs it.
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
+
+As a user, I want the game folder to be the one my setting names, else the one the mod manager's
+configuration names, else the one Modbench finds on this machine.
 
 ## States
 
