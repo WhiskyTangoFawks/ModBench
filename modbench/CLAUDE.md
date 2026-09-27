@@ -20,5 +20,3 @@ npx vitest run src/<box>   # skips the cross-cutting scans in src/test/; npm run
   `src/client/apiClient.ts` and `webview/src/types.ts` alias `components['schemas'][…]`, and
   a new wire field is a C# model change plus `/regenerate-api`. A hand-written type is a transform
   of the wire type, never a mirror of it.
-- A view's spec is its surface in `docs/architecture/surfaces/`; a gesture's contract is the trace
-  its row in `docs/architecture/commands.md` names.

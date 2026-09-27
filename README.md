@@ -151,8 +151,8 @@ The repo is set up to be worked on by people and coding agents alike:
 - [docs/adr/](docs/adr/) — decisions; [docs/out-of-scope/](docs/out-of-scope/) — the won't-do
   register; [docs/research/xedit-ux-audit.md](docs/research/xedit-ux-audit.md) — required reading
   before touching any record-editing interaction.
-- [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones), triage labels,
-  and how to consume the domain docs.
+- [docs/agents/](docs/agents/) — tracker conventions (GitHub issues and milestones) and triage
+  labels.
 
 The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed
 request/response for every operation, an index you can query with SQL, and edits that land as git
