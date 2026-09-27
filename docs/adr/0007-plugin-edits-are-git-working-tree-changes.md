@@ -15,10 +15,11 @@ the binary is a build artifact that compile regenerates from it.
    blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
 2. **A plugin is tracked when its plugin source is in a git repository in its mod's folder, and
-   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod and tracks every untracked plugin it holds; a plugin's row and its Editor column offer it for the plugin's mod. The
-   first plugin tracked in a mod creates the mod's repository. Each plugin is serialized, verified
-   by the round-trip gate over the tree it wrote, and committed to `main` as its own baseline
-   commit; the edit branch is checked out once, after the last. A repo destroyed outside Modbench reads as untracked the next time
+   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod and tracks every untracked plugin it holds; a plugin's row and its Editor column offer it for the plugin's mod. Each
+   plugin is serialized and verified by the round-trip gate over the tree it wrote. In a mod with
+   no repository, Track creates one and writes its `.gitignore`, then commits the mod's own files
+   and each plugin as its own baseline commit. In a mod that has a repository, Track writes each
+   plugin's source into the working tree, and the user commits it. A repo destroyed outside Modbench reads as untracked the next time
    anyone looks.
 3. **The source is complete, and a tracked plugin loads from it.** Ingest reads both the working
    tree and `HEAD`, and never consults the binary for content; an untracked plugin keeps the binary
@@ -37,8 +38,8 @@ the binary is a build artifact that compile regenerates from it.
 6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine upstream
    state on `main` and is edited on the edit branch, so `git diff main <branch>` is everything the
    user changed and checking out `main` and compiling restores the pristine plugin. An authored mod
-   merges into `main` at will. A baseline commit holds one plugin, so a Track or an update that
-   covers several plugins writes one commit per plugin. Its message follows git's convention. The
+   merges into `main` at will. A baseline commit holds one plugin, so a Track that covers several
+   plugins writes one commit per plugin. Its message follows git's convention. The
    plugin's version is two facts: the upstream version the mod manager records, which is
    informational, and the hash of the plugin's binary, which identifies it. The subject names the
    plugin and the upstream version, and the trailers carry both facts, read by humans and agents.

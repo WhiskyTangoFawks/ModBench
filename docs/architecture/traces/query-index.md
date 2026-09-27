@@ -29,7 +29,7 @@ nothing. The record types a game can create are the schema's answer, not the Sto
 | The plugin list | Plugins | Each plugin's statuses: master issues, parse failures, tracked or not, and whether the record filter leaves it a record. |
 | A record's comparison | the Editor | One column for each plugin the game loads (ADR-0013, invariant 3), with each field's value and its conflict states ([editor-conflicts.md](../surfaces/editor-conflicts.md)). |
 | The references to a record | Referenced By | Each referring record, and the loaded plugins that hold the reference, with the fields that hold it. A plugin the game does not load holds no reference, and neither does a condition parameter its function does not use (ADR-0005, invariant 7). |
-| A search by FormID or EditorID | the record picker | The matching records. |
+| A search by EditorID, FormID or FormKey | the record picker | The matching records. |
 | The record types a plugin's game can create | Plugins, create record's type pick | Each record type the game's schema can create, named as xEdit names it. |
 | A malformed plugin's diagnosis | Plugins | The reasons ingest recorded. |
 
