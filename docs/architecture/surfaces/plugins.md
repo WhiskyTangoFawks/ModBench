@@ -33,12 +33,12 @@ As a user, I want:
    says which they are. Until it does, a line that names one is an ordinary row. *MO2; ADR-0016,
    invariant 1; ruling*
 3. An overridden plugin, one the game does not load because another mod's plugin of the same name
-   wins, not to be a row. It stays indexed, and viewing it is deferred. *ADR-0012, invariant 5*
+   wins, not to be a row. It stays indexed. *ADR-0012, invariant 5*
 4. Every enabled plugin row to expand at any time. Expanding decides what it shows: its records,
    "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
    invariant 1*
-5. A disabled plugin to show no expander, because the game does not load its records. Viewing them
-   is deferred, as for an overridden plugin. *ruling; ADR-0013, invariant 3*
+5. A disabled plugin to show no expander, because the game does not load its records. *ruling;
+   ADR-0013, invariant 3*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
 7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
@@ -172,9 +172,9 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
-   Argument in the catalog says: enable or disable, compile, delete, copy and open take
-   the selection. Several records open each in a tab of its own, until #23 makes them one
-   comparison. *catalog Argument; commands.md, A selection is one gesture*
+   Argument in the catalog says: enable or disable, compile, delete, copy and open take the
+   selection. Several records open each in a tab of its own. *catalog Argument; commands.md, A
+   selection is one gesture*
 2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
    identity*
 3. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
@@ -277,11 +277,6 @@ As a user, I want:
 6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
    at Track. *ruling*
 
-### Other dialogs
-
-There is no offer to rebuild a binary after an interrupted compile: #977 cuts it. Compiling again
-is the recovery (compile-plugin, Failure).
-
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
@@ -294,19 +289,6 @@ By [common.md](common.md#reporting). As a user, I want:
    the reason in the view's message line and the Output. *update-load-order-file, plugin sync,
    stories 4 and 5; ruling*
 4. Every message to name a gesture that exists and a view by its name.
-
-## Deferred
-
-| What | Waits on |
-|---|---|
-| A plugin's tracked or untracked mark, and its file order decorations | #683, #578 |
-| Showing the plugins the game does not load | their design |
-| `move` from the menu, with its targets: top, bottom, priority N | the catalog's planned Options |
-| `highlight origin`, `open details` on a plugin's mod | their design |
-| `repair`, `validate`, `rename` | their design |
-| `create` in a new mod | its design |
-| `create` record inside a container | the catalog's planned Options |
-| A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 
 ## Test seam
 

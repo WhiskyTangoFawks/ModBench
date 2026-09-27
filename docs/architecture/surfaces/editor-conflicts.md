@@ -81,13 +81,6 @@ As a user, I want:
 3. Until mEdit has computed the conflicts for every plugin, the colours to be marked as not final.
    *[editor.md](editor.md), States, story 3; ADR-0019, invariant 1*
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| A record's own conflict state, ConflictCritical included, on its row in Plugins, as xEdit's navigator shows it | its design |
-| `hide no-conflict rows` | #250 |
-
 ## Test seam
 
 - **The panel, given mEdit's classification:** each row's background, collapsed and expanded, each

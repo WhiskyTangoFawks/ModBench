@@ -40,7 +40,7 @@ binary, no commit and no index (ADR-0007, invariant 4). Review and commit are gi
 | `create` | A new record of the chosen type, as a new file. Its FormID is the next free one that neither the working tree nor `HEAD` uses, and its EditorID is fresh and unique in the plugin. |
 | `delete` | The record's file is removed, or a child record leaves its container's document. The records that reference it are left as they are: compile reports them. |
 | `copy`, as override | The record's document lands in the destination plugin's source, under the same FormKey. A destination that already holds the record takes it only with the replace Option, as xEdit's copy as override with overwriting does. |
-| `copy`, as new | A duplicate lands in the destination under its next free FormID, with an EditorID derived from the source's and unique in the destination (#867). Its child records get fresh FormKeys, and a reference to itself follows it. A container the destination lacks is created bare, as a Partial Form. |
+| `copy`, as new | A duplicate lands in the destination under its next free FormID, with an EditorID derived from the source's and unique in the destination. Its child records get fresh FormKeys, and a reference to itself follows it. A container the destination lacks is created bare, as a Partial Form. |
 
 ## Hand-off
 
@@ -63,10 +63,10 @@ Commands refuses before it writes the record, and names the cause.
 | A value the codec rejects, naming the field | `edit field`, `add element` | Refuse, do not repair. |
 | Two elements with one key in a keyed array, naming the key | `edit field`, `add element` | The key is the element's identity. |
 | A read-only field, with the reason: the schema's, a Partial Form's own field, a container's child slots, the header's masters, or a plugin header's FormID | the element and field gestures | ADR-0005, invariant 6; ADR-0008. |
-| A record type that cannot be created, or a container record | `create` | Choosing a container's containment is planned (#462). |
+| A record type that cannot be created, or a container record | `create` | |
 | No free FormID is left, naming the remedies: clear the light flag in the header, or change a record's FormID | `create`, `copy` as new | |
 | The FormKey asked for is taken | `create`, `edit field` on the FormID | |
-| The destination loads before the source | `copy` as override | That is an underride, which is planned. |
+| The destination loads before the source | `copy` as override | That is an underride. |
 | The destination already holds the record, and the replace Option is not given, naming the destination | `copy` as override | Confirm what destroys: the surface asks, then supplies the Option. |
 | A cell or a worldspace | `copy` as new | |
 | The FormID of an override, naming its master | `edit field` | Change it where the record is native. |

@@ -162,17 +162,6 @@ edit as any record's. *xEdit; mEdit's answer*
 A plugin's header is a record, and reads and edits as one. Its masters are the Effective masters,
 and are never edited. *ADR-0008, invariant 2; catalog `edit field`*
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| More collapsed readings | #435 |
-| Setting the Partial Form flag | its design |
-| A Partial Form copy's EditorID and record flags editable, and its own values shown | mEdit's answer |
-| Colour and vector as structs of their parts, as xEdit shows them, with Alpha on the four colours xEdit gives one | mEdit's answer |
-| The picker's search limited to a field's record types when it allows several | mEdit's answer |
-| An alias number read as the alias's name | its design |
-
 ## Test seam
 
 - **A cell, given a field's schema and a column's value:** what it reads, its editor, what Ctrl+C

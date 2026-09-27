@@ -32,8 +32,7 @@ As a user, I want:
 2. Open to the side to open the record beside the tab I am in, pinned, so later clicks leave it
    alone. *catalog `open`, placement*
 3. A record already open in a tab of its own to be shown, not opened twice. *VS Code*
-4. Several records opened at once each to open in a tab of its own. *catalog `open`; #23 makes
-   them one comparison*
+4. Several records opened at once each to open in a tab of its own. *catalog `open`*
 5. The tab titled with the EditorID, or the FormKey when there is none. A plugin header's tab is
    titled with the plugin's file name. *catalog `open`: a plugin header is a record*
 6. Open from the palette, with no record given, to ask for one by FormID or EditorID. *catalog
@@ -60,8 +59,8 @@ As a user, I want:
 
 1. One column for each plugin the game loads that holds the record, in plugin order: the record's
    master on the left, the winning copy on the right. *xEdit; ADR-0013, invariant 3*
-2. A plugin the game does not load not to be a column: an overridden plugin, or a disabled
-   plugin. Showing them is deferred, as in Plugins. *ADR-0012, invariant 5; ruling*
+2. A plugin the game does not load not to be a column: an overridden plugin, or a disabled plugin.
+   *ADR-0012, invariant 5; ruling*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
    It stays collapsed while the tab is open. *ruling*
 4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
@@ -205,17 +204,6 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A refused edit to raise a notification that says why and names the field. The cell shows
    mEdit's value again. *common, Unconfirmed writes, story 6*
 2. A failed copy to the clipboard to say so. *ADR-0019, invariant 2*
-
-## Deferred
-
-| What | Waits on |
-|---|---|
-| Several records open as one comparison, with a column per record, and xEdit's grid items that work across them: remove from selected records, sort by this row, compare the records a row references | #23 |
-| `hide no-conflict rows` | #250 |
-| Showing a record in the plugins the game does not load: an overridden plugin, or a disabled plugin | their design, as in Plugins |
-| `copy` as underride, and deep copy of a container | the catalog's planned Options |
-| The record header's other rows, with the record flags, and Partial Form cleared there | mEdit's answer |
-| The fields in xEdit's order | mEdit's answer |
 
 ## Test seam
 

@@ -143,15 +143,6 @@ By [common.md](common.md#reporting). As a user, I want:
    line in the Output naming the `.meta` left behind. The row is gone and a lone `.meta` shows
    nothing, so no view is untrue. *common, Reporting; Which files are rows, story 5*
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| `download`, `pause / resume`, `cancel`, rows for unfinished downloads, the progress bar and a status-bar count | the Nexus download work |
-| `query info`, and MO2's "info incomplete" icon that offers it | the Nexus API work |
-| `reveal installed mod` | its design |
-| A position, the installer choice, reinstall | the catalog's planned Options |
-
 ## Test seam
 
 - **The view, given an instance value:** which rows exist, each row's parts, the order, and the

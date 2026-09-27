@@ -76,14 +76,6 @@ By [common.md](common.md#reporting). As a user, I want:
    *catalog `refresh`; ADR-0009*
 2. A failed refresh to stop there, re-reading nothing and sending nothing, and to say why.
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| `log in`, `cancel` | their design |
-| `create` a profile | its design |
-| `validate` the instance | its design |
-
 ## Test seam
 
 - **The view, given an instance value:** the rows and their parts, and the states, with no VS Code

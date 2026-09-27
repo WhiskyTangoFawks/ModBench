@@ -205,19 +205,6 @@ By [common.md](common.md#reporting). As a user, I want:
    because the installer's own steps did not run. *install-mod, new mod, story 3; ADR-0019,
    invariant 1*
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| A mod's file order conflicts: its status, its decoration and its contested files | the conflict UX design, #483 |
-| `rename` a mod, and F2 on a mod | its design |
-| `open details` and a double click that opens it, `highlight conflicts` | their design |
-| `exclude / include file` | #483: where a mod's files are shown |
-| `check for updates` and the update badge, `publish` | the Nexus API work |
-| move targets: top, bottom, priority N, first or last conflict; add separator above or inside | the catalog's planned Options |
-| install's position, installer choice and reinstall | the catalog's planned Options |
-| `open folder` in the native file tab, decorated by conflict status | #483 |
-
 ## Test seam
 
 - **The view, given an instance value:** the rows, their parents, each row's parts, the order in both

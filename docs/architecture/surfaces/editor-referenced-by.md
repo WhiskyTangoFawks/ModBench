@@ -99,14 +99,6 @@ As a user, I want:
 4. Copy and delete on the selected rows beneath a referrer, each acting on that plugin's copy, as in
    Plugins. *catalog `copy`, `delete`; xEdit's Referenced By menu*
 
-## Deferred
-
-| What | Waits on |
-|---|---|
-| What references several records at once | a query over several records |
-| Comparing the selected referrers | #23 |
-| References from record types mEdit does not index, such as landscape and navmesh | their indexing |
-
 ## Test seam
 
 - **The view, given the active record and mEdit's answer:** the title, the description, the rows,
