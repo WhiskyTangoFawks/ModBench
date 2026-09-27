@@ -6,35 +6,34 @@ Plugin, Profile and Downloaded file, and the system commands `mod sync` and `plu
 is in [mods.md](../surfaces/mods.md), [plugins.md](../surfaces/plugins.md),
 [toolbox.md](../surfaces/toolbox.md) and [downloads.md](../surfaces/downloads.md). Governed by
 [ADR-0003](../../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md),
+[ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md),
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md),
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md),
 [ADR-0016](../../adr/0016-mod-management-lives-in-the-extension.md) and
 [ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md).
 
-Every command here changes one instance file, and a folder where the table says so, then forgets
-it. The watch reads the change back, so a change from MO2 or any other tool takes the same path
-(ADR-0015, invariant 2).
+Every command here changes the instance files and folders the table names, then forgets them. The
+watch reads the change back, so a change from MO2 or any other tool takes the same path (ADR-0015,
+invariant 2).
 
 ## The flow
 
 1. A driving box sends the gesture to its Core box, with its Argument and Options. A system command
-   gets the instance value from the Instance loader as its Argument. No Core box reads the Instance
-   loader itself.
-2. For a move, plugins commands ask the mEdit client which masters each plugin has. An
-   unreachable mEdit answers that it cannot say.
-3. Under one lock per file, the Instance adapter reads the file as it is now and splices the
-   command's change through the file's codec: the mod manager's own, inside its implementation,
-   or the game's, for `plugins.txt`. Only the bytes the command names change: comments, blank lines, line endings, the byte
-   order mark and every line Modbench does not manage survive (ADR-0017, invariant 2). A result
-   equal to the file writes nothing.
-4. The Instance adapter replaces the file whole, through a temporary file and a rename, then
-   forgets it. It also makes, renames and trashes the folders the table names.
+   gets the instance value from the Instance loader as its Argument.
+2. For a move, plugins commands ask the mEdit client which masters each plugin has. When mEdit is
+   unreachable, the mEdit client answers that it cannot say.
+3. The Instance adapter reads the file as it is now and splices in the command's change through the
+   file's codec (ADR-0017, invariant 2). Only the bytes the command names change: comments, blank
+   lines, line endings, the byte order mark and every line Modbench does not manage survive. A
+   result equal to the file writes nothing.
+4. The Instance adapter replaces the file whole, then forgets it. It also makes, renames and
+   trashes the folders the table names.
 5. The Core box answers per item: applied, or the refusal.
 
 | Command | Core box | What changes |
 |---|---|---|
 | mod `enable` / `disable` | modlist commands | Each mod's line flips. |
-| mod `move` | modlist commands | The lines move as one block: into a separator as its first mods, or directly above a mod ([mods.md](../surfaces/mods.md)). |
+| mod `move` | modlist commands | The lines move as one block to the target ([mods.md](../surfaces/mods.md), Drag and drop). |
 | separator `add` | modlist commands | A line, and the folder `mods/<name>_separator/`: above a mod, which joins it, or after a separator's last mod. |
 | separator `rename` | modlist commands | The line, and the folder with it. |
 | separator `delete` | modlist commands | The line goes, and the folder goes to the trash. Its mods join the separator above, or become ungrouped. |
@@ -43,7 +42,7 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
 | `mod sync` | modlist commands | A line for each folder in `mods/` that has none, at the winning end, disabled. Each line whose folder is gone is dropped. One write. |
 | plugin `enable` / `disable` | plugins commands | Each plugin's line flips. |
 | plugin `move` | plugins commands | The lines move as one block. |
-| `plugin sync` | plugins commands | A line for each provided plugin that has none, at the end, disabled. Each line that nothing provides is dropped. One write. |
+| `plugin sync` | plugins commands | A line for each provided plugin that has none, at the winning end, disabled. Each line that nothing provides is dropped. One write. |
 | profile `switch` | instance commands | The selected profile in `ModOrganizer.ini`. |
 | downloaded file `exclude` / `include` | downloads commands | The file's `.meta` hidden flag, set or cleared. A file with no `.meta` gets one. |
 | downloaded file `delete` | downloads commands | The file goes to the trash, then its `.meta`. The mod it installed stays. |
@@ -52,8 +51,8 @@ A plugin is provided when a plugin file sits at the root of an enabled mod, in `
 the game folder. Provided decides `plugins.txt` lines only. It never decides which plugins mEdit
 indexes (ADR-0012). A plugin the game loads with no line never earns one, even when a mod ships a
 plugin of that name (ADR-0013, invariant 3). A disabled mod provides nothing, so disabling a mod
-drops its plugins' lines, and enabling it again adds them at the end: their place in plugin order
-is lost, as in MO2.
+drops its plugins' lines, and enabling it again adds them at the winning end: their place in plugin
+order is lost, as in MO2.
 
 When one write adds several lines, their order is not set, and no test may assert one. The user
 orders them.
@@ -61,8 +60,8 @@ orders them.
 ## Hand-off
 
 This flow waits for no hand-off. The Instance loader's watch reads the file back and builds the next
-value ([load-instance](load-instance.md)). Every view renders it, and a changed load order goes on
-to mEdit ([index-load-order](index-load-order.md)). A value that disagrees with the disk runs the
+value ([load-instance](load-instance.md)). Every view renders it, and the snapshot goes on to mEdit
+([index-load-order](index-load-order.md)). A value that disagrees with the disk runs the
 two syncs again, so an uninstalled mod's plugin line is dropped by `plugin sync`.
 
 ## Refusals
@@ -74,14 +73,13 @@ The Core box refuses before it writes, and names the cause.
 | The object has gone: a mod, a separator, a plugin line or a downloaded file, naming it | every gesture | A gone object is refused. |
 | A name another mod has, naming it | `create empty mod` | MO2 keys mods by name. |
 | A name another separator has, naming it | separator `add` and `rename` | MO2 keys separators by name. A separator's folder is `<name>_separator`, so a mod and a separator can share a name. |
-| A master below a plugin that depends on it, or a blueprint plugin before one that is not, naming both | plugin `move` | When mEdit cannot say, the move lands ([plugins.md](../surfaces/plugins.md)). |
+| A master after a plugin that depends on it, or a blueprint plugin before one that is not, naming both | plugin `move` | When mEdit cannot say, the move lands ([plugins.md](../surfaces/plugins.md)). |
 | A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
 | `mods/` cannot be listed | `mod sync` | Nothing is written. The reason goes to the Mods view's message line and the Output. |
 | A folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
 
-A system command reports a failure once when it begins, and again only when its reason changes
-([common.md](../surfaces/common.md), States, story 2).
+A system command reports a failure once when it begins, and again only when its reason changes.
 
 ## Failure
 
@@ -89,13 +87,12 @@ A failed write leaves the file as it was.
 
 Exceptions to commands.md's rules:
 
-- **A failed gesture writes nothing.** `uninstall` writes the folder, the line and the `.meta`. When
-  the line fails after the trash, the line names a folder that is gone, and `mod sync` drops it. A
-  failed `.meta` mark is a line in the Output, and the uninstall stands. A separator `delete` trashes
-  the folder first, then drops its line; when the line fails after the trash, the line names a
-  folder that is gone, and `mod sync` drops it. A downloaded file `delete`
-  whose `.meta` fails after the file leaves a lone `.meta`, which no view shows
-  ([downloads.md](../surfaces/downloads.md), Reporting).
+- **A failed gesture writes nothing.**
+  - `uninstall` and separator `delete` trash the folder, then drop the line. When the line fails
+    after the trash, it names a folder that is gone, and `mod sync` drops it.
+  - A failed `.meta` write after an uninstall is a line in the Output, and the uninstall stands.
+  - A downloaded file `delete` whose `.meta` fails after the file leaves a lone `.meta`, which no
+    view shows ([downloads.md](../surfaces/downloads.md), Reporting).
 
 ## Test seam
 

@@ -3,17 +3,15 @@
 Referenced By lists the records that reference the record I am looking at, so I can see what a
 change to it would reach before I make it. Its template is xEdit's Referenced By tab
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
-[xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
-[commands.md](../commands.md) under Record. It is a list, so [common.md](common.md) applies to it
-in full. The record panel it follows is [editor.md](editor.md)'s.
+[xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](../commands.md)
+under Record, Referrer and Every view. It is a list, so [common.md](common.md) applies to it in
+full. The record panel it follows is [editor.md](editor.md)'s.
 
 Each story cites its source. A story with no source is owned here.
 
 ## The view
 
-A native tree view in the Panel, beside Problems and Output, in its own container
-`modbenchReferencedBy`, and named "Referenced By". It is always there and never hides. *commands.md,
-Where surfaces live*
+A native tree view in the Panel, named "Referenced By". *commands.md, Where surfaces live*
 
 As a user, I want:
 
@@ -26,17 +24,17 @@ As a user, I want:
    shows a zero it has not confirmed. *xEdit*
 4. The description to name the record the list is about, then the name filter's term while one is
    active: `WeapLaserGun · "arm"`. *common, The name filter, story 5*
-5. Several rows selected at once, and a gesture to act on the whole selection. *common, A view,
-   story 6*
 
 ## The tree
 
 As a user, I want:
 
-1. One row for each record that references the active one, however many plugins hold the
-   reference: a referrer overridden in four plugins is one referrer, not four.
+1. One row for each referrer of the record the list is about, however many plugins hold the
+   reference: a referrer overridden in four plugins is one referrer, not four. *xedit.md,
+   divergence 15*
 2. Beneath a referrer, one row for each plugin that holds the reference, in plugin order: each is
-   one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xEdit*
+   one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xedit.md,
+   divergence 15*
 3. Only active plugins to count: a reference held only in plugins that are not active lists
    nothing and counts toward nothing. *ADR-0012*
 4. A reference counted only where its field is in use: a condition parameter its function does not
@@ -75,8 +73,6 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 2. With a record nothing references, the message "No references found."
 3. While mEdit is still indexing plugins, a message that the list may not be complete. *ADR-0019,
    invariant 1*
-4. The list to read again when mEdit reports a change to the records, from an edit of mine or from
-   any other tool. *ADR-0015, invariant 3*
 
 ## Menus and keys
 
@@ -91,18 +87,18 @@ The row menus follow VS Code's groups: open, change, copy, then destroy.
 
 As a user, I want:
 
-1. A click on a referrer to open it in the record panel's preview tab, which moves the list to it,
-   so following a chain of references is a series of clicks. *catalog `open`; xEdit*
+1. A click on a referrer to open it in the record panel's preview editor, which moves the list to
+   it, so following a chain of references is a series of clicks. *catalog `open`; xEdit*
 2. A click on a row beneath a referrer to select it and do nothing else.
-3. Copy value to copy each selected referrer as `EditorID [FormKey]`, one to a line. A row beneath a
+3. Copy value to copy each selected referrer as `EditorID [FormKey]`. A row beneath a
    referrer adds nothing. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 4. Copy and delete on the selected rows beneath a referrer, each acting on that plugin's copy, as in
    Plugins. *catalog `copy`, `delete`; xEdit's Referenced By menu*
 
 ## Test seam
 
-- **The view, given the active record and mEdit's answer:** the title, the description, the rows,
-  their order in both directions, and the states, with no VS Code UI.
+- **The view, given the record the list is about and mEdit's answer:** the title, the description,
+  the rows, their order in both directions, and the states, with no VS Code UI.
 - **Following:** given a sequence of focused tabs, opened and closed, the record the list is about.
 - **A gesture's entry:** given the clicked row and the selection, the Argument the command receives,
   and what copy value copies.

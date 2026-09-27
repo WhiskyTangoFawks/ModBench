@@ -858,8 +858,8 @@ describe('modbench.downloads tree', () => {
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 
-  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
-  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  // downloads.md, Which files are rows, story 1: `download_directory` can name a folder outside
+  // the instance. This proves VS Code's real watcher fires for one, not just that it was asked to.
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
     this.timeout(40000);
     if (!root) throw new Error('no open workspace');
@@ -1514,7 +1514,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
 // An enabled row is collapsible from launch (ADR-0002); launch/close changes its content on
-// expand, never its collapsibleState. A disabled row has no expander (plugins.md, A row story 5).
+// expand, never its collapsibleState. A disabled row has no expander (plugins.md, The tree,
+// story 5).
 
 // plugins.txt lines carry `plugin.name`; the game's implicitly-loaded masters carry `name`.
 function rowFields(row: unknown): { name?: unknown; plugin?: { name?: unknown; enabled?: unknown } } {
@@ -1709,7 +1710,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
   });
 
-  // plugins.md, A row story 5: the game does not load a disabled plugin's records, so its row
+  // plugins.md, The tree, story 5: the game does not load a disabled plugin's records, so its row
   // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();
@@ -2378,7 +2379,7 @@ describe('Progressive load', () => {
   });
 });
 
-// plugins.md, Reporting, story 1: a failed destination lookup says what failed and why, and the
+// common.md, Reporting: a failed destination lookup says what failed and why, and the
 // command resolves rather than escaping as VS Code's raw rejection toast.
 describe('Copy says why its destination lookup failed', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution

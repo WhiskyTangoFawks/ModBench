@@ -13,25 +13,23 @@ Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit fiel
 [ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-Every gesture here changes a tracked plugin's source in the working tree, and nothing else: no
-binary, no commit and no index (ADR-0007, invariant 4). Review and commit are git's.
+Every gesture here changes a tracked plugin's plugin source in the working tree, and nothing else:
+no binary, no commit and no index (ADR-0007, invariant 4). Review and commit are git's.
 
 ## The flow
 
 1. Plugins or the Editor sends the gesture to Commands, through the mEdit client and the HTTP
    endpoints: the records, each as its FormKey and its plugin's origin and file name, and the
-   gesture's Options. Each record lands or is refused on its own. A cause that no record can
-   escape refuses the whole selection once.
+   gesture's Options.
 2. Commands refuses a record whose plugin cannot take the write: see Refusals.
 3. The Source adapter reads the document that holds the record: its own, or its container's for a
    child record (ADR-0006, invariant 4).
 4. Commands applies the gesture to the document, as the table below says. The schema decides what
    a field may hold, and Commands adds no rule of its own (ADR-0005).
-5. The Source adapter puts each changed document whole, then forgets it. It names each file from
-   the document's identity and EditorID, and moves it when the name changes.
+5. The Source adapter puts each changed document whole, then forgets it.
 6. Commands answers per record: applied, with the new FormKey where there is one, or the refusal.
 
-| Gesture | What changes in the source |
+| Gesture | What changes in the plugin source |
 |---|---|
 | `edit field` | A field's value is set, or cleared to its default. A new function or Run On empties the condition parameters it leaves unused (ADR-0005, invariant 7). An edit of the FormID changes the record's FormKey and nothing else: the records that reference it, itself included, are left as they are, and updating them is a script. |
 | `add element` | An element is appended to an array: the value a drop supplies, or an element empty but for its kind. |
@@ -55,7 +53,7 @@ Commands refuses before it writes the record, and names the cause.
 | Refusal | Where | Why |
 |---|---|---|
 | The plugin is not tracked, naming Track | every gesture | An untracked plugin is read-only (ADR-0007, invariant 1). |
-| The plugin is in no mod, pointing at a patch plugin | every gesture | The game's plugins are not edited. |
+| The plugin is in no mod, pointing at a patch plugin | every gesture | A repository lives in a mod's folder. |
 | The plugin is not active | every gesture | A plugin that is not active is read-only (ADR-0012, invariant 5). |
 | The record has gone, naming it | every gesture | A gone object is refused. |
 | A field or element that is not there, or a move off either end, naming the path | the element and field gestures | |
@@ -79,4 +77,3 @@ commands.md has an exception.
 
 - **Commands:** given the records, the gesture, its Options and the source documents, the documents
   written, renamed and removed, or the refusal and nothing written for that record.
-- The views reading again is tested in [index-load-order](index-load-order.d2).

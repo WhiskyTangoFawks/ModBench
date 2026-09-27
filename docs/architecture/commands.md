@@ -20,21 +20,20 @@ A gesture this file has and the model cannot hold is a ticket.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
   objects.
-- **Where**: the entry points of the gesture, surface by surface, as `<surface>: <entry point>`
-  with a condition in brackets, separated by semicolons. It states the model, not the code. The
-  entry points are `context menu`, `title icon`, `title overflow`, `inline button`, `row click`, `key`
-  (a default chord goes in brackets), `drag`, `check box`, `webview message`, `dialog answer`, `code
-  action`, `code lens` and `automatic`. A gesture is absent, not refused, where its condition is false. Every
-  gesture is also in the command palette, unless it is marked internal. An **internal** command is
-  registered under its Command ID and has no entry point and no palette entry.
+- **Where**: the entry points of the gesture, surface by surface, as `<surface>: <entry point>` with
+  a condition in brackets, separated by semicolons. It states the model, not the code. The entry
+  points are `context menu`, `title icon`, `title overflow`, `row click`, `key` (a default chord
+  goes in brackets), `drag`, `check box`, `webview message` and `code lens`. A gesture is absent,
+  not refused, where its condition is false. Every gesture is also in the command palette, unless it
+  is marked internal. An **internal** command is registered under its Command ID and has no entry
+  point and no palette entry.
 - **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
   or a folder. `reads` when it only changes what the surface shows, or opens something. `runs`
   when it starts another program and writes nothing itself.
 - **Command ID**: the registered interface and the source of truth, which the code reflects. It is
   `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`,
-  `modbench.downloadedFile.delete`). `-` means the gesture has none. A toggle or opposite pair has one
-  ID per direction. A gesture every list view does to whatever it shows is `modbench.<verb>`, in
-  Every view.
+  `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does
+  to whatever it shows is `modbench.<verb>`, in Every view.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
@@ -51,15 +50,14 @@ A gesture this file has and the model cannot hold is a ticket.
   gesture: the row is an addition or a divergence, and needs a ruling.
 - **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
   drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
-  its specification is this row and its surface. Gestures whose arrows are the same share one
-  diagram. Beside each diagram, a `.md` file of the same name holds the contract: what the flow
+  its specification is this row and its surface. A trace's `.md` contract says what the flow
   promises, step by step, where it hands off, what it refuses, and what a failure leaves.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
 A toggle or an opposite pair (enable and disable, move up and move down) is one row with both
-directions, and both Command IDs. Any other gesture has one Command ID. A gesture that appears on several surfaces has one row, and each surface adapts its
-own item to the Argument.
+directions, and both Command IDs. Any other gesture has one Command ID. A gesture that appears on
+several surfaces has one row, and each surface adapts its own item to the Argument.
 
 ## Principles
 
@@ -69,7 +67,6 @@ own item to the Argument.
 - **The surface supplies the Argument. A picker supplies the Options.** A menu on an object passes
   the object. The gesture asks only for the Options the caller left out. A keybinding, a webview
   message or an agent call may supply all of them.
-- **One command per gesture.** A toggle or an opposite pair registers one for each direction.
 - **When to group.** Variants are one gesture when all four of these hold:
   1. The user names them with the same verb and a qualifier: "copy as", "move to", "open beside".
   2. The Argument has the same shape.
@@ -77,8 +74,8 @@ own item to the Argument.
   4. The result is the same kind of thing.
 
   A category word such as "edit" fails the first test, so its variants are separate gestures. An
-  opposite pair is one row with two entries, and it needs no picker. Gestures that share a flow share
-  a diagram; that does not merge them.
+  opposite pair needs no picker. Gestures that share a flow share a diagram; that does not merge
+  them.
 - **A gesture is atomic.** It does one thing the user intends, however many steps it takes inside. A
   chain of gestures the user already has, such as installing and then moving, is a script the user
   writes.
@@ -87,10 +84,10 @@ own item to the Argument.
 - **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
   can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
   command, not a second gesture.
-- **An entry point fires a gesture. A gesture does not fire another.** An entry point on any
-  surface may fire any gesture through the command registry. It passes the Argument and uses no
-  result, as a click on a plugin row opens its header. A gesture that needs another box's work as
-  a step, and acts on its outcome, calls that box through a reference the reference view draws.
+- **An entry point fires a gesture. A gesture does not fire another.** An entry point may fire any
+  gesture through the command registry. It passes the Argument and uses no result, as a click on a
+  plugin row opens its header. A gesture that acts on another box's outcome calls that box through
+  a reference the reference view draws.
 - **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb
   the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod"),
   or the verb alone for a gesture in Every view ("Modbench: Copy Value").
@@ -121,15 +118,13 @@ own item to the Argument.
   and deletes nothing, so it does not ask. No other gesture asks. A surface or a contract can name
   an exception, with its reason.
 - **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
-  reads the file back, and every view updates from the disk's next value. Until then, the thing the
-  gesture changed shows its result, marked unconfirmed, and nothing else in the view changes
-  (common.md, Unconfirmed writes). The disk's value always wins.
+  reads the file back, and every view updates from the disk's next value. common.md, Unconfirmed
+  writes, says what a view shows until then. The disk's value always wins.
 - **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing
   and says nothing.
 - **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts,
   stops or reloads it.
-- **One filter.** Every list has the same name filter. It stays until cleared, its term shows in the
-  view description, and the same slot clears it.
+- **One filter.** Every list has the same name filter (common.md, The name filter).
 - **Stay in the panel.** No click on the record panel moves the user out of it. A gesture that
   opens another tab is on the right-click menu.
 
@@ -163,7 +158,7 @@ reasons, and each reason is a row in the summary table of [xedit.md](../out-of-s
 - **Metadata chrome.** It annotates or organizes a list, and nothing in Modbench consumes it.
 - **Backups belong to git.**
 - **Manual file management.** It is a compound file operation, and the user does it by hand in VS Code.
-- **Maintainer ruling.** The gesture is unnecessary, and the ledger says why.
+- **Maintainer ruling.** The gesture is unnecessary, and its register row says why.
 - **Dead in the template.** It has no working handler there.
 
 A gesture that fits none of these stays in the tables. A new reason is added to the summary table
@@ -210,16 +205,12 @@ neither.
 
 ## Instance
 
-Offered on Toolbox.
-
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | open settings | reads | Toolbox: title overflow | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
-| refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index and re-read every source from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive, and it clears every unconfirmed mark (common.md, Unconfirmed writes). It is refused while another window holds the index. | load-instance |
+| refresh | writes | Toolbox: title icon | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the index, then re-read the instance from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the index. | load-instance |
 
 ## Profile
-
-Offered on Toolbox. A Profile is part of the Instance.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
@@ -227,7 +218,7 @@ Offered on Toolbox. A Profile is part of the Instance.
 
 ## Mod
 
-Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
+The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
@@ -236,14 +227,14 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod. An upgrade installs it over a mod with the same Nexus id, once the user confirms the target. A downloaded file supplies its own source. The Mods menu asks for one. | install-mod |
-| track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git. It sends `decompile plugin`, which creates the mod's repository and commits the mod's own files, then commits each plugin's baseline in a commit of its own. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
+| track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git: a repository, and a baseline commit for each plugin. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in VS Code's Explorer, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | Mods: context menu (mod has a Nexus id); Downloads: context menu (file has a Nexus id) | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
 
 ## Separator
 
-Offered on Mods. A separator is a row in mod order.
+A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
@@ -253,25 +244,24 @@ Offered on Mods. A separator is a row in mod order.
 
 ## Plugin
 
-Offered on Plugins. The Plugins surface shows each plugin's origin mod. Tracking gates every edit. An untracked plugin is read-only in the Editor. Its column names the gesture that makes it editable: Track, or decompile in a tracked mod. The user meets each gesture where the Editor refuses the edit.
-
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | Plugins: drag | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
 | create | writes | Plugins: title icon | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
-| compile | writes | Plugins: context menu (plugin tracked); Editor: context menu (plugin tracked) | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. A failed compile says so, and compiling again rebuilds the binary. | compile-plugin |
+| compile | writes | Plugins: context menu (plugin tracked); Editor: context menu (plugin tracked) | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
 | decompile | writes | Plugins: context menu (plugin in a tracked mod); Editor: context menu (column of a plugin in a tracked mod) | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
 | reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
 
 ## Record
 
-Offered on Plugins (the record children) and on Editor (the record panel and Referenced By). A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
+A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the
+palette only while one has focus.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field. A new FormID changes the record's FormKey and nothing else. Updating the records that reference it is a script. | edit-record |
+| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. | edit-record |
 | add element | writes | Editor: context menu | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
@@ -284,19 +274,15 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 
 ## Referrer
 
-Offered on Editor, in Referenced By. A referrer is a record, listed because it references the active record.
-
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | sort direction | reads | Editor: title icon (on Referenced By) | `modbench.referrer.sortAscending`, `modbench.referrer.sortDescending` | - | - | xEdit Referenced By | List referrers by record type, then label, or in reverse. | none |
 
 ## Downloaded file
 
-Offered on Downloads.
-
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files hidden in their `.meta`, or restore them. `show excluded` decides whether the list shows them. | update-load-order-file |
+| exclude / include | writes | Downloads: context menu | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files excluded in their `.meta`, or clear the mark. `show excluded` decides whether the list shows them. | update-load-order-file |
 | delete | writes | Downloads: context menu, key | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | update-load-order-file |
 | open | reads | Downloads: context menu | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open `.meta` | reads | Downloads: context menu (the file has a `.meta`) | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open a downloaded file's `.meta` in an editor tab. | none |
@@ -305,16 +291,15 @@ Offered on Downloads.
 
 ## System commands
 
-Commands Modbench runs itself. No user starts them and no surface owns them, so they have no
-gesture and sit outside the object tables. The first column is the trigger that fires each one.
-Each is a command for the same reason a gesture is: one handler, and one identity. Each is
-registered under its Command ID, internal. A system command
-keeps the disk and mEdit in line with the instance value. A disagreement between the instance
-value and the disk or mEdit triggers it. It takes the value, or the slice it needs, as its
-Argument. It acts once, in every direction the disagreement needs.
+Commands Modbench runs itself. No user starts them and no surface owns them, so they have no gesture
+and sit outside the object tables. The first column is the trigger that fires each one. Each is a
+command for the same reason a gesture is: one handler, and one identity. Each is registered under
+its Command ID, internal. A system command keeps the disk and mEdit in line with the instance value.
+A disagreement between the instance value and the disk or mEdit triggers it. It takes the value, or
+the slice it needs, as its Argument. It acts once, in every direction the disagreement needs.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | The snapshot changed: a plugin file appeared or disappeared, or a profile switch or a `modlist.txt` or `plugins.txt` edit changed the active plugins, from Modbench or another tool; or mEdit started | writes | `modbench.instance.putLoadOrder` | snapshot: every plugin in the instance, and the active plugins in load order | - | none | Hand mEdit the whole snapshot whenever it changes. The architecture calls it a PUT. | index-load-order |
 | The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | instance value | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. | update-load-order-file |
-| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |
+| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |

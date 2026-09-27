@@ -107,7 +107,7 @@ export class PluginNode extends vscode.TreeItem {
     this.id = rowIdentity(this.kind, { name: plugin.name, origin });
     this.contextValue = `plugin ${plugin.enabled ? 'enabled' : 'disabled'}`;
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
-    // plugins.md, Menus and keys, story 4: the game loads no disabled plugin's records, so a click
+    // plugins.md, Menus and keys, story 2: the game loads no disabled plugin's records, so a click
     // on its row only selects it.
     if (plugin.enabled) this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
@@ -521,7 +521,7 @@ export class PluginsTreeProvider
     return element;
   }
 
-  // plugins.md, A row story 5: a disabled plugin's records are not the game's to load, so there
+  // plugins.md, The tree, story 5: a disabled plugin's records are not the game's to load, so there
   // is nothing behind the row to expand into.
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
     if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
@@ -584,7 +584,7 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // plugins.md, Menus and keys, story 6: compile on a tracked, editable plugin.
+  // commands.md, Plugin, Where: compile on a tracked, editable plugin.
   private compilable(file: string, origin: string): boolean {
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;

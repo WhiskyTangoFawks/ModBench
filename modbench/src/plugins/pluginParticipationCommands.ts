@@ -6,7 +6,7 @@ import { setPluginsEnabled, type PluginParticipation, type PluginsSelectionResul
 import type { Reporter } from '../ports/reporter';
 
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
-// (plugins.md, Menus and keys, story 5 — behaves as in Mods).
+// (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,

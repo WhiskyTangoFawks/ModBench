@@ -3,10 +3,9 @@
 The Toolbox shows the instance itself: which game it is for and which profile is active, with the
 gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
-[mo2.md](../../out-of-scope/mo2.md) says why (divergence 1: VS Code has no container title bar, so
-the Toolbox is a view of its own). Its gestures are in [commands.md](../commands.md) under Instance
-and Profile; what each one writes is in its trace. What every view shares is in
-[common.md](common.md).
+[mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in
+[commands.md](../commands.md) under Instance and Profile; what each one writes is in its trace. What
+every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -25,19 +24,15 @@ disagrees with the views below it. *ADR-0015*
 
 | Row | Description | Icon | Tooltip | Click |
 |---|---|---|---|---|
-| Game | the game the instance is for, as MO2's configuration names it | `$(game)` | the game folder | none |
+| Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
-
-The Instance adapter reads which game the instance is for from the mod manager's configuration, and
-where its folder is from the game folder setting, then the configuration's game path, then the Steam
-install. The Instance loader carries both in the instance value. When either fails, the Toolbox
-shows it as [common.md](common.md#states) says, stories 2, 4 and 5.
 
 ## States
 
-The states every view shares are in [common.md](common.md#states). With no folder open, or a folder
-that is not an instance, the Toolbox says so in place of its rows, as every view does, and its title
-bar's gestures are absent. *common, States, story 4; No dead entries*
+The states every view shares are in [common.md](common.md#states). As a user, I want:
+
+1. With no game folder, the Game row to show `$(warning)` and "game folder not found", with a
+   tooltip naming each place Modbench looked and the setting that fixes it.
 
 ## Menus and keys
 
@@ -47,25 +42,17 @@ bar's gestures are absent. *common, States, story 4; No dead entries*
 | Profile menu | switch |
 | Keys | Enter: the row's gesture, as a click does. |
 
-As a user, I want:
-
-1. Refresh to rebuild every read model from disk, the index included, as one gesture for all of
-   Modbench. It is a safety net, never how a change normally arrives. *catalog `refresh`; ADR-0015*
-2. Open settings to open VS Code's Settings on Modbench's own. *catalog `open settings`; mo2.md:
-   VS Code provides the settings*
-
 ## Pickers, prompts and confirmations
 
 ### Switch profile
 
 As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to
-it, and every view follows through the watch; Esc switches nothing. *catalog `switch`;
-update-load-order-file, profile switch*
+it; Esc switches nothing. *catalog `switch`; update-load-order-file, profile switch*
 
 ### Refresh
 
 As a user, I want no confirmation, and the view's progress bar while it runs. *Confirm what destroys:
-refresh destroys nothing on disk*
+refresh deletes only derived state, and rebuilds it*
 
 ## Reporting
 
@@ -74,7 +61,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A refresh refused because another window holds the index to say "This instance's index is open
    in another Modbench window", and to name the instance. Modbench cannot name the other window.
    *catalog `refresh`; ADR-0009*
-2. A failed refresh to stop there, re-reading nothing and sending nothing, and to say why.
+2. A failed refresh to say why. *load-instance*
 
 ## Test seam
 

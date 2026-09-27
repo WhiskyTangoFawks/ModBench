@@ -17,16 +17,17 @@ or an installed mod the user confirmed. Install never infers the target from dis
 
 1. Downloads or Mods sends `install` to the install box: the source, the target, and, for a
    downloaded file, what its `.meta` knows: the Nexus mod ID, the file ID and the version.
-2. The install box refuses a new mod whose folder exists, and an upgrade whose folder has gone. It
-   checks here whatever the prompt checked, because the disk can change in between.
+2. The install box checks the target again, because the disk can change after the prompt: see
+   Refusals.
 3. Through the Instance adapter, it stages the source in a folder on the same volume as
    `mods/`: it extracts an archive, or copies a folder.
 4. It finds the mod's root: a `Data/` folder, or the level that holds the plugins and asset
-   folders, below any single wrapper folder. A FOMOD installer is found and flagged. Its steps do
+   folders, below any single wrapper folder. The install box flags a FOMOD installer. Its steps do
    not run, and its files stay as they are.
-5. It writes `meta.ini` through the Instance adapter: the game, the Nexus mod ID, the version, the installation
-   file and the installed files. On an upgrade, a key the source does not know keeps its old value,
-   so an unknown version never blanks a known one. Every key install does not own survives.
+5. It writes `meta.ini` through the Instance adapter: the game, the Nexus mod ID, the version, the
+   installation file and the installed files. On an upgrade, a key the source does not know keeps
+   its old value, so an unknown version never blanks a known one. Every key install does not own
+   survives.
 6. The mod lands:
    - **A new mod.** `meta.ini` is written in the staged tree first. Then one rename moves the tree
      into `mods/<name>`, so the folder is never seen half built.
@@ -64,14 +65,14 @@ The install box refuses before it writes to `mods/`, and names the cause.
 ## Failure
 
 - **A new mod.** A failure before the rename leaves `mods/` as it was.
-- **The `.meta` mark.** A failed mark is a line in the Output, and the install stands
+- **The `.meta` flag.** A failed `.meta` write is a line in the Output, and the install stands
   ([downloads.md](../surfaces/downloads.md), Reporting).
 
 Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** An upgrade that fails after the old files are removed is not
-  rolled back. It says so, naming the folder and what failed. Installing the downloaded file again is the
-  recovery, and a tracked mod's source stays in git.
+  rolled back. It says so, naming the folder and what failed. Installing the downloaded file again
+  is the recovery, and a tracked mod's plugin source stays in git.
 
 ## Test seam
 

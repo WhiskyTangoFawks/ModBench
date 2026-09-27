@@ -71,7 +71,7 @@ function copyValueLine(row: CopiedRow): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
 
-/** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 8).
+/** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 5).
  *  `undefined` unless `clicked` is a Plugins row or the Plugins key's args, so another view's
  *  invocation defers. */
 export function pluginsCopyValueText(

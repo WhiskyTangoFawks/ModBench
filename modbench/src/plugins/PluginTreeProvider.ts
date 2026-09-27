@@ -60,7 +60,7 @@ export interface PluginConditions {
 const NOT_EDITABLE: PluginConditions = { tracked: false, editable: false };
 
 // The contextValues state, on the row, refusals the backend would otherwise reach only after
-// walking the whole gesture (plugins.md, Menus and keys, story 7).
+// walking the whole gesture (plugins.md, Menus and keys, story 4).
 function conditionedContextValue(kind: string, conditions: PluginConditions): string {
   return `${kind} ${conditions.tracked ? 'tracked' : 'untracked'}${conditions.editable ? ' editable' : ''}`;
 }
@@ -543,7 +543,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  // Every interior cell in one call (plugins.md, The tree, story 10).
+  // Every interior cell in one call (plugins.md, The tree, story 9).
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(node.plugin, node.origin),
