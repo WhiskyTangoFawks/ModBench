@@ -100,8 +100,8 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Drag a record onto a reference field | Navigator drag, View drop | Platform |
 | Stick to (a view preference) | View grid | Maintainer ruling |
 | Create a ModGroup from columns (ModGroups are dropped as a feature) | View grid: Ctrl+M | Maintainer ruling |
-| Select all rows and sort in Referenced By | Referenced By | VS Code provides it |
-| Jump to a record; back and forward history | Jump to, Back, Forward | VS Code provides it |
+| Select all rows in Referenced By | Referenced By | VS Code provides it |
+| Back and forward history | Back, Forward | VS Code provides it |
 | Follow a FormID in a message | Messages: Ctrl + double click | VS Code provides it |
 | Mark modified | Navigator, Referenced By: Mark Modified | An ADR decides it |
 | Copy idle animations (games up to FNV) | Navigator | Game-specific |

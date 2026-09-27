@@ -70,7 +70,8 @@ The Core box refuses before it writes, and names the cause.
 | Refusal | Where | Why |
 |---|---|---|
 | The object has gone: a mod, a separator, a plugin line or a downloaded file, naming it | every gesture | A gone object is refused. |
-| A name another mod or separator has, naming it | `create empty mod`, separator `add` and `rename` | MO2 keys both by name. |
+| A name another mod has, naming it | `create empty mod` | MO2 keys mods by name. |
+| A name another separator has, naming it | separator `add` and `rename` | MO2 keys separators by name. A separator's folder is `<name>_separator`, so a mod and a separator can share a name. |
 | A master below a plugin that depends on it, or a blueprint plugin before one that is not, naming both | plugin `move` | When mEdit cannot say, the move lands ([plugins.md](../surfaces/plugins.md)). |
 | A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
