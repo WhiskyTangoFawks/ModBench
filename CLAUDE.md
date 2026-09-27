@@ -41,9 +41,10 @@ serves.
 - Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect:
   fix it. Everything the list below does not name is tactical: decide it, and give the reason in
   the commit message.
-- Stop and ask when the work adds or changes a gesture or a view state no spec draws, needs a
-  module, arrow, port, payload, public type or project reference `docs/architecture/` does not
-  draw, or meets two documents at one level that disagree.
+- Stop and ask when the work adds or changes a gesture, an entry point, or a state, row or status a
+  view shows that no spec draws; needs a module, arrow or port `docs/architecture/` does not draw,
+  or an interface item a box's caption does not list; or meets two documents at one level that
+  disagree.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher
   one. A break report and a stop quote the texts at stake, name their levels and say what you
   built; the maintainer decides every change to their documents.
