@@ -24,7 +24,7 @@ A gesture this file has and the model cannot hold is a ticket.
   with a condition in brackets, separated by semicolons. It states the model, not the code. The
   entry points are `context menu`, `title icon`, `title overflow`, `inline button`, `row click`, `key`
   (a default chord goes in brackets), `drag`, `check box`, `webview message`, `dialog answer`, `code
-  action` and `automatic`. A gesture is absent, not refused, where its condition is false. Every
+  action`, `code lens` and `automatic`. A gesture is absent, not refused, where its condition is false. Every
   gesture is also in the command palette, unless it is marked internal. An **internal** command is
   registered under its Command ID and has no entry point and no palette entry.
 - **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
@@ -115,7 +115,8 @@ own item to the Argument.
 - **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
   message.
 - **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
-  selection. Any other gesture does not ask. A contract names an exception.
+  selection. Any other gesture does not ask. A surface or a contract names an exception, and its
+  reason.
 - **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
   reads the file back, and every view updates from the disk's next value. Until then, the thing the
   gesture changed shows its result, marked unconfirmed, and nothing else in the view changes
@@ -236,9 +237,9 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | rename | writes | Mods: context menu, key | - | mod | - | MO2 mod list | Rename a mod's folder and its name in every profile's `modlist.txt`. | - |
 | create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | position (planned) | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | position (planned); target mod, for an upgrade; reinstall from the recorded archive (planned); installer: quick, manual or FOMOD (planned) | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | install-mod |
-| open details | reads | Mods: context menu, double click; Plugins: context menu, double click | - | mod, separator, or a plugin's origin mod | tab | MO2 mod list; MO2 plugin list | Open the mod details view. Its conflicts tab lists the conflicting mods and opens each one. | - |
+| open details | reads | Mods: context menu; Plugins: context menu | - | mod, separator, or a plugin's origin mod | tab | MO2 mod list; MO2 plugin list | Open the mod details view. Its conflicts tab lists the conflicting mods and opens each one. | - |
 | highlight conflicts | reads | Mods: automatic; Plugins: automatic | - | mods | - | MO2 mod list | Mark the mods that conflict with the selection. | - |
-| exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. It does not change what any list shows. | - |
+| exclude / include file | writes | Mods: context menu | - | files in a mod | - | MO2 Information dialog, Conflicts tab; MO2 mod list | Keep a file out of the deployed Data folder by renaming it with MO2's `.mohidden` suffix, or restore it. | - |
 | check for updates | writes | Mods: context menu | - | mods (all, or the selection) | - | MO2 mod list | Ask Nexus for the latest version of each mod and set the update badge. | - |
 | track | writes | Mods: context menu (mod holds an untracked plugin); Plugins: context menu (plugin untracked, in a mod); Editor: context menu (column of an untracked plugin in a mod) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put every untracked plugin the mod holds under git. It fires `decompile plugin` with the repository as the destination: it creates the repository if the mod has none, commits each plugin's baseline to `main` as its own commit, and checks out the edit branch. A plugin row or an Editor column fires it for the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
@@ -275,18 +276,18 @@ Offered on Plugins. The Plugins surface shows a plugin's origin mod, so it offer
 
 ## Record
 
-Offered on Plugins (the record children) and on Editor (the record panel and Referenced By). Following xEdit, create and filter are Plugins only; field gestures are Editor only; the rest are on both. A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
+Offered on Plugins (the record children) and on Editor (the record panel and Referenced By). A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
 | edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field: a new one changes the record's FormKey and nothing else, and updating the records that reference it is a script. | edit-record |
-| add element | writes | Editor: context menu, key | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
-| remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | elements | - | xEdit View grid | Remove an element from an array field. | edit-record |
+| add element | writes | Editor: context menu | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
+| remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container (planned) | xEdit navigator | Add a record to a plugin. | edit-record |
 | delete | writes | Plugins: context menu, key (Delete); Editor: context menu, key (Delete, on Referenced By) | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new, override, underride (planned); destination plugins; replace, for a destination that holds the record; deep, for containers (planned) | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | edit-record |
-| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own; one comparison over several is planned (#23). A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | query-index |
+| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click, context menu, key (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own; one comparison over several is planned (#23). A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by FormID or EditorID. | query-index |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query source: input box, or a document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 | hide no-conflict rows | reads | Editor: context menu | - | - | - | xEdit View grid | Collapse the compare grid to the rows that conflict. A toggle. | - |
