@@ -1,5 +1,5 @@
 # deploy
 
-deploy commands. Projects the winning files into Game Data/ and takes them back out, with the
-instance value as an argument: it decides which files to hardlink and writes the hardlinks and the
-manifest. The Instance adapter writes no deployment.
+deploy commands. Deploys and purges, with the winners as an argument: it hides the rules that
+refuse a deploy, and hands the deployment adapter what to write and what to remove. It decides no
+winner, which is the instance's, and names no deployment model, which is the adapter's.
