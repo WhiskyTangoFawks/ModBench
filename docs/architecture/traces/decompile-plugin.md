@@ -13,7 +13,7 @@ Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under
 inverse of `compile`. Two gestures send it: `track` in a mod with no repository, and `decompile` in
 a tracked mod.
 
-## The command
+## The flow
 
 1. Plugins sends `decompile plugin` to Commands, through the mEdit client and the HTTP endpoints:
    the plugins, each as origin and file name, and, from `track`, the preset. Each plugin carries its mod's
@@ -71,12 +71,11 @@ Commands names the cause.
 
 ## Failure
 
-No rollback beyond git's: each commit is its own unit (ruling: git handles it).
+Each commit is its own unit, and nothing rolls back.
 
 - A refused plugin leaves nothing of its own. The plugins committed before it stay committed, and
   the rest go on.
-- When Commands refuses every plugin, it writes nothing. The Source adapter creates the repository
-  only once the first plugin passes its check.
+- When Commands refuses every plugin, it writes nothing.
 
 Exceptions to commands.md's rules:
 

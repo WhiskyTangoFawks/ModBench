@@ -6,9 +6,8 @@ over two templates: its plugin rows follow MO2's plugin list
 them follow xEdit's navigator
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)). Where it departs,
 [mo2.md](../../out-of-scope/mo2.md) and [xedit.md](../../out-of-scope/xedit.md) say why. Its
-gestures are in [commands.md](../commands.md) under Plugin and Record; what
-each one writes is in its trace. What every view shares is in
-[common.md](common.md).
+gestures are in [commands.md](../commands.md) under Plugin and Record, `track` under Mod, and Every
+view; what each one writes is in its trace. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -17,20 +16,18 @@ Each story cites its source. A story with no source is owned here.
 A native tree view, `modbench.pluginListTree`, third in the `modbench` container and open by
 default (commands.md, Where surfaces live). It has Collapse All (Chrome). Its plugin rows need only
 the instance value. What a row holds beneath it needs mEdit, and no view has a mode for mEdit's
-absence
-([ADR-0002](../../adr/0002-mod-management-and-editing-are-one-tool.md), invariant 2).
+absence ([ADR-0002](../../adr/0002-mod-management-and-editing-are-one-tool.md), invariant 2).
 
-The view's description shows the name filter's term and the record filter's source while each is
-active: `"arm" · records: armor.sql`.
+The view's description shows the name filter's term and the record filter's source, never its SQL,
+while each is active: `"arm" · records: armor.sql`.
 
 ## The tree
 
 As a user, I want:
 
-1. One row for each line of the active profile's `plugins.txt`, in its order, first loaded at the
-   top. *MO2*
-2. The plugins the game loads with no line at the losing end, before every line, locked. *MO2;
-   ADR-0013, invariant 3*
+1. One row for each line of the active profile's `plugins.txt`, in its order. *MO2*
+2. The plugins the game loads with no line at the losing end, before every line. *MO2; ADR-0013,
+   invariant 3*
 3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed.
    *ADR-0012*
 4. Every active plugin row to expand at any time. Expanding decides what it shows: its records,
@@ -39,17 +36,16 @@ As a user, I want:
 5. A disabled plugin to show no expander, because it is not active. *ADR-0012, invariant 5*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
-7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
+7. Beneath a group, its records, in FormID order. A container record holds its children directly, as xEdit folds a
    record's child group into the record: a worldspace holds its persistent cell and its blocks, a
    block its sub-blocks, a sub-block its cells, a cell its persistent and temporary placed
    references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
    responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
 8. A row with nothing beneath it to show no expander, and an empty group of placed references not to
    be a row. *xEdit*
-9. Beneath a group, the records in FormID order. *xEdit*
-10. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
-    is on screen.
-11. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
+9. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
+   is on screen.
+10. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
 
 ## A row
 
@@ -61,10 +57,10 @@ As a user, I want:
 | Check box | checked when its line is enabled | MO2 |
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |
-| Tooltip | the file name, the mod it comes from, "read-only" when its records cannot be edited, and a line for each status | ADR-0012, invariant 3 |
+| Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, and a line for each status | ADR-0012, invariant 3 |
 | Identity | the row's kind and the plugin, as (origin, filename) | ADR-0012, invariant 1 |
 
-A plugin's statuses, the first in this order sets the icon, and the tooltip lists every one:
+A plugin's statuses follow. The first that holds, in this order, sets the icon:
 
 | Status | When | Icon | Words |
 |---|---|---|---|
@@ -74,13 +70,14 @@ A plugin's statuses, the first in this order sets the icon, and the tooltip list
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
-A master issue never disables the plugin or cascades to its dependants: the check box stays as I set
-it (ADR-0012, invariant 4). Before the snapshot is indexed, a plugin has no master verdict, so no
-badge means not yet asked. A later snapshot keeps the last statuses, and the rows the record
-filter hides, until the new ones land. A malformed plugin's reasons are also in the
-Problems panel, on the plugin file. *ADR-0019* A plugin that changed outside Modbench is also a
-warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last
-wrote. *detect-external-change*
+- A master issue never disables the plugin or cascades to its dependants. The check box stays as I
+  set it. *ADR-0012, invariant 4*
+- Before the snapshot is indexed, a plugin has no master status, and none means not yet asked.
+- A later snapshot keeps the last statuses until the new ones land.
+- A malformed plugin's reasons are also in the Problems panel, on the plugin file. *commands.md,
+  Surfaces and their templates*
+- A plugin that changed outside Modbench is also a warning in the Problems panel, on the plugin
+  file, while its bytes differ from what Modbench last wrote. *detect-external-change*
 
 ### A plugin the game loads with no line
 
@@ -91,7 +88,7 @@ wrote. *detect-external-change*
 | Icon | `$(lock)` | |
 | Tooltip | "This plugin can't be disabled or moved (enforced by the game)." | MO2's wording |
 
-It cannot be dragged. A `plugins.txt` line that names one is not a second row.
+A `plugins.txt` line that names one is not a second row.
 
 ### Record-type group
 
@@ -127,25 +124,24 @@ record's. *xEdit*
 
 As a user, I want:
 
-1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows to
-   winning at the top. It never changes which plugin wins: the locked plugins stay at the losing
-   end, at the bottom when winning is at the top, and the groups and records beneath keep their
-   order. *common, A view, story 7; MO2's priority sort*
+1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The
+   plugins the game loads with no line stay at the losing end. The groups and records beneath keep
+   their order. *common, A view, story 7; MO2's priority sort*
 2. The name filter to match plugin rows. *common, The name filter*
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
-   becomes a clear icon while it is active, and the view's description names its source, never its
-   SQL. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
-4. A plugin with no record left under the record filter hidden while the record filter is active.
+   becomes a clear icon while it is active. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
+4. A plugin with no record left under the record filter hidden while the record filter is active. A
+   later snapshot keeps the rows the record filter hides until the new ones land.
 
 ## States
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no lines and no plugins the game loads on its own, a message saying so, in the view's
+1. With no lines and no plugins the game loads with no line, a message saying so, in the view's
    message line.
 2. While mEdit starts and indexes, the view's progress bar under its title, and every plugin row
    already there. A row whose plugin is not indexed yet expands to "Still indexing…", never to an
-   error. Progress lives in the view header, never a notification.
+   error. No notification.
 3. While mEdit is unreachable, the rows and their statuses to stay. A row expands to the error row
    with the reason, and the status bar says mEdit is down. The tree never changes shape. *ADR-0002,
    invariant 2*
@@ -153,11 +149,9 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
    never to "Still indexing…" for ever. *ADR-0009*
 5. When the record filter matches nothing, a message saying so, naming its source. *common, The name
    filter, story 6*
-6. The title bar's gestures absent while the folder is not an instance. *No dead entries*
-7. When indexing the snapshot fails, the view's message line to name the failure, with one line
-   in the Output. The plugins read before it keep their records. A row whose plugin was not reached
-   expands to the error row naming the failure, never to "Still indexing…" for ever. The next
-   snapshot starts indexing again. *index-load-order, Failure*
+6. When indexing the snapshot fails, the view's message line to name the failure, with one line
+   in the Output. A row whose plugin was not reached expands to the error row naming the failure,
+   never to "Still indexing…" for ever. *index-load-order, Refusals and failures*
 
 ## Menus and keys
 
@@ -176,24 +170,16 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
-   Argument in the catalog says: enable or disable, compile, delete, copy and open take the
-   selection. Several records open each in a tab of its own. *catalog Argument; commands.md, A
-   selection is one gesture*
-2. Each menu item titled with its gesture's verb, as the catalog names it. *commands.md, One
-   identity*
-3. Keys and mouse that do what VS Code's trees do. *common, A view, story 5*
-4. A click on a record to open it in the record panel, and a click on an enabled plugin row to open
+   Argument in the catalog says. *catalog Argument*
+2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open
    its header, which is a record. A click on a disabled plugin row only selects it. *catalog `open`*
-5. Enable or disable over a mixed selection, and the check box, to behave as in Mods (Menus and keys,
-   stories 3 and 5). *mods.md*
-6. `track`, `decompile` and `compile`, each offered only where the catalog's condition holds: track
-   on a plugin in a mod with no repository, decompile on a plugin in a tracked mod, and compile on
-   a tracked plugin. *catalog Where*
-7. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is
+3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2).
+   *mods.md*
+4. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is
    not active: create record and delete, and the plugin as a copy destination. Track or decompile
    is on its row. *No dead entries*
-8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
-   file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
+5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
+   file name. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
 ## Drag and drop
 
@@ -203,13 +189,13 @@ As a user, I want:
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads
    with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view,
    as shown.
-3. A drop that would put a master below a plugin that depends on it, or a blueprint plugin before a
+3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a
    plugin that is not one, refused, naming the plugin and the master. While mEdit cannot say which
    masters a plugin has, the drop lands, and the master status flags it once mEdit answers.
    *update-load-order-file, Refusals; ADR-0012, invariant 4*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
-5. Records, groups and the locked rows not to drag, and nothing from outside the view to drop here.
+5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here.
    *xedit.md: Drag a record onto a reference field*
 
 ## Pickers, prompts and confirmations
@@ -222,8 +208,8 @@ As a user, I want:
    `.esl`.
 2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog `create`,
    place Option*
-3. A place that already holds a plugin of that name left out of the pick. The same name elsewhere
-   in the load order is not checked. *No dead entries*
+3. A place that already holds a plugin of that name left out of the pick. The same name in another
+   place is not checked. *No dead entries*
 4. Esc at either step to create nothing. *Esc changes nothing*
 5. The new plugin to appear at the end of the list, disabled. *create-plugin, Hand-off*
 
@@ -231,7 +217,7 @@ As a user, I want:
 
 As a user, I want a pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a
 line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod
-and the phase. *catalog `track`; decompile-plugin, The command, step 4*
+and the phase. *catalog `track`; decompile-plugin, The flow, step 4*
 
 ### Decompile
 
@@ -242,8 +228,8 @@ replaces their source in the working tree from their bytes. *catalog `decompile`
 
 As a user, I want:
 
-1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
-   truth and the plugin a projection of it, so compile destroys nothing.
+1. `compile` to build from the working tree, without asking: a tracked plugin's plugin source is
+   the truth, and compile builds the plugin from it.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
 3. From the palette with no plugin, a pick of the tracked plugins. *No dead entries*
@@ -269,23 +255,22 @@ plugin source as working-tree changes I can review. *catalog `delete`; Confirm w
 
 As a user, I want a pick of the `.sql` files in my scripts folder, then "New filter…", which opens an
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
-that it is active and clears it. *catalog `filter`: input box, or a document*
+that it is active and clears it. *catalog `filter`, query Option*
 
 ## Reporting
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A failed gesture's notification to say what failed and why. *common, Reporting*
-2. When mEdit cannot read active plugins, one notification naming them, beside each row's
+1. When mEdit cannot read active plugins, one notification naming them, beside each row's
    status: my picture of my records would otherwise be wrong. *ADR-0019, invariant 1*
-3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
+2. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
    the result, with a line in the Output. When a folder cannot be listed, the reason in the view's
    message line and the Output. *update-load-order-file, Refusals*
-4. Every message to name a gesture that exists and a view by its name.
-5. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
+3. Every message to name a gesture that exists and a view by its name.
+4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
    the plugins. It offers nothing to do. It comes once in a session for each new state of a
    plugin's bytes. *detect-external-change; ADR-0003, invariant 3*
-6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
+5. A warning notification, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
    at decompile. *detect-external-change*
 
 ## Test seam

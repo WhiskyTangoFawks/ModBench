@@ -29,8 +29,8 @@ Diagram: [create-plugin.d2](create-plugin.d2). Catalog row: `create` under Plugi
 This flow waits for no hand-off.
 
 - The Instance loader's watch finds a plugin on disk with no `plugins.txt` line. From there the
-  flow is plugin sync in [update-load-order-file](update-load-order-file.d2), which adds the line
-  at the end, disabled. The next snapshot names the plugin, and
+  flow is plugin sync in [update-load-order-file](update-load-order-file.md), which adds the line
+  at the winning end, disabled. The next snapshot names the plugin, and
   [index-load-order](index-load-order.d2) indexes it, with or without a line.
 - In a tracked mod, the Mod watcher finds a plugin that the mod's repository does not track. From
   there the flow is [detect-external-change](detect-external-change.d2), which warns. Decompiling

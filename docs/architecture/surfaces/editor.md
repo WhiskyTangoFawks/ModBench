@@ -4,9 +4,8 @@ The record panel shows one record as every active plugin has it: a row for each 
 column for each plugin. Its template is xEdit's View grid
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
 [xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
-[commands.md](../commands.md) under Record and Plugin; what each one writes is in its trace. The
-words are CONTEXT.md's: record, FormKey, FormLink, plugin order, winning and losing, record order
-conflict, tracked mod.
+[commands.md](../commands.md) under Record, Plugin, Mod (`track`) and Every view; what each one
+writes is in its trace.
 
 The Editor surface has three more files:
 
@@ -14,8 +13,8 @@ The Editor surface has three more files:
 - [editor-conflicts.md](editor-conflicts.md): the colours of a record order conflict.
 - [editor-referenced-by.md](editor-referenced-by.md): the Referenced By view.
 
-The panel is a grid, not a list, so the list rules in [common.md](common.md) do not apply to it.
-Its States, Unconfirmed writes and Reporting do.
+The panel is a grid, not a list. Of [common.md](common.md), A view stories 2, 5 and 8, States,
+Unconfirmed writes and Reporting apply to it.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -47,11 +46,9 @@ FormKey alone when there is no EditorID. It holds no controls.
 
 ## The FormID
 
-As a user, I want the record's FormID as the first row of the grid, under Record Header, edited as
-any field is. A new FormID changes the record's FormKey and nothing else: the records that
-reference it, the record itself included, are left as they are, and updating them is a script.
-The Index reads the record again under its new FormKey. A plugin header's FormID is read-only.
-*xedit.md, divergence 9*
+As a user, I want the record's FormKey as the first row of the grid, under Record Header, with
+xEdit's label FormID. It edits as any field does, and edit-record says what the write changes. A
+plugin header's FormID is read-only. *xedit.md, divergences 9 and 16*
 
 ## Columns
 
@@ -62,12 +59,11 @@ As a user, I want:
 2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a
    plugin in a disabled mod. *ADR-0012, invariant 5*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
-   It stays collapsed while the tab is open.
-4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
-   marks its cells ahead of time. Its header says why. *xEdit; ADR-0018*
+4. A cell in a column that cannot be edited to open no editor, as in xEdit. Nothing marks its cells
+   ahead of time. Its header says why. *xEdit; ADR-0018*
 5. Each column sized to fit, and its edge to drag to resize it.
-6. The grid to scroll sideways from a scrollbar at the bottom of the panel, wherever I have scrolled
-   to.
+6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every
+   vertical position.
 
 ### A column's header
 
@@ -76,12 +72,12 @@ As a user, I want:
 | Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, and its file name. | xEdit; ADR-0012, invariant 3 |
 | Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
-| Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |
+| Tooltip | the file name, the origin, and the status's reason in a sentence | ADR-0012, invariant 3 |
 
 | Status | When | The tooltip says | Source |
 |---|---|---|---|
 | `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
-| `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | ruling |
+| `(read-only)` | the plugin is in the game folder, in no mod | that the game's plugins are not edited, and a patch plugin can override the record | ruling; edit-record, Refusals |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
 | `(untracked)` | the plugin is not tracked | that Track, or decompile in a tracked mod, in this header's menu, makes it editable | ADR-0007, invariant 1 |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
@@ -100,10 +96,6 @@ As a user, I want:
 3. Every row expanded when the record opens, as xEdit opens it. *xEdit*
 4. To expand and collapse a row from the arrow beside its label, by double clicking the label, or
    from the keys below. *VS Code's trees; xEdit*
-5. Each row and each cell coloured by the record order conflict it shows.
-   *[editor-conflicts.md](editor-conflicts.md)*
-6. What each cell reads, and how it edits, as its field's type says.
-   *[editor-fields.md](editor-fields.md)*
 
 ## The focused cell
 
@@ -123,16 +115,13 @@ As a user, I want:
    it or steps out to its parent, as in a tree. On a value column, Left and Right move the focus a
    column, since a tree has no columns. *VS Code's trees; common, A view, story 5*
 5. Ctrl+C to copy the focused cell's value in any column; Ctrl+X to copy it and then clear it, and
-   Ctrl+V to paste over it, in a column that can be edited. The value is the cell's, never text on
-   the screen, so it is the same whatever the cell draws.
-   *xEdit; [editor-fields.md](editor-fields.md)*
+   Ctrl+V to paste over it, in a column that can be edited. *xEdit;
+   [editor-fields.md](editor-fields.md)*
 6. Delete to remove the focused element, and Alt+Up or Alt+Down to move it one step, as VS Code
-   moves a line. Delete on a field that is not an element clears
-   it, as xEdit's Clear does. Add has no key, since VS Code has none for it. *VS Code; catalog
+   moves a line. Delete on a field that is not an element clears it, as xEdit's Clear does. Add has no key, since VS Code has none for it. *VS Code; catalog
    `remove element`, `move element`, `edit field`*
 7. The keys to act on the grid only while no editor is open. In an open editor they edit its text.
 8. A right click to focus the cell and open its menu. *xEdit*
-9. The focused cell to keep its focus when the panel reads the record again.
 
 ## Drag and drop
 
@@ -147,36 +136,32 @@ As a user, I want:
 5. A drop that cannot land, on a column that cannot be edited, on another field, or from outside
    the panel, to change nothing and say nothing. *Doing nothing is not an error*
 
-A drop is `edit field` or `add element`, so it is one gesture however it lands (commands.md, Entry
-points are not gestures).
-
 ## States
 
 As a user, I want:
 
 1. Before the record's first read lands, an empty panel, so "not read yet" never reads as "no
    fields". *common, States, story 1*
-2. When the read fails, in place of the grid, "Failed to load:" and the reason, and a line in the
+2. When the first read fails, in place of the grid, "Failed to load:" and the reason, and a line in the
    Output. No notification. The next good read replaces it. *common, States, story 2; ADR-0019,
    invariant 2*
-3. When the conflict colours are not yet computed for every plugin, a message above the grid:
+3. While mEdit is still indexing plugins, a message above the grid:
    "This record's comparison is not complete: the colours are not final." It goes by itself once
    they are, and the grid reads again. *ADR-0019, invariant 1*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
-   naming it, in place of the grid. *A gone object is refused* When only plugins that are not
-   active hold it, the grid with no column, and the tab stays open. *ADR-0012*
-5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
+   naming it, in place of the grid.
+5. When only plugins that are not active hold the record, the grid with no column, and the tab to
+   stay open. *ADR-0012*
+6. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
    scroll stay. *ADR-0015, invariant 3; edit-record, Hand-off*
-6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
+7. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
    the last good read:" and the reason. *common, States, story 6*
 
 ## Menus and keys
 
 The row menus follow VS Code's groups: open, change, source control, copy, then destroy. Only
 these items show; VS Code's own Cut, Copy and Paste items, which act on text on the screen, do not.
-A gesture on a field acts on the focused cell, and is in the palette only while a record tab has
-focus. *commands.md, Record*
 
 | Where | Items, in order |
 |---|---|
@@ -209,10 +194,10 @@ By [common.md](common.md#reporting). As a user, I want:
 
 ## Test seam
 
-- **The panel, given mEdit's answer for a record:** the header, the columns, their notes and order,
+- **The panel, given mEdit's answer for a record:** the header, the columns, their statuses and order,
   the rows and their nesting, and the states, with no VS Code UI.
 - **A gesture's entry:** given the focused cell and a click, key, drop or menu item, the command
   and Argument it fires, or nothing.
-- **The tab:** its title, reveal against open, its place kept when hidden, and the read again on
+- **The tab:** its title, a record already open shown and not opened twice, its place kept when hidden, and the read again on
   mEdit's report of a change.
 - **Menus and keys:** the placement above, checked against the extension manifest.

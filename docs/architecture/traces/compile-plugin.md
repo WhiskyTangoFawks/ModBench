@@ -10,19 +10,14 @@ Diagram: [compile-plugin.d2](compile-plugin.d2). Catalog row: `compile` under Pl
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 `compile` writes a tracked plugin's binary from its plugin source. It is the inverse of
-[decompile plugin](decompile-plugin.md). It builds from the working tree.
-
-For a tracked plugin, the source is the truth and the binary is its build (ADR-0006; ADR-0007).
-Git keeps every state of the source, so compile keeps no copy of the binary. A failed build means a
-bad binary, and compiling again rebuilds it.
+[decompile plugin](decompile-plugin.md).
 
 ## The flow
 
 1. Plugins or the Editor sends `compile` to Commands, through the mEdit client and the HTTP
-   endpoints: the plugins, each as origin and file name. Each plugin compiles on
-   its own.
-2. The Source adapter reads the plugin's documents from the working tree. Compile never commits, and never changes a branch or the working tree (ADR-0007,
-   invariant 4).
+   endpoints: the plugins, each as origin and file name.
+2. The Source adapter reads the plugin's documents from the working tree. Compile never commits,
+   and never changes a branch or the working tree (ADR-0007, invariant 4).
 3. Commands checks the documents before it writes anything. The codec reproduces every document
    exactly (ADR-0006, invariant 6), and no two documents claim one FormKey.
 4. Commands derives what the format forces: the masters from the content, in load order
@@ -32,8 +27,8 @@ bad binary, and compiling again rebuilds it.
    (ADR-0003, invariant 1).
 6. The Plugin adapter writes the binary, whole or not at all, and a localized plugin's strings
    beside it.
-7. Until the next compile, the record before this one also counts as what Modbench last wrote, so
-   either binary an interrupted compile leaves is Modbench's own.
+7. Until the next compile, the previous last write also counts as what Modbench last wrote. Either
+   binary an interrupted compile leaves is then Modbench's own.
 8. Commands checks the references. A reference it cannot resolve is a diagnostic, never a refusal
    (ADR-0007, invariant 4).
 9. Commands answers per plugin: applied, with the masters and the diagnostics, or the refusal.
@@ -53,9 +48,9 @@ Commands refuses before any write, and names the cause.
 
 | Refusal | Why |
 |---|---|
-| The plugin is not tracked | There is no source to compile. |
-| The source holds no tree for the plugin | There is nothing to compile. |
-| A source file cannot be opened, naming it | Another program may hold it. |
+| The plugin is not tracked | There is no plugin source to compile. |
+| The plugin source holds no tree for the plugin | There is nothing to compile. |
+| A plugin source file cannot be opened, naming it | Another program may hold it. |
 | A document the codec cannot reproduce, naming the path | ADR-0006, invariants 5 and 6. |
 | Two documents claim one FormKey, naming them | The format holds one record per FormKey. |
 | A light plugin holds records outside the light range, naming them | The refusal names the remedies: clear the light flag in the header, rename the plugin off `.esl`, or change the records' FormIDs. |
@@ -63,7 +58,7 @@ Commands refuses before any write, and names the cause.
 
 ## Failure
 
-- **A failed write** says so, and names the plugin. The source is untouched, so compiling again
+- **A failed write** says so, and names the plugin. The plugin source is untouched, so compiling again
   rebuilds the binary.
 - **An interrupted compile** leaves the old binary or the new one. Each counts as what Modbench last
   wrote (step 7), so detect-external-change finds no change. Compiling again rebuilds the binary.
@@ -71,7 +66,7 @@ Commands refuses before any write, and names the cause.
 Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** An interrupted compile can leave a localized plugin's strings
-  written without its binary. The source, which is the truth, is untouched.
+  written without its binary. The plugin source, which is the truth, is untouched.
 
 ## Test seam
 

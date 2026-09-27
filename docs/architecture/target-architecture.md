@@ -1,11 +1,11 @@
 # Target architecture: how to read the diagrams
 
 mEdit is the C# service in `MEditService/`; Modbench is the VS Code extension in `modbench/`.
-The decisions the pictures draw are
-[ADR-0014](../adr/0014-modules-are-layered-and-call-adjacent-layers-through-ports.md) (the
-layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)
-(how a change flows) and [ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)
-(the load order the file layer hands the record layer); this file says how to read the pictures.
+[ADR-0014](../adr/0014-modules-are-layered-and-call-adjacent-layers-through-ports.md) decides the
+layers and their ports. [ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)
+decides how a change flows. [ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)
+decides the load order the file layer hands the record layer. This file says how to read the
+pictures.
 
 ## The set
 
@@ -14,16 +14,17 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
   sits beside its Modbench twin and means the same thing. A module box carries three lines: its
   name, `interface:` what other boxes may call, `hides:` what they may not. A cylinder is a store
   and carries what it holds; purple is a system of record, green is derived from what sits beside
-  it and can be rebuilt. It has no arrows.
+  it and can be rebuilt. The zoom-out has no arrows.
 - [target-architecture-references.d2](target-architecture-references.d2) is the reference view:
   the zoom-out's boxes with one arrow per reference, from the box that references to the box it
   references. This picture is each project's reference list. A thin purple arrow is a read or
   write of a system of record. A grey arrow is the user, another tool, or the wire between the
   two processes.
+- [layers.d2](layers.d2) is the layer rule the gate reads: which band may reference which, and the
+  named same-band exceptions.
 - [traces/](traces/) holds one sequence diagram per flow. Gestures whose arrows are the same share
-  one, and the diagram names each one's command and the box it calls. Beside each diagram a `.md`
-  file of the same name holds its contract. Actors are the zoom-out's
-  boxes, imported by name; time runs down; a message is labelled with what moves, never with the
+  one, and its contract names each gesture's row. Beside each diagram a `.md` file of the same
+  name holds its contract. Actors are the zoom-out's boxes, imported by name; time runs down; a message is labelled with what moves, never with the
   call, so a request and its reply are two messages. A note on an actor is what it does between
   messages.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
@@ -36,9 +37,9 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
 
 Both columns use the same six names. Drivers: who drives the process. Driving adapters: what
 turns a driver's gesture or a file's change into a call. Core: the rules, one command per
-gesture. Kernel: pure, read by every Core box and driven adapter; a port lives here only where
-the box that implements it sits above the boxes that call it, so both reference the kernel and
-nothing references up or across.
+gesture. Kernel: read by every Core box and driven adapter. On Modbench it is pure. On mEdit it
+also holds the load order state (ADR-0013, invariant 4). A port lives here when its implementer
+sits above its callers. Both then reference the kernel, and no reference points up or across.
 Driven adapters: what the core calls to reach a system of record, and the only boxes that read
 or write one. Systems of record: the files that are the truth.
 
@@ -48,10 +49,9 @@ A box is a project. Its reference list is the arrows that leave it in the refere
 a Core box or a driven adapter, every box of its column's kernel by the band's rule; a driving
 adapter's kernel reads are drawn. A kernel box references nothing above it: on mEdit, Ports reads
 Load order state and the other two read nothing; on Modbench a kernel box references nothing.
-Every arrow points down or into the kernel, with three same-band references the captions name: the
-record index reads the two adapters beside it, Ports reads Load order state, and the Instance loader
-reads the Instance adapter. A composition root, the HTTP endpoints
-on mEdit and the activation file on Modbench, references every box below it by definition.
+Every arrow points down or into the kernel, except the same-band references
+[layers.d2](layers.d2) names. A composition root, the HTTP endpoints on mEdit and the activation
+file on Modbench, references every box below it by definition.
 A reference the reference view does not draw is a compile error and a question for the
 maintainer, never a line an agent adds.
 
@@ -84,17 +84,13 @@ The mod manager owns every other file in the instance. The Instance adapter is a
 is one implementation of it. Only that implementation names MO2. A source scan holds this rule,
 as it holds game names. Mods, Downloads and Toolbox never see a record.
 
-## What is left out
-
-Deliberately absent, so that every arrow drawn stays legible: the repair engine,
-and MO2's own UI beyond the trees Modbench renders.
-
 ## Rendering
 
 ```bash
 # from docs/architecture/, with d2 on PATH (https://d2lang.com/tour/install)
 d2 target-architecture.d2 target-architecture.svg
 d2 target-architecture-references.d2 target-architecture-references.svg
+d2 layers.d2 layers.svg
 for f in traces/*.d2; do d2 "$f" "${f%.d2}.svg"; done
 ```
 
@@ -119,15 +115,13 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   story order. An actor that is a set of boxes, `every view`, is declared in the trace with the
   set as its label. A branch, a dialog or a pick is a note on the actor that holds it, not an
   actor.
-- A trace message runs between two boxes the reference view joins, or through a port, where one
-  end implements it and the other references Ports, or across the wire, or inside one box, or
-  between two boxes a composition root wires, as the HTTP endpoints hand a request to a Commands
-  handler. Any other message is a reference the maintainer has not drawn. The one exception is a trace
-  that abbreviates another trace as one message named after it.
+- `.claude/skills/validate/check_layers.py` holds which boxes a trace message may join. A message
+  it refuses is a reference the maintainer has not drawn. The one exception it does not check is a
+  trace that abbreviates another trace as one message named after it.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
-  reference view. A new payload is a message in the trace of its gesture, in that gesture's class.
+  reference view. A new payload is a message in the trace of its gesture, in its payload's class.
   A new flow is a new trace and, if its payload is a new kind, a new class in the styles file.
 - A box's `CLAUDE.md` opens with its purpose in plain words, consistent with its caption. A new box
   gets one, and a caption edit rereads it.
 - Render before committing and look at the picture. A change that makes a diagram false changes
-  the diagram in the same change, and the ADR it cites with it.
+  the diagram in the same change. A change that makes an ADR false goes to the maintainer.

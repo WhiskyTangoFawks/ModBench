@@ -29,7 +29,7 @@ a plugin's bytes is the Mod watcher's, and it ends in the same tail.
    - A plugin that arrived is read only when the index holds no rows for its content, by hash
      (ADR-0009, invariant 4).
    - A plugin that became tracked or untracked is read again, from its new source.
-   - Changed active plugins read and drop no row.
+   - A change to the active plugins reads no row and drops no row.
 5. For each plugin it reads, one at a time, the Indexer reads the documents through the Source
    adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
    not. It takes the schema from the Codec, and writes the plugin's rows to the Store.
@@ -41,7 +41,7 @@ a plugin's bytes is the Mod watcher's, and it ends in the same tail.
 
 ## Hand-off
 
-The views read again on the rows that changed, and not before. The index status drives each
+This flow waits for no hand-off. The views read again on the rows that changed, and not before. The index status drives each
 view's progress and states (plugins.md, States).
 
 ## Refusals and failures
@@ -50,14 +50,14 @@ Nothing here refuses a gesture: no user starts this flow. Each outcome is the in
 
 | Outcome | What the status says | What stays |
 |---|---|---|
-| Another window holds the instance's index | held elsewhere, naming the index file and saying to close mEdit there | Nothing is read (ADR-0009, invariant 5). |
+| Another window holds the instance's index | held elsewhere, naming the index file and the other window | Nothing is read (ADR-0009, invariant 5). |
 | A plugin cannot be read or parsed | ready, with the plugin flagged and its reason | The plugin stays in the index, never dropped (ADR-0013, invariant 4). It is read again only when its bytes change. |
 | The reconcile fails | failed, with the reason | The snapshot stays held. Each plugin is read in its own transaction, so the plugins read before the failure stand. The next snapshot tries again. |
 | mEdit stops before the reconcile ends | nothing | The next start's snapshot finds the plugins already read, by their hashes, and reads the rest. |
 
 ## Test seam
 
-From the HTTP `put load order` to the published status and rows, as the diagram draws it.
+From the HTTP `put load order` to the published status and rows.
 
 - **In:** a snapshot, the snapshot before it, and the files and repositories it names.
 - **Observed:** the Store's rows, which plugins' records a read answers, the sequence of index
