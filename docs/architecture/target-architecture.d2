@@ -48,7 +48,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
   class: band; grid-rows: 1
-  loadorder: "Load order state\ninterface: the snapshot; which plugin wins each filename; who participates\nhides: the participation rule" {class: kernel}
+  loadorder: "Load order state\ninterface: every plugin in the instance, with its path; the active\nplugins, in load order\nhides: nothing" {class: kernel}
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences, children and an element's key; which record types can\nbe created\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
   ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change, per\nmod · untracked plugins in a tracked mod\nhides: nothing; the interface and its payloads; the endpoints\nimplement it" {class: kernel}
 }
@@ -56,23 +56,23 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
   class: band; grid-rows: 1
   loadorderfilecodec: "Load-order file codec\ninterface: parse and byte-faithful splice of plugins.txt\nhides: the game's format, per release" {class: kernel}
   wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
-  tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
+  tables: "per-release tables\ninterface: game paths · load-order file destination ·\nthe game's masters\nhides: every game name" {class: kernel}
   ports: "Ports\ninterface: report a failure by severity; ask one modal question\nand get the answer; a selection's outcome: what landed and each\nrefusal; the invariant lookup and the errno read; move a file to\nthe system trash\nhides: nothing; the types and the severity table (ADR-0019); the\ncomposition root implements them over the window API" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads · refresh by keys · validate by hash · reconcile ·\nset and clear the filter · rebuild · the sequence and its await\nhides: the Indexer and the Store" {
+  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · refresh by keys ·\nvalidate by hash · reconcile · set and clear the record filter ·\nrebuild · the sequence and its await\nhides: the Indexer and the Store" {
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
-    store: "Store\nDuckDB" {class: derived}
+    store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
   sourceadapter: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
-  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; the plugins the game loads\nwith no line\nhides: the game assemblies" {class: driven}
+  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every watcher on the instance; the debounce; which file wins\neach path; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
-  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files; changes: enable or disable mods and plugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a downloaded file's metadata, a mod's meta, the\nselected profile; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
+  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every watcher on the instance; the debounce; which file wins\neach path; which plugins are active; a downloaded file's status;\na read failure keeps the last value" {class: driven}
+  instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files, the game folder's plugins and its Creation Club\nlist; changes: enable or disable mods and plugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a downloaded file's metadata, a mod's meta, the\nselected profile; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
   deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }

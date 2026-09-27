@@ -35,8 +35,8 @@ and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).
 | Surface | Spec | State |
 |---|---|---|
 | **Mods** — install from archive or folder, separators, drag-order, enable | [mods.md](docs/architecture/surfaces/mods.md) | Implemented; spec rewritten, code catching up |
-| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
-| **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
+| **Plugins** — `plugins.txt` order and checkboxes, and with mEdit running, every active plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/architecture/surfaces/plugins.md) | Implemented; spec rewritten, code catching up |
+| **Record editor** — xEdit-style compare grid across the active plugins, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [editor.md](docs/architecture/surfaces/editor.md) | Implemented |
 | **Version control** — Track, compile, native SCM integration, external-change handling | [plugins.md](docs/architecture/surfaces/plugins.md), [decompile-plugin.md](docs/architecture/traces/decompile-plugin.md), [compile-plugin.md](docs/architecture/traces/compile-plugin.md) | Implemented; spec rewritten, code catching up |
 | **Referenced By** — what points at a record | [editor-referenced-by.md](docs/architecture/surfaces/editor-referenced-by.md) | Implemented |
 | **Toolbox** — the instance at a glance: its game and active profile, switch profile, refresh | [toolbox.md](docs/architecture/surfaces/toolbox.md) | Implemented; spec rewritten, code catching up |
@@ -78,10 +78,10 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
                    per box of docs/architecture/
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
                               Swashbuckle, and mEdit's composition root
-  MEditService.Watcher/       one watcher per mod folder in the load order
+  MEditService.Watcher/       one watcher per mod folder the snapshot names
   MEditService.Commands/      one handler per gesture: edit, create, track, compile, put load order
   MEditService.Queries/       compare, references, children — the only readers of the read model
-  MEditService.LoadOrder/     the kernel: the load-order snapshot and who wins
+  MEditService.LoadOrder/     the kernel: every plugin in the instance, and the active plugins
   MEditService.Codec/         the kernel: record text to document and back, and the schema
   MEditService.Ports/         the kernel: the notification port and its payloads
   MEditService.Index/         DuckDB as an index over per-record JSON documents
@@ -91,7 +91,7 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
 
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
-file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for a load order
+file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for an instance
 ([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)). The Mods, Downloads and Toolbox views
 never call the backend.
 
@@ -124,7 +124,7 @@ npm run test:unit
 ```
 
 You don't run the backend yourself — the extension spawns it at activation and hands it the
-load order snapshot. For the API on its own:
+snapshot: every plugin in the instance, and the active plugins in load order. For the API on its own:
 `dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
 
 **Launch the extension** from the repo root (F5 is unreliable in this environment; use the CLI):

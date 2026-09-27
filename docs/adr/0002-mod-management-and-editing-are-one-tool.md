@@ -15,8 +15,8 @@ record editor as it happens, with nothing relaunched and nothing reloaded.
    with the extension, so the backend runs for the extension's whole lifetime. No view has a mode
    for its absence: a disconnect is a status the client reports and the views surface as an
    error. Nothing outside the client names the process, the port or the health check.
-3. **The load order flows from Mod Management to Editing as state**, sent whenever anything that
-   feeds it changes and reconciled, never reloaded
+3. **The plugins and the active plugins flow from Mod Management to Editing as state**, sent
+   whenever anything that feeds them changes and reconciled, never reloaded
    ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)).
    That is what makes a mod change visible in the editor at once.
 4. **Deploy is for the game, never for editing.** Editing reads the physical folders.

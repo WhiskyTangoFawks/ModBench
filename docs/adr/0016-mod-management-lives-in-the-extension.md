@@ -9,9 +9,11 @@ service.
 
 ## Strategic invariants
 
-1. **The extension parses no plugin binary.** A plugin's declared masters, and which plugins load
-   with no `plugins.txt` line, come from the backend through the generated client, so there is one
-   master verdict and no second signal for two views to disagree over.
+1. **The extension parses no plugin binary.** A plugin's declared masters come from the backend
+   through the generated client, so there is one master verdict and no second signal for two views
+   to disagree over. Which plugins load with no `plugins.txt` line is Mod Management's own answer,
+   read from no plugin binary
+   ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md), invariant 3).
    `pluginBinaryScan.test.ts` is the gate.
 2. **Mod Management hands the backend plugin files at physical paths, and a mod's facts that
    Editing needs, as data.** It never sends a modlist or a profile

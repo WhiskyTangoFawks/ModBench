@@ -37,7 +37,7 @@ Gestures Modbench does differently.
 | 12 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
 | 13 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
 | 14 | Sorted arrays | Kept in the order they have; an array without a key aligns by its values in sequence, and every array takes add, remove and move | Sorts `wbArrayS` arrays on save and aligns them by value, with no move | Ruling: the game does not need the order, so sorting is xEdit's habit reaching into the data, and Mutagen decides the data. |
-| 15 | Referenced By | One row per referrer, with a row for each loaded plugin that holds the reference beneath it | One row per plugin's copy of each referring record | Ruling. |
+| 15 | Referenced By | One row per referrer, with a row for each active plugin that holds the reference beneath it | One row per plugin's copy of each referring record | Ruling. |
 | 16 | The FormID row | Shows and takes the FormKey, under xEdit's label | Shows the FormID in load order | Mutagen decides the data: a FormID changes with the load order (divergence 10). |
 
 ## Omissions by object

@@ -42,7 +42,7 @@ As a user, I want:
 | True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
 | Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | a dropdown of the names | the name |
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
-| Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record | the record picker, below | `EditorID [FormKey]` |
+| Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record of an active plugin | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
 | Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text |
 | Vector | `x, y, z`, as mEdit gives it | a text box | the text |
@@ -77,8 +77,9 @@ As a user, I want:
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone
    stale still finds the right record.
 4. Enter to write the record I chose, and Esc to change nothing. *Esc changes nothing*
-5. A reference that resolves to no record, or to a type the field does not allow, to carry a warning
-   in its cell, with the reason in its tooltip. Each cell carries its own. *CONTEXT.md, FormLink*
+5. A reference that resolves to no record of an active plugin, or to a type the field does not
+   allow, to carry a warning in its cell, with the reason in its tooltip. Each cell carries its
+   own. *CONTEXT.md, FormLink*
 6. A reference to a record the engine defines, such as the player, to resolve with no warning,
    though no plugin holds it. *xEdit*
 7. Go to record on a reference that resolves, and on one of the wrong type, as xEdit follows both.

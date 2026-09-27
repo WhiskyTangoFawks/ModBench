@@ -97,6 +97,12 @@ A plugin file that another mod's file of the same name overrides. The game loads
 and not this one.
 Avoid: plugin copy, duplicate, version, shadowed plugin
 
+## Active plugin
+A plugin the game loads: the file mod order resolves its name to, with an enabled `plugins.txt`
+line or loaded by the game with no line. An overridden plugin is never active, whatever its line
+says.
+Avoid: participating, loaded, registered
+
 ## Master Plugin
 A plugin that another plugin lists as a dependency. A master loads earlier.
 Avoid: parent plugin (an override's plugin is not its child)
@@ -139,7 +145,7 @@ Avoid: FormID, record ID
 
 # FormLink
 A typed field that holds another record's FormKey. Two data errors exist. A dangling link resolves
-to no record in the load order. A type-mismatched link resolves to a type the field does not permit.
+to no record in an active plugin. A type-mismatched link resolves to a type the field does not permit.
 Avoid: missing reference, broken link
 
 # Instance

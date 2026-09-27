@@ -20,8 +20,8 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
 1. A driving box sends the gesture to its Core box, with its Argument and Options. A system command
    gets the instance value from the Instance loader as its Argument. No Core box reads the Instance
    loader itself.
-2. Plugins commands ask the mEdit client which plugins the game loads with no line, and, for a
-   move, which masters each plugin has. An unreachable mEdit answers that it cannot say.
+2. For a move, plugins commands ask the mEdit client which masters each plugin has. An
+   unreachable mEdit answers that it cannot say.
 3. Under one lock per file, the Instance adapter reads the file as it is now and splices the
    command's change through the file's codec: the mod manager's own, inside its implementation,
    or the game's, for `plugins.txt`. Only the bytes the command names change: comments, blank lines, line endings, the byte
@@ -49,9 +49,11 @@ it. The watch reads the change back, so a change from MO2 or any other tool take
 | downloaded file `delete` | downloads commands | The file goes to the trash, then its `.meta`. The mod it installed stays. |
 
 A plugin is provided when a plugin file sits at the root of an enabled mod, in `overwrite/`, or in
-the game folder. A plugin the game loads with no line never earns one, even when a mod ships a plugin of that name
-(ADR-0013; ADR-0016). A disabled mod provides nothing, so disabling a mod drops its plugins' lines,
-and enabling it again adds them at the end: their place in plugin order is lost, as in MO2.
+the game folder. Provided decides `plugins.txt` lines only. It never decides which plugins mEdit
+indexes (ADR-0012). A plugin the game loads with no line never earns one, even when a mod ships a
+plugin of that name (ADR-0013, invariant 3). A disabled mod provides nothing, so disabling a mod
+drops its plugins' lines, and enabling it again adds them at the end: their place in plugin order
+is lost, as in MO2.
 
 When one write adds several lines, their order is not set, and no test may assert one. The user
 orders them.
@@ -76,7 +78,7 @@ The Core box refuses before it writes, and names the cause.
 | A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
 | `mods/` cannot be listed | `mod sync` | Nothing is written. The reason goes to the Mods view's message line and the Output. |
-| mEdit cannot say which plugins load with no line, or a folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. Before mEdit first attaches, plugin sync waits and runs on attach, so a launch reports nothing. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
+| A folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
 
 A system command reports a failure once when it begins, and again only when its reason changes
 ([common.md](../surfaces/common.md), States, story 2).

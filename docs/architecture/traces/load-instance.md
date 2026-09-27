@@ -28,8 +28,8 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
-5. The value goes to every view. The Instance loader derives the load order snapshot from it, every
-   plugin file in the instance (ADR-0012), and hands it to instance commands, which send it to mEdit
+5. The value goes to every view. The Instance loader derives the snapshot from it: every plugin
+   in the instance, and the active plugins, in load order (ADR-0013, invariants 2 and 3). It hands the snapshot to instance commands, which send it to mEdit
    ([index-load-order](index-load-order.md)).
 
 ## refresh
@@ -39,7 +39,7 @@ change normally arrives.
 
 1. The Toolbox fires `refresh`. Instance commands ask mEdit, through the mEdit client, to drop and
    rebuild the index.
-2. Once the rebuild lands, mEdit reads every plugin again against the load order it holds, as a cold
+2. Once the rebuild lands, mEdit reads every plugin in the snapshot it holds again, as a cold
    load does ([ADR-0009](../../adr/0009-the-record-index-mirrors-the-files-on-disk.md), invariant 5).
    Nothing is sent.
 3. The Toolbox then asks the Instance loader to read every file again, as flow step 2 does.
@@ -61,7 +61,7 @@ This flow waits for no hand-off.
 | A file cannot be read or parsed | The last value stays, with its sequence, and the reason is published beside it until a read lands. One line goes to the Output. Each view keeps its rows and says so (common.md, States, story 6). |
 | The first read fails | No value lands. The views show the error row (common.md, States, story 2). |
 | The folder is not an instance | The views say so, and how to open one (common.md, States, story 4). |
-| The game folder cannot be found | The value lands without it. No snapshot is sent, so mEdit keeps the load order it holds (common.md, States, story 5). |
+| The game folder cannot be found | The value lands without it. No snapshot is sent, so mEdit keeps the snapshot it holds (common.md, States, story 5). |
 | `refresh`, while another window holds the index | Refused, naming it (ADR-0009, invariant 5). |
 | `refresh`, when the rebuild fails | It stops, and says why. |
 

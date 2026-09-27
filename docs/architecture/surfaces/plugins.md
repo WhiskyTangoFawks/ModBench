@@ -29,16 +29,14 @@ As a user, I want:
 
 1. One row for each line of the active profile's `plugins.txt`, in its order, first loaded at the
    top. *MO2*
-2. The plugins the game loads with no line at the losing end, before every line, locked, once mEdit
-   says which they are. Until it does, a line that names one is an ordinary row. *MO2; ADR-0016,
-   invariant 1*
-3. An overridden plugin, one the game does not load because another mod's plugin of the same name
-   wins, not to be a row. It stays indexed. *ADR-0012, invariant 5*
-4. Every enabled plugin row to expand at any time. Expanding decides what it shows: its records,
+2. The plugins the game loads with no line at the losing end, before every line, locked. *MO2;
+   ADR-0013, invariant 3*
+3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed.
+   *ADR-0012*
+4. Every active plugin row to expand at any time. Expanding decides what it shows: its records,
    "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
    invariant 1*
-5. A disabled plugin to show no expander, because the game does not load its records. *ADR-0013,
-   invariant 3*
+5. A disabled plugin to show no expander, because it is not active. *ADR-0012, invariant 5*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
 7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
@@ -70,16 +68,16 @@ A plugin's statuses, the first in this order sets the icon, and the tooltip list
 
 | Status | When | Icon | Words |
 |---|---|---|---|
-| Failed to load | mEdit could not load it | `$(error)` red | failed to load |
-| Master issues | the game loads it, and a master in its header is one the game does not load (ADR-0013, invariant 3); once the load order is indexed | `$(error)` red | 1 master issue, N master issues |
+| Failed to read | mEdit could not read it | `$(error)` red | failed to read |
+| Master issues | it is active, and a master in its header is not (ADR-0012, invariant 4); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 A master issue never disables the plugin or cascades to its dependants: the check box stays as I set
-it (ADR-0012, invariant 4). Before the load order is indexed, a plugin has no master verdict, so no
-badge means not yet asked. A later reload of the load order keeps the last statuses, and the rows
-the record filter hides, until the new ones land. A malformed plugin's reasons are also in the
+it (ADR-0012, invariant 4). Before the snapshot is indexed, a plugin has no master verdict, so no
+badge means not yet asked. A later snapshot keeps the last statuses, and the rows the record
+filter hides, until the new ones land. A malformed plugin's reasons are also in the
 Problems panel, on the plugin file. *ADR-0019* A plugin that changed outside Modbench is also a
 warning in the Problems panel, on the plugin file, while its bytes differ from what Modbench last
 wrote. *detect-external-change*
@@ -137,7 +135,7 @@ As a user, I want:
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
    becomes a clear icon while it is active, and the view's description names its source, never its
    SQL. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
-4. A plugin with no record left under the record filter hidden while it is active.
+4. A plugin with no record left under the record filter hidden while the record filter is active.
 
 ## States
 
@@ -156,10 +154,10 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 5. When the record filter matches nothing, a message saying so, naming its source. *common, The name
    filter, story 6*
 6. The title bar's gestures absent while the folder is not an instance. *No dead entries*
-7. When indexing the load order fails, the view's message line to name the failure, with one line
+7. When indexing the snapshot fails, the view's message line to name the failure, with one line
    in the Output. The plugins read before it keep their records. A row whose plugin was not reached
-   expands to the error row naming the failure, never to "Still indexing…" for ever. The next load
-   order starts indexing again. *index-load-order, Failure*
+   expands to the error row naming the failure, never to "Still indexing…" for ever. The next
+   snapshot starts indexing again. *index-load-order, Failure*
 
 ## Menus and keys
 
@@ -190,10 +188,10 @@ As a user, I want:
    stories 3 and 5). *mods.md*
 6. `track`, `decompile` and `compile`, each offered only where the catalog's condition holds: track
    on a plugin in a mod with no repository, decompile on a plugin in a tracked mod, and compile on
-   a tracked, editable plugin. *catalog Where*
-7. The gestures that edit a plugin's records absent on an untracked plugin: create record and
-   delete, and the plugin as a copy destination. Track or decompile is on its row. *No dead
-   entries*
+   a tracked plugin. *catalog Where*
+7. The gestures that edit a plugin's records absent on an untracked plugin and on a plugin that is
+   not active: create record and delete, and the plugin as a copy destination. Track or decompile
+   is on its row. *No dead entries*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
    file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
@@ -248,7 +246,7 @@ As a user, I want:
    truth and the plugin a projection of it, so compile destroys nothing.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
-3. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
+3. From the palette with no plugin, a pick of the tracked plugins. *No dead entries*
 
 ### Create record
 
@@ -259,7 +257,7 @@ under Record, record type Option; xEdit selects what it adds*
 ### Copy
 
 As a user, I want a pick of the mode, then a pick of the destination: the plugins I can edit, each
-with its load position. A destination that already holds a copy asks whether to replace it. Esc on
+with its load index. A destination that already holds a copy asks whether to replace it. Esc on
 either copies nothing. *catalog `copy`; edit-record contract*
 
 ### Delete
@@ -278,11 +276,11 @@ that it is active and clears it. *catalog `filter`: input box, or a document*
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A failed gesture's notification to say what failed and why. *common, Reporting*
-2. When a load order leaves plugins unloaded, one notification naming them, beside each row's
-   status: my picture of what is loaded would otherwise be wrong. *ADR-0019, invariant 1*
+2. When mEdit cannot read active plugins, one notification naming them, beside each row's
+   status: my picture of my records would otherwise be wrong. *ADR-0019, invariant 1*
 3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
-   the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
-   the reason in the view's message line and the Output. *update-load-order-file, Refusals*
+   the result, with a line in the Output. When a folder cannot be listed, the reason in the view's
+   message line and the Output. *update-load-order-file, Refusals*
 4. Every message to name a gesture that exists and a view by its name.
 5. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
    the plugins. It offers nothing to do. It comes once in a session for each new state of a
