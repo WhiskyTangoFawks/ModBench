@@ -37,11 +37,18 @@ Inner-loop `dotnet test --filter` runs take no slot.
 
 ## Merging
 
-1. /validate is a STRICT gate for merging to main. No code changes can be merged to main without the
-the tests passing, and code-review.
-2. Merge only from the main checkout, one merge at a time: `git -C <main-checkout-path> merge
+1. `/validate` and `/code-review main` are a STRICT gate for every merge to main. Sort each finding
+   by `/validate`'s Finding dispositions.
+2. A branch that changes a maintainer's document merges only once the maintainer approves it. The
+   maintainer's documents are `docs/principles.md`, `docs/adr/`, `docs/architecture/`,
+   `docs/out-of-scope/`, `CONTEXT.md` and every `CLAUDE.md`. After the review, open the diff in the
+   maintainer's VS Code window, one `code --reuse-window --diff <main-checkout file> <worktree file>`
+   per changed file, and ask for feedback. Apply the feedback, and ask again; the review does not run
+   again. In an orchestrated run, the reviewer holds such a branch instead
+   (`.claude/skills/orchestrate/REVIEW.md`).
+3. Merge only from the main checkout, one merge at a time: `git -C <main-checkout-path> merge
    --no-ff <branch>`. Confirm `git status` is clean and no `.git/MERGE_HEAD` exists first.
-3. `git fetch && git merge --ff-only origin/main` before pushing.
+4. `git fetch && git merge --ff-only origin/main` before pushing.
 
 ## Cleanup
 
