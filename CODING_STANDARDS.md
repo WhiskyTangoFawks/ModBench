@@ -23,8 +23,7 @@ hold the seam between an exception and a result.
 ## Tests
 
 Development is /tdd: a failing test, then the code that passes it, one slice at a time.
-Mutation testing holds assertion strength. These are the marks a skipped loop leaves in a
-diff.
+These are the marks a skipped loop leaves in a diff.
 
 - A hunk changes behaviour and no test in the diff covers it. → Name the hunk. Red comes
   before green.

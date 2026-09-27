@@ -22,7 +22,7 @@ public sealed class CutDownPluginGenerator
     public void RegenerateCutDownPlugin()
     {
         // Tool, not an assertion: no-op unless explicitly invoked with an install present, so it
-        // costs nothing in normal/mutation runs. Run with
+        // costs nothing in normal runs. Run with
         //   MEDIT_REGEN_TESTDATA=1 dotnet test --filter FullyQualifiedName~CutDownPluginGenerator
         if (Environment.GetEnvironmentVariable("MEDIT_REGEN_TESTDATA") != "1")
             return;
