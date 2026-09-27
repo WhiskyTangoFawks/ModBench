@@ -172,6 +172,21 @@ As a user, I want:
    *catalog `install`: the Mods menu asks for the source*
 3. The name prompt filled with the archive's name without its extension, or the folder's name. *MO2*
 
+### What install does
+
+Install is offered here and on Downloads (catalog `install`). As a user, I want:
+
+1. A new mod whose folder already exists refused, naming it and pointing at an upgrade. Install
+   never merges into a folder or replaces one by surprise.
+2. A new mod to appear at the winning end of the mod order, disabled. *catalog `mod sync`*
+3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
+   its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
+4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
+   never blanks a known one. *ADR-0017, invariant 2*
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll
+   back. Installing again is the recovery, and a tracked mod's plugin source stays in git. This is
+   an exception to *A failed gesture writes nothing*.
+
 ### Uninstall
 
 As a user, I want one confirmation for the whole selection, naming the mod when there is one and
@@ -183,8 +198,7 @@ destroys; MO2's recycle bin*
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
-   because the installer's own steps did not run. *install-mod, The flow, step 4; ADR-0019,
-   invariant 1*
+   because the installer's own steps did not run. *ADR-0019, invariant 1*
 2. When `mods/` cannot be listed, the reason in the view's message line and the Output.
    *update-load-order-file, Refusals*
 

@@ -1,4 +1,4 @@
-# Install, both targets. Contract: install-mod.md.
+# Install, both targets. Stories: mods.md, What install does; downloads.md, The install target.
 ...@../styles
 shape: sequence_diagram
 downloads: @../target-architecture.modbench_driving.downloads
@@ -40,5 +40,5 @@ mo2 -> watcher: changed paths {class: signal}
 watcher."a tracked mod: decompile-plugin from here, the new baseline as the default"
 
 refused: "refused, before any write" {
-  install -> downloads: "the refusal, as the contract's Refusals list it" {class: loadorder}
+  install -> downloads: "the refusal" {class: loadorder}
 }
