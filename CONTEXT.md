@@ -1,4 +1,6 @@
-Architecture words live in `docs/architecture/`. Verbs live in `docs/architecture/commands.md`.
+Architecture words live in `docs/architecture/`. Verbs live in `docs/architecture/commands.md`. A
+word is here only where its usual meaning, in software development or in modding, would mislead; a
+word that is not here means what it usually means.
 
 # Order
 A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds.
