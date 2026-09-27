@@ -17,14 +17,14 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 
 1. The Instance loader watches the instance through the globs the Instance adapter names: each
    profile's `modlist.txt` and `plugins.txt`, `ModOrganizer.ini`, `mods/`, `overwrite/`, the
-   downloads folder, and the game folder's plugins. One debounce covers every watch, so a burst of
-   changes is one read. A watcher overflow is one more change: it starts the same read. Activation
-   and refresh start the same read.
+   downloads folder, and the game folder's plugins and its Creation Club list. One debounce covers
+   every watch, so a burst of changes is one read. A watcher overflow is one more change: it starts
+   the same read. Activation and refresh start the same read.
 2. The Instance loader reads, through the Instance adapter, `ModOrganizer.ini` first: the active
    profile, the game, and where the downloads are. Then it reads the profile's `modlist.txt` and
    `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
-   folder's plugins. The Instance adapter finds the game folder: the setting first, then MO2's
-   configuration, then Steam or Wine detection.
+   folder's plugins and its Creation Club list. The Instance adapter finds the game folder: the
+   setting first, then MO2's configuration, then Steam or Wine detection.
 3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
