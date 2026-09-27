@@ -18,11 +18,12 @@ As a user, I want:
 1. A value to read as what it means, never as it is stored: an enum or a flag by its name, a
    reference by its record, never a raw integer, never "null" or "undefined". *ADR-0005, invariant 3;
    ruling*
-2. A value the plugin leaves out to read as the field's default, and its editor to open on it. A
-   plugin leaves out a value equal to its default, so a blank would say something untrue. *ADR-0005,
-   invariant 1; ruling*
+2. A value the record holds, but its document leaves out because it equals its default, to read as
+   the default its schema declares. A field the record does not hold at all to read as nothing, as
+   xEdit shows a subrecord a plugin lacks. *ADR-0005, invariants 1, 2 and 7; xEdit*
 3. A value too wide for its column cut with an ellipsis, and copied whole. *ruling*
-4. Ctrl+C to copy the value as the cell reads it. *xEdit*
+4. Ctrl+C to copy the value as its editor shows it, so Ctrl+V takes it back unchanged. *xEdit's
+   EditValue*
 5. Ctrl+V to take the text on the clipboard as if I had typed it. Text the field cannot hold is
    refused, naming the field, and nothing changes. *xEdit; Refuse, do not repair*
 6. Ctrl+X, and Delete on a field that is not an element, to clear the value: it reads as the field's
@@ -33,20 +34,20 @@ As a user, I want:
 
 ## By type
 
-| Type | The cell reads | The editor | Ctrl+C copies | The default reads |
-|---|---|---|---|---|
-| Text, and translated text | the text | a text box in place; open field value for a long text | the text | nothing |
-| Integer | the number | a number box | the number | `0` |
-| Float | the number | a number box | the number as it reads | `0` |
-| True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` | `False` |
-| Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | a dropdown of the names | the name | the default the schema names |
-| Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` | nothing |
-| Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record | the record picker, below | `EditorID [FormKey]` | `—` |
-| Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text | `—` |
-| Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text | `—` |
-| Vector | `x, y, z`, as mEdit gives it | a text box | the text | `—` |
-| Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON | `{…}` |
-| Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON | `[0]` |
+| Type | The cell reads | The editor | Ctrl+C copies |
+|---|---|---|---|
+| Text, and translated text | the text | a text box in place; open field value for a long text | the text |
+| Integer | the number | a number box | the number |
+| Float | the number | a number box | the full number |
+| True or false | `True` or `False` | a check box, which writes as it is clicked | `True` or `False` |
+| Enum | the member's name; a value the enum does not name reads `<Unknown: 5>` | a dropdown of the names | the name |
+| Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
+| Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record | the record picker, below | `EditorID [FormKey]` |
+| Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
+| Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text |
+| Vector | `x, y, z`, as mEdit gives it | a text box | the text |
+| Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
+| Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON |
 
 *xEdit's editors by type; xedit.md, divergences 1 and 7; ruling; mEdit's answer*
 
