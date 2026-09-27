@@ -22,7 +22,8 @@ it is handed and never reloads.
    and whether this plugin is the one mod order resolves the name to. The one fact the service
    derives itself is which plugins the game loads with no line: the game's own masters and its
    Creation Club plugins, read from the game folder.
-3. **Participation is derived, once, in the load order value: enabled, winning and listed.** It
+3. **Participation is derived, once, in the load order value: winning, and either listed and
+   enabled or loaded by the game with no line.** It
    is never a stored column and no SQL re-spells it. Only participating rows compete for winner
    or count in a conflict; a non-participating row is hidden by default and shown on request
    with the reason.

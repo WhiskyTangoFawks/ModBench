@@ -71,7 +71,7 @@ A plugin's statuses, the first in this order sets the icon, and the tooltip list
 | Status | When | Icon | Words |
 |---|---|---|---|
 | Failed to load | mEdit could not load it | `$(error)` red | failed to load |
-| Master issues | a master it lists is missing or cannot be loaded, once the load order is indexed | `$(error)` red | 1 master issue, N master issues |
+| Master issues | the game loads it, and a master in its header is one the game does not load (ADR-0013, invariant 3); once the load order is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
@@ -155,6 +155,10 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 5. When the record filter matches nothing, a message saying so, naming its source. *common, The name
    filter, story 6*
 6. The title bar's gestures absent while the folder is not an instance. *No dead entries*
+7. When indexing the load order fails, the view's message line to name the failure, with one line
+   in the Output. The plugins read before it keep their records. A row whose plugin was not reached
+   expands to the error row naming the failure, never to "Still indexing…" for ever. The next load
+   order tries again. *index-load-order, Failure*
 
 ## Menus and keys
 
