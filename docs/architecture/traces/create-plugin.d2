@@ -18,8 +18,6 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 
 plugins."the name, then the place"
 plugins -> client: "create: origin, name, folder" {class: edit}
@@ -33,8 +31,7 @@ http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
 mo2 -> instanceloader: watch {class: signal}
 instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
-plugin -> watcher: changed paths {class: signal}
-watcher."a tracked mod: detect-external-change from here"
+instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal" {class: edit}

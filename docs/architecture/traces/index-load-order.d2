@@ -13,8 +13,6 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
@@ -36,8 +34,8 @@ http -> commands: put load order {class: loadorder}
 commands -> loadorder: snapshot {class: query}
 commands -> http: "applied: the version" {class: loadorder}
 http -> client: the version {class: loadorder}
-loadorder -> watcher: the snapshot changed {class: signal}
-watcher -> indexer: reconcile {class: signal}
+loadorder -> indexer: "a snapshot arrived" {class: signal}
+indexer."validate every plugin"
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
