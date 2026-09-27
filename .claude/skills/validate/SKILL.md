@@ -20,7 +20,7 @@ Classify changed files → run matching gate (never review non-compiling code):
 
 | Changed | Command |
 |---|---|
-| `MEditService/**/*.cs` | `bash .claude/skills/validate/run-gates.sh --backend --api-drift` |
+| `MEditService/**/*.cs`, or a `docs/architecture/**/*.d2` (backend scans read the diagrams) | `bash .claude/skills/validate/run-gates.sh --backend --api-drift` |
 | `modbench/**` | `… --frontend` |
 | both | `… --backend --frontend --api-drift` |
 | config/docs only | `… ` with no flag — Gate 1 alone |
