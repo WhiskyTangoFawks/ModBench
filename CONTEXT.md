@@ -6,7 +6,7 @@ Load order combines them.
 Avoid: priority
 
 ## Mod order
-The order of mods, held in `modlist.txt`. It resolves files.
+The order of mods. It resolves files.
 Avoid: mod priority, mod load order
 
 ## Plugin order
@@ -51,8 +51,8 @@ with. It is the other side of an override. The item is a record or a file.
 Avoid: inject, inject-to-master
 
 # Mod
-A folder under the instance's `mods/` folder. Its files overlay the game folder. A line in
-`modlist.txt` places it in mod order. A mod holds zero or more plugins.
+A folder of files, installed as one unit, that overlays the game folder. A mod holds zero or more
+plugins.
 Avoid: plugin, package
 
 ## Mod separator
@@ -145,16 +145,17 @@ to no record in the load order. A type-mismatched link resolves to a type the fi
 Avoid: missing reference, broken link
 
 # Instance
-A mod manager's installation, a set of files on disk. MO2 is the one Modbench reads today.
+A mod manager's setup for one game: the mods, profiles and downloaded files it manages, wherever it
+keeps them.
 Avoid: loadout, workspace, profile (that is one part of it)
 
 # Profile
-An MO2 profile. Only the active profile shows in the instance.
+A named configuration of an instance: which mods are enabled, and in what order. One profile is
+active at a time.
 Avoid: session, loadout
 
 # Downloaded file
-A mod file that MO2 fetched into the instance's `downloads/` folder, with its `.meta` sidecar.
-Installing it creates a mod, and the file stays. The Downloads view lists downloaded files.
+A mod file the instance keeps with its metadata. Installing it creates a mod, and the file stays.
 Avoid: download (as a noun; to download is to fetch a file), archive (that is
 a BA2 or BSA), package
 
