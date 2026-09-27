@@ -42,9 +42,11 @@ the binary is a build artifact that compile regenerates from it.
    plugin's version is two facts: the upstream version the mod manager records, which is
    informational, and the hash of the plugin's binary, which identifies it. The subject names the
    plugin and the upstream version, and the trailers carry both facts, read by humans and agents.
-7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
-   trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
-   generates the `.gitignore`, then the user owns it.
+7. **Never track a file that changes for non-content reasons.** `meta.ini` is never tracked
+   content: one MO2 update check rewrites it across every mod. The upstream version a baseline's
+   trailers carry arrives with Track's request
+   ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). Track generates the
+   `.gitignore`, then the user owns it.
 
 ## Alternatives rejected
 
