@@ -7,14 +7,12 @@ every file Modbench reads or writes, and to the state Modbench derives from them
 
 1. **Disk-derived state validates by content, never by clock and never by trust in its own last
    write.** The record index hashes every file it holds rows for
-   ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md)); the instance value is rebuilt
-   whole from the mod manager's files
-   ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md));
-   a tracked plugin's bytes are compared against what Modbench last wrote.
-2. **Watchers are never trusted alone.** Every watched state also validates at load and on
-   reconcile, and a watcher overflow triggers validation
-   ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)
-   invariant 4).
+   ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md)). The Instance loader rebuilds
+   the instance value whole from the mod manager's files
+   ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench compares a
+   tracked plugin's bytes with what it last wrote.
+2. **Watchers are never trusted alone.** Every watched state also validates by content, as
+   [ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md) invariant 4 says.
 3. **Modbench tells the user when a tracked plugin changes outside it, and the user owns what
    follows.** A tracked plugin exists twice: the binary, and its plugin source, which git versions.
    Git shows every change to the source and to every other tracked file. The binary is the one copy
@@ -29,8 +27,8 @@ every file Modbench reads or writes, and to the state Modbench derives from them
 
 - "What Modbench last wrote" is a parked ref: each compile records the compiled working tree as a
   commit object outside every branch, its message carrying the binary's hash, and Track
-  initializes it to the pristine snapshot. No porcelain gesture can move it, and a missing or
-  orphaned ref counts as a change the user is told about, never as a guess.
+  initializes it to the pristine snapshot. No porcelain gesture can move it. A missing or
+  orphaned ref counts as a change, and Modbench tells the user. Modbench never guesses.
 
 ## Alternatives rejected
 
@@ -39,10 +37,9 @@ every file Modbench reads or writes, and to the state Modbench derives from them
 - **Detect from the watcher's event list.** Events are lossy and Modbench's own writes are in
   them. The bytes on disk are the only oracle that cannot drift.
 - **Refuse every write to the mod until the user answers a question**, the design this replaces.
-  The notice is where Modbench's part ends, and a gate on every write stands between the user and
-  the work ([principles](../principles.md), *Minimal by default*).
+  Modbench's part ends at the notice. A gate on every write stands between the user and the work ([principles](../principles.md), *Minimal by default*).
 - **Offer answers on the notice: commit to `main` as a new baseline, or apply to the working
-  tree.** Each answer chained several steps that the user does with git.
+  tree.** Each answer chains several steps that the user does with git.
 - **Watch every tracked file, not only the plugin.** Git already shows every tracked file except
   the binary.
 - **Git tracks the binary, with a diff driver that shows its records.** The plugin source is the

@@ -4,9 +4,10 @@ Modbench never assumes exclusive ownership of a file
 ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)), so a watcher and
 validation must exist for every file it reads. Once they exist, Modbench's own write can take the
 same path as another tool's: a command writes a system of record and returns, and the change
-comes back to the read model through the watcher. Both processes have that shape, the record
-index over the plugin files and the source tree, the instance value over the mod manager's files, and one
-architecture on both sides of the HTTP boundary is worth more than either side's local optimum.
+comes back to the read model through the watcher. Both processes have that shape. In mEdit the
+read model is the record index, over the plugin files and the source tree. In Modbench it is the
+instance value, over the mod manager's files. One architecture on both sides of the HTTP boundary
+is worth more than either side's local optimum.
 
 ## Strategic invariants
 
@@ -19,17 +20,16 @@ architecture on both sides of the HTTP boundary is worth more than either side's
    publishes which rows changed and a sequence, and the front end re-reads then. The same
    notification carries hand edits and other tools' writes, which have no other channel.
 4. **Watchers are not trusted alone.** The read model validates by content hash at load, on
-   reconcile and on watcher overflow, and is idempotent by hash, so a duplicate signal is
-   harmless.
+   reconcile, for the file a watcher event names, and for every file on a watcher overflow. It is
+   idempotent by hash, so a duplicate signal is harmless.
 5. **The write side's inputs are the source text, the load order and the schema.** It reads the
    load order for which plugin a record lives in and the Source adapter for whether a mod is
    tracked. Parse status comes from the codec at edit time. A document is never taken from the
    read model, and a missing file is a refusal.
 6. **The instance value is whole and immutable.** Replaced whole by each recompute, with no
    partial update and no per-key invalidation, so a consumer never holds two facts from two
-   generations. Recompute is whole, not incremental, while a full walk stays affordable; if it
-   stops being affordable, this ADR is what gets rewritten.
-7. **The Instance loader owns every watcher on the instance, and a bad read is not a new value.** A watcher
+   generations. Recompute is whole, not incremental, while a full walk stays affordable.
+7. **The Instance loader owns every watcher on the instance, and a bad read keeps the last value.** A watcher
    event, activation and refresh run the same whole recompute, debounced once. A read that throws
    keeps the last value, and publishes the reason beside it until a read lands.
 

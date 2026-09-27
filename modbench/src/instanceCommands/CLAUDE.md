@@ -1,7 +1,7 @@
 # instanceCommands
 
-instance commands. The commands of the instance itself: switch profile hands the Instance adapter
-the profile to select; put load order hands the mEdit client the load order snapshot; refresh asks
-mEdit to drop and rebuild the index, and sends nothing. It hides nothing, and gets the instance
-value as an argument. Not the Instance loader (src/instanceLoader/), which reads the instance and
-never writes it.
+instance commands. The commands of the instance itself. Switch profile hands the Instance adapter
+the profile to select. Put load order hands the mEdit client the load order snapshot. Refresh asks
+mEdit to drop and rebuild the index, and sends no snapshot. It hides nothing, and gets the instance
+value as an argument. It is not the Instance loader (src/instanceLoader/), which reads the
+instance and never writes it.

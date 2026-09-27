@@ -73,7 +73,7 @@ As a user, I want:
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | `[XX] File name`: the plugin's load order index in hex, `[FE:XXX]` for a light plugin, and its file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
+| Label | `[XX] File name`: the plugin's index in plugin order, in hex, `[FE:XXX]` for a light plugin, and its file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
 | Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |

@@ -11,5 +11,5 @@ JSON path queries are what the documents model is built on.
 - **SQLite.** Adequate for one plugin at modest scale. JSON support is an afterthought, and
   analytical queries across a full load order are slow.
 - **Kuzu, a graph database.** The reference graph is a graph problem, but a flat references table
-  answers what is asked today. Revisit if reachability analysis becomes a feature.
+  answers what is asked today.
 - **PostgreSQL or any external database.** A local desktop tool should require no server process.

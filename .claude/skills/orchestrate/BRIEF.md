@@ -29,7 +29,7 @@ Park only for one of these:
 - The premise is refuted.
 - A tool call is denied.
 - A stop the chain of authority names. Gesture and entry point are commands.md's words.
-- A name only the maintainer can give, or a suppression the work cannot do without. Describe it in the meantime; never name it or add it.
+- A name only the maintainer can give, or a suppression the work cannot do without. Describe it in the meantime. Never name it or add it.
 
 To park, commit WIP and end your turn with the question as the report.
 

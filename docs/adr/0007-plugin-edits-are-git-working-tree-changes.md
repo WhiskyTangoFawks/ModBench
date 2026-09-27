@@ -15,12 +15,13 @@ the binary is a build artifact that compile regenerates from it.
    blessed paths for someone else's plugin are a patch or a vendored mod, edited on its edit branch after Track. The
    read path, deep parse, conflicts and the compare grid, never requires source.
 2. **A plugin is tracked when its plugin source is in a git repository in its mod's folder, and
-   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod with no repository; a plugin's row and its Editor column offer it for the plugin's mod. Each
-   plugin is serialized and verified by the round-trip gate over the tree it wrote. In a mod with
+   Track is a manual gesture.** No registry, no hidden gitdirs, no automatic repo creation. Track takes a mod with no
+   repository. A plugin's row and its Editor column offer Track for the plugin's mod. Track
+   serializes each plugin, and the round-trip gate verifies the tree that Track wrote. In a mod with
    no repository, Track creates one and writes its `.gitignore`, then commits the mod's own files
    and each plugin as its own baseline commit. In a tracked mod, the decompile gesture writes a
-   plugin's source into the working tree, and the user commits it. A repo destroyed outside Modbench reads as untracked the next time
-   anyone looks.
+   plugin's source into the working tree, and the user commits it. A repository destroyed outside Modbench reads as untracked the
+   next time anyone looks.
 3. **The source is complete, and a tracked plugin loads from it.** Ingest reads both the working
    tree and `HEAD`, and never consults the binary for content; an untracked plugin keeps the binary
    ingest and yields the same document shape, so the read model never sees a dialect.
@@ -39,13 +40,13 @@ the binary is a build artifact that compile regenerates from it.
    state on `main` and is edited on the edit branch, so `git diff main <branch>` is everything the
    user changed and checking out `main` and compiling restores the pristine plugin. An authored mod
    merges into `main` at will. A baseline commit holds one plugin, so a Track that covers several
-   plugins writes one commit per plugin. Its message follows git's convention. The
+   plugins writes one commit per plugin. Each commit's message follows git's convention. The
    plugin's version is two facts: the upstream version the mod manager records, which is
    informational, and the hash of the plugin's binary, which identifies it. The subject names the
    plugin and the upstream version, and the trailers carry both facts, read by humans and agents.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is never tracked
-   content: one MO2 update check rewrites it across every mod. The upstream version a baseline's
-   trailers carry arrives with Track's request
+   content: one MO2 update check rewrites it across every mod. Track's request carries the upstream
+   version that a baseline's trailers record
    ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). Track generates the
    `.gitignore`, then the user owns it.
 

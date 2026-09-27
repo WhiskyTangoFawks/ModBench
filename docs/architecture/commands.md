@@ -13,9 +13,10 @@ A gesture this file has and the model cannot hold is a ticket.
   realizes it.
 - **Gesture**: one thing the user does to an object. One row in the tables below, under the
   object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
-- **Exclude and hide**: to exclude is to mark an object durably on disk, so it is left out of
-  something until include clears the mark, as a downloaded file is left out of its list. To hide is a view's own lens: it changes nothing on disk and ends with the window,
-  like hide excluded or a name filter.
+- **Exclude and hide**: to exclude is to mark an object durably on disk. The mark leaves the
+  object out of something until include clears it, as the Downloads list leaves out an excluded
+  downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the
+  window, like hide excluded or a name filter.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
   objects.
@@ -37,8 +38,8 @@ A gesture this file has and the model cannot hold is a ticket.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
-- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin,
-  as origin and file name, or a FormKey. For a gesture that creates an object, it identifies the container, when the
+- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin
+  as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the
   entry point is on the container's row. A create from a title icon has none, and its container is
   an Option. It is the same on every surface that offers the gesture. Singular means the clicked
   row, and plural means the whole selection.
@@ -234,8 +235,8 @@ Offered on Mods, and on Downloads for install. The Overwrite row is a mod-list r
 | move | writes | Mods: drag, context menu | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
-| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over a mod with the same Nexus id when the user confirms the target. That is an upgrade. A downloaded file supplies its own source; the Mods menu asks for one. | install-mod |
-| track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git. It fires `decompile plugin`, which creates the mod's repository and commits the mod's own files, then each plugin's baseline as its own commit. A plugin row or an Editor column fires it for the plugin's mod. | decompile-plugin |
+| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod. An upgrade installs it over a mod with the same Nexus id, once the user confirms the target. A downloaded file supplies its own source. The Mods menu asks for one. | install-mod |
+| track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git. It sends `decompile plugin`, which creates the mod's repository and commits the mod's own files, then commits each plugin's baseline in a commit of its own. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in VS Code's Explorer, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | Mods: context menu (mod has a Nexus id); Downloads: context menu (file has a Nexus id) | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
@@ -246,13 +247,13 @@ Offered on Mods. A separator is a row in mod order.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, which joins it; below a separator, after its mods | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
+| add | writes | Mods: context menu | `modbench.separator.add` | mod or separator (the anchor) | position: above a mod, and the mod joins the new separator; below a separator, after its mods | MO2 mod list | Add a mod separator next to a mod or a separator. | update-load-order-file |
 | rename | writes | Mods: context menu, key (F2) | `modbench.separator.rename` | separator | - | MO2 mod list | Rename a mod separator. | update-load-order-file |
 | delete | writes | Mods: context menu, key (Delete) | `modbench.separator.delete` | separators | - | MO2 mod list | Delete a mod separator. The mods under it join the separator above, or become ungrouped when it was the first. | update-load-order-file |
 
 ## Plugin
 
-Offered on Plugins. The Plugins surface shows a plugin's origin mod, and its origin. Tracking gates every edit. An untracked plugin is read-only in the Editor, whose column names Track, or decompile in a tracked mod, so each is offered where the user meets that refusal.
+Offered on Plugins. The Plugins surface shows each plugin's origin mod. Tracking gates every edit. An untracked plugin is read-only in the Editor. Its column names the gesture that makes it editable: Track, or decompile in a tracked mod. The user meets each gesture where the Editor refuses the edit.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
@@ -270,14 +271,14 @@ Offered on Plugins (the record children) and on Editor (the record panel and Ref
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
-| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field: a new one changes the record's FormKey and nothing else, and updating the records that reference it is a script. | edit-record |
+| edit field | writes | Editor: webview message, key, drag | `modbench.record.editField` | record, plugin, field path | value: set, paste, or the value of another field by drag and drop | xEdit View grid; xEdit drag between columns | Change a field's value in plugin source. A plugin header is a record, and its fields are editable the same way. A record's FormID is a field. A new FormID changes the record's FormKey and nothing else. Updating the records that reference it is a script. | edit-record |
 | add element | writes | Editor: context menu | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | writes | Editor: context menu, key | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | writes | Editor: context menu, key | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container | xEdit navigator | Add a record to a plugin. | edit-record |
 | delete | writes | Plugins: context menu, key (Delete); Editor: context menu, key (Delete, on Referenced By) | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
-| copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirm asks whether to replace it. | edit-record |
-| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click, context menu, key (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. A reference cell opens the record it points to, by the Go to Record menu item. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
+| copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
+| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click, context menu, key (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 
@@ -308,9 +309,9 @@ Commands Modbench runs itself. No user starts them and no surface owns them, so 
 gesture and sit outside the object tables. The first column is the trigger that fires each one.
 Each is a command for the same reason a gesture is: one handler, and one identity. Each is
 registered under its Command ID, internal. A system command
-keeps the disk and mEdit in line with the instance value. Its trigger is a disagreement between
-them. It takes the value, or the slice it needs, as its Argument, and it acts once, in every
-direction the disagreement needs.
+keeps the disk and mEdit in line with the instance value. A disagreement between the instance
+value and the disk or mEdit triggers it. It takes the value, or the slice it needs, as its
+Argument. It acts once, in every direction the disagreement needs.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|

@@ -10,7 +10,7 @@ Break an epic into a set of **tickets** — tracer-bullet vertical slices, each 
 
 The epic's scope is a list of **pointers** into the specs in `docs/architecture/`. The tickets divide those pointers between them. The specs hold the behaviour, so a ticket carries pointers and never the words they point at.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the triage labels in `docs/agents/triage-labels.md`.
 
 ## Process
 

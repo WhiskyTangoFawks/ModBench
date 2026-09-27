@@ -10,7 +10,7 @@ Diagram: [decompile-plugin.d2](decompile-plugin.d2). Catalog rows: `track` under
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 `decompile plugin` reads a plugin's bytes into plugin source in its mod's repository. It is the
-inverse of `compile`. Two gestures fire it: `track` in a mod with no repository, and `decompile` in
+inverse of `compile`. Two gestures send it: `track` in a mod with no repository, and `decompile` in
 a tracked mod.
 
 ## The command
@@ -26,15 +26,15 @@ a tracked mod.
    invariant 2). Nothing of the plugin is written before its check passes.
 4. Commands publishes track progress, per plugin and phase, through Ports.
 5. The Source adapter puts the plugin's documents in the mod's repository:
-   - **`track`, in a mod with no repository.** Once the first plugin passes its check, it creates one on `main`
-     with the preset's `.gitignore`, keeping line endings as written, and commits the mod's own
-     files in a commit of their own (`Track <mod>`): the `.gitignore` and, under `Everything`, the
-     assets. It then commits the plugin's documents as the plugin's baseline
+   - **`track`, in a mod with no repository.** Once the first plugin passes its check, it creates the
+     repository on `main`, with the preset's `.gitignore`, and keeps line endings as written. It
+     commits the mod's own files in a commit of their own (`Track <mod>`): the `.gitignore` and,
+     under `Everything`, the assets. It then commits the plugin's documents as the plugin's baseline
      (`Track Foo.esp 1.2.3`).
    - **`decompile`, in a tracked mod.** It writes the plugin's documents into the working tree of
      the checked-out branch, in place of the plugin's source there, and commits nothing.
 6. Commands records each plugin's bytes as what Modbench last wrote.
-7. Commands answers applied or the refusal, per plugin.
+7. Commands answers per plugin: applied, or the refusal.
 
 A baseline commit's message follows git's convention: the subject, a blank line, then the trailers
 `Plugin`, `Upstream-Version` and `Binary-SHA256` (ADR-0007, invariant 6). A version the mod
@@ -75,8 +75,8 @@ No rollback beyond git's: each commit is its own unit (ruling: git handles it).
 
 - A refused plugin leaves nothing of its own. The plugins committed before it stay committed, and
   the rest go on.
-- When every plugin is refused, nothing is written: the repository is created only once the first
-  plugin passes its check.
+- When Commands refuses every plugin, it writes nothing. The Source adapter creates the repository
+  only once the first plugin passes its check.
 
 Exceptions to commands.md's rules:
 

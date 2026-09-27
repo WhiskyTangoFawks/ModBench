@@ -1,10 +1,7 @@
 # Failures are data; the front end decides how to surface them
 
-## Context
-
-A load returned HTTP 200 while silently dropping a whole plugin's records, because Mutagen could
-not parse it. Nothing failed, so an error-only convention let it through, yet the user's model of
-what was loaded was wrong.
+An error-only convention lets a partial result through: a load can succeed while it drops a whole
+plugin's records. So a failure is data, and the front end decides how the user sees it.
 
 ## Strategic invariants
 

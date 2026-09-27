@@ -22,13 +22,13 @@ it is handed and never reloads.
    and whether this plugin is the one mod order resolves the name to. The one fact the service
    derives itself is which plugins the game loads with no line: the game's own masters and its
    Creation Club plugins, read from the game folder.
-3. **Participation is derived, once, in the load order value: winning, and either listed and
-   enabled or loaded by the game with no line.** It
+3. **The load order value derives participation, once. A plugin participates when it is winning,
+   and either listed and enabled or loaded by the game with no line.** Participation
    is never a stored column and no SQL re-spells it. Only participating rows compete for winner
    or count in a conflict; a non-participating row is hidden by default and shown on request
    with the reason.
-4. **The load order is a value in Editing's shared kernel, written only through put load order and read by
-   both sides and the adapters.** There is no session: nothing is loaded, reloaded or exited, and
+4. **The load order is a value in Editing's shared kernel. Only put load order writes it, and both
+   sides and the adapters read it.** There is no session: nothing is loaded, reloaded or exited, and
    a plugin that fails to parse is a row in an error state, the way a file with a diagnostic is
    still a file.
 
@@ -42,7 +42,7 @@ it is handed and never reloads.
 
 ## Alternatives rejected
 
-- **A bulk load verb plus a verb per loadout gesture**, the state this replaced: reread for a
+- **A bulk load verb plus a verb per loadout gesture:** reread for a
   mod-order change, participation for enable and disable, load and unload for unlisted plugins.
   Every future gesture would need its own endpoint and its own drift story.
 - **Editing reads `modlist.txt` and `plugins.txt` itself.** Self-validating like the record

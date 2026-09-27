@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Bytes to documents and facts and back (ADR-0005 rule 2): a live mod crosses this door
+/// <summary>Bytes to documents and facts and back (ADR-0005 invariant 2): a live mod crosses this door
 /// in neither direction. The game release is a parameter of every verb.</summary>
 public interface IPluginAdapter
 {
@@ -54,7 +54,7 @@ public interface IPluginAdapter
     // travels beside the path: a ModKey renders the extension from Mutagen's lowercase constants.
 
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
-    /// does not (ADR-0005 rule 2). A tree that will not read answers with its diagnosis.</summary>
+    /// does not (ADR-0005 invariant 2). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,

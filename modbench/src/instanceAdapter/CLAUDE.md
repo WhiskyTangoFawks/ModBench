@@ -3,7 +3,7 @@
 Instance adapter. A repository, the one box that reads or writes the instance: the mod manager's
 configuration, the profiles, the mods and their order, the plugin order and the downloaded files.
 MO2 is one implementation of it, and the only code that names MO2. It answers parsed reads and
-takes changes in domain words. It hides the layout, the globs its watchers use, every path
+takes changes in domain words. It hides the layout, the globs the Instance loader's watchers use, every path
 function, the manager's file formats with their codecs and splices, and whole-file writes.
 `plugins.txt`'s format is the game's, and its codec is the kernel's Load-order file codec. It reads
 which game the instance is for and where that game is. It writes no deployment, which is deploy's.
