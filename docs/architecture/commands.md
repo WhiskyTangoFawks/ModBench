@@ -114,9 +114,10 @@ own item to the Argument.
   answering, refuses the whole selection once, before any item is written.
 - **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
   message.
-- **Confirm what destroys.** A gesture that deletes or overwrites asks first, once for the whole
-  selection. Any other gesture does not ask. A surface or a contract names an exception, and its
-  reason.
+- **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks
+  first. It asks once for the whole selection. An edit to a value inside a record changes the record
+  and deletes nothing, so it does not ask. No other gesture asks. A surface or a contract can name
+  an exception, with its reason.
 - **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
   reads the file back, and every view updates from the disk's next value. Until then, the thing the
   gesture changed shows its result, marked unconfirmed, and nothing else in the view changes

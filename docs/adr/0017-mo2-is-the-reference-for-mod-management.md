@@ -32,11 +32,12 @@ own.
    defaulting a view there would compete with chat for screen space. Views stay user-relocatable
    through VS Code's own Move View, so a user who wants MO2's literal side-by-side layout can
    build it. Modbench never assumes that choice, and nothing reserves or locks the bar.
-5. **MO2 decides what, VS Code decides how**, as the principle *Mutagen's data, the reference's
-   behaviour, VS Code's interaction* says ([principles](../principles.md)). A departure from MO2's
-   what needs a platform limitation or a maintainer ruling, and is on [the
-   register](../out-of-scope/mo2.md). Nicer, cleaner or more modern is not a reason. An MO2 gesture
-   that VS Code already provides, or that only repeats another, is an omission on the register.
+5. **MO2 decides the behaviour, VS Code decides the interaction.** This is the principle *Mutagen's
+   data, the reference's behaviour, VS Code's interaction* ([principles](../principles.md)), applied
+   to Mod Management. Every departure from MO2's behaviour is a row on [the
+   register](../out-of-scope/mo2.md). A divergence changes the behaviour. Its reason is a platform
+   limitation, a principle ranked above this one, or a maintainer ruling. An omission leaves the
+   behaviour out. Its reason is a row of the register's *Omissions by reason* table.
 
 ## Permitted divergences
 

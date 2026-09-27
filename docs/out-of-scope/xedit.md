@@ -1,6 +1,6 @@
 # xEdit: divergences and omissions
 
-Where xEdit has an answer, Modbench adopts it ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). This file lists every place it does not. A divergence needs a platform limit or a maintainer ruling. An omission needs a reason from the table below.
+Where xEdit has an answer, Modbench adopts it ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). This file lists every place it does not.
 
 What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [the grid audit](../research/xedit-ux-audit.md).
 
