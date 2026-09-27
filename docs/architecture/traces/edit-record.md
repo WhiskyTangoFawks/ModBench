@@ -13,8 +13,8 @@ Diagram: [edit-record.d2](edit-record.d2). Catalog rows under Record: `edit fiel
 [ADR-0012](../../adr/0012-every-plugin-in-the-instance-is-indexed.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-Every gesture here changes a tracked plugin's plugin source in the working tree, and nothing else: no
-binary, no commit and no index (ADR-0007, invariant 4). Review and commit are git's.
+Every gesture here changes a tracked plugin's plugin source in the working tree, and nothing else:
+no binary, no commit and no index (ADR-0007, invariant 4). Review and commit are git's.
 
 ## The flow
 

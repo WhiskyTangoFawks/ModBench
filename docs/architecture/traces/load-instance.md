@@ -9,9 +9,9 @@ States, and [toolbox.md](../surfaces/toolbox.md), Refresh. Governed by
 [ADR-0013](../../adr/0013-mod-management-hands-editing-the-load-order.md) and
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
-The Instance loader is how Toolbox, Mods, Plugins and Downloads read the instance: one value, built from disk and nothing
-else. A change from Modbench and a change from MO2 or any other tool reach it the same way
-(ADR-0015, invariant 2).
+The Instance loader is how Toolbox, Mods, Plugins and Downloads read the instance: one value, built
+from disk and nothing else. A change from Modbench and a change from MO2 or any other tool reach it
+the same way (ADR-0015, invariant 2).
 
 ## The flow
 
@@ -23,7 +23,8 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 2. The Instance loader reads, through the Instance adapter, `ModOrganizer.ini` first: the active
    profile, the game, and where the downloaded files are. Then it reads the profile's `modlist.txt`
    and `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the
-   game folder's plugins and its Creation Club list.
+   game folder's plugins and its Creation Club list. The Instance adapter finds the game folder:
+   the setting first, then MO2's configuration, then Steam or Wine detection.
 3. The Instance adapter parses each file through its codec and answers parsed values.
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).

@@ -1141,7 +1141,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 });
 
-// mods.md, Menus and keys, story 7: copy value copies each selected mod's or separator's name,
+// mods.md, Menus and keys, story 5: copy value copies each selected mod's or separator's name,
 // one per line — Mods' own text for the catalog's one copy value id.
 describe('modsCopyValueText', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });

@@ -94,9 +94,9 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 
 | Where | Items, in order |
 |---|---|
-| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod…. Collapse All last. |
-| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator… · create empty mod… · install… · track… · copy value · uninstall |
-| Separator menu | move… · add separator… · rename… · copy value · delete |
+| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
+| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator · create empty mod · install… · track · copy value · uninstall |
+| Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. |
 
@@ -105,8 +105,8 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
    Argument in the catalog says. *catalog Argument*
 2. Enable or disable, over a selection that mixes enabled and disabled mods, to apply the
-   right-clicked row's direction to every mod. Space takes the focused row's direction. A mod already in
-   that state is left alone. *MO2; Doing nothing is not an error*
+   right-clicked row's direction to every mod. Space takes the focused row's direction. A mod
+   already in that state is left alone. *MO2; Doing nothing is not an error*
 3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for
    separators.
 4. A click or double click on a row to do nothing but select it. *catalog: no row click on Mods*
@@ -146,15 +146,15 @@ As a user, I want:
 
 1. A prompt for the name. Esc or an empty name adds nothing. A name another separator has is refused
    in the prompt: "A separator with this name already exists". *MO2*
-2. On a mod, the new separator to go directly on the mod's losing side, so the mod and the mods on its
-   winning side in its separator join it. On a separator, on the winning side of that
+2. On a mod, the new separator to go directly on the mod's losing side, so the mod and the mods on
+   its winning side in its separator join it. On a separator, on the winning side of that
    separator's last mod, taking none. With losing at the top, that is directly above the mod, and
    directly below the separator's last mod, as shown. *catalog `add`, position; A gesture is atomic*
 
 ### Rename separator
 
-As a user, I want a prompt filled with the current name. Esc, an empty name or the same name renames nothing. A name
-another separator has is refused in the prompt, as for add. *MO2*
+As a user, I want a prompt filled with the current name. Esc, an empty name or the same name renames
+nothing. A name another separator has is refused in the prompt, as for add. *MO2*
 
 ### Delete separator
 

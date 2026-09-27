@@ -31,9 +31,10 @@ As a user, I want:
 
 ## The name filter
 
-One filter on every list (commands.md, One filter). As a user, I want:
+One filter on every list. As a user, I want:
 
-1. To open it from the title bar's first slot. It has no key (A view, story 5). *catalog `filter`*
+1. To open it from the title bar's first slot. It has no key: Ctrl+Alt+F and F3 stay VS Code's own
+   Find on the tree (A view, story 5). *catalog `filter`*
 2. Typing to narrow the list live, by case-insensitive substring of the row's label.
 3. The filter to stay when the input box closes by any route: Enter, Esc, a click on a row or
    elsewhere. Reopening the box shows the term, to edit.
@@ -61,9 +62,9 @@ As a user, I want:
    story 2. *commands.md, No dead entries*
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The
    Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows
-   need the game folder says so in its message line. One line in the Output. No notification; this is the background
-   tier. Rows that do not need the game folder still show. A configuration that names no game is
-   story 2; no configuration is story 4. *ADR-0019, invariant 2*
+   need the game folder says so in its message line. One line in the Output. No notification; this
+   is the background tier. Rows that do not need the game folder still show. A configuration that
+   names no game is story 2; no configuration is story 4. *ADR-0019, invariant 2*
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing
    the last good read:" and the reason, with one line in the Output. No notification. The next
    good read clears it. *ADR-0015, invariant 7; ADR-0019, invariant 1*

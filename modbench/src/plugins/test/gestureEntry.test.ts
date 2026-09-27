@@ -210,7 +210,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('create sees exactly one selected record type whose plugin is tracked and editable', () => {
     expect(context([weapons]).singleEditableRecordType).toBe(true);
     expect(context([untrackedWeapons]).singleEditableRecordType).toBe(false);
@@ -233,7 +233,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allRecords).toBe(false);
   });
 
-  // mods.md, Menus and keys, story 3, which plugins.md story 5 follows: Space takes the focused
+  // mods.md, Menus and keys, story 2, which plugins.md story 3 follows: Space takes the focused
   // row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
     expect(context([alpha, beta]).selectionToggle).toBe('disable');

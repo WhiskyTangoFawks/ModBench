@@ -258,7 +258,7 @@ describe('registerRevealInExplorerCommand', () => {
   });
 });
 
-// plugins.md, Menus and keys, story 8: copy value copies each selected plugin as its file name and
+// plugins.md, Menus and keys, story 5: copy value copies each selected plugin as its file name and
 // each selected record as `EditorID [FormKey]`, or the FormKey alone with no EditorID, one to a line.
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');

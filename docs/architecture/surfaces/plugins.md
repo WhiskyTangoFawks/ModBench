@@ -36,10 +36,10 @@ As a user, I want:
 5. A disabled plugin to show no expander, because it is not active. *ADR-0012, invariant 5*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
-7. Beneath a group, its records, in FormID order. A container record holds its children directly, as xEdit folds a
-   record's child group into the record: a worldspace holds its persistent cell and its blocks, a
-   block its sub-blocks, a sub-block its cells, a cell its persistent and temporary placed
-   references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
+7. Beneath a group, its records, in FormID order. A container record holds its children directly, as
+   xEdit folds a record's child group into the record: a worldspace holds its persistent cell and
+   its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary
+   placed references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
    responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
 8. A row with nothing beneath it to show no expander, and an empty group of placed references not to
    be a row. *xEdit*
@@ -72,7 +72,8 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I
   set it. *ADR-0012, invariant 4*
-- Before the snapshot is indexed, a plugin has no master status, and none means not yet asked.
+- Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not
+  no issues.
 - A later snapshot keeps the last statuses until the new ones land.
 - A malformed plugin's reasons are also in the Problems panel, on the plugin file. *commands.md,
   Surfaces and their templates*
@@ -124,12 +125,13 @@ record's. *xEdit*
 
 As a user, I want:
 
-1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows. The
-   plugins the game loads with no line stay at the losing end. The groups and records beneath keep
-   their order. *common, A view, story 7; MO2's priority sort*
+1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows.
+   The plugins the game loads with no line stay at the losing end. The groups and records beneath
+   keep their order. *common, A view, story 7; MO2's priority sort*
 2. The name filter to match plugin rows. *common, The name filter*
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
-   becomes a clear icon while it is active. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
+   becomes a clear icon while it is active. It is its own filter, beside the name filter. *catalog
+   `filter` under Record; Chrome*
 4. A plugin with no record left under the record filter hidden while the record filter is active. A
    later snapshot keeps the rows the record filter hides until the new ones land.
 
@@ -137,8 +139,8 @@ As a user, I want:
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no lines and no plugins the game loads with no line, a message saying so, in the view's
-   message line.
+1. With no `plugins.txt` lines, and no plugin the game loads without one, a message saying so, in
+   the view's message line.
 2. While mEdit starts and indexes, the view's progress bar under its title, and every plugin row
    already there. A row whose plugin is not indexed yet expands to "Still indexing…", never to an
    error. No notification.
@@ -195,8 +197,8 @@ As a user, I want:
    *update-load-order-file, Refusals; ADR-0012, invariant 4*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
-5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here.
-   *xedit.md: Drag a record onto a reference field*
+5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from
+   outside the view to drop here. *xedit.md: Drag a record onto a reference field*
 
 ## Pickers, prompts and confirmations
 
@@ -211,7 +213,7 @@ As a user, I want:
 3. A place that already holds a plugin of that name left out of the pick. The same name in another
    place is not checked. *No dead entries*
 4. Esc at either step to create nothing. *Esc changes nothing*
-5. The new plugin to appear at the end of the list, disabled. *create-plugin, Hand-off*
+5. The new plugin to appear at the winning end of the list, disabled. *create-plugin, Hand-off*
 
 ### Track
 
@@ -270,7 +272,7 @@ By [common.md](common.md#reporting). As a user, I want:
 4. A notification for each tracked mod whose plugins changed outside Modbench, naming the mod and
    the plugins. It offers nothing to do. It comes once in a session for each new state of a
    plugin's bytes. *detect-external-change; ADR-0003, invariant 3*
-5. A warning notification, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
+5. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
    at decompile. *detect-external-change*
 
 ## Test seam

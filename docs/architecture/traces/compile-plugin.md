@@ -58,8 +58,8 @@ Commands refuses before any write, and names the cause.
 
 ## Failure
 
-- **A failed write** says so, and names the plugin. The plugin source is untouched, so compiling again
-  rebuilds the binary.
+- **A failed write** says so, and names the plugin. The plugin source is untouched, so compiling
+  again rebuilds the binary.
 - **An interrupted compile** leaves the old binary or the new one. Each counts as what Modbench last
   wrote (step 7), so detect-external-change finds no change. Compiling again rebuilds the binary.
 

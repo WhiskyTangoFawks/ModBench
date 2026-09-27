@@ -23,10 +23,10 @@ pictures.
 - [layers.d2](layers.d2) is the layer rule the gate reads: which band may reference which, and the
   named same-band exceptions.
 - [traces/](traces/) holds one sequence diagram per flow. Gestures whose arrows are the same share
-  one, and its contract names each gesture's row. Beside each diagram a `.md` file of the same
-  name holds its contract. Actors are the zoom-out's boxes, imported by name; time runs down; a message is labelled with what moves, never with the
-  call, so a request and its reply are two messages. A note on an actor is what it does between
-  messages.
+  one, and its contract names each gesture's row. Beside each diagram a `.md` file of the same name
+  holds its contract. Actors are the zoom-out's boxes, imported by name; time runs down; a message
+  is labelled with what moves, never with the call, so a request and its reply are two messages. A
+  note on an actor is what it does between messages.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
   kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
   mark. A message class says which kind of payload it is, and a reply takes its
@@ -83,6 +83,11 @@ holds it. Modbench does not depend on one mod manager. The game owns the format 
 The mod manager owns every other file in the instance. The Instance adapter is a repository. MO2
 is one implementation of it. Only that implementation names MO2. A source scan holds this rule,
 as it holds game names. Mods, Downloads and Toolbox never see a record.
+
+## What is left out
+
+Deliberately absent, so that every arrow drawn stays legible: the repair engine,
+and MO2's own UI beyond the trees Modbench renders.
 
 ## Rendering
 

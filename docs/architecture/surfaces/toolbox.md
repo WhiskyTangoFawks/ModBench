@@ -32,8 +32,7 @@ disagrees with the views below it. *ADR-0015*
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
 1. With no game folder, the Game row to show `$(warning)` and "game folder not found", with a
-   tooltip naming each place Modbench looked and the setting that fixes it. *common, States,
-   story 5*
+   tooltip naming each place Modbench looked and the setting that fixes it.
 
 ## Menus and keys
 

@@ -25,8 +25,9 @@ or an installed mod the user confirmed. Install never infers the target from dis
    folders, below any single wrapper folder. The install box flags a FOMOD installer. Its steps do
    not run, and its files stay as they are.
 5. It writes `meta.ini` through the Instance adapter: the game, the Nexus mod ID, the version, the
-   installation file and the installed files. On an upgrade, a key the source does not know keeps its old value,
-   so an unknown version never blanks a known one. Every key install does not own survives.
+   installation file and the installed files. On an upgrade, a key the source does not know keeps
+   its old value, so an unknown version never blanks a known one. Every key install does not own
+   survives.
 6. The mod lands:
    - **A new mod.** `meta.ini` is written in the staged tree first. Then one rename moves the tree
      into `mods/<name>`, so the folder is never seen half built.

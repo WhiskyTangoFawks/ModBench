@@ -20,19 +20,20 @@ A gesture this file has and the model cannot hold is a ticket.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
   objects.
-- **Where**: the entry points of the gesture, surface by surface, as `<surface>: <entry point>`
-  with a condition in brackets, separated by semicolons. It states the model, not the code. The
-  entry points are `context menu`, `title icon`, `title overflow`, `row click`, `key` (a default
-  chord goes in brackets), `drag`, `check box`, `webview message` and `code lens`. A gesture is
-  absent, not refused, where its condition is false. Every gesture is also in the command palette, unless it is marked internal. An **internal** command is
-  registered under its Command ID and has no entry point and no palette entry.
+- **Where**: the entry points of the gesture, surface by surface, as `<surface>: <entry point>` with
+  a condition in brackets, separated by semicolons. It states the model, not the code. The entry
+  points are `context menu`, `title icon`, `title overflow`, `row click`, `key` (a default chord
+  goes in brackets), `drag`, `check box`, `webview message` and `code lens`. A gesture is absent,
+  not refused, where its condition is false. Every gesture is also in the command palette, unless it
+  is marked internal. An **internal** command is registered under its Command ID and has no entry
+  point and no palette entry.
 - **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
   or a folder. `reads` when it only changes what the surface shows, or opens something. `runs`
   when it starts another program and writes nothing itself.
 - **Command ID**: the registered interface and the source of truth, which the code reflects. It is
   `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`,
-  `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does to whatever it shows is `modbench.<verb>`, in
-  Every view.
+  `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does
+  to whatever it shows is `modbench.<verb>`, in Every view.
 - **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
   position. A picker asks for each Option the caller did not supply. An Option may be computed
   and multi-valued, such as a checked list with defaults.
@@ -49,8 +50,8 @@ A gesture this file has and the model cannot hold is a ticket.
   gesture: the row is an addition or a divergence, and needs a ruling.
 - **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
   drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
-  its specification is this row and its surface. Its `.md` contract says what the flow promises,
-  step by step, where it hands off, what it refuses, and what a failure leaves.
+  its specification is this row and its surface. A trace's `.md` contract says what the flow
+  promises, step by step, where it hands off, what it refuses, and what a failure leaves.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -255,7 +256,8 @@ A separator is a row in mod order.
 
 ## Record
 
-A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
+A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the
+palette only while one has focus.
 
 | Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|---|
@@ -266,7 +268,7 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | create | writes | Plugins: context menu | `modbench.record.create` | plugin, or a container | record type; containment, for a container | xEdit navigator | Add a record to a plugin. | edit-record |
 | delete | writes | Plugins: context menu, key (Delete); Editor: context menu, key (Delete, on Referenced By) | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | writes | Plugins: context menu; Editor: context menu | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
-| open | reads | Plugins: row click, context menu; Editor: context menu (on a reference field); Editor: row click, context menu, key (on Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
+| open | reads | Plugins: row click, context menu; Editor: context menu (Go to Record on a reference), row click, context menu, key (Referenced By) | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |
 | open field value | reads | Editor: context menu | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | Plugins: title icon, code lens (on any SQL document) | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-index |
 
@@ -289,13 +291,15 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 
 ## System commands
 
-Each is a command for the same reason a gesture is: one handler, and one identity. A system command
-keeps the disk and mEdit in line with the instance value. A disagreement between the instance
-value and the disk or mEdit triggers it. It takes the value, or the slice it needs, as its
-Argument. It acts once, in every direction the disagreement needs.
+Commands Modbench runs itself. No user starts them and no surface owns them, so they have no gesture
+and sit outside the object tables. The first column is the trigger that fires each one. Each is a
+command for the same reason a gesture is: one handler, and one identity. Each is registered under
+its Command ID, internal. A system command keeps the disk and mEdit in line with the instance value.
+A disagreement between the instance value and the disk or mEdit triggers it. It takes the value, or
+the slice it needs, as its Argument. It acts once, in every direction the disagreement needs.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | The snapshot changed: a plugin file appeared or disappeared, or a profile switch or a `modlist.txt` or `plugins.txt` edit changed the active plugins, from Modbench or another tool; or mEdit started | writes | `modbench.instance.putLoadOrder` | snapshot: every plugin in the instance, and the active plugins in load order | - | none | Hand mEdit the whole snapshot whenever it changes. The architecture calls it a PUT. | index-load-order |
 | The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | instance value | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. | update-load-order-file |
-| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |
+| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |

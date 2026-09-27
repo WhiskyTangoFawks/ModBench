@@ -2199,7 +2199,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  // plugins.md, The tree, story 11: VS Code remembers expansion by identity only within one
+  // plugins.md, The tree, story 10: VS Code remembers expansion by identity only within one
   // activation, so an activation opens clean when no row is built expanded.
   it('builds every row, at every level, collapsed', async () => {
     const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', slot: 1, enabled: false })]);
@@ -2538,7 +2538,7 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
   });
 });
 
-// plugins.md, Menus and keys, story 4: a click on an enabled plugin row opens its header, and a
+// plugins.md, Menus and keys, story 2: a click on an enabled plugin row opens its header, and a
 // click on a disabled one only selects it.
 describe('PluginsTreeProvider — a plugin row\'s click', () => {
   it('opens the header of an enabled plugin', async () => {

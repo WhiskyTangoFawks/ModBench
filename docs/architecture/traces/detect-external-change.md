@@ -16,7 +16,8 @@ invariant 3), and it ends there. The user decides what to do next.
 2. Commands compares each tracked plugin's bytes with what Modbench last wrote
    ([compile-plugin](compile-plugin.md), step 5; [decompile-plugin](decompile-plugin.md), step 6).
    A plugin whose bytes differ changed outside Modbench.
-3. An untracked plugin in the mod has no plugin source to compare. Commands names it beside the change.
+3. An untracked plugin in the mod has no plugin source to compare. Commands names it beside the
+   change.
 4. Commands publishes the mod through Ports: the plugins that changed outside Modbench, and the
    untracked plugins. A check that finds neither publishes that too, so an earlier notice clears.
    The HTTP endpoints stream it to the mEdit client, and Plugins shows it.
@@ -29,7 +30,7 @@ This flow waits for no hand-off.
 ## Failure
 
 - **A plugin whose file is gone or cannot be read** counts as changed, and the notice names the reason.
-- **A plugin whose last write cannot be read** counts as changed. The flow never guesses
+- **A plugin whose last-write ref is missing or orphaned** counts as changed. The flow never guesses
   (ADR-0003, Derived tactical observations).
 
 ## Test seam

@@ -18,9 +18,9 @@ no command of its own. The list is flat: every row is a leaf, so it has no Colla
 
 As a user, I want:
 
-1. One row for each file directly in the instance's downloads folder: the folder the mod manager's
-   configuration names, even when it lies outside the instance. `downloads/` unless I moved it.
-   *MO2*
+1. One row for each file directly in the instance's downloads folder: the folder MO2's
+   configuration names, resolved as MO2 resolves it, `%BASE_DIR%` included, even when it lies
+   outside the instance. `downloads/` unless I moved it. *MO2*
 2. Only a file install can take to be a row. Install owns the list of extensions. A subfolder, a
    readme or any other file is not a row. *MO2 lists files by the installers' extensions, never
    folders*
@@ -35,7 +35,7 @@ As a user, I want:
 |---|---|---|
 | Label | the `.meta` `name`, or the file name when that is missing or empty. Never blank. | MO2 |
 | Description | the `.meta` version, then the status word, which is left out for Downloaded | common, A view, story 3 |
-| Icon | the status: Downloaded `$(archive)` green, Installed `$(check)` uncoloured, Uninstalled `$(circle-slash)` yellow. No file-type icon: every row is a downloaded file, so it would never vary. | MO2's status colours |
+| Icon | the status: Downloaded `$(archive)` green, Installed `$(check)` uncoloured, Uninstalled `$(circle-slash)` yellow. No file-type icon: the icon carries the status. | MO2's status colours |
 | Tooltip | file name, mod name, version, Nexus mod ID, size, file time, game and author, each only when known. A tree has no columns, so size and file time live here. | MO2's columns |
 | Identity | the file name, never the label, so an edit to the `.meta` `name` keeps the row selected | |
 | Excluded | shown only while show excluded is on, dimmed, among the other rows in sort order | mo2.md, divergence 5 |
@@ -53,8 +53,8 @@ The status is read from the files, first match wins:
 A mod's `meta.ini` decides Installed. The row stays right when I or another tool remove a mod.
 *ADR-0003, invariant 1*
 
-Install and uninstall write the `.meta` flags so that MO2's Downloads tab agrees. Here the flags only
-separate a file installed once from one never installed. *ADR-0017, invariant 1*
+Install and uninstall write the `.meta` flags so that MO2's Downloads tab agrees. Here the flags
+only separate a file installed once from one never installed. *ADR-0017, invariant 1*
 
 ## Order and view state
 
@@ -71,8 +71,8 @@ As a user, I want:
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no downloaded files, a message saying there are none yet, and that a file copied into the
-   downloads folder shows up here.
+1. With no downloaded files, a message saying there are none yet, and that an installable file
+   copied into the downloads folder shows up here.
 2. With files that are all excluded while show excluded is off, a message saying so, never "none
    yet". *ADR-0019, invariant 1*
 
@@ -102,15 +102,15 @@ As a user, I want:
 
 As a user, I want:
 
-1. One confirmation for the whole selection. It names the file when I select one, and gives the
-   count when I select several. It says the files go to the trash. *Confirm what destroys; MO2*
+1. One confirmation for the whole selection. It names the file by its file name when I select one,
+   and gives the count when I select several. It says the files go to the trash. *Confirm what
+   destroys; MO2*
 2. The installed mod to be untouched, and the confirmation to say so. *MO2*
 
 ### The install target
 
-There is no file picker (catalog `install`). The pick is Downloads' own
-(the diagram's caption: "the target pick: candidates by Nexus id, always confirmed"). As a user, I
-want:
+There is no file picker (catalog `install`). The pick is Downloads' own (the diagram's caption: "the
+target pick: candidates by Nexus id, always confirmed"). As a user, I want:
 
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod,
    showing its name and version, and a last item, "Install as a new mod…". *diagram;
@@ -118,10 +118,10 @@ want:
 2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new
    mod.
 3. An upgrade only when I choose it, even when one item is pre-selected. *diagram: always confirmed*
-4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed first and
-   pre-selected. With no such mod, the mod whose `meta.ini` records this file as its installation
-   file named "Installed from this file", listed first and pre-selected. With neither, "Install as a
-   new mod…" is pre-selected. Never a guess from the file's name. *diagram*
+4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed
+   first and pre-selected. With no such mod, the mod whose `meta.ini` records this file as its
+   installation file named "Installed from this file", listed first and pre-selected. With neither,
+   "Install as a new mod…" is pre-selected. Never a guess from the file's name. *diagram*
 5. Esc to install nothing. *Esc changes nothing*
 6. A new mod to go on to the name prompt, and an upgrade not to. *install-mod contract*
 

@@ -12,8 +12,9 @@ is in [mods.md](../surfaces/mods.md), [plugins.md](../surfaces/plugins.md),
 [ADR-0016](../../adr/0016-mod-management-lives-in-the-extension.md) and
 [ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md).
 
-Every command here changes the instance files and folders the table names, then forgets them. The watch reads the change back, so a change from MO2 or any other tool takes the same path
-(ADR-0015, invariant 2).
+Every command here changes the instance files and folders the table names, then forgets them. The
+watch reads the change back, so a change from MO2 or any other tool takes the same path (ADR-0015,
+invariant 2).
 
 ## The flow
 
@@ -25,8 +26,8 @@ Every command here changes the instance files and folders the table names, then 
    file's codec (ADR-0017, invariant 2). Only the bytes the command names change: comments, blank
    lines, line endings, the byte order mark and every line Modbench does not manage survive. A
    result equal to the file writes nothing.
-4. The Instance adapter replaces the file whole, then forgets it. It also makes and renames the
-   folders the table names. The Core box moves a folder or a file to the trash through Ports.
+4. The Instance adapter replaces the file whole, then forgets it. It also makes, renames and
+   trashes the folders the table names.
 5. The Core box answers per item: applied, or the refusal.
 
 | Command | Core box | What changes |
@@ -50,8 +51,8 @@ A plugin is provided when a plugin file sits at the root of an enabled mod, in `
 the game folder. Provided decides `plugins.txt` lines only. It never decides which plugins mEdit
 indexes (ADR-0012). A plugin the game loads with no line never earns one, even when a mod ships a
 plugin of that name (ADR-0013, invariant 3). A disabled mod provides nothing, so disabling a mod
-drops its plugins' lines, and enabling it again adds them at the winning end: their place in plugin order
-is lost, as in MO2.
+drops its plugins' lines, and enabling it again adds them at the winning end: their place in plugin
+order is lost, as in MO2.
 
 When one write adds several lines, their order is not set, and no test may assert one. The user
 orders them.
@@ -73,7 +74,7 @@ The Core box refuses before it writes, and names the cause.
 | A name another mod has, naming it | `create empty mod` | MO2 keys mods by name. |
 | A name another separator has, naming it | separator `add` and `rename` | MO2 keys separators by name. A separator's folder is `<name>_separator`, so a mod and a separator can share a name. |
 | A master after a plugin that depends on it, or a blueprint plugin before one that is not, naming both | plugin `move` | When mEdit cannot say, the move lands ([plugins.md](../surfaces/plugins.md)). |
-| A target that is not a valid place | mod `move`, plugin `move` | The surface never sends it. A keybinding or an agent call can, and is refused. |
+| A target that is not a valid place | mod `move`, plugin `move` | A drop there changes nothing and says nothing: the surface never sends it. |
 | The trash fails, naming the item | `uninstall`, separator `delete`, downloaded file `delete` | Nothing more is written for that item. |
 | `mods/` cannot be listed | `mod sync` | Nothing is written. The reason goes to the Mods view's message line and the Output. |
 | A folder cannot be listed | `plugin sync` | Nothing is written. The reason goes to the Plugins view's message line and the Output. A game folder that is not found also writes nothing, and is told once, as the instance's state ([common.md](../surfaces/common.md), States, story 5). |
@@ -86,12 +87,12 @@ A failed write leaves the file as it was.
 
 Exceptions to commands.md's rules:
 
-- **A failed gesture writes nothing.** `uninstall` and separator `delete` trash the folder, then
-  drop the line. When the line fails after the trash, it names a folder that is gone, and `mod sync`
-  drops it.
-- A failed `.meta` write after an uninstall is a line in the Output, and the uninstall stands.
-- A downloaded file `delete` whose `.meta` fails after the file leaves a lone `.meta`, which no
-  view shows ([downloads.md](../surfaces/downloads.md), Reporting).
+- **A failed gesture writes nothing.**
+  - `uninstall` and separator `delete` trash the folder, then drop the line. When the line fails
+    after the trash, it names a folder that is gone, and `mod sync` drops it.
+  - A failed `.meta` write after an uninstall is a line in the Output, and the uninstall stands.
+  - A downloaded file `delete` whose `.meta` fails after the file leaves a lone `.meta`, which no
+    view shows ([downloads.md](../surfaces/downloads.md), Reporting).
 
 ## Test seam
 

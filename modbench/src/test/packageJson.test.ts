@@ -673,7 +673,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
+  // commands.md, Where for track and compile: track on an untracked plugin in a mod, compile on a
   // tracked, editable plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
@@ -695,7 +695,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('record-type group menu: create record, only where its plugin is tracked and editable', () => {
     expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable')).toEqual([]);
@@ -955,7 +955,7 @@ describe('package.json Downloads palette entries', () => {
   });
 });
 
-// mods.md, Menus and keys, story 3: enable on a disabled row, disable on an enabled one — the
+// mods.md, Menus and keys, story 2: enable on a disabled row, disable on an enabled one — the
 // row's own contextValue flag is what the menu reads to choose between the two commands.
 describe('package.json Mods row menu — enable/disable by row state', () => {
   const modRowMenu = (): MenuEntry[] =>
@@ -1023,7 +1023,7 @@ describe('package.json Move on the mod menu and the separator menu', () => {
   });
 });
 
-// mods.md, Menus and keys, story 7: copy value on the mod menu and the separator menu, under the
+// mods.md, Menus and keys, story 5: copy value on the mod menu and the separator menu, under the
 // catalog's one copy value id (commands.md, Record: copy value) — no second command for Mods.
 describe('package.json Mods row menu — copy value', () => {
   const modsViewMenu = (): MenuEntry[] =>

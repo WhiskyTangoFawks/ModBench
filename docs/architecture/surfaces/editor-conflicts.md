@@ -15,8 +15,9 @@ Each story cites its source. A story with no source is owned here.
 - **ConflictAll**, one for each row: the state of that field across every copy.
 - **ConflictThis**, one for each cell: this plugin's copy of the field against the others.
 
-The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have
-(xedit.md, divergence 7).
+The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's
+benign and ignored states come from its priority table, which Modbench does not have (xedit.md,
+divergence 7).
 
 ## Rows
 

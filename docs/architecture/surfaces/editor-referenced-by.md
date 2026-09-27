@@ -3,9 +3,9 @@
 Referenced By lists the records that reference the record I am looking at, so I can see what a
 change to it would reach before I make it. Its template is xEdit's Referenced By tab
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
-[xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
-[commands.md](../commands.md) under Record, Referrer and Every view. It is a list, so [common.md](common.md) applies to it
-in full. The record panel it follows is [editor.md](editor.md)'s.
+[xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in [commands.md](../commands.md)
+under Record, Referrer and Every view. It is a list, so [common.md](common.md) applies to it in
+full. The record panel it follows is [editor.md](editor.md)'s.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -87,8 +87,8 @@ The row menus follow VS Code's groups: open, change, copy, then destroy.
 
 As a user, I want:
 
-1. A click on a referrer to open it in the record panel's preview editor, which moves the list to it,
-   so following a chain of references is a series of clicks. *catalog `open`; xEdit*
+1. A click on a referrer to open it in the record panel's preview editor, which moves the list to
+   it, so following a chain of references is a series of clicks. *catalog `open`; xEdit*
 2. A click on a row beneath a referrer to select it and do nothing else.
 3. Copy value to copy each selected referrer as `EditorID [FormKey]`. A row beneath a
    referrer adds nothing. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
@@ -97,8 +97,8 @@ As a user, I want:
 
 ## Test seam
 
-- **The view, given the record the list is about and mEdit's answer:** the title, the description, the rows,
-  their order in both directions, and the states, with no VS Code UI.
+- **The view, given the record the list is about and mEdit's answer:** the title, the description,
+  the rows, their order in both directions, and the states, with no VS Code UI.
 - **Following:** given a sequence of focused tabs, opened and closed, the record the list is about.
 - **A gesture's entry:** given the clicked row and the selection, the Argument the command receives,
   and what copy value copies.

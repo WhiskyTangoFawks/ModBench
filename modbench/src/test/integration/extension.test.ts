@@ -2378,7 +2378,7 @@ describe('Progressive load', () => {
   });
 });
 
-// plugins.md, Reporting, story 1: a failed destination lookup says what failed and why, and the
+// common.md, Reporting: a failed destination lookup says what failed and why, and the
 // command resolves rather than escaping as VS Code's raw rejection toast.
 describe('Copy says why its destination lookup failed', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution
