@@ -17,7 +17,7 @@ Each story cites its source. A story with no source is owned here.
 
 A row can be in conflict while its master's cell is only the master and the winner's cell wins.
 xEdit's benign and ignored states come from its priority table, which Modbench does not have
-(xedit.md, divergence 9).
+(xedit.md, divergence 7).
 
 ## Rows
 
@@ -27,16 +27,16 @@ xEdit's benign and ignored states come from its priority table, which Modbench d
 | Override | green | copies change the field, and none disagrees with another |
 | Conflict | orange | copies disagree on the field |
 
-*ADR-0018, invariant 3; xedit.md, divergence 6; ruling*
+*ADR-0018, invariant 3; xedit.md, divergence 4; ruling*
 
 As a user, I want:
 
 1. Each row painted from its own field, so one changed field tints its own row and no other. *ruling*
 2. A collapsed struct or array row to show the worst state beneath it, so collapsing hides nothing,
    and an expanded one to show no background, since its rows show their own. *xedit.md, divergence
-   6*
+   4*
 3. A background to mean that something here needs a look: a field every copy agrees on has none.
-   *xedit.md, divergence 6*
+   *xedit.md, divergence 4*
 
 ## Cells
 

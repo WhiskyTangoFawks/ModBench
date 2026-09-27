@@ -52,7 +52,7 @@ As a user, I want the record's FormID as the first row of the grid, under Record
 any field is. A new FormID changes the record's FormKey and nothing else: the records that
 reference it, the record itself included, are left as they are, and updating them is a script.
 The Index reads the record again under its new FormKey. A plugin header's FormID is read-only.
-*xedit.md, divergence 11; ruling*
+*xedit.md, divergence 9; ruling*
 
 ## Columns
 
@@ -116,7 +116,7 @@ As a user, I want:
 1. A click on a cell to focus it and do nothing else: its row highlights and the cell is outlined.
    *xEdit*
 2. A second click on the focused cell, F2, or a double click to open the cell's editor, in place.
-   Each opens the same editor, at once. *xEdit; xedit.md, divergence 8*
+   Each opens the same editor, at once. *xEdit; xedit.md, divergence 6*
 3. The editor to take the whole value, so typing or pasting replaces it. Enter, or moving the
    focus away, writes it; Esc closes it and writes nothing. *VS Code's inline rename*
 4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page
@@ -187,11 +187,11 @@ focus. *commands.md, Record*
 As a user, I want:
 
 1. Go to record to show the record the reference points to, in the same tab. *xedit.md, divergence
-   10; catalog `open`; Stay in the panel*
+   8; catalog `open`; Stay in the panel*
 2. Open field value to open the field's text in a text editor tab beside the panel, titled
    `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened
    again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long
-   value can still be read. *xedit.md, divergences 2 and 8; catalog `open field value`*
+   value can still be read. *xedit.md, divergences 2 and 6; catalog `open field value`*
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the
    destination, as in Plugins. *catalog `copy`; xEdit's column header menu*
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it.

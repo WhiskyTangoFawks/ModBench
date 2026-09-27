@@ -19,8 +19,8 @@ or an installed mod the user confirmed. Install never infers the target from dis
    downloaded file, what its `.meta` knows: the Nexus mod ID, the file ID and the version.
 2. The install box refuses a new mod whose folder exists, and an upgrade whose folder has gone. It
    checks here whatever the prompt checked, because the disk can change in between.
-3. Through the Instance adapter, it stages the source in a folder inside the instance root, on the
-   same volume as `mods/`: it extracts an archive, or copies a folder.
+3. Through the Instance adapter, it stages the source in a folder on the same volume as
+   `mods/`: it extracts an archive, or copies a folder.
 4. It finds the mod's root: a `Data/` folder, or the level that holds the plugins and asset
    folders, below any single wrapper folder. A FOMOD installer is found and flagged. Its steps do
    not run, and its files stay as they are.
@@ -57,7 +57,6 @@ The install box refuses before it writes to `mods/`, and names the cause.
 |---|---|---|
 | A new mod whose folder exists, naming it and pointing at an upgrade | a new mod | A folder is never merged into or replaced by surprise. |
 | An upgrade whose folder has gone, naming it | an upgrade | A gone object is refused. |
-| `mods/` is on another volume than the instance root | a new mod | One rename cannot move the mod in, and a mod folder is never copied in pieces. |
 | The archive cannot be extracted, with the reason, or no 7-Zip is found, naming what to install | an archive | |
 
 ## Failure

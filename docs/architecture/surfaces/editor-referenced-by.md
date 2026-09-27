@@ -40,7 +40,7 @@ As a user, I want:
 3. Only the plugins the game loads to count: a reference held only in a disabled plugin, or in an
    overridden plugin, lists nothing and counts toward nothing. *ADR-0013, invariant 3; ruling*
 4. A reference counted only where its field is in use: a condition parameter its function does not
-   use is not a reference, whatever it holds. *xedit.md, divergence 15*
+   use is not a reference, whatever it holds. *xedit.md, divergence 13*
 5. A child record's references counted as its own: a quest and a dialog topic inside it each list
    what they reference. *ruling*
 6. The referrers sorted by record type, then by label, and the title bar's toggle to reverse them.

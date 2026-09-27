@@ -215,7 +215,7 @@ As a user, I want:
 
 1. A prompt for the name. It refuses an empty name, and a name that does not end `.esp`, `.esm` or
    `.esl`. *ruling*
-2. Then a pick of where the plugin lives: Overwrite first, then the enabled mods. *catalog
+2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog
    `create`, place Option; ruling*
 3. A place that already holds a plugin of that name left out of the pick. The same name elsewhere
    in the load order is not checked. *No dead entries; ruling*
@@ -304,7 +304,7 @@ By [common.md](common.md#reporting). As a user, I want:
 | `move` from the menu, with its targets: top, bottom, priority N | the catalog's planned Options |
 | `highlight origin`, `open details` on a plugin's mod | their design |
 | `repair`, `validate`, `rename` | their design |
-| `create` in a new mod, and moving a plugin out of Overwrite | the Overwrite inbox design |
+| `create` in a new mod | its design |
 | `create` record inside a container | the catalog's planned Options |
 | A record's own conflict state, ConflictCritical included, on its row, as xEdit's navigator shows it | its design; [editor-conflicts.md](editor-conflicts.md) |
 

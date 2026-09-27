@@ -49,7 +49,7 @@ As a user, I want:
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
 | Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON |
 
-*xEdit's editors by type; xedit.md, divergences 1 and 7; ruling; mEdit's answer*
+*xEdit's editors by type; xedit.md, divergences 1 and 5; ruling; mEdit's answer*
 
 A struct or array row pastes, and takes a drop, of a whole value copied from the same field.
 *xEdit*
@@ -142,7 +142,7 @@ As a user, I want:
 A condition list is an array like any other. As a user, I want:
 
 1. A parameter the condition's function does not use to have no row, unless a column uses it, so an
-   overridden record's data is never hidden. *ruling; xedit.md, divergence 15; ADR-0005, invariant 7*
+   overridden record's data is never hidden. *ruling; xedit.md, divergence 13; ADR-0005, invariant 7*
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value
    never reaches the plugin. *ADR-0005, invariant 7*
 3. The function chosen from the ordinary enum dropdown. *ruling*

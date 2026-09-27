@@ -8,14 +8,13 @@ What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [th
 
 | Reason | Why | Gestures | Examples |
 |---|---|---|---|
-| VS Code provides it | VS Code already supplies settings, editor history and pinning, the Output and Problems panels, and themes ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). | 15 | Change options; Switch the strings language; Sort files: as selected, by load order, by name |
+| VS Code provides it | VS Code already supplies settings, editor history and pinning, the Output and Problems panels, and themes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md), invariant 1). | 15 | Change options; Switch the strings language; Sort files: as selected, by load order, by name |
 | Standalone application | xEdit loads a fixed plugin set and saves on demand. Modbench indexes every plugin in the instance and writes edits to a working tree ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). | 4 | Select game mode; Choose plugins to load; Choose plugins to save, with a backup toggle |
-| An ADR decides it | A decision covers the gesture. Masters are derived ([ADR-0008](../adr/0008-masters-are-derived-from-content.md)). Edits are git changes ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). The index is always current ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md), [ADR-0012](../adr/0012-every-plugin-in-the-instance-is-indexed.md)). Filtering is user-written SQL. | 10 | Compare to another plugin file; Add masters; Sort masters |
+| An ADR decides it | A decision covers the gesture. Masters are derived ([ADR-0008](../adr/0008-masters-are-derived-from-content.md)). Edits are git changes ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). The index is always current ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md), [ADR-0012](../adr/0012-every-plugin-in-the-instance-is-indexed.md)). | 7 | Compare to another plugin file; Add masters; Sort masters |
 | Platform | The gesture relies on something Modbench lacks, such as dragging from a tree into a webview. | 1 | Drag a record onto a reference field |
 | Game-specific | It serves one or two games, or one engine. Modbench generalizes across Bethesda games. | 6 | Set the game-link mode (Pluggy); Create SEQ file (Skyrim); Set VWD on all REFRs with a VWD mesh (Oblivion) |
 | Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 19 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
-| Metadata chrome | The feature annotates or organizes a list inside xEdit's UI. Separators already organize Modbench's lists, and nothing in Modbench consumes it. | 3 | Create a ModGroup; Edit or delete a ModGroup, update CRCs; Create a ModGroup from columns |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 7 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 13 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
 | Dead in xEdit | xEdit documents or ships it, and no working handler exists. | 3 | Temporary and Persistent nav items; Element detail form; Bookmarks (Ctrl+1 to 5, Alt+1 to 5), F5, Ctrl+F3, Alt+F3, Ctrl+W |
 
 ## Divergences
@@ -26,20 +25,19 @@ Gestures Modbench does differently.
 |---|---|---|---|---|
 | 1 | FormKey editing | A native QuickPick | A sorted combo box | Limitation: VS Code hosts a searchable thousand-row picker better than a webview can. |
 | 2 | The extended editor | A VS Code editor tab | A modeless form | Limitation. |
-| 3 | The clipboard | The extension host writes it, not the webview | - | Limitation, with no visible difference. |
-| 4 | Tracking, compile and branches | Follow git and VS Code ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)) | No model for review, revert or history | Product difference. |
-| 5 | Copy as New Record | Prompts for nothing. The copy lands under a derived EditorID, as the Creation Kit does, and is renamed in the grid. It never mints a duplicate EditorID. | Prompts for an EditorID | Ruling. |
-| 6 | Row painting | NoConflict, OnlyOne and expanded struct rows are unpainted, so a background colour means "something here needs attention" | Tints every row | Ruling. |
-| 7 | Flags row | Expands into an in-cell checkbox list, collapsed to xEdit's compact name summary | Opens a transient check-combo | Ruling. |
-| 8 | Left click and the extended editor | No left click leaves the record panel. The extended editor opens only from the right-click menu. A string cell's second click, F2 and double click open the inline editor, like every other scalar. | Double click opens the extended editor, which is modeless | Ruling: a tab relocates the user where xEdit's modeless editor did not. |
-| 9 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
-| 10 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
-| 11 | Change FormID | Editing the FormID field changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
-| 12 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
-| 13 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
-| 14 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
-| 15 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
-| 16 | Sorted arrays | Kept in the order they have; an array without a key aligns by its values in sequence, and every array takes add, remove and move | Sorts `wbArrayS` arrays on save and aligns them by value, with no move | Ruling: the game does not need the order, so sorting is xEdit's habit reaching into the data, and Mutagen decides the data. |
+| 3 | Copy as New Record | Prompts for nothing. The copy lands under a derived EditorID, as the Creation Kit does, and is renamed in the grid. It never mints a duplicate EditorID. | Prompts for an EditorID | Ruling. |
+| 4 | Row painting | NoConflict, OnlyOne and expanded struct rows are unpainted, so a background colour means "something here needs attention" | Tints every row | Ruling. |
+| 5 | Flags row | Expands into an in-cell checkbox list, collapsed to xEdit's compact name summary | Opens a transient check-combo | Ruling. |
+| 6 | Left click and the extended editor | No left click leaves the record panel. The extended editor opens only from the right-click menu. A string cell's second click, F2 and double click open the inline editor, like every other scalar. | Double click opens the extended editor, which is modeless | Ruling: a tab relocates the user where xEdit's modeless editor did not. |
+| 7 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
+| 8 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
+| 9 | Change FormID | Editing the FormID field changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
+| 10 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
+| 11 | No reference | `—` | `NULL - Null Reference [00000000]` | Ruling. |
+| 12 | Byte arrays | `0x` and the bytes in uppercase hex, Mutagen's spelling | Its own format, which the clone does not carry | Ruling. |
+| 13 | Unused condition parameters | No row while no column uses them, and a change of function empties them | The string parameters are always rows | Ruling: a parameter the function does not use does nothing, so its row would only mislead. |
+| 14 | Sorted arrays | Kept in the order they have; an array without a key aligns by its values in sequence, and every array takes add, remove and move | Sorts `wbArrayS` arrays on save and aligns them by value, with no move | Ruling: the game does not need the order, so sorting is xEdit's habit reaching into the data, and Mutagen decides the data. |
+| 15 | Referenced By | One row per referrer, with a row for each loaded plugin that holds the reference beneath it | One row per plugin's copy of each referring record | Ruling. |
 
 ## Omissions by object
 
@@ -67,16 +65,16 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Clean masters | Navigator: Clean Masters | An ADR decides it |
 | Mark all files without ONAM as modified | Navigator: Other | An ADR decides it |
 | Build reference info | Navigator: Other | An ADR decides it |
-| Build reachable info | Navigator: Other | An ADR decides it |
-| Filter presets: apply, remove, conflicts, cleaning | Navigator: Apply Filter... | An ADR decides it |
-| Filter presets on selected files only | Navigator | An ADR decides it |
+| Build reachable info (not needed; ADR-0010 revisits it if reachability becomes a feature) | Navigator: Other | Maintainer ruling |
+| Filter presets: apply, remove, conflicts, cleaning (a preset is a saved `.sql` file, which the record filter picks) | Navigator: Apply Filter... | Maintainer ruling |
+| Filter presets on selected files only (a preset is a saved `.sql` file, which the record filter picks) | Navigator | Maintainer ruling |
 | Create SEQ file (Skyrim) | Navigator: Other > Create SEQ File | Game-specific |
 | Set VWD on all REFRs with a VWD mesh (Oblivion) | Navigator: Cleaning | Game-specific |
 | Compact FormIDs for ESL | Navigator | Scripts, tasks or the agent |
 | Hide a plugin in the navigator (filters hide a class of things) | Navigator: Hidden | Maintainer ruling |
 | BOSS / LOOT cleaning report | Navigator | Scripts, tasks or the agent |
-| Create a ModGroup | Navigator: Create ModGroup..., Ctrl+M | Metadata chrome |
-| Edit or delete a ModGroup, update CRCs | Navigator | Metadata chrome |
+| Create a ModGroup (ModGroups are dropped as a feature) | Navigator: Create ModGroup..., Ctrl+M | Maintainer ruling |
+| Edit or delete a ModGroup, update CRCs (ModGroups are dropped as a feature) | Navigator | Maintainer ruling |
 | Batch change referencing records | Navigator | Scripts, tasks or the agent |
 | Create delta patch | Navigator: Create delta patch using... | Scripts, tasks or the agent |
 | Create merged patch | Navigator: Other > Create Merged Patch | Scripts, tasks or the agent |
@@ -100,7 +98,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Clean up references to injected records | Navigator | Scripts, tasks or the agent |
 | Drag a record onto a reference field | Navigator drag, View drop | Platform |
 | Stick to (a view preference) | View grid | Maintainer ruling |
-| Create a ModGroup from columns | View grid: Ctrl+M | Metadata chrome |
+| Create a ModGroup from columns (ModGroups are dropped as a feature) | View grid: Ctrl+M | Maintainer ruling |
 | Select all rows and sort in Referenced By | Referenced By | VS Code provides it |
 | Jump to a record; back and forward history | Jump to, Back, Forward | VS Code provides it |
 | Follow a FormID in a message | Messages: Ctrl + double click | VS Code provides it |
