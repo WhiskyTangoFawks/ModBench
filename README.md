@@ -23,8 +23,8 @@ treats a plugin the way an IDE treats a program:
   discard it, commit it, branch it, rebase it.
 - **Compile** writes the binary from the source when you say so. The compiler refuses what 
   it can't emit and reports the rest as Problems.
-- **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
-  everything else see. Modbench never assumes exclusive ownership of any file. When a tracked
+- **The plugin stays what every tool sees.** The game, MO2 and xEdit load the plugin binary. Compile
+  writes it from the source, which is the truth (ADR-0007). Modbench never assumes exclusive ownership of any file. When a tracked
   plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
 The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md)
