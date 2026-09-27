@@ -18,8 +18,11 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 1. The Instance loader watches the instance through the globs the Instance adapter names: each
    profile's `modlist.txt` and `plugins.txt`, `ModOrganizer.ini`, `mods/`, `overwrite/`, the
    downloads folder, and the game folder's plugins and its Creation Club list. One debounce covers
-   every watch, so a burst of changes is one read. A watcher overflow is one more change: it starts
-   the same read. Activation and refresh start the same read.
+   every watch, so a burst of changes is one read. Activation, refresh and the window regaining
+   focus start the same read. A lost event delays a change, and the next read finds it (ADR-0015,
+   invariant 4). A folder created, renamed or deleted under `mods/` restarts the watch, because the
+   watcher can lose the folders inside a moved one. This watch is the only one on the instance:
+   mEdit watches nothing (ADR-0015, invariant 7).
 2. The Instance loader reads, through the Instance adapter, `ModOrganizer.ini` first: the active
    profile, the game, and where the downloads are. Then it reads the profile's `modlist.txt` and
    `plugins.txt`, each mod's `meta.ini`, the downloaded files and their `.meta` files, and the game
@@ -29,8 +32,9 @@ else. A change from Modbench and a change from MO2 or any other tool reach it th
 4. The Instance loader builds one immutable value, replaces the last value whole, and raises the
    sequence by one. No consumer holds facts from two generations (ADR-0015, invariant 6).
 5. The value goes to every view. The Instance loader derives the snapshot from it: every plugin
-   in the instance, and the active plugins, in load order (ADR-0013, invariants 2 and 3). It hands the snapshot to instance commands, which send it to mEdit
-   ([index-load-order](index-load-order.md)).
+   in the instance, and the active plugins, in load order (ADR-0013, invariants 2 and 3). It hands the snapshot to instance commands at every recompute, changed or
+   not, and they send it to mEdit ([index-load-order](index-load-order.md)). The snapshot is also
+   mEdit's signal that a file may have changed (ADR-0013, invariant 1).
 
 ## refresh
 
@@ -67,7 +71,7 @@ This flow waits for no hand-off.
 
 ## Test seam
 
-- **The Instance loader:** given watch events and the bytes of the files, the value and its
+- **The Instance loader:** given watch events, focus and the bytes of the files, the value and its
   sequence, or the last value kept.
 - **Instance commands:** given the snapshot, the snapshot sent to mEdit. Given `refresh`, the rebuild and no
   snapshot sent, or the refusal and no snapshot sent.

@@ -11,7 +11,7 @@ Governed by
 [ADR-0019](../../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md).
 
 A query reads the Store, and never a file, git or a plugin's bytes. It answers from the last
-projection, which [index-load-order](index-load-order.md) and the Mod watcher write, and it writes
+projection, which [index-load-order](index-load-order.md) writes, and it writes
 nothing. The record types a game can create are the schema's answer, not the Store's.
 
 ## The flow

@@ -23,18 +23,23 @@ under a minute; only not redoing the work does.
    the key is valid at; every profile in the instance shares the file. It sits beside MO2's own
    working files, never inside `mods/`, `profiles/`, `overwrite/` or `downloads/`, which a
    reinstall or a sweep would take the record index with.
-4. **Validity is by content, never by clock, and it is checked at every door.** The index records
-   each file's content hash and the codec and schema version its rows were written under. On open,
-   on reconcile and on a watcher event, a hash mismatch re-indexes the plugin, a missing file
-   removes its rows, and a version change invalidates the whole file. `mtime` is never
-   consulted, because other tools' writes can fool it. This is the
-   ownership rule ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file.md))
-   applied to the record index.
+4. **Validity is by content, and every reconcile checks every file.** The index records each file's
+   content hash and the codec and schema version its rows were written under. A hash mismatch
+   re-indexes the plugin, a missing file removes its rows, and a version change invalidates the
+   whole file. This is the ownership rule
+   ([ADR-0003](0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)) applied to the record
+   index.
 5. **One writer; a second load of the same instance is refused by name.** DuckDB admits one
    writing process and Modbench runs one service per VS Code window. A second window on the same
    instance fails with an error the client can tell apart from a failed reconcile and a stale
    snapshot. A file that cannot be opened is rebuilt from scratch: the record index is derived state, and
    losing it costs one cold load.
+
+## Derived tactical observations
+
+- A file whose size, mtime and ctime match its last hash keeps that hash without a read. ctime
+  moves on every write and on every change to mtime, so a tool that preserves mtime is still seen.
+  Open hashes every file.
 
 ## Alternatives rejected
 

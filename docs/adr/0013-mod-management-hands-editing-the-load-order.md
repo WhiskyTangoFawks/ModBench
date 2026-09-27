@@ -14,12 +14,13 @@ it is handed and never reloads.
 ## Strategic invariants
 
 1. **The snapshot arrives whole, as state, and is reconciled.** Mod Management builds it from one
-   instance value ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md), invariant
-   6), so its two halves never come from two reads. It sends the snapshot on activation and
-   whenever either half changes. Editing compares each half with the one it holds. Changed
-   plugins index only what the record index has never seen. They drop the rows of each plugin
-   whose file left. Changed active plugins run one winner sweep, and read or drop no row. A
-   snapshot identical to the current state is a no-op.
+   instance value ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md), invariant 6),
+   so its two halves never come from two reads. It sends the snapshot at every recompute of that
+   value, changed or not: the snapshot is also the signal that a file may have changed. Editing
+   compares each half with the one it holds. Changed plugins index only what the record index has
+   never seen. They drop the rows of each plugin whose file left. Changed active plugins run one
+   winner sweep, and read or drop no row. Every snapshot, identical or not, validates every file
+   ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md), invariant 4).
 2. **The snapshot names every plugin in the instance
    ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)), each as origin, filename and
    path.** It names the files on disk, never deploy's links. Mod order, `plugins.txt` and enabled

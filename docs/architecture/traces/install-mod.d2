@@ -12,8 +12,6 @@ instanceadapter.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nmods/<name>/, meta.ini · downloads/<file>.meta"
 views: "every view" {class: driving}
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: "Mod watcher\nmEdit"
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target: a new mod, or a candidate pre-selected by file id, else by its recorded installation file. Always confirmed. Esc installs nothing"
@@ -36,8 +34,7 @@ install -> downloads: applied or refusal {class: loadorder}
 mo2 -> instanceloader: watch {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."the folder has no line: update-load-order-file adopts it"
-mo2 -> watcher: changed paths {class: signal}
-watcher."a tracked mod: decompile-plugin from here, the new baseline as the default"
+instanceloader."the next snapshot: index-load-order indexes the plugins; in a tracked mod, detect-external-change names the plugins that changed"
 
 refused: "refused, before any write" {
   install -> downloads: "the refusal, as the contract's Refusals list it" {class: loadorder}

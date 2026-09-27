@@ -52,9 +52,9 @@ then the user owns it.
 
 This flow waits for no hand-off.
 
-- The Mod watcher sees the source change, and the Indexer refreshes the keys. Once a plugin is
-  tracked, the Indexer reads its documents, not its bytes
-  ([index-load-order](index-load-order.d2)).
+- The next snapshot starts [index-load-order](index-load-order.d2), and the Indexer reads the
+  changed documents again by key. Once a plugin is tracked, the Indexer reads its documents, not its
+  bytes ([index-load-order](index-load-order.d2)).
 
 ## Refusals
 

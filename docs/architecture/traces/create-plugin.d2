@@ -18,8 +18,6 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 pluginscommands: @../target-architecture.modbench_core.pluginscommands
 pluginscommands.label: plugins commands
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 
 plugins."the name, then Overwrite or an enabled mod"
 plugins -> client: "create: origin, name, folder" {class: edit}
@@ -35,8 +33,7 @@ client -> plugins: applied or refusal {class: edit}
 mo2 -> instanceloader: watch {class: signal}
 instanceloader."a plugin on disk with no plugins.txt line"
 instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
-plugin -> watcher: changed paths {class: signal}
-watcher."a tracked mod: decompile-plugin from here, which warns of the untracked plugin"
+instanceloader."the next snapshot: index-load-order indexes the plugin; in a tracked mod, detect-external-change warns of it"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal, as the contract's Refusals list it" {class: edit}

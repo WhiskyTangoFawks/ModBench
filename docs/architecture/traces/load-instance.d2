@@ -20,7 +20,7 @@ instanceloader -> instanceadapter: "get: ModOrganizer.ini first · modlist.txt �
 instanceadapter -> instanceloader: "parsed: the game, the profile, the mods in order, the load order, each mod's meta, the downloaded files, the game folder's plugins and Creation Club list" {class: loadorder}
 instanceloader."one immutable value, replaced whole; sequence +1; a read failure keeps the last"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
-instanceloader -> instancecommands: "put load order: the snapshot as an argument, on change" {class: loadorder}
+instanceloader -> instancecommands: "put load order: the snapshot as an argument, at every recompute" {class: loadorder}
 instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {

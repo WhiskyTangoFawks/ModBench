@@ -17,10 +17,9 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
   user: "The user\nclicks, checks, drags, types" {class: other}
 }
 
-medit_driving: "MEDIT · Driving adapters — the API and the watcher" {
+medit_driving: "MEDIT · Driving adapters — the API" {
   class: band; grid-rows: 1
   http: "HTTP endpoints\ninterface: one endpoint per command and query; the notification\nstream\nhides: the SSE adapter of the notification port; the composition\nroot of mEdit" {class: driving}
-  watcher: "Mod watcher\ninterface: subscribe and dispose; nothing sends it a message; the\none listener to the load-order change\nhides: arming one watcher per mod folder from the snapshot, with\nthe Source adapter naming the paths; settle per mod; the route\nper path: plugin bytes, source, git refs, anything else in a\ntracked mod. It announces nothing: it tells the Index and Commands" {class: driving}
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
@@ -33,7 +32,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
 
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
-  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ndecompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck" {class: core}
+  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ndecompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck at each put load order" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nthe malformed-plugin diagnosis, the record\ntypes a game can create; set and clear the record filter · rebuild\nthe index\nhides: the Index's reads" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
@@ -62,16 +61,16 @@ modbench_kernel: "MODBENCH · Kernel — pure; read by every Core box and driven
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · refresh by keys ·\nvalidate by hash · reconcile · set and clear the record filter ·\nrebuild · the sequence and its await\nhides: the Indexer and the Store" {
-    indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
+  index: "Record index — one deep module, rebuildable\ninterface: reads, of the active plugins only · validate by hash ·\nset and clear the record filter · rebuild · the sequence and its\nawait\nhides: the Indexer and the Store; the reconcile each snapshot\nstarts" {
+    indexer: "Indexer\nlistens to the load order, asks the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
-  sourceadapter: "Source adapter\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
-  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
+  sourceadapter: "Source adapter\ninterface: get, put, remove, rename\nhides: layout and git; the stamp that skips an unchanged file" {class: driven}
+  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; a file's hash\nhides: the game assemblies; the stamp that skips an unchanged\nfile" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every watcher on the instance; the debounce; which file wins\neach path; which plugins are active; a downloaded file's status;\na read failure keeps the last value" {class: driven}
+  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: the one watcher on the instance, for both processes; the\ndebounce; which file wins each path; which plugins are active; a\ndownloaded file's status; a read failure keeps the last value" {class: driven}
   instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files, the game folder's plugins and its Creation Club\nlist; changes: enable or disable mods and plugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a downloaded file's metadata, a mod's meta, the\nselected profile; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
   deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}

@@ -13,8 +13,9 @@ binary changed outside Modbench, and it ends there. The user decides what to do 
 
 ## The flow
 
-1. The Mod watcher waits until a tracked mod's folder is quiet, then tells Commands the mod
-   settled. At load, Commands checks every tracked mod the same way.
+1. The Instance loader's watch sees the change, and the next snapshot reaches Commands
+   ([index-load-order](index-load-order.md), step 1). Commands checks every tracked mod at each
+   snapshot, the first one after load included.
 2. Commands compares each tracked plugin's bytes with what Modbench last wrote
    ([compile-plugin](compile-plugin.md), step 5; [decompile-plugin](decompile-plugin.md), step 6).
    A plugin whose bytes differ changed outside Modbench.
@@ -39,6 +40,5 @@ This flow waits for no hand-off.
 
 ## Test seam
 
-- **The Mod watcher:** given a mod folder's changes, one settle once it is quiet.
-- **Commands, at a settle or at load:** given a tracked mod's plugins and what Modbench last wrote,
+- **Commands, at a snapshot:** given a tracked mod's plugins and what Modbench last wrote,
   the plugins that changed outside Modbench and the untracked plugins.

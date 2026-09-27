@@ -11,8 +11,6 @@ commands.label: Commands
 sourceadapter: @../target-architecture.medit_driven.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 store: @../target-architecture.medit_driven.index.store
@@ -30,8 +28,7 @@ sourceadapter -> source: documents {class: edit}
 commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
-source -> watcher: source changed {class: signal}
-watcher -> indexer: "source changed: refresh keys" {class: signal}
+indexer."the next snapshot: index-load-order"
 sourceadapter -> indexer: documents (tracked) {class: query}
 indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}

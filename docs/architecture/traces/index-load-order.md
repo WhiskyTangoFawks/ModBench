@@ -9,8 +9,9 @@ order` in [commands.md](../commands.md). What the views show while it runs is in
 [ADR-0015](../../adr/0015-edits-reach-the-read-model-through-the-watcher.md).
 
 A file changing and the active plugins changing are two events (ADR-0009, invariant 1). This flow
-carries a plugin file that appears or disappears, and a change to the active plugins. A change to
-a plugin's bytes is the Mod watcher's, and it ends in the same tail.
+carries every change mEdit sees: a plugin file that appears, changes or disappears, a source
+document that changes, and a change to the active plugins. Each snapshot is also the signal that a
+file may have changed (ADR-0013, invariant 1).
 
 ## The flow
 
@@ -21,23 +22,26 @@ a plugin's bytes is the Mod watcher's, and it ends in the same tail.
    still waiting.
 2. Commands puts the snapshot in Load order state, and answers at once with its version. The index
    follows.
-3. Load order state tells the Mod watcher that the snapshot changed. The watcher arms one watch per
-   mod folder the snapshot names, and asks the Indexer to reconcile.
-4. The Indexer compares each half of the snapshot with the one it last reconciled. An identical
-   snapshot does nothing (ADR-0013, invariant 1). Otherwise:
+3. Load order state tells the Indexer that a snapshot arrived, and the Indexer reconciles.
+4. The Indexer compares each half of the snapshot with the one it last reconciled, and validates
+   every plugin it holds (ADR-0009, invariant 4). A file whose size, mtime and ctime held since its
+   last hash is not read (ADR-0009, Derived tactical observations).
    - A plugin whose file left loses its rows.
-   - A plugin that arrived is read only when the index holds no rows for its content, by hash
-     (ADR-0009, invariant 4).
+   - A plugin that arrived is read only when the index holds no rows for its content, by hash.
+   - A plugin whose bytes changed is read again.
+   - A tracked plugin's source documents are compared the same way, and each one that changed is
+     read again by key. When the repository's HEAD moved, the committed rows are compared too.
    - A plugin that became tracked or untracked is read again, from its new source.
    - Changed active plugins read and drop no row.
 5. For each plugin it reads, one at a time, the Indexer reads the documents through the Source
    adapter when the mod tracks the plugin, and the bytes through the Plugin adapter when it does
    not. It takes the schema from the Codec, and writes the plugin's rows to the Store.
-6. After the last plugin, the Indexer takes the active plugins from Load order state and computes
-   each FormKey's winner once.
+6. After the last plugin, when anything changed, the Indexer takes the active plugins from Load
+   order state and computes each FormKey's winner once.
 7. Through Ports, the Indexer publishes the index status at each plugin: reconciling, with the count
    done, then ready. Master issues and conflicts are part of the status only once step 6 is done.
-   The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3).
+   The Store publishes the rows that changed, with a sequence (ADR-0015, invariant 3). A snapshot
+   that changes nothing publishes nothing.
 
 ## Hand-off
 
