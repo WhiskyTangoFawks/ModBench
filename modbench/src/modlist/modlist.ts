@@ -332,8 +332,8 @@ export type UninstallModsResult =
   | { applied: false; refusal: string };
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
- *  then its downloaded file marked (commands.md, `uninstall`; mods.md, Reporting, story 4).
- *  `downloadsDir` undefined (unresolved) skips the mark; its reason was already logged once. */
+ *  then its downloaded file marked (mods.md, Reporting, story 4). An unresolved `downloadsDir`
+ *  skips the mark; its reason was already logged once. */
 export async function uninstallMods(
   instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string | undefined,
   trash: MoveToTrash,
