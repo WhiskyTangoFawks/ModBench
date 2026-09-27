@@ -21,13 +21,16 @@ Each story cites its source. A story with no source is owned here.
 
 ## Opening
 
+The record tab is a VS Code editor, and each record has its own address. Preview, pinning, Go Back
+and Go Forward, the recent editors, reopening a closed tab, and restoring the tabs after a reload
+behave as they do for any file. *VS Code; ADR-0018, invariant 1*
+
 As a user, I want:
 
-1. A click on a record in Plugins or Referenced By to open it in the record tab: one tab, which
-   the next click points at the next record, as VS Code replaces a preview tab. *catalog `open`;
-   VS Code's preview editors*
-2. Open to the side to open the record in a tab of its own, beside the one I am in, which later
-   clicks leave alone. *catalog `open`, placement*
+1. A click on a record in Plugins or Referenced By to open it as a preview editor, which my next
+   click replaces. *catalog `open`; VS Code's preview editors*
+2. Open to the side to open the record beside the tab I am in, pinned, so later clicks leave it
+   alone. *catalog `open`, placement*
 3. A record already open in a tab of its own to be shown, not opened twice. *VS Code*
 4. Several records opened at once each to open in a tab of its own. *catalog `open`; #23 makes
    them one comparison*
@@ -211,7 +214,6 @@ By [common.md](common.md#reporting). As a user, I want:
 | `hide no-conflict rows` | #250 |
 | Showing a record in the plugins the game does not load: an overridden plugin, or a disabled plugin | their design, as in Plugins |
 | `copy` as underride, and deep copy of a container | the catalog's planned Options |
-| The record tab as VS Code's own editor: preview and pinning, Go Back and Go Forward, a tooltip, and the deleted mark | #980 |
 | The record header's other rows, with the record flags, and Partial Form cleared there | mEdit's answer |
 | The fields in xEdit's order | mEdit's answer |
 
