@@ -20,8 +20,9 @@ file re-read, which is what lets the editor follow a mod change as it happens
 3. **Origin is never what the user reads.** The tree and the compare-grid header show the
    filename; the origin sits in the tooltip and appears inline only when two loaded plugins share a
    filename. Column headers are the scarcest space in the grid, and xEdit's carry filenames alone.
-4. **A plugin whose master is missing is indexed like any other, flagged, never deactivated,
-   and never cascades.** Mutagen builds FormKeys from a plugin's own header, so importing never
+4. **A plugin whose master the game does not load is indexed like any other, flagged, never
+   deactivated, and never cascades.** The game loads the plugins that participate
+   ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md), invariant 3). Mutagen builds FormKeys from a plugin's own header, so importing never
    requires the master to exist, and a link into an absent master is a well-formed key that
    resolves to nothing. xEdit deactivates and cascades only because its object graph cannot
    resolve at all with a master missing. The Plugins tree keeps the checkbox as the user set it
