@@ -50,4 +50,5 @@ diff.
 
 - An identifier names a domain concept with a word other than the glossary's. → Use the term
   in [CONTEXT.md](CONTEXT.md).
-- A hunk introduces a domain word the glossary lacks. → Surface to the developer for a decision.
+- A hunk names a concept that neither CONTEXT.md, the reference tool nor ordinary use names. →
+  Describe it, and put the naming question to the developer.
