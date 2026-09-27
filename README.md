@@ -24,8 +24,8 @@ treats a plugin the way an IDE treats a program:
 - **Compile** writes the binary from the source when you say so. The compiler refuses what 
   it can't emit and reports the rest as Problems.
 - **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
-  everything else see. Modbench never assumes exclusive ownership of any file — external changes
-  are detected and handled through one dialog (upstream update, or your own edit).
+  everything else see. Modbench never assumes exclusive ownership of any file — when a tracked
+  plugin changes outside it, Modbench tells you, and what you do next is yours.
 
 The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md)
 and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).

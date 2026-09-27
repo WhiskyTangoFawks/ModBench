@@ -13,7 +13,8 @@ file re-read, which is what lets the editor follow a mod change as it happens
 1. **A plugin is identified by `(origin, filename)`.** Once every plugin is indexed, one filename
    can name several plugins, so it cannot be the key. `origin` is the mod folder that provides
    the file, with reserved values for the game's `Data/` directory and MO2's `overwrite/`;
-   vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component.
+   vanilla, DLC and Creation Club plugins take the `Data/` origin, never a null key component. A
+   filename compares as the game compares it, ignoring case, on every platform.
 2. **The column is named `origin`, not `mod`.** The game's `Data/` folder and Overwrite are origins
    and not mods. An origin that is a mod is that mod's folder, where its repository lives.
 3. **Origin is never what the user reads.** The tree and the compare-grid header show the

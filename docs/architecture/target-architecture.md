@@ -64,7 +64,7 @@ Modbench are the same signal in both
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md), invariant 2). No trace
 draws that signal on its own, because there is no separate path: it is the watch that opens
 [load-instance](traces/load-instance.d2) and [index-load-order](traces/index-load-order.d2), and the
-settle that opens decompile-plugin's trigger. mEdit is always running, so no view has a mode
+settle that opens [detect-external-change](traces/detect-external-change.d2). mEdit is always running, so no view has a mode
 for its absence; a disconnect is an error the views surface.
 
 ## Rules the Modbench column draws

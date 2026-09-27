@@ -45,9 +45,9 @@ This flow waits for no hand-off. Install writes no `modlist.txt` line.
 - The Instance loader's watch sees the folder. `mod sync` adds its line at the winning end,
   disabled, and `plugin sync` adds its plugins' lines
   ([update-load-order-file](update-load-order-file.md)).
-- For a tracked mod, the Mod watcher sees the new bytes.
-  [decompile-plugin](decompile-plugin.md)'s trigger asks, with the new baseline as the default.
-  That question is the user's notice that tracked files changed.
+- For a tracked mod, the Mod watcher sees the new bytes, and
+  [detect-external-change](detect-external-change.md) tells the user which plugins changed outside
+  Modbench.
 
 ## Refusals
 

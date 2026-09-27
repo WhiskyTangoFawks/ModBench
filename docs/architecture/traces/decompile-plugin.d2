@@ -1,11 +1,6 @@
 # Decompile plugin, green. Contract: decompile-plugin.md.
 ...@../styles
 shape: sequence_diagram
-tools: "MO2 · another tool · the user" {class: other}
-mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "the mod's folder"
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
 client: @../target-architecture.modbench_driven.client
@@ -22,23 +17,12 @@ pluginadapter.label: Plugin adapter
 sourceadapter: @../target-architecture.medit_driven.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 
-the trigger: "the system trigger: which destination" {
-  tools -> mo2: bytes, at any time {class: outside}
-  mo2 -> watcher: changed paths {class: signal}
-  watcher."settle per mod"
-  watcher -> commands: a tracked mod settled {class: signal}
-  commands."classify: tracked plugins' bytes vs the parked ref · git status of tracked files"
-  commands -> port: "external change pending: mod, what changed · untracked plugins" {class: push}
-  port -> http: publish {class: push}
-  http -> client: stream {class: push}
-  client -> plugins: "external change pending · untracked plugins" {class: push}
-  plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc defers, and every write to the mod is refused until it is answered · an untracked plugin: a warning"
-}
-
-plugins -> client: "decompile plugin: to the repository (track) · to main · to the working tree" {class: edit}
+plugins -> client: "decompile plugin: track, with the preset" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
@@ -48,7 +32,7 @@ commands -> sourceadapter: documents, per plugin {class: track}
 commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
-baseline: "the repository or main" {
+baseline: "the repository" {
   sourceadapter."one baseline commit per plugin, by plumbing, trailers from the request; the edit branch moves only in a repository this run created"
 }
 
