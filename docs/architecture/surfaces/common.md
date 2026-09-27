@@ -99,7 +99,8 @@ As a user, I want:
 
 1. One item at the bottom left that says what mEdit is doing: `$(loading~spin) mEdit: Starting…`,
    `$(plug) mEdit: Running`, `$(error) mEdit: Disconnected`, `$(circle-slash) mEdit: Stopped`, or
-   `$(check) mEdit: Ready (N plugins)` once the load order is indexed. It names no game.
+   `$(check) mEdit: Ready (N plugins)` once the snapshot is indexed, N counting the active
+   plugins. It names no game.
 2. A click on it to do nothing: mEdit starts with the extension, and nothing starts it.
    *commands.md, No lifecycle gestures*
 3. A disconnect reported, never adapted to: the views keep their rows. *ADR-0002, invariant 2;

@@ -60,7 +60,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Only the copies the game loads compared, which are the only columns. *ADR-0013, invariant 3;
+1. Only the active plugins' copies compared, which are the only columns. *ADR-0012;
    [editor.md](editor.md)*
 2. A Partial Form copy's own fields left out of the comparison, as if it did not have them, even
    where they differ: the game ignores them. Its children compare as any record does. *xEdit*

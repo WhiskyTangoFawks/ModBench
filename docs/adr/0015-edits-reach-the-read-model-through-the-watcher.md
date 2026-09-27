@@ -22,8 +22,8 @@ is worth more than either side's local optimum.
 4. **Watchers are not trusted alone.** The read model validates by content hash at load, on
    reconcile, for the file a watcher event names, and for every file on a watcher overflow. It is
    idempotent by hash, so a duplicate signal is harmless.
-5. **The write side's inputs are the source text, the load order and the schema.** It reads the
-   load order for which plugin a record lives in and the Source adapter for whether a mod is
+5. **The write side's inputs are the source text, the plugins and the schema.** It reads the
+   plugins for where each plugin's file lives and the Source adapter for whether a mod is
    tracked. Parse status comes from the codec at edit time. A document is never taken from the
    read model, and a missing file is a refusal.
 6. **The instance value is whole and immutable.** Replaced whole by each recompute, with no

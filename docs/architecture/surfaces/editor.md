@@ -1,6 +1,6 @@
 # Editor: the record panel
 
-The record panel shows one record as every plugin the game loads has it: a row for each field, a
+The record panel shows one record as every active plugin has it: a row for each field, a
 column for each plugin. Its template is xEdit's View grid
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
 [xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
@@ -57,10 +57,10 @@ The Index reads the record again under its new FormKey. A plugin header's FormID
 
 As a user, I want:
 
-1. One column for each plugin the game loads that holds the record, in plugin order: the record's
-   master on the left, the winning copy on the right. *xEdit; ADR-0013, invariant 3*
-2. A plugin the game does not load not to be a column: an overridden plugin, or a disabled plugin.
-   *ADR-0012, invariant 5*
+1. One column for each active plugin that holds the record, in plugin order: the record's master
+   on the left, the winning copy on the right. *xEdit; ADR-0012*
+2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a
+   plugin in a disabled mod. *ADR-0012, invariant 5*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
    It stays collapsed while the tab is open.
 4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
@@ -73,7 +73,7 @@ As a user, I want:
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | `[XX] File name`: the plugin's index in plugin order, in hex, `[FE:XXX]` for a light plugin, and its file name. The origin mod follows in brackets only when two columns share a file name. | xEdit; ADR-0012, invariant 3 |
+| Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, and its file name. | xEdit; ADR-0012, invariant 3 |
 | Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
 | Tooltip | the file name, the origin mod, and the status's reason in a sentence | ADR-0012, invariant 3 |
@@ -163,7 +163,8 @@ As a user, I want:
    "This record's comparison is not complete: the colours are not final." It goes by itself once
    they are, and the grid reads again. *ADR-0019, invariant 1*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
-   naming it, in place of the grid. *A gone object is refused*
+   naming it, in place of the grid. *A gone object is refused* When only plugins that are not
+   active hold it, the grid with no column, and the tab stays open. *ADR-0012*
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
    scroll stay. *ADR-0015, invariant 3; edit-record, Hand-off*

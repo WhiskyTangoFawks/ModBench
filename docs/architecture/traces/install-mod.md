@@ -43,8 +43,10 @@ or an installed mod the user confirmed. Install never infers the target from dis
 This flow waits for no hand-off. Install writes no `modlist.txt` line.
 
 - The Instance loader's watch sees the folder. `mod sync` adds its line at the winning end,
-  disabled, and `plugin sync` adds its plugins' lines
-  ([update-load-order-file](update-load-order-file.md)).
+  disabled ([update-load-order-file](update-load-order-file.md)). A disabled mod provides no
+  plugin, so its plugins get lines only when the mod is enabled.
+- The next snapshot names the mod's plugins, and [index-load-order](index-load-order.md) indexes
+  them while the mod is still disabled.
 - For a tracked mod, the Mod watcher sees the new bytes, and
   [detect-external-change](detect-external-change.md) tells the user which plugins changed outside
   Modbench.
