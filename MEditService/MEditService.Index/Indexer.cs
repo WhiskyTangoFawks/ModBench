@@ -745,8 +745,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         return reports;
     }
 
-    // index-load-order.md, failures: one plugin that cannot be read is flagged with its reason, and the
-    // plugins after it are still validated.
+    // plugins.md, A row, Plugin, "Failed to read": one plugin that cannot be read is flagged with
+    // its reason, and the plugins after it are still validated.
     private ValidationReport ValidateOne(IRecordIndex index, PluginAddress key, string? modFolder)
     {
         try
@@ -755,8 +755,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // Gained records are refreshed by key so the rows that moved are named (edit-record.md,
-            // Hand-off). A plugin whose last read failed is read whole: that lifts the failure
+            // Gained records are refreshed by key so the rows that moved are named (ADR-0015,
+            // invariant 3). A plugin whose last read failed is read whole: that lifts the failure
             // (ADR-0003).
             var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
             if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)

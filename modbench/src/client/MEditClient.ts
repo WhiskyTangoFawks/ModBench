@@ -118,7 +118,7 @@ export type CopyMode = components['schemas']['CopyMode'];
 export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination'>;
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
- *  (query-index contract, The record filter). */
+ *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
 /** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"

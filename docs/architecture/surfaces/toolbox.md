@@ -4,8 +4,8 @@ The Toolbox shows the instance itself: which game it is for and which profile is
 gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in
-[commands.md](../commands.md) under Instance and Profile; what each one writes is in its trace. What
-every view shares is in [common.md](common.md).
+[commands.md](../commands.md) under Instance and Profile. What every view shares is in
+[common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 

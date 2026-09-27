@@ -26,7 +26,7 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ```
 
 ## Resources
-- `docs/architecture/` is the spec. `target-architecture.md` says how to read the diagrams. A view's spec is its surface in `surfaces/`. A gesture's contract is the trace that its row in `commands.md` names.
+- `docs/architecture/` is the spec. `target-architecture.md` says how to read the diagrams. A view's spec is its surface in `surfaces/`. A trace in `traces/` is a diagram of how data flows, and holds no contract.
 - `docs/adr/` holds the decisions the code only cites. `ls docs/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, spec or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
 - `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen
   (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.

@@ -1,5 +1,5 @@
 // The plugin-order rules a move keeps: masters above their dependants, blueprint plugins last
-// (update-load-order-file, Refusals; MO2's PluginList::setPluginPriority, pluginlist.cpp).
+// (plugins.md, Drag and drop, story 3; MO2's PluginList::setPluginPriority, pluginlist.cpp).
 
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 

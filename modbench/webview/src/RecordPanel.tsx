@@ -28,7 +28,7 @@ const mEditWindow = window as Window & typeof globalThis & {
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
 // The document member a record's FormID is, which an edit of the FormID names (editor.md, The
-// FormID; edit-record.md).
+// FormID).
 const FORM_ID_MEMBER = 'FormKey';
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its

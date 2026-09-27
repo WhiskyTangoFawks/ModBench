@@ -47,8 +47,7 @@ export function registerPluginSync(
   channel: { error(msg: string): void; info(msg: string): void },
 ): PluginSyncTrigger {
   const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line));
-  // update-load-order-file, Refusals: before mEdit first attaches, plugin sync waits, so a launch
-  // reports nothing.
+  // Before mEdit first attaches, plugin sync waits, so a launch reports nothing.
   let attachedOnce = false;
   const runs = trackSyncRuns();
   const run = (value: InstanceValue): void => {

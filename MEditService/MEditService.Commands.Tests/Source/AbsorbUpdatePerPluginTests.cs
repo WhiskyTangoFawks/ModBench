@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.Source;
 
 /// <summary>An update of a tracked mod with two plugins and an asset, answered with a new baseline
-/// on main (decompile-plugin, The command, step 5, and Failure).</summary>
+/// on main.</summary>
 public sealed class AbsorbUpdatePerPluginTests : IDisposable
 {
     private const string Origin = "UpdatedMod";

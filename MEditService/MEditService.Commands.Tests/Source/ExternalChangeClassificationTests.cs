@@ -252,7 +252,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
     }
 
     // An untracked plugin has no source to lose, so its bytes are no part of the question
-    // (decompile-plugin, The trigger, step 3).
+    // (ADR-0003, invariant 3).
     [Fact]
     public void ASettle_ReportsNothing_ForAnUntrackedPluginBesideATrackedOne()
     {

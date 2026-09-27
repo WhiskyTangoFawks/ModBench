@@ -4,8 +4,7 @@ The record panel shows one record as every active plugin has it: a row for each 
 column for each plugin. Its template is xEdit's View grid
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
 [xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
-[commands.md](../commands.md) under Record, Plugin, Mod (`track`) and Every view; what each one
-writes is in its trace.
+[commands.md](../commands.md) under Record, Plugin, Mod (`track`) and Every view.
 
 The Editor surface has three more files:
 

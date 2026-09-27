@@ -10,7 +10,7 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
 ## Process
 
-1. Read the specs the conversation touched: the surfaces, the traces and the `commands.md` rows. For each behaviour the conversation settled, find the spec line that draws it.
+1. Read the specs the conversation touched: the surfaces and the `commands.md` rows. For each behaviour the conversation settled, find the spec line that draws it.
 
    A settled behaviour with no spec line is a gap in the spec, and the spec is the user's. Name each gap to the user and leave it out of the epic until the spec draws it.
 
@@ -34,7 +34,7 @@ The spec lines this epic makes true, as pointers. One bullet per file.
 
 <scope-example>
 - `surfaces/plugins.md` § The tree, stories 1–9; § A row, stories 10–17
-- `traces/create-plugin.md`, the whole contract
+- `surfaces/common.md` § States, story 5
 - `commands.md`: the `plugin create` and `plugin compile` rows
 </scope-example>
 

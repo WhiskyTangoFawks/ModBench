@@ -294,8 +294,8 @@ async function trashThenUnlist(
 export type DeleteSeparatorsResult = TrashThenUnlistResult;
 
 /** `modbench.separator.delete` over the selection. The trash cannot be undone, so each folder goes
- *  before its line: a refused trash writes nothing for that separator (update-load-order-file,
- *  Refusals). */
+ *  before its line: a refused trash writes nothing for that separator (commands.md, *A failed
+ *  gesture writes nothing*). */
 export function deleteSeparators(
   instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<DeleteSeparatorsResult> {
@@ -332,8 +332,8 @@ export type UninstallModsResult =
   | { applied: false; refusal: string };
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
- *  then its downloaded file marked (update-load-order-file, mod `uninstall`). `downloadsDir`
- *  undefined (unresolved) skips the mark; its reason was already logged once. */
+ *  then its downloaded file marked (commands.md, `uninstall`; mods.md, Reporting, story 4).
+ *  `downloadsDir` undefined (unresolved) skips the mark; its reason was already logged once. */
 export async function uninstallMods(
   instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string | undefined,
   trash: MoveToTrash,
@@ -437,8 +437,8 @@ export async function syncMods(
   let dropped: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, async (text) => {
     // Matched by key, as MO2 matches a line to its folder, whatever case the disk keeps.
-    // A mods/ that cannot be listed, gone included, refuses the sync (update-load-order-file,
-    // Refusals).
+    // A mods/ that cannot be listed, gone included, refuses the sync (mods.md, Reporting,
+    // story 2).
     const onDiskNow = new Set((await listFolders(modsDir(instanceRoot))).map(modNameKey));
     const onDisk = (folder: string) => Promise.resolve(onDiskNow.has(modNameKey(folder)));
     // Under the write lock: each value lags the disk and the last write, so only the text about

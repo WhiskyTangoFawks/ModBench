@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Refresh's own first step (load-instance, refresh): the index file is dropped, and mEdit
+/// <summary>Refresh's own first step (commands.md, `refresh`): the index file is dropped, and mEdit
 /// reads every plugin again against the load order it holds, as a cold load does. Nothing is sent.
 /// </summary>
 [Collection(WebHostCollection.Name)]

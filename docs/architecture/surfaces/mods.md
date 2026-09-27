@@ -4,8 +4,7 @@ The Mods surface shows the active profile's mod order: its mods, grouped by sepa
 Overwrite folder. Its template is MO2's mod list
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md)
-under Mod and Separator; what each one writes is in its trace. What every view shares is in
-[common.md](common.md).
+under Mod and Separator. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 

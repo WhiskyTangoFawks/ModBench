@@ -50,8 +50,7 @@ A gesture this file has and the model cannot hold is a ticket.
   gesture: the row is an addition or a divergence, and needs a ruling.
 - **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
   drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
-  its specification is this row and its surface. A trace's `.md` contract says what the flow
-  promises, step by step, where it hands off, what it refuses, and what a failure leaves.
+  its specification is this row and its surface.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -104,7 +103,7 @@ several surfaces has one row, and each surface adapts its own item to the Argume
 - **A failed gesture writes nothing.** When a command cannot finish, it leaves the files as they
   were and reports the failure
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)). A
-  contract names any gesture that cannot promise this.
+  surface story names any gesture that cannot promise this.
 - **A selection is one gesture, and each item lands on its own.** A gesture over several objects is
   one command with the whole selection as its Argument, asked once. An item that cannot proceed
   writes nothing and is refused, naming why; the others land. The result names both
@@ -115,7 +114,7 @@ several surfaces has one row, and each surface adapts its own item to the Argume
   message.
 - **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks
   first. It asks once for the whole selection. An edit to a value inside a record changes the record
-  and deletes nothing, so it does not ask. No other gesture asks. A surface or a contract can name
+  and deletes nothing, so it does not ask. No other gesture asks. A surface can name
   an exception, with its reason.
 - **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
   reads the file back, and every view updates from the disk's next value. common.md, Unconfirmed
