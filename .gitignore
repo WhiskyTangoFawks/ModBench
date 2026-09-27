@@ -18,12 +18,6 @@ __pycache__/
 # Vitest cache
 .vite/
 
-# Stryker mutation test reports
-MEditService/StrykerOutput/
-MEditService/.stryker-run.json
-modbench/reports/mutation/
-modbench/.stryker-tmp/
-
 # DuckDB cache
 *.duckdb
 *.duckdb.wal

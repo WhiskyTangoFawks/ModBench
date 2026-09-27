@@ -60,9 +60,6 @@ files an issue: the tracker holds no standing bug/tech-debt backlog (`docs/agent
 
 Rerun the gates if any fix changed logic.
 
-Mutation testing (`/mutation-test`, the Suite axis) is not a validate step — a full
-Stryker run takes hours, so it is dispatched only when explicitly asked for.
-
 Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces
 them continuously during the work, scoped to changed files, and the work in progress triages them. Validate
 owns correctness and gates — nothing else.
