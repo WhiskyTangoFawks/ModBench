@@ -70,15 +70,15 @@ no view has a mode for its absence. A disconnect is an error that the views surf
 
 ## Rules the Modbench column draws
 
-Change flows up only through the one watcher and the notification port. mEdit watches nothing.
+Change flows up only through the one watcher and the notification port.
 On the mEdit side the Source adapter owns layout; on the Modbench side the Instance adapter is that
 owner, the one box that reads or writes the instance: the mod
 manager's configuration, the load order, and which game it is for. Deployment is a boundary of its own: it makes the game see the instance's resolved files, and hides how. The instance decides which file wins each path; deployment decides nothing, and writes only into the game folder, where it removes only what it wrote. A command hands the Instance adapter the change, and the adapter splices it through the file's codec and writes the file whole. The mod manager's codecs are inside its implementation; the game's `plugins.txt` codec is in the kernel. No command reads the
 Instance loader; a value a command needs, the mods and plugins to sync, or the winners
 to deploy, arrives as an argument.
 The Instance loader builds its value from disk and nothing else. It rebuilds the whole value. It
-keeps the last value on a read failure, and publishes the reason beside it. A watch event, activation, refresh and window focus all start the
-same read ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
+keeps the last value on a read failure, and publishes the reason beside it. Every recompute takes the
+same path ([load-instance](traces/load-instance.d2)). Outside two per-release tables,
 game paths and the load-order file destination, no Modbench file names a game; a source scan
 holds it. Modbench does not depend on one mod manager. The game owns the format of `plugins.txt`.
 The mod manager owns every other file in the instance. The Instance adapter is a repository. MO2
