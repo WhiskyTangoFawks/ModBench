@@ -38,8 +38,8 @@ medit_core: "MEDIT · Core — the write side and the read side; each references
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, sync mod lines\nhides: an uninstall's mark on its downloaded file" {class: core}
-  pluginscommands: "plugins commands\ninterface: enable, disable, move, sync plugin lines\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
+  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, mod sync\nhides: an uninstall's mark on its downloaded file" {class: core}
+  pluginscommands: "plugins commands\ninterface: enable, disable, move, plugin sync\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
   instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: nothing; the Instance adapter writes the profile" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a download's\nrecord" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nsource/; the installed mark on the downloaded file" {class: core}
@@ -71,7 +71,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
-  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every MO2-side watcher; the debounce; which file wins\neach path; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
+  instanceloader: "Instance loader\ninterface: current value and the last read's failure · subscribe ·\nrefresh · sequence\nhides: every watcher on the instance; the debounce; which file wins\neach path; a downloaded file's status; a read failure\nkeeps the last value" {class: driven}
   instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files; changes: enable or disable mods and plugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a download's record, a mod's meta, the\nselected profile; get, put, rename in mods/; what to\nwatch\nhides: layout — the directory structure, the globs its watchers\nuse and every path function; the manager's file formats, their\nsplices and locks; whole-file writes; the ini's game path, then\nSteam and Wine detection" {class: driven}
   deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}

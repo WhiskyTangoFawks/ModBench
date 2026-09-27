@@ -1,5 +1,5 @@
 // The Instance: one read model over the MO2 instance directory's files (ADR-0015). It owns the
-// MO2-side watchers, holds one whole value, and is built only by watching.
+// watchers on the instance, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
 import { errnoCode } from '../ports/errno';

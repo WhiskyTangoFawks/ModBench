@@ -8,7 +8,7 @@ every file Modbench reads or writes, and to the state Modbench derives from them
 1. **Disk-derived state validates by content, never by clock and never by trust in its own last
    write.** The record index hashes every file it holds rows for
    ([ADR-0009](0009-the-record-index-mirrors-the-files-on-disk.md)); the instance value is rebuilt
-   whole from MO2's files
+   whole from the mod manager's files
    ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md));
    a tracked plugin's bytes are compared against what Modbench last wrote.
 2. **Watchers are never trusted alone.** Every watched state also validates at load and on

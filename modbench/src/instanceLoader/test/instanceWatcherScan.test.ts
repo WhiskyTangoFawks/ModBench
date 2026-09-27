@@ -1,4 +1,4 @@
-// ADR-0015 invariant 7: the Instance owns every MO2-side watcher. A view or command wiring its own
+// ADR-0015 invariant 7: the Instance owns every watcher on the instance. A view or command wiring its own
 // watcher would duplicate the Instance's recompute trigger instead of reading its value.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -47,7 +47,7 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
   return found;
 }
 
-describe('every MO2-side watcher is created inside the Instance or a watcher module', () => {
+describe('every watcher on the instance is created inside the Instance or a watcher module', () => {
   it('scans a real body of files', () => {
     expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
   });
