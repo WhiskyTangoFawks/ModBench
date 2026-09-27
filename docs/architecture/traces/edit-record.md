@@ -73,8 +73,8 @@ Commands refuses before it writes the record, and names the cause.
 
 ## Failure
 
-Each document is written whole. Over a selection, the records that landed stand. No principle has
-an exception.
+Each document is written whole. Over a selection, the records that landed stand. No rule of
+commands.md has an exception.
 
 ## Test seam
 

@@ -23,7 +23,7 @@ As a user, I want:
    last record tab, the list to empty.
 3. The title to count the records that reference it, as xEdit's tab caption does: `Referenced By
    (12)`. With no record, or while the count is not known, the title has no count, so it never
-   shows a zero it has not confirmed. *xEdit; ruling*
+   shows a zero it has not confirmed. *xEdit*
 4. The description to name the record the list is about, then the name filter's term while one is
    active: `WeapLaserGun · "arm"`. *common, The name filter, story 5*
 5. Several rows selected at once, and a gesture to act on the whole selection. *common, A view,
@@ -34,15 +34,15 @@ As a user, I want:
 As a user, I want:
 
 1. One row for each record that references the active one, however many plugins hold the
-   reference: a referrer overridden in four plugins is one referrer, not four. *ruling*
+   reference: a referrer overridden in four plugins is one referrer, not four.
 2. Beneath a referrer, one row for each plugin that holds the reference, in plugin order: each is
    one plugin's copy of the referrer, as each row of xEdit's list is one file's record. *xEdit*
 3. Only the plugins the game loads to count: a reference held only in a disabled plugin, or in an
-   overridden plugin, lists nothing and counts toward nothing. *ADR-0013, invariant 3; ruling*
+   overridden plugin, lists nothing and counts toward nothing. *ADR-0013, invariant 3*
 4. A reference counted only where its field is in use: a condition parameter its function does not
    use is not a reference, whatever it holds. *xedit.md, divergence 13*
 5. A child record's references counted as its own: a quest and a dialog topic inside it each list
-   what they reference. *ruling*
+   what they reference.
 6. The referrers sorted by record type, then by label, and the title bar's toggle to reverse them.
    *common, A view, story 7*
 7. Every referrer collapsed when the list follows a new record.
@@ -71,8 +71,8 @@ As a user, I want:
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no record open, the message "Open a record to see what references it." *ruling*
-2. With a record nothing references, the message "No references found." *ruling*
+1. With no record open, the message "Open a record to see what references it."
+2. With a record nothing references, the message "No references found."
 3. While mEdit is still indexing plugins, a message that the list may not be complete. *ADR-0019,
    invariant 1*
 4. The list to read again when mEdit reports a change to the records, from an edit of mine or from

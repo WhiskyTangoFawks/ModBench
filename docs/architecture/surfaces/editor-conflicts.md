@@ -27,11 +27,11 @@ xEdit's benign and ignored states come from its priority table, which Modbench d
 | Override | green | copies change the field, and none disagrees with another |
 | Conflict | orange | copies disagree on the field |
 
-*ADR-0018, invariant 3; xedit.md, divergence 4; ruling*
+*ADR-0018, invariant 3; xedit.md, divergence 4*
 
 As a user, I want:
 
-1. Each row painted from its own field, so one changed field tints its own row and no other. *ruling*
+1. Each row painted from its own field, so one changed field tints its own row and no other.
 2. A collapsed struct or array row to show the worst state beneath it, so collapsing hides nothing,
    and an expanded one to show no background, since its rows show their own. *xedit.md, divergence
    4*
@@ -48,13 +48,13 @@ As a user, I want:
 | ConflictWins | orange | default | disagrees with another copy, and wins |
 | ConflictLoses | red | red | disagrees with another copy, and loses |
 
-*ADR-0018, invariant 3; ruling*
+*ADR-0018, invariant 3*
 
 As a user, I want:
 
-1. A cell whose plugin has nothing there to have no colour. *ruling*
+1. A cell whose plugin has nothing there to have no colour.
 2. Each column's header painted with the worst state among its cells, as a summary; the cells are
-   what count. *ruling*
+   what count.
 
 ## What takes part
 

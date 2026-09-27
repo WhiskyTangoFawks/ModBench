@@ -122,7 +122,7 @@ No rollback beyond git's: each commit is its own unit (ruling: git handles it).
 - **The working tree.** A failure stops the run and says so, naming what failed. The files written
   before it stay as uncommitted changes, for the user to keep or discard with git.
 
-Exceptions to the principles:
+Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** The commits that landed before a failure stand, and so do
   the working-tree files written before it.

@@ -49,7 +49,7 @@ folder and the file, because only it touches the disk.
 
 ## Failure
 
-The flow writes one file. A failed write leaves no file. No principle has an exception.
+The flow writes one file. A failed write leaves no file. No rule of commands.md has an exception.
 
 ## Test seam
 

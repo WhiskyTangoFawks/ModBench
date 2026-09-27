@@ -84,7 +84,7 @@ A system command reports a failure once when it begins, and again only when its 
 
 A failed write leaves the file as it was.
 
-Exceptions to the principles:
+Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** `uninstall` writes the folder, the line and the `.meta`. When
   the line fails after the trash, the line names a folder that is gone, and `mod sync` drops it. A

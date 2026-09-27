@@ -68,7 +68,7 @@ Commands refuses before any write, and names the cause.
 - **An interrupted compile** leaves the old binary or the new one, and each is what Modbench last
   wrote (step 7), so no question opens. Compiling again builds the binary.
 
-Exceptions to the principles:
+Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** An interrupted compile can leave a localized plugin's strings
   written without its binary. The source, which is the truth, is untouched.

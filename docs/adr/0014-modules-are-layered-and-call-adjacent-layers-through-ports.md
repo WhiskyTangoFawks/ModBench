@@ -2,7 +2,7 @@
 
 The picture is [docs/architecture/](../architecture/target-architecture.md): one grid, six rows
 for the layers, two columns for the processes, each box a module with its interface and what it
-hides. The build enforces the arrows the diagram draws. Architecture words live here; domain words
+hides. The build enforces the arrows the diagram draws. Architecture words live in `docs/architecture/`; domain words
 live in the glossary.
 
 ## Strategic invariants

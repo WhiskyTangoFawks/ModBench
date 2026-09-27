@@ -1,9 +1,7 @@
 # Modbench never assumes exclusive ownership of a file
 
-MO2, xEdit, other tools and the user can create, edit, move or delete any mod file or plugin
-outside Modbench at any moment. Every file Modbench reads or writes is shared. Anything that holds
-disk-derived state detects that a file changed without its knowledge and recovers, and a change
-Modbench cannot classify on its own is a question for the user, never a silent repair.
+This decision applies the principle *Modbench owns nothing* ([principles](../principles.md)) to
+every file Modbench reads or writes, and to the state Modbench derives from them.
 
 ## Strategic invariants
 
@@ -41,8 +39,7 @@ Modbench cannot classify on its own is a question for the user, never a silent r
 
 ## Alternatives rejected
 
-- **Assume ownership: lock the files, or trust the last write.** Every tool in the ecosystem
-  writes these files, and none of them checks for Modbench.
+- **Assume ownership: lock the files, or trust the last write.** The principle rules it out.
 - **Detect by modification time.** Other tools' writes can preserve it.
 - **Classify from the watcher's event list.** Events are lossy and Modbench's own writes are in
   them; git's view of the tree is the only oracle that cannot drift.

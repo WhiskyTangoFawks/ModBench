@@ -22,11 +22,11 @@ As a user, I want:
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a
    check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only
    while the tree has focus and no input box does, as VS Code's list keys do. The keys of a
-   template, xEdit or MO2, are not adopted. *ADR-0018, invariant 1; ruling*
+   template, xEdit or MO2, are not adopted. *ADR-0018, invariant 1*
 6. Every tree to let me select several rows, and a gesture to act on the whole selection unless it
-   only makes sense for one row, which its Argument in the catalog says. *ruling*
+   only makes sense for one row, which its Argument in the catalog says.
 7. Every list to reverse its order from its title bar. The direction never changes what the order
-   means, such as which item wins. *ruling; CONTEXT.md, Sort direction*
+   means, such as which item wins. *CONTEXT.md, Sort direction*
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its
    surface says it copies. *catalog `copy value`*
 
@@ -35,7 +35,7 @@ As a user, I want:
 One filter on every list (commands.md, One filter). As a user, I want:
 
 1. To open it from the title bar's first slot. It has no key: Ctrl+Alt+F and F3 stay VS Code's own
-   Find on the tree. *ruling; catalog*
+   Find on the tree. *catalog*
 2. Typing to narrow the list live, by case-insensitive substring of the row's label.
 3. The filter to stay when the input box closes by any route: Enter, Esc, a click on a row or
    elsewhere. Reopening the box shows the term, to edit.
@@ -60,13 +60,13 @@ As a user, I want:
    be told so, never to fail silently. Every view that shows the instance says it in place of its
    rows, and says how to open an instance. The message waits for the check, so a folder not yet
    checked never reads as not an instance. An instance Modbench recognizes whose files cannot be
-   read is story 2, not this. *ruling*
+   read is story 2, not this.
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The
    Toolbox's Game row shows `$(warning)` and "game folder not found", with a tooltip naming each
    place Modbench looked and the setting that fixes it. Every view whose rows need the game folder
    says so in its message line. One line in the Output. No notification; this is the background
    tier. Rows that do not need the game folder still show. A configuration that names no game is
-   story 2; no configuration is story 4. *ADR-0019, invariant 2; ruling*
+   story 2; no configuration is story 4. *ADR-0019, invariant 2*
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing
    the last good read:" and the reason, with one line in the Output. No notification. The next
    good read clears it. *ADR-0015, invariant 7; ADR-0019, invariant 1*
@@ -78,12 +78,11 @@ Between the two, as a user, I want:
 
 1. A value I changed, a field, a check box or a name, to show my new value at once, and the thing
    I changed to carry `$(sync~spin)`, its tooltip "Written; waiting for the disk to confirm".
-   Nothing else in the view changes. *ruling*
+   Nothing else in the view changes.
 2. A gesture that changes the shape of a list, a move, a create, a delete, an element added or
    removed, to leave the shape as it is until the disk confirms it, and the thing it changed to
-   carry the same mark: the row I moved or deleted, or the row I created in. *ruling*
+   carry the same mark: the row I moved or deleted, or the row I created in.
 3. The mark only after a short delay, so a write the disk confirms at once never flickers.
-   *ruling*
 4. The mark to go when the disk's next value covers what I changed, and the disk's value to show,
    whatever it is. When it differs from what I wrote, one line in the Output naming the thing and
    saying the disk now shows something else. No notification. *ADR-0003, invariant 4; ADR-0019,
@@ -92,7 +91,7 @@ Between the two, as a user, I want:
 6. `refresh` to clear every mark, because it reloads from disk. A gesture that is refused or fails
    is reported as any failed gesture is (Reporting), and what it changed shows the disk's value
    again at once, with no mark. A gesture that gets no answer keeps its mark until the disk's next
-   value or a refresh: only the disk can say what happened. *ADR-0015, invariant 2; ruling*
+   value or a refresh: only the disk can say what happened. *ADR-0015, invariant 2*
 
 ## The status bar
 
@@ -101,7 +100,6 @@ As a user, I want:
 1. One item at the bottom left that says what mEdit is doing: `$(loading~spin) mEdit: Starting…`,
    `$(plug) mEdit: Running`, `$(error) mEdit: Disconnected`, `$(circle-slash) mEdit: Stopped`, or
    `$(check) mEdit: Ready (N plugins)` once the load order is indexed. It names no game.
-   *ruling*
 2. A click on it to do nothing: mEdit starts with the extension, and nothing starts it.
    *commands.md, No lifecycle gestures*
 3. A disconnect reported, never adapted to: the views keep their rows. *ADR-0002, invariant 2;

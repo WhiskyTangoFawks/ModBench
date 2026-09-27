@@ -43,7 +43,7 @@ As a user, I want:
 ## The header
 
 One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the
-FormKey alone when there is no EditorID. It holds no controls. *ruling*
+FormKey alone when there is no EditorID. It holds no controls.
 
 ## The FormID
 
@@ -51,7 +51,7 @@ As a user, I want the record's FormID as the first row of the grid, under Record
 any field is. A new FormID changes the record's FormKey and nothing else: the records that
 reference it, the record itself included, are left as they are, and updating them is a script.
 The Index reads the record again under its new FormKey. A plugin header's FormID is read-only.
-*xedit.md, divergence 9; ruling*
+*xedit.md, divergence 9*
 
 ## Columns
 
@@ -60,14 +60,14 @@ As a user, I want:
 1. One column for each plugin the game loads that holds the record, in plugin order: the record's
    master on the left, the winning copy on the right. *xEdit; ADR-0013, invariant 3*
 2. A plugin the game does not load not to be a column: an overridden plugin, or a disabled plugin.
-   *ADR-0012, invariant 5; ruling*
+   *ADR-0012, invariant 5*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
-   It stays collapsed while the tab is open. *ruling*
+   It stays collapsed while the tab is open.
 4. A column that cannot be edited to refuse silently, as xEdit does: no editor opens, and nothing
    marks its cells ahead of time. Its header says why. *xEdit; ADR-0018*
-5. Each column sized to fit, and its edge to drag to resize it. *ruling*
+5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar at the bottom of the panel, wherever I have scrolled
-   to. *ruling*
+   to.
 
 ### A column's header
 
@@ -88,7 +88,7 @@ As a user, I want:
 | `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed,
-header and cells alike, so it reads as outside the conflict after the header scrolls away. *ruling*
+header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
 ## Rows
 
@@ -161,7 +161,7 @@ As a user, I want:
    invariant 2*
 3. When the conflict colours are not yet computed for every plugin, a message above the grid:
    "This record's comparison is not complete: the colours are not final." It goes by itself once
-   they are, and the grid reads again. *ADR-0019, invariant 1; ruling*
+   they are, and the grid reads again. *ADR-0019, invariant 1*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
    naming it, in place of the grid. *A gone object is refused*
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from

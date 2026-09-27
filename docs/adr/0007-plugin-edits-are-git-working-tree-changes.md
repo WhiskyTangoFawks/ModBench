@@ -4,7 +4,7 @@ Version control is foundational to working with an agent in a domain where autom
 is next to impossible: the user needs oversight of what the agent did and an easy roll-back of
 what it did wrong. Git gives both, and VS Code's Source Control panel shows them. So a tracked
 mod's source ([ADR-0006](0006-decompilation-is-provably-faithful.md)) lives in a git
-working tree inside the mod folder, every edit is a change to that tree, and Save & Compile writes
+working tree inside the mod folder, every edit is a change to that tree, and compile writes
 the binary from it. Tracking adopts the standard software lifecycle: the source is the truth, and
 the binary is a build artifact that compile regenerates from it.
 
@@ -24,7 +24,7 @@ the binary is a build artifact that compile regenerates from it.
    working tree as Effective and `HEAD` as Head and never consults the binary for content; an
    untracked plugin keeps the binary ingest and yields the same document shape, so the read model
    never sees a dialect.
-4. **Every edit writes working-tree text; Save & Compile writes the binary.** Compile behaves like
+4. **Every edit writes working-tree text; compile writes the binary.** Compile behaves like
    a compiler: it derives what the format forces it to derive, the masters list
    ([ADR-0008](0008-masters-are-derived-from-content.md)) and the header's counters, refuses
    only what it structurally cannot emit, and reports the rest as
@@ -35,14 +35,14 @@ the binary is a build artifact that compile regenerates from it.
    diffs, native commit. Git on PATH is a product requirement. Modbench does not rebuild a git gesture VS Code
    already offers: branching, rebasing and merging, the edit branch included, happen in Source
    Control.
-6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine
-   upstream state on `main` and is edited on the edit branch, so `git diff main <branch>` is
-   everything the user changed and compiling `main` restores the pristine plugin. An authored mod
-   merges into `main` at will. A baseline commit holds one plugin, so a Track or an update that covers several plugins writes
-   one commit per plugin. Its message follows git's convention. The plugin's version is two facts:
-   the upstream version the mod manager records, which is informational, and the hash of the
-   plugin's binary, which identifies it. The subject names the plugin and the upstream version, and
-   the trailers carry both facts, read by humans and agents.
+6. **Vendored versus Authored is repo topology, not a mode.** A vendored mod keeps pristine upstream
+   state on `main` and is edited on the edit branch, so `git diff main <branch>` is everything the
+   user changed and checking out `main` and compiling restores the pristine plugin. An authored mod
+   merges into `main` at will. A baseline commit holds one plugin, so a Track or an update that
+   covers several plugins writes one commit per plugin. Its message follows git's convention. The
+   plugin's version is two facts: the upstream version the mod manager records, which is
+   informational, and the hash of the plugin's binary, which identifies it. The subject names the
+   plugin and the upstream version, and the trailers carry both facts, read by humans and agents.
 7. **Never track a file that changes for non-content reasons.** `meta.ini` is a source of
    trailers, never tracked content: one MO2 update check rewrites it across every mod. Track
    generates the `.gitignore`, then the user owns it.

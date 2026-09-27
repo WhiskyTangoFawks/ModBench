@@ -65,7 +65,7 @@ The install box refuses before it writes to `mods/`, and names the cause.
 - **The `.meta` mark.** A failed mark is a line in the Output, and the install stands
   ([downloads.md](../surfaces/downloads.md), Reporting).
 
-Exceptions to the principles:
+Exceptions to commands.md's rules:
 
 - **A failed gesture writes nothing.** An upgrade that fails after the old files are removed is not
   rolled back. It says so, naming the folder and what failed. Installing the download again is the

@@ -100,7 +100,7 @@ As a user, I want:
    clicked row's direction to every row, because a menu condition cannot see the mix. A row already
    in that state is left alone. *MO2's Hide All; Doing nothing is not an error*
 5. To install only from the row menu. A double click, Enter or a drag onto the Mods view installs
-   nothing. *ruling; mo2.md, Downloaded file*
+   nothing. *mo2.md, Downloaded file*
 6. Copy value to copy each selected file's file name, one to a line. *catalog `copy value`*
 
 ## Pickers and confirmations
@@ -123,7 +123,7 @@ want:
    showing its name and version, and a last item, "Install as a new mod…". *diagram;
    [install-mod.d2](../traces/install-mod.d2)*
 2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new
-   mod. *ruling*
+   mod.
 3. An upgrade only when I choose it, even when one item is pre-selected. *diagram: always confirmed*
 4. The mod whose installed files record this file's ID named "File ID match", listed first and
    pre-selected. With no such mod, the mod whose `meta.ini` records this file as its installation

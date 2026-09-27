@@ -21,7 +21,7 @@ absence
 ([ADR-0002](../../adr/0002-mod-management-and-editing-are-one-tool.md), invariant 2).
 
 The view's description shows the name filter's term and the record filter's source while each is
-active: `"arm" · records: armor.sql`. *ruling*
+active: `"arm" · records: armor.sql`.
 
 ## The tree
 
@@ -31,14 +31,14 @@ As a user, I want:
    top. *MO2*
 2. The plugins the game loads with no line at the losing end, before every line, locked, once mEdit
    says which they are. Until it does, a line that names one is an ordinary row. *MO2; ADR-0016,
-   invariant 1; ruling*
+   invariant 1*
 3. An overridden plugin, one the game does not load because another mod's plugin of the same name
    wins, not to be a row. It stays indexed. *ADR-0012, invariant 5*
 4. Every enabled plugin row to expand at any time. Expanding decides what it shows: its records,
    "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
    invariant 1*
-5. A disabled plugin to show no expander, because the game does not load its records. *ruling;
-   ADR-0013, invariant 3*
+5. A disabled plugin to show no expander, because the game does not load its records. *ADR-0013,
+   invariant 3*
 6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
 7. Beneath a group, its records. A container record holds its children directly, as xEdit folds a
@@ -51,8 +51,7 @@ As a user, I want:
 9. Beneath a group, the records in FormID order. *xEdit*
 10. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
     is on screen.
-11. Every row collapsed each time the extension activates, so the view opens clean. *ruling, as
-    in Mods*
+11. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
 
 ## A row
 
@@ -80,7 +79,7 @@ A master issue never disables the plugin or cascades to its dependants: the chec
 it (ADR-0012, invariant 4). Before the load order is indexed, a plugin has no master verdict, so no
 badge means not yet asked. A later reload of the load order keeps the last statuses, and the rows
 the record filter hides, until the new ones land. A malformed plugin's reasons are also in the
-Problems panel, on the plugin file. *ADR-0019; ruling*
+Problems panel, on the plugin file. *ADR-0019*
 
 ### A plugin the game loads with no line
 
@@ -130,12 +129,12 @@ As a user, I want:
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the plugin rows to
    winning at the top. It never changes which plugin wins: the locked plugins stay at the losing
    end, at the bottom when winning is at the top, and the groups and records beneath keep their
-   order. *common, A view, story 7; MO2's priority sort; ruling*
+   order. *common, A view, story 7; MO2's priority sort*
 2. The name filter to match plugin rows. *common, The name filter*
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot
    becomes a clear icon while it is active, and the view's description names its source, never its
    SQL. It is its own filter, beside the name filter. *catalog `filter` under Record; Chrome*
-4. A plugin with no record left under the record filter hidden while it is active. *ruling*
+4. A plugin with no record left under the record filter hidden while it is active.
 
 ## States
 
@@ -186,7 +185,7 @@ As a user, I want:
    untracked plugin in a mod, and compile on a tracked, editable plugin. *catalog
    Where*
 7. The gestures that edit a plugin's records absent on an untracked plugin: create record and
-   delete, and the plugin as a copy destination. Track is on its row. *No dead entries; ruling*
+   delete, and the plugin as a copy destination. Track is on its row. *No dead entries*
 8. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its
    file name, one to a line. *catalog `copy value`; [editor-fields.md](editor-fields.md)*
 
@@ -201,7 +200,7 @@ As a user, I want:
 3. A drop that would put a master below a plugin that depends on it, or a blueprint plugin before a
    plugin that is not one, refused, naming the plugin and the master. While mEdit cannot say which
    masters a plugin has, the drop lands, and the master status flags it once mEdit answers.
-   *update-load-order-file, plugin move, story 2; ADR-0012, invariant 4; ruling*
+   *update-load-order-file, Refusals; ADR-0012, invariant 4*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
 5. Records, groups and the locked rows not to drag, and nothing from outside the view to drop here.
@@ -214,11 +213,11 @@ As a user, I want:
 As a user, I want:
 
 1. A prompt for the name. It refuses an empty name, and a name that does not end `.esp`, `.esm` or
-   `.esl`. *ruling*
-2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog
-   `create`, place Option; ruling*
+   `.esl`.
+2. Then a pick of where the plugin lives: the enabled mods first, then Overwrite. *catalog `create`,
+   place Option*
 3. A place that already holds a plugin of that name left out of the pick. The same name elsewhere
-   in the load order is not checked. *No dead entries; ruling*
+   in the load order is not checked. *No dead entries*
 4. Esc at either step to create nothing. *Esc changes nothing*
 5. The new plugin to appear at the end of the list, disabled. *create-plugin, Hand-off*
 
@@ -233,7 +232,7 @@ and the phase. *catalog `track`; decompile-plugin, The command, step 4*
 As a user, I want:
 
 1. `compile` to build from the working tree, without asking: a tracked plugin's source is the
-   truth and the plugin a projection of it, so compile destroys nothing. *ruling*
+   truth and the plugin a projection of it, so compile destroys nothing.
 2. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems
    panel when it left diagnostics.
 3. From the palette with no plugin, a pick of the tracked, editable plugins. *No dead entries*
@@ -266,8 +265,8 @@ that it is active and clears it. *catalog `filter`: input box, or a document*
 As a user, I want:
 
 1. One dialog for each tracked mod that changed outside Modbench, one mod at a time. *ADR-0003,
-   invariant 3; ruling*
-2. The dialog to name the mod, list the changed plugins and the changed tracked files. *ruling*
+   invariant 3*
+2. The dialog to name the mod, list the changed plugins and the changed tracked files.
 3. Two answers, `Commit to main as new baseline` first, as the default, and
    `Apply to working tree on <branch>`. *ADR-0003, invariant 3*
 4. Esc to change nothing, and the dialog to come back at the next check while the change is still
@@ -275,7 +274,7 @@ As a user, I want:
 5. A write refused while a question is open to name the question and its two answers.
    *decompile-plugin, The trigger*
 6. A warning, once in a session, for each untracked plugin in a tracked mod, naming it and pointing
-   at Track. *ruling*
+   at Track.
 
 ## Reporting
 
@@ -286,8 +285,7 @@ By [common.md](common.md#reporting). As a user, I want:
    status: my picture of what is loaded would otherwise be wrong. *ADR-0019, invariant 1*
 3. Adding and removing `plugins.txt` lines for plugins found or gone to say nothing, the rows being
    the result, with a line in the Output. When mEdit cannot answer, or a folder cannot be listed,
-   the reason in the view's message line and the Output. *update-load-order-file, plugin sync,
-   stories 4 and 5; ruling*
+   the reason in the view's message line and the Output. *update-load-order-file, Refusals*
 4. Every message to name a gesture that exists and a view by its name.
 
 ## Test seam

@@ -18,7 +18,8 @@ children, so it has Collapse All (Chrome). Several rows can be selected at once.
 mods*
 
 The view's description shows how many mods are enabled out of how many are listed, counting the
-whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *ruling; MO2's active-mod counter*
+whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *MO2's
+active-mod counter*
 
 ## The tree
 
@@ -34,7 +35,7 @@ As a user, I want:
 4. The Overwrite row pinned at the winning end, outside every separator: last when losing is at the
    top, first when winning is. *MO2: Overwrite wins over every mod*
 5. Separators collapsed each time the extension activates, so the view opens clean. What I expand
-   stays expanded until then. *ruling*
+   stays expanded until then.
 6. A separator with no mods to show no expander. *VS Code*
 
 ## A row
@@ -51,7 +52,7 @@ As a user, I want:
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
 A mod whose folder was deleted by hand is not a row: its line is pruned from `modlist.txt`, and the
-row goes with it. *ruling; MO2*
+row goes with it. *MO2*
 
 ### Separator
 
@@ -71,7 +72,7 @@ row goes with it. *ruling; MO2*
 | Tooltip | what Overwrite is: the files tools wrote while MO2 ran them, which win over every mod | MO2 |
 
 Overwrite is always a row, even when it holds nothing. It is not a mod: it has no check box and
-cannot be dragged. *ruling; MO2*
+cannot be dragged. *MO2*
 
 ## Order and view state
 
@@ -139,8 +140,7 @@ As a user, I want:
 5. A drop where what I dragged cannot go to change nothing and say nothing: on Overwrite, on a row
    I am dragging, inside a separator I am dragging, or a separator on a mod. *MO2 refuses a
    separator on a mod; Doing nothing is not an error; collected in the CLAUDE.md review*
-6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *ruling;
-   mo2.md*
+6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *mo2.md*
 
 A drop is `move`, so it is one gesture however it lands (commands.md, Entry points are not gestures).
 
@@ -166,8 +166,7 @@ As a user, I want:
 2. On a mod, the separator on the mod's losing side in mod order, so the mod and the mods on its
    winning side in its separator join the new one. On a separator, on the winning side of that
    separator's last mod, taking none. With losing at the top, that is directly above the mod, and
-   directly below the separator's last mod, as shown. *ruling; catalog `add`, position; A gesture
-   is atomic*
+   directly below the separator's last mod, as shown. *catalog `add`, position; A gesture is atomic*
 
 ### Rename separator
 
@@ -177,7 +176,7 @@ another separator has is refused in the prompt, as for add. *MO2*
 ### Delete separator
 
 A separator delete does not ask: no mod is lost, and the separator's folder goes to the trash.
-*Confirm what destroys; ruling*
+*Confirm what destroys*
 
 ### Create empty mod and install
 
@@ -202,7 +201,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A failed gesture's notification to say what failed and why, not only that it failed. *common,
    Reporting*
 2. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
-   because the installer's own steps did not run. *install-mod, new mod, story 3; ADR-0019,
+   because the installer's own steps did not run. *install-mod, The flow, step 4; ADR-0019,
    invariant 1*
 
 ## Test seam
