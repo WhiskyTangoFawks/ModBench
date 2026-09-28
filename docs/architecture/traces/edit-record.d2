@@ -31,13 +31,13 @@ commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
 source -> watcher: source changed {class: signal}
-watcher -> indexer: "source changed: refresh keys" {class: signal}
+watcher -> indexer: source changed {class: signal}
 sourceadapter -> indexer: documents (tracked) {class: query}
 indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> editor: rows changed (push), then re-read {class: push}
+client -> editor: rows changed {class: push}
 
 refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}

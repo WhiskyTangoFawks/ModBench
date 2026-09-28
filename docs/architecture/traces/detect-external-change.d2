@@ -19,11 +19,9 @@ plugins.label: Plugins
 
 tools -> mo2: bytes, at any time {class: outside}
 mo2 -> watcher: changed paths {class: signal}
-watcher."settle per mod"
-watcher -> commands: a tracked mod settled {class: signal}
-commands."each tracked plugin's bytes against what Modbench last wrote; keeps nothing"
+watcher -> commands: a tracked mod changed {class: signal}
+commands."each tracked plugin's bytes against what Modbench last wrote"
 commands -> port: "external change: the mod, its changed plugins · untracked plugins" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> plugins: "external change · untracked plugins" {class: push}
-plugins."a notification per mod · the row status and a Problems warning per changed plugin · a warning per untracked plugin"
