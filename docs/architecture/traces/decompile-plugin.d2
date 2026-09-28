@@ -27,13 +27,13 @@ client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
-commands."the round-trip gate, per plugin, before any of it is written"
+commands."the round-trip gate, per plugin"
 commands -> sourceadapter: documents, per plugin {class: track}
 commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
 baseline: "the repository" {
-  sourceadapter."a new repository: the mod's own files, then one baseline commit per plugin, trailers from the request · an existing one: the working tree, no commit"
+  sourceadapter."a new repository, with baseline commits · a tracked mod: the working tree"
 }
 
 commands -> http: "applied or refusal, per item" {class: edit}

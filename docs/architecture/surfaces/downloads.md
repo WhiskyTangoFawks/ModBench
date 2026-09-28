@@ -109,19 +109,17 @@ As a user, I want:
 
 ### The install target
 
-There is no file picker (catalog `install`). The pick is Downloads' own (the diagram's caption: "the
-target pick: candidates by Nexus id, always confirmed"). As a user, I want:
+There is no file picker (catalog `install`). The pick is Downloads' own. As a user, I want:
 
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod,
-   showing its name and version, and a last item, "Install as a new mod…". *diagram;
-   [install-mod.d2](../traces/install-mod.d2)*
+   showing its name and version, and a last item, "Install as a new mod…".
 2. No pick when no installed mod shares the ID, or the file has none: the file installs as a new
    mod.
-3. An upgrade only when I choose it, even when one item is pre-selected. *diagram: always confirmed*
+3. An upgrade only when I choose it, even when one item is pre-selected.
 4. The mod whose installed files record this file's Nexus file ID named "File ID match", listed
    first and pre-selected. With no such mod, the mod whose `meta.ini` records this file as its
    installation file named "Installed from this file", listed first and pre-selected. With neither,
-   "Install as a new mod…" is pre-selected. Never a guess from the file's name. *diagram*
+   "Install as a new mod…" is pre-selected. Never a guess from the file's name.
 5. Esc to install nothing. *Esc changes nothing*
 6. A new mod to go on to the name prompt, and an upgrade not to.
 

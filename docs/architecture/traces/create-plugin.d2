@@ -21,22 +21,19 @@ pluginscommands.label: plugins commands
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: Mod watcher
 
-plugins."the name, then Overwrite or an enabled mod"
 plugins -> client: "create: origin, name, folder" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 commands -> pluginadapter: "an empty plugin: name, path, release" {class: edit}
-pluginadapter -> plugin: bytes, then forget {class: edit}
-pluginadapter -> commands: "written · the folder has gone · the file exists" {class: edit}
-plugin."the same file, in the picked mod's folder or in overwrite/"
+pluginadapter -> plugin: bytes {class: edit}
+pluginadapter -> commands: written or refusal {class: edit}
 commands -> http: applied or refusal {class: edit}
 http -> client: applied or refusal {class: edit}
 client -> plugins: applied or refusal {class: edit}
 mo2 -> instanceloader: watch {class: signal}
-instanceloader."a plugin on disk with no plugins.txt line"
 instanceloader -> pluginscommands: "plugin sync: update-load-order-file" {class: loadorder}
 plugin -> watcher: changed paths {class: signal}
-watcher."a tracked mod: decompile-plugin from here, which warns of the untracked plugin"
+watcher."a tracked mod: detect-external-change from here"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal" {class: edit}
