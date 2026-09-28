@@ -30,22 +30,19 @@ As a user, I want:
    invariant 3*
 3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed.
    *ADR-0012*
-4. Every active plugin row to expand at any time. Expanding decides what it shows: its records,
-   "Still indexing…", or the error row, never an empty list that reads as "no records". *ADR-0019,
-   invariant 1*
-5. A disabled plugin to show no expander, because it is not active. *ADR-0012, invariant 5*
-6. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
+4. A disabled plugin to show no expander, because it is not active. *ADR-0012, invariant 5*
+5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"),
    sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
-7. Beneath a group, its records, in FormID order. A container record holds its children directly, as
+6. Beneath a group, its records, in FormID order. A container record holds its children directly, as
    xEdit folds a record's child group into the record: a worldspace holds its persistent cell and
    its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary
    placed references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
    responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
-8. A row with nothing beneath it to show no expander, and an empty group of placed references not to
+7. A row with nothing beneath it to show no expander, and an empty group of placed references not to
    be a row. *xEdit*
-9. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
+8. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
    is on screen.
-10. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
+9. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
 
 ## A row
 
@@ -291,7 +288,7 @@ are, and compile reports them. *catalog `delete`; Confirm what destroys*
 
 ### Record filter
 
-As a user, I want a pick of the `.sql` files in my scripts folder, then "New filter…", which opens an
+As a user, I want a pick of the workspace's `.sql` files, then "New filter…", which opens an
 untitled SQL document; and on any SQL document, a code lens that applies it as the filter, or reads
 that it is active and clears it. A query that returns no FormKey column is refused, and one that
 cannot run is refused with the database's reason. *catalog `filter`, query Option*
