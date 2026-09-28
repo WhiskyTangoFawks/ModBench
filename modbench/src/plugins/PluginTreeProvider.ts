@@ -41,7 +41,7 @@ function describeRecordRow(item: vscode.TreeItem, record: RecordRowFacts): void 
   item.tooltip = lines.length > 0 ? lines.join('\n') : undefined;
 }
 
-// A row with nothing beneath it has no expander (plugins.md, The tree, story 8).
+// A row with nothing beneath it has no expander (plugins.md, The tree, story 7).
 function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState {
   return hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
 }
@@ -543,7 +543,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     });
   }
 
-  // Every interior cell in one call (plugins.md, The tree, story 9).
+  // Every interior cell in one call (plugins.md, The tree, story 8).
   private fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
       const blocks = await this.getOrLoad(this.interiorCache, pluginAddressKey(node.plugin, node.origin),

@@ -1438,7 +1438,7 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
   });
 });
 
-// plugins.md, The tree, story 5: the game does not load a disabled plugin's records, so there is
+// plugins.md, The tree, story 4: the game does not load a disabled plugin's records, so there is
 // nothing behind the row to expand into — same as an overridden plugin, viewing it is deferred.
 describe('PluginsTreeProvider — a disabled plugin row has no expander', () => {
   it('renders TreeItemCollapsibleState.None for a disabled plugin, before any reconcile', async () => {
@@ -2199,7 +2199,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  // plugins.md, The tree, story 10: VS Code remembers expansion by identity only within one
+  // plugins.md, The tree, story 9: VS Code remembers expansion by identity only within one
   // activation, so an activation opens clean when no row is built expanded.
   it('builds every row, at every level, collapsed', async () => {
     const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', slot: 1, enabled: false })]);

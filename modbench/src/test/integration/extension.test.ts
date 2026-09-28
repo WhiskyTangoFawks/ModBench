@@ -1710,7 +1710,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
   });
 
-  // plugins.md, The tree, story 5: the game does not load a disabled plugin's records, so its row
+  // plugins.md, The tree, story 4: the game does not load a disabled plugin's records, so its row
   // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();

@@ -58,7 +58,7 @@ As a user, I want:
 4. With no folder open, or a folder that is not an instance of a mod manager Modbench recognizes, to
    be told so. Every view that shows the instance says it in place of its rows. The message says how
    to open an instance. It waits for the check, so a folder not yet checked never reads as not an
-   instance. The view's title-bar gestures are absent. An instance whose files cannot be read is
+   instance. The view's title-bar gestures that need an instance are absent. An instance whose files cannot be read is
    story 2. *commands.md, No dead entries*
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The
    Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows

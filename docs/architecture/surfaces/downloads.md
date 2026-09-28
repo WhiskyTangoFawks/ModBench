@@ -42,19 +42,18 @@ As a user, I want:
 
 A Nexus mod ID or file ID of `0` is no ID. *MO2*
 
-The status is read from the files, first match wins:
+The status, first match wins:
 
-| The files say | Status |
+| When | Status |
 |---|---|
-| the `meta.ini` of any mod in `mods/`, enabled or not, names this file as its installation file | Installed |
-| the `.meta` says `installed=true` or `uninstalled=true` | Uninstalled |
-| neither, or no `.meta` | Downloaded |
+| a mod in the instance, enabled or not, was installed from this file | Installed |
+| the file was installed once, and no mod from it is left | Uninstalled |
+| it was never installed | Downloaded |
 
-A mod's `meta.ini` decides Installed. The row stays right when I or another tool remove a mod.
+A mod in the instance decides Installed. The row stays right when I or another tool remove a mod.
 *ADR-0003, invariant 1*
 
-Install and uninstall write the `.meta` flags so that MO2's Downloads tab agrees. Here the flags
-only separate a file installed once from one never installed. *ADR-0017, invariant 1*
+Install and uninstall keep MO2's own Downloads tab in agreement. *ADR-0017, invariant 1*
 
 ## Order and view state
 

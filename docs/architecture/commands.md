@@ -139,8 +139,6 @@ Rules for the title bar of a view.
   All last. Collapse All is on trees only.
 - An action that is not about a tree's own object goes on the Toolbox, the status bar or the
   palette.
-- The icons: search narrows by name, filter narrows by condition, clear-all clears a durable
-  filter, and there is one refresh.
 
 ## Ruling a gesture out
 
@@ -225,7 +223,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | move | writes | Mods: drag, context menu | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
 | uninstall | writes | Mods: context menu, key (Delete) | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
 | create empty mod | writes | Mods: context menu, title overflow | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
-| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod. An upgrade installs it over a mod with the same Nexus id, once the user confirms the target. A downloaded file supplies its own source. The Mods menu asks for one. | install-mod |
+| install | writes | Mods: context menu, title overflow; Downloads: context menu | `modbench.mod.install` | source: archive, folder or downloaded file | target mod, for an upgrade | MO2 mod list; MO2 Downloads | Install a source as a new mod, or over an installed mod as an upgrade. | install-mod |
 | track | writes | Mods: context menu (mod has no repository and holds a plugin); Plugins: context menu (plugin in a mod with no repository); Editor: context menu (column of a plugin in a mod with no repository) | `modbench.mod.track` | mods | preset: Edits or Everything | none | Put a mod under git: a repository, and a baseline commit for each plugin. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-plugin |
 | sort direction | reads | Mods: title icon | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | Mods: context menu | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in VS Code's Explorer, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
@@ -294,8 +292,7 @@ Commands Modbench runs itself. No user starts them and no surface owns them, so 
 and sit outside the object tables. The first column is the trigger that fires each one. Each is a
 command for the same reason a gesture is: one handler, and one identity. Each is registered under
 its Command ID, internal. A system command keeps the disk and mEdit in line with the instance value.
-A disagreement between the instance value and the disk or mEdit triggers it. It takes the value, or
-the slice it needs, as its Argument. It acts once, in every direction the disagreement needs.
+It takes the value, or the slice it needs, as its Argument.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
