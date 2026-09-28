@@ -105,10 +105,11 @@ interaction uses the native VS Code surface that already does the job
 ## Getting started
 
 Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x,
-[Node.js](https://nodejs.org/) 20 LTS or later, VS Code, and git on `PATH` (Track needs it).
+[Node.js](https://nodejs.org/) 20 LTS or later, VS Code, git on `PATH` (Track needs it), and 7-Zip
+on `PATH` as `7z`, `7za` or `7zz` (installing a mod from an archive needs it).
 The backend test suite also wants `python3` on `PATH` — only to hold an index file from a second
 process in the two-windows tests, which skip without it.
-On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm`.
+On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm p7zip-full`.
 
 ```bash
 # backend
