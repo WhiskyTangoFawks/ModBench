@@ -108,8 +108,8 @@ several surfaces has one row, and each surface adapts its own item to the Argume
   one command with the whole selection as its Argument, asked once. An item that cannot proceed
   writes nothing and is refused, naming why; the others land. The result names both
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md),
-  invariant 4). A cause that no item can escape, such as git missing from the PATH or mEdit not
-  answering, refuses the whole selection once, before any item is written.
+  invariant 4). A cause that no item can escape, such as git missing from the PATH, refuses the
+  whole selection once, before any item is written.
 - **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
   message.
 - **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks

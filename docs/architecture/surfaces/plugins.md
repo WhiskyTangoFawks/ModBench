@@ -195,8 +195,7 @@ As a user, I want:
    with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view,
    as shown.
 3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a
-   plugin that is not one, refused, naming the plugin and the master. While mEdit cannot say which
-   masters a plugin has, the drop lands, and the master status flags it once mEdit answers.
+   plugin that is not one, refused, naming the plugin and the master.
    *ADR-0012, invariant 4*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a
    row being dragged. *mods.md, Drag and drop, story 5*
