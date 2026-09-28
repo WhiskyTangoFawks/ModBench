@@ -23,8 +23,7 @@ pictures.
 - [layers.d2](layers.d2) is the layer rule the gate reads: which band may reference which, and the
   named same-band exceptions.
 - [traces/](traces/) holds one sequence diagram per flow. Gestures whose arrows are the same share
-  one, and its contract names each gesture's row. Beside each diagram a `.md` file of the same name
-  holds its contract. Actors are the zoom-out's boxes, imported by name; time runs down; a message
+  one. Actors are the zoom-out's boxes, imported by name; time runs down; a message
   is labelled with what moves, never with the call, so a request and its reply are two messages. A
   note on an actor is what it does between messages.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,

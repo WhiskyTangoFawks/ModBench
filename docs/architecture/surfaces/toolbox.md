@@ -4,8 +4,8 @@ The Toolbox shows the instance itself: which game it is for and which profile is
 gestures that act on the whole instance. Its template is MO2's top bar, run box and profile combo
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why (divergence 1). Its gestures are in
-[commands.md](../commands.md) under Instance and Profile; what each one writes is in its trace. What
-every view shares is in [common.md](common.md).
+[commands.md](../commands.md) under Instance and Profile. What every view shares is in
+[common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -27,6 +27,9 @@ disagrees with the views below it. *ADR-0015*
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
 
+As a user, I want the game folder to be the one my setting names, else the one the mod manager's
+configuration names, else the one Modbench finds on this machine.
+
 ## States
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
@@ -47,7 +50,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 ### Switch profile
 
 As a user, I want a pick of the instance's profiles, the active one marked. Choosing one switches to
-it; Esc switches nothing. *catalog `switch`; update-load-order-file, profile switch*
+it; Esc switches nothing. *catalog `switch`*
 
 ### Refresh
 
@@ -61,7 +64,7 @@ By [common.md](common.md#reporting). As a user, I want:
 1. A refresh refused because another window holds the index to say "This instance's index is open
    in another Modbench window", and to name the instance. Modbench cannot name the other window.
    *catalog `refresh`; ADR-0009*
-2. A failed refresh to say why. *load-instance*
+2. A failed refresh to say why.
 
 ## Test seam
 

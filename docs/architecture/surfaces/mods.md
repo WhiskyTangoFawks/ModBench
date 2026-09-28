@@ -4,8 +4,7 @@ The Mods surface shows the active profile's mod order: its mods, grouped by sepa
 Overwrite folder. Its template is MO2's mod list
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md)
-under Mod and Separator; what each one writes is in its trace. What every view shares is in
-[common.md](common.md).
+under Mod and Separator. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -172,6 +171,21 @@ As a user, I want:
    *catalog `install`: the Mods menu asks for the source*
 3. The name prompt filled with the archive's name without its extension, or the folder's name. *MO2*
 
+### What install does
+
+Install is offered here and on Downloads (catalog `install`). As a user, I want:
+
+1. Install never to merge into an existing folder, or to replace one I did not confirm.
+2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`
+   does.
+3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
+   its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
+4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
+   never blanks a known one. *ADR-0017, invariant 2*
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll
+   back. Installing again is the recovery, and a tracked mod's plugin source stays in git. This is
+   an exception to *A failed gesture writes nothing*.
+
 ### Uninstall
 
 As a user, I want one confirmation for the whole selection, naming the mod when there is one and
@@ -183,10 +197,14 @@ destroys; MO2's recycle bin*
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
-   because the installer's own steps did not run. *install-mod, The flow, step 4; ADR-0019,
-   invariant 1*
-2. When `mods/` cannot be listed, the reason in the view's message line and the Output.
-   *update-load-order-file, Refusals*
+   because the installer's own steps did not run. *ADR-0019, invariant 1*
+2. When `mods/` cannot be listed, `modlist.txt` untouched, and the reason in the view's message line
+   and the Output.
+3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported
+   as done, with a line in the Output: `mod sync` drops the line. This is an exception to *A failed
+   gesture writes nothing*.
+4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported
+   as failed. The failed `.meta` write is a line in the Output.
 
 ## Test seam
 

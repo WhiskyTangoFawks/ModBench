@@ -41,9 +41,9 @@ export interface SyncFailureReport extends SyncMessage {
   run<T extends SyncOutcome>(sync: () => Promise<T>): Promise<Extract<T, { applied: true }> | undefined>;
 }
 
-/** update-load-order-file, Refusals: a system command reports a failure once when it begins, and
- *  again only when its reason changes, in the Output and its view's message line. The message
- *  line clears when the command next lands. */
+/** common.md, Reporting: a system command reports a failure once when it begins, and again only
+ *  when its reason changes, in the Output and its view's message line. The message line clears
+ *  when the command next lands. */
 export function reportSyncFailures(
   command: string, unsynced: string, log: (line: string) => void,
 ): SyncFailureReport {

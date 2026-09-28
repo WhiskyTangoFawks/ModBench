@@ -67,7 +67,8 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         edited.EnsureSuccessStatusCode();
         Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
 
-        // edit-record.md, Hand-off: the rows that changed are named, the old FormKey's and the new one's.
+        // ADR-0015, invariant 3: the rows that changed are named, the old FormKey's and the new
+        // one's.
         var named = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))
             .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(oldFormKey, named);

@@ -497,7 +497,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
-  // load-instance, refresh: instance commands rebuild the index and send nothing; the gesture
+  // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder

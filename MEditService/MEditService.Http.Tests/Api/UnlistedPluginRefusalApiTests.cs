@@ -5,9 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record's Refusals table: a plugin with no plugins.txt line, a mod's or an Overwrite
-/// stray, is read-only (ADR-0012 invariant 5). A disabled line is still a line, so its plugin stays
-/// writable.</summary>
+/// <summary>A plugin with no plugins.txt line, a mod's or an Overwrite stray, is read-only
+/// (ADR-0012 invariant 5). A disabled line is still a line, so its plugin stays writable.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class UnlistedPluginRefusalApiTests : HostedTests
 {

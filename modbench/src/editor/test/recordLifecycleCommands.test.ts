@@ -327,7 +327,7 @@ describe('registerRecordLifecycleCommands', () => {
   });
 });
 
-// plugins.md, Pickers, Copy; edit-record, The flow: one command over the selection, the mode
+// plugins.md, Copy, story 1; commands.md, `copy`: one command over the selection, the mode
 // picked, then the destinations.
 describe('modbench.record.copy', () => {
   const SOURCE = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };

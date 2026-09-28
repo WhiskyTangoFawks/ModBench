@@ -63,7 +63,7 @@ public sealed record QuestionOpenNotification(
 }
 
 /// <summary>A compile of Plugin began and never finished, so its binary is bad; compiling again
-/// rebuilds it (compile-plugin, Failure).</summary>
+/// rebuilds it (plugins.md, Compile, story 5).</summary>
 public sealed record CompileUnfinishedNotification(PluginAddress Plugin) : Notification("compile-unfinished")
 {
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, [], 0);

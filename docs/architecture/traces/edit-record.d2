@@ -1,4 +1,4 @@
-# Edit a record, blue. Contract: edit-record.md.
+# Edit a record, blue.
 ...@../styles
 shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
@@ -40,7 +40,7 @@ http -> client: stream {class: push}
 client -> editor: rows changed (push), then re-read {class: push}
 
 refused: "refused, nothing written for that record" {
-  commands -> http: "the refusal, as the contract's Refusals list it" {class: edit}
+  commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> editor: the refusal {class: edit}
 }

@@ -66,8 +66,8 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
 
 type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
 
-// decompile-plugin.md's preset table, in the QuickPick items' own words (plugins.md, Pickers,
-// Track: "each with a line saying what it keeps").
+// plugins.md, Track, story 2, in the QuickPick items' own words (plugins.md, Track, story 1:
+// "each with a line saying what it keeps").
 const EDITS_ITEM: PresetItem = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
 const EVERYTHING_ITEM: PresetItem = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 
@@ -194,7 +194,7 @@ describe('registerTrackCommand', () => {
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
   });
 
-  it('offers Edits first and pre-selected, then Everything, each in decompile-plugin.md\'s own words for what it keeps', async () => {
+  it('offers Edits first and pre-selected, then Everything, each in plugins.md\'s own words for what it keeps', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
     const { handler } = invokeTrack(client);

@@ -4,8 +4,7 @@ The record panel shows one record as every active plugin has it: a row for each 
 column for each plugin. Its template is xEdit's View grid
 ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md)); where it departs,
 [xedit.md](../../out-of-scope/xedit.md) says why. Its gestures are in
-[commands.md](../commands.md) under Record, Plugin, Mod (`track`) and Every view; what each one
-writes is in its trace.
+[commands.md](../commands.md) under Record, Plugin, Mod (`track`) and Every view.
 
 The Editor surface has three more files:
 
@@ -47,8 +46,9 @@ FormKey alone when there is no EditorID. It holds no controls.
 ## The FormID
 
 As a user, I want the record's FormKey as the first row of the grid, under Record Header, with
-xEdit's label FormID. It edits as any field does, and edit-record says what the write changes. A
-plugin header's FormID is read-only. *xedit.md, divergences 9 and 16*
+xEdit's label FormID. It edits as any field does. A plugin header's FormID is read-only, and an
+override's is refused, naming its master, where the record is native. *xedit.md, divergences 9 and
+16*
 
 ## Columns
 
@@ -155,7 +155,7 @@ As a user, I want:
    stay open. *ADR-0012*
 6. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
-   scroll stay. *ADR-0015, invariant 3; edit-record, Hand-off*
+   scroll stay. *ADR-0015, invariant 3*
 7. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
    the last good read:" and the reason. *common, States, story 6*
 

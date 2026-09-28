@@ -119,7 +119,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     // A settle can close mid-release, naming only what had changed by then; the question is asked
-    // again at each settle that still finds the change (decompile-plugin, trigger 5).
+    // again at each settle that still finds the change (ADR-0003, invariant 3).
     private static Task<IReadOnlyList<JsonElement>> QuestionsUntilOneNames(
         StreamReader stream, IReadOnlyList<string> trackedFiles) =>
         stream.EventsUntil("question-open", question =>
@@ -270,7 +270,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
-    // Decompile-plugin, trigger 5: every question a release-sized burst opens is the mod's, and a
+    // ADR-0003, invariant 3: every question a release-sized burst opens is the mod's, and a
     // question is asked again at each settle that still finds the change, until one names it all.
     [Fact]
     public async Task AReleaseTouchingManyFiles_AsksTheModsQuestionUntilOneNamesAllOfThem()
@@ -309,7 +309,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
             Asset, question.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
     }
 
-    // The mark step 5 of compile-plugin leaves when the write never finishes.
+    // The mark a compile leaves when its write never finishes.
     private static Task InterruptACompile(string modFolder) =>
         Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunBatchAsync(modFolder, [Plugin],
             _ => throw new InvalidOperationException("simulated crash between the mark and the binary write")));

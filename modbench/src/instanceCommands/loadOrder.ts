@@ -53,9 +53,9 @@ export function loadOrderChanged(
   return snapshot !== undefined && !sender.alreadySent(snapshot);
 }
 
-/** load-instance, refresh: mEdit rebuilds the index and reads every plugin again against the load
- *  order it holds; nothing is sent. ADR-0009 invariant 5: held-elsewhere is a refusal apart from
- *  every other failure. */
+/** commands.md, `refresh`: mEdit rebuilds the index and reads every plugin again against the
+ *  load order it holds; nothing is sent. ADR-0009 invariant 5: held-elsewhere is a refusal apart
+ *  from every other failure. */
 export type RefreshResult =
   | { applied: true }
   | { applied: false; heldElsewhere: true }

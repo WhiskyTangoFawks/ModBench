@@ -1,4 +1,4 @@
-# Compile, orange. Contract: compile-plugin.md.
+# Compile, orange.
 ...@../styles
 shape: sequence_diagram
 plugins: "Plugins · Editor" {class: driving}
@@ -37,7 +37,7 @@ plugin -> watcher: bytes {class: signal}
 watcher -> indexer: "plugin changed: validate by hash" {class: signal}
 
 refused: "refused, before any write" {
-  commands -> http: "the refusal, as the contract's Refusals list it" {class: edit}
+  commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}
 }

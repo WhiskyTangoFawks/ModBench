@@ -5,9 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record's Refusals table: an overridden plugin is read-only (ADR-0012 invariant 5),
-/// refused through the real host before any source write. The same write against the winning
-/// plugin of the same name lands.</summary>
+/// <summary>An overridden plugin is read-only (ADR-0012 invariant 5), refused through the real host
+/// before any source write. The same write against the winning plugin of the same name lands.
+/// </summary>
 [Collection(WebHostCollection.Name)]
 public sealed class OverriddenPluginRefusalApiTests : HostedTests
 {

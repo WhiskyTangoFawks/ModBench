@@ -5,8 +5,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>edit-record, `copy` as override: a destination that already holds the record takes it
-/// only with the replace Option, flat records and containers alike.</summary>
+/// <summary>plugins.md, Copy, story 1, `copy` as override: a destination that already holds the
+/// record takes it only with the replace Option, flat records and containers alike.</summary>
 public sealed class CopyReplaceTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();

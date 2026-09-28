@@ -3,8 +3,8 @@
 The Downloads surface lists the instance's downloaded files. Its template is MO2's Downloads tab
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md)
-under Downloaded file, with `install` under Mod; what each one writes is in its trace. What every
-view shares is in [common.md](common.md).
+under Downloaded file, with `install` under Mod. What every view shares is in
+[common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -123,7 +123,9 @@ target pick: candidates by Nexus id, always confirmed"). As a user, I want:
    installation file named "Installed from this file", listed first and pre-selected. With neither,
    "Install as a new mod…" is pre-selected. Never a guess from the file's name. *diagram*
 5. Esc to install nothing. *Esc changes nothing*
-6. A new mod to go on to the name prompt, and an upgrade not to. *install-mod contract*
+6. A new mod to go on to the name prompt, and an upgrade not to.
+
+What install then does is in [mods.md](mods.md#what-install-does).
 
 ## Reporting
 

@@ -50,8 +50,7 @@ A gesture this file has and the model cannot hold is a ticket.
   gesture: the row is an addition or a divergence, and needs a ruling.
 - **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
   drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
-  its specification is this row and its surface. A trace's `.md` contract says what the flow
-  promises, step by step, where it hands off, what it refuses, and what a failure leaves.
+  its specification is this row and its surface.
 - **Ruled out**: a gesture the maintainer has cut is not in any table. See
   [Ruling a gesture out](#ruling-a-gesture-out).
 
@@ -104,7 +103,7 @@ several surfaces has one row, and each surface adapts its own item to the Argume
 - **A failed gesture writes nothing.** When a command cannot finish, it leaves the files as they
   were and reports the failure
   ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)). A
-  contract names any gesture that cannot promise this.
+  surface story names any gesture that cannot promise this.
 - **A selection is one gesture, and each item lands on its own.** A gesture over several objects is
   one command with the whole selection as its Argument, asked once. An item that cannot proceed
   writes nothing and is refused, naming why; the others land. The result names both
@@ -115,7 +114,7 @@ several surfaces has one row, and each surface adapts its own item to the Argume
   message.
 - **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks
   first. It asks once for the whole selection. An edit to a value inside a record changes the record
-  and deletes nothing, so it does not ask. No other gesture asks. A surface or a contract can name
+  and deletes nothing, so it does not ask. No other gesture asks. A surface can name
   an exception, with its reason.
 - **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
   reads the file back, and every view updates from the disk's next value. common.md, Unconfirmed
@@ -302,4 +301,4 @@ the slice it needs, as its Argument. It acts once, in every direction the disagr
 |---|---|---|---|---|---|---|---|
 | The snapshot changed: a plugin file appeared or disappeared, or a profile switch or a `modlist.txt` or `plugins.txt` edit changed the active plugins, from Modbench or another tool; or mEdit started | writes | `modbench.instance.putLoadOrder` | snapshot: every plugin in the instance, and the active plugins in load order | - | none | Hand mEdit the whole snapshot whenever it changes. The architecture calls it a PUT. | index-load-order |
 | The active profile's `modlist.txt` disagrees with `mods/`: a folder with no line, or a line whose folder is gone | writes | `modbench.mod.sync` | instance value | - | MO2 refresh | Bring the active profile's `modlist.txt` into line with `mods/`: add a line for each folder that has none, and drop each line whose folder is gone. One write. | update-load-order-file |
-| The active profile's `plugins.txt` disagrees with the plugins provided: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |
+| The active profile's `plugins.txt` disagrees with the plugins provided, a plugin file where the game can load it from: an enabled mod, Overwrite or the game folder: a plugin with no line, or a line that nothing provides | writes | `modbench.plugin.sync` | instance value | - | MO2 refresh | Bring `plugins.txt` into line with the plugins provided: add a line at the winning end, disabled, for each plugin that has none, and drop each line that nothing provides. One write. | update-load-order-file |

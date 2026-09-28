@@ -1539,7 +1539,7 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// update-load-order-file, Refusals: once mEdit has attached, plugin sync's refusal reaches the
+// plugins.md, Reporting, story 2: once mEdit has attached, plugin sync's refusal reaches the
 // Plugins view's message line, and a connect runs plugin sync again.
 describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -2061,7 +2061,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// load-instance, refresh: mEdit reads every plugin again against the load order it holds, and the
+// commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
 // re-read of the instance that follows finds that load order unchanged.
 describe('Refresh rebuilds the index and sends nothing', () => {
   // Launched, so a re-read that changed the load order would put it.

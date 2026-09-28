@@ -57,7 +57,7 @@ public sealed class TrackedModSettled
             ? Warn(loadOrder, modFolder, unfinished)
             : TrackedModSettledOutcome.NoQuestion;
 
-    // compile-plugin, Failure: no question opens.
+    // plugins.md, Compile, story 5: no question opens.
     private TrackedModSettledOutcome Warn(
         LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.CompileUnfinished unfinished)
     {
