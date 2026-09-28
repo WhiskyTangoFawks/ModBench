@@ -157,13 +157,13 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ## Menus and keys
 
-The catalog decides which gestures this view offers and on what condition. This is where each sits,
-in VS Code's groups: open, change, create, source control, copy, then destroy.
+This table decides which gestures this view offers, where each sits and on what condition, in VS
+Code's groups: open, change, create, source control, copy, then destroy.
 
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
-| Plugin menu | reveal · enable or disable · create record… · track… · decompile · compile · copy value |
+| Plugin menu | reveal · enable or disable · create record… · track… (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
 | Record-type group menu | create record, except on a group of container records or of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |

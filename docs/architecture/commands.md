@@ -241,15 +241,15 @@ A separator is a row in mod order.
 
 ## Plugin
 
-| Gesture | Effect | Where | Command ID | Argument | Options | Template | Meaning | Trace |
-|---|---|---|---|---|---|---|---|---|
-| enable / disable | writes | Plugins: check box, key, context menu | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
-| move | writes | Plugins: drag | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
-| create | writes | Plugins: title icon | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
-| compile | writes | Plugins: context menu (plugin tracked); Editor: context menu (plugin tracked) | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
-| decompile | writes | Plugins: context menu (plugin in a tracked mod); Editor: context menu (column of a plugin in a tracked mod) | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
-| sort direction | reads | Plugins: title icon | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
-| reveal | reads | Plugins: context menu | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
+| Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
+|---|---|---|---|---|---|---|---|
+| enable / disable | writes | `modbench.plugin.enable`, `modbench.plugin.disable` | plugins | - | MO2 plugin list | Flip each plugin's line in `plugins.txt`. Enable all is select all, then this gesture. | update-load-order-file |
+| move | writes | `modbench.plugin.move` | plugins | target: the row it is dropped on, or the view's end. Several plugins move as one block | MO2 plugin list | Move plugins in plugin order. Masters stay above their dependants, and blueprint plugins stay last. | update-load-order-file |
+| create | writes | `modbench.plugin.create` | - | place: Overwrite or an enabled mod | xEdit navigator | Create an empty plugin in Overwrite or in a mod. | create-plugin |
+| compile | writes | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
+| decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
+| sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
+| reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
 
 ## Record
 

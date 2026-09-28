@@ -584,7 +584,7 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // commands.md, Plugin, Where: compile on a tracked, editable plugin.
+  // plugins.md, Menus and keys: compile on a tracked, editable plugin.
   private compilable(file: string, origin: string): boolean {
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;
