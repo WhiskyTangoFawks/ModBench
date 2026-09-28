@@ -20,8 +20,8 @@ A gesture this file has and the model cannot hold is a ticket.
 - **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
   has no gesture. Its first column is the trigger that fires it. It has its own section, after the
   objects.
-- **Where**: where a gesture sits on a surface, and on what condition, is that surface's own. Each
-  surface's Menus and keys says it.
+- **Where**: each surface's Menus and keys lists the gestures it offers, where each sits and on
+  what condition.
 - **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
   or a folder. `reads` when it only changes what the surface shows, or opens something. `runs`
   when it starts another program and writes nothing itself.
@@ -59,7 +59,8 @@ several surfaces has one row, and each surface adapts its own item to the Argume
   it is needed. A gesture with variants is one gesture with Options. It is not a flat list of
   near-duplicate menu items.
 - **The surface supplies the Argument. A picker supplies the Options.** A menu on an object passes
-  the object. A palette entry or a key has no clicked row, so the gesture takes the selection. The
+  the object. A palette entry or a keybinding has no clicked row, so the gesture takes the focused
+  view's selection. The
   gesture asks only for the Options the caller left out. A keybinding, a webview message or an agent
   call may supply all of them.
 - **When to group.** Variants are one gesture when all four of these hold:
@@ -287,8 +288,9 @@ palette only while one has focus.
 Commands Modbench runs itself. No user starts them and no surface owns them, so they have no gesture
 and sit outside the object tables. The first column is the trigger that fires each one. Each is a
 command for the same reason a gesture is: one handler, and one identity. Each is internal:
-registered under its Command ID, with no entry point and no palette entry. A system command keeps the disk and mEdit in line with the instance value.
-It takes the value, or the slice it needs, as its Argument.
+registered under its Command ID, with no entry point and no palette entry. A system command keeps
+the disk and mEdit in line with the instance value. It takes the value, or the slice it needs, as
+its Argument.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
