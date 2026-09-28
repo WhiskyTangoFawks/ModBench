@@ -84,17 +84,16 @@ As a user, I want:
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
 1. With no mods and no separators, the view's message line to say so and to name install and create
-   empty mod, in the title bar's overflow. *catalog Where*
+   empty mod, in the title bar's overflow.
 
 ## Menus and keys
 
-The catalog decides which gestures this view offers and on what condition. This is where each sits.
 The row menus follow VS Code's groups: open, change, create, source control, copy, then destroy.
 
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator · create empty mod · install… · track · copy value · uninstall |
+| Mod menu | open folder · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · add separator · create empty mod · install… · track (no repository, and holds a plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. |
@@ -108,7 +107,7 @@ As a user, I want:
    already in that state is left alone. *MO2; Doing nothing is not an error*
 3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for
    separators.
-4. A click or double click on a row to do nothing but select it. *catalog: no row click on Mods*
+4. A click or double click on a row to do nothing but select it.
 5. Copy value to copy each selected mod's or separator's name. *catalog `copy value`*
 
 ## Drag and drop

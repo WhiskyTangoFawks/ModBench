@@ -157,8 +157,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ## Menus and keys
 
-This table decides which gestures this view offers, where each sits and on what condition, in VS
-Code's groups: open, change, create, source control, copy, then destroy.
+The menus follow VS Code's groups: open, change, create, source control, copy, then destroy.
 
 | Where | Items, in order |
 |---|---|

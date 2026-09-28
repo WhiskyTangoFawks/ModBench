@@ -226,7 +226,8 @@ describe('registerRevealInExplorerCommand', () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
+  // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
+  // takes the one selected plugin.
   it('reveals the one selected plugin from the palette', async () => {
     const { run } = invoke(
       (name) => Promise.resolve(`/instance/mods/MyMod/${name}`), [new PluginNode({ name: 'Selected.esp', enabled: true }, 'SomeMod')]);

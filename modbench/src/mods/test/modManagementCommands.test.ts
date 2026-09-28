@@ -1050,7 +1050,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
 
-  // commands.md, Where surfaces live: every gesture is in the palette, which hands it no row.
+  // commands.md, The surface supplies the Argument: a palette entry hands the gesture no row.
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
     ['Overwrite', new OverwriteNode(3), '/instance/overwrite'],

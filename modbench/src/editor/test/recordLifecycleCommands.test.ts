@@ -89,7 +89,8 @@ describe('registerRecordLifecycleCommands', () => {
     return { reporter, ask };
   }
 
-  // commands.md, Where: the palette hands the gesture no row, so it takes the Plugins selection.
+  // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
+  // takes the Plugins selection.
   describe('from the palette', () => {
     afterEach(() => { viewSelection = []; });
 

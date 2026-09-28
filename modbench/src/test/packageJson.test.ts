@@ -587,7 +587,7 @@ describe('package.json command titles and categories', () => {
     const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
     expect(
       hidden,
-      'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
+      'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
 
