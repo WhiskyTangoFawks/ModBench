@@ -19,7 +19,7 @@ plugins.label: Plugins
 
 tools -> mo2: bytes, at any time {class: outside}
 mo2 -> watcher: changed paths {class: signal}
-watcher -> commands: a tracked mod settled {class: signal}
+watcher -> commands: a tracked mod changed {class: signal}
 commands."each tracked plugin's bytes against what Modbench last wrote"
 commands -> port: "external change: the mod, its changed plugins · untracked plugins" {class: push}
 port -> http: publish {class: push}

@@ -16,6 +16,7 @@ watcher: @../target-architecture.medit_driving.watcher
 watcher.label: "Mod watcher\nmEdit"
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
+downloads."the target pick"
 downloads -> install: "the source, and the target" {class: loadorder}
 
 new mod: "a new mod" {

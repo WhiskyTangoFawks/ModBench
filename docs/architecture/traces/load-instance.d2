@@ -17,7 +17,7 @@ client.label: mEdit client
 
 mo2 -> instanceloader: watch {class: signal}
 instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder}
-instanceadapter -> instanceloader: "parsed: the game, the profile, the mods, the load order, the downloaded files" {class: loadorder}
+instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list" {class: loadorder}
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
@@ -27,6 +27,7 @@ refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}
   instancecommands -> client: "rebuild the index" {class: loadorder}
   client -> instancecommands: applied or refusal {class: loadorder}
+  instancecommands."a refused rebuild stops here"
   instancecommands -> toolbox: applied or refusal {class: loadorder}
   toolbox -> instanceloader: refresh {class: loadorder}
 }

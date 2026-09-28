@@ -109,7 +109,7 @@ As a user, I want:
 
 ### The install target
 
-There is no file picker (catalog `install`). The pick is Downloads' own. As a user, I want:
+There is no file picker (catalog `install`). As a user, I want:
 
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod,
    showing its name and version, and a last item, "Install as a new mod…".

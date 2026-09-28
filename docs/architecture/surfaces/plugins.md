@@ -168,7 +168,7 @@ in VS Code's groups: open, change, create, source control, copy, then destroy.
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
 | Plugin menu | reveal · enable or disable · create record… · track… · decompile · compile · copy value |
 | Plugin the game loads with no line | reveal · copy value |
-| Record-type group menu | create record, except on a group of container records |
+| Record-type group menu | create record, except on a group of container records or of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
 | Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. |
 
