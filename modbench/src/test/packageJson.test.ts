@@ -587,7 +587,7 @@ describe('package.json command titles and categories', () => {
     const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
     expect(
       hidden,
-      'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
+      'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
 
@@ -673,7 +673,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // commands.md, Where for track and compile: track on an untracked plugin in a mod, compile on a
+  // plugins.md, Menus and keys: track on an untracked plugin in a mod, compile on a
   // tracked, editable plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],

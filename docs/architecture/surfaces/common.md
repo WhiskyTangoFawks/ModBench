@@ -1,8 +1,8 @@
 # Common: what every surface shares
 
-Each surface spec holds what is particular to its view and points here for the rest. The gestures,
-their Where and their Arguments are in [commands.md](../commands.md), with the Chrome rules for a
-view's title bar.
+Each surface spec holds what is particular to its view and points here for the rest. The gestures
+and their Arguments are in [commands.md](../commands.md), with the Chrome rules for a view's title
+bar.
 
 Each story cites its source. A story with no source is owned here.
 

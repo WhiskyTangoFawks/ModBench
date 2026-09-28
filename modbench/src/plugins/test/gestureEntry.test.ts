@@ -164,8 +164,8 @@ describe('a singular Plugins gesture\'s Argument', () => {
   });
 });
 
-// commands.md, Where: a palette entry and a key are handed no row, so their `when` reads what the
-// Plugins selection holds, and the gesture is absent where it would have nothing to act on.
+// commands.md, The surface supplies the Argument; No dead entries: with no row, a palette entry or
+// key reads the Plugins selection, and is absent where it would have nothing to act on.
 describe('what the Plugins palette entries and keys read off the selection', () => {
   const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
     row.contextValue = contextValue;

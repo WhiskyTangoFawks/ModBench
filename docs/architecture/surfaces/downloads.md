@@ -77,13 +77,10 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 ## Menus and keys
 
-The catalog decides which gestures this view offers and on what condition. This is where each
-sits.
-
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: show excluded, or hide excluded while shown. Overflow: sort. |
-| Row menu | install · view on Nexus · open · open `.meta` · exclude or include · copy value · delete |
+| Row menu | install · view on Nexus (the file has a Nexus mod ID) · open · open `.meta` (the file has one) · exclude or include · copy value · delete |
 | Keys | Ctrl+C: copy value. Delete: delete. |
 
 As a user, I want:
