@@ -151,12 +151,10 @@ As a user, I want:
    they are, and the grid reads again. *ADR-0019, invariant 1*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone,
    naming it, in place of the grid.
-5. When only plugins that are not active hold the record, the grid with no column, and the tab to
-   stay open. *ADR-0012*
-6. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
+5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from
    any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the
    scroll stay. *ADR-0015, invariant 3*
-7. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
+6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing
    the last good read:" and the reason. *common, States, story 6*
 
 ## Menus and keys

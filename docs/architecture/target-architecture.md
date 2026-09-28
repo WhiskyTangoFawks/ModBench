@@ -26,10 +26,9 @@ pictures.
   one. Actors are the zoom-out's boxes, imported by name; time runs down; a message
   is labelled with what moves, never with the call, so a request and its reply are two messages. A
   note on an actor is what it does between messages.
-- [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
-  kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
-  mark. A message class says which kind of payload it is, and a reply takes its
-  request's class. A signal is dashed grey and carries no payload, a watch event or a bare
+- [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer; in a trace the
+  actor's colour is the only layer mark. A message class says which kind of payload it is, and a
+  reply takes its request's class. A signal is dashed grey and carries no payload, a watch event or a bare
   request; a push is dashed purple and names what changed, and the receiver re-reads.
 
 ## The layers
