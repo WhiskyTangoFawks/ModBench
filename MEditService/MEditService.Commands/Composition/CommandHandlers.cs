@@ -74,22 +74,8 @@ public static class CommandHandlers
         services.AddSingleton(sp => new TrackedModSettled(sp.GetRequiredService<INotificationPublisher>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(
-            sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<PluginCompileService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
-
-        services.AddSingleton(sp => new AbsorbExternalChangeHandler(
-            sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<ILogger<AbsorbExternalChangeHandler>>()));
-
-        services.AddSingleton(sp => new KeepExternalChangeHandler(
-            sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<RecordTextCodec>(),
-            sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),

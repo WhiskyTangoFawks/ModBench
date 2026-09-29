@@ -4,13 +4,13 @@ using MEditService.Watcher.Tests.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;
 
-/// <summary>The load-time settle, through the verb the live watcher sends. The reconcile follows
-/// every settle, so once it is recorded an unopened question never opens.</summary>
+/// <summary>The load-time settle, through the verb the live watcher sends: each settle of a tracked
+/// mod tells which of its plugins changed outside Modbench.</summary>
 public sealed class LoadOrderChangeSettleTests
 {
     private const string Origin = "TrackedMod";
     private const string PluginName = "Tracked.esp";
-    private const string QuestionOpen = "question-open";
+    private const string ExternalChange = "external-change";
 
     private static string PluginPath(WatchedTree tree) => Path.Combine(tree.InstanceRoot, "mods", Origin, PluginName);
 
@@ -24,132 +24,78 @@ public sealed class LoadOrderChangeSettleTests
         return (tree, modFolder);
     }
 
-    private static IReadOnlyList<PublishedNotification> Questions(WatchedTree tree) =>
-        [.. tree.Notifications.Published.Where(n => n.Kind == QuestionOpen)];
+    private static IReadOnlyList<PublishedNotification> Notices(WatchedTree tree) =>
+        [.. tree.Notifications.Published.Where(n => n.Kind == ExternalChange)];
 
     [Fact]
-    public async Task ABinaryThatChangedWithNoWatcherEverRunning_OpensTheQuestionAtTheNextLoad()
+    public async Task ABinaryThatChangedWithNoWatcherEverRunning_IsNamedAtTheNextLoad_WithTheOriginTheSnapshotNames()
     {
-        var (tree, modFolder) = TrackedBeforeWatching();
-        using var _ = tree;
+        var (tree, _) = TrackedBeforeWatching();
+        using var __ = tree;
         // "Closed" means no FileSystemWatcher instance ever sees this write happen.
         File.WriteAllBytes(PluginPath(tree), "changed-by-xedit"u8.ToArray());
 
         await tree.ApplyLoadOrder();
 
-        var question = SourceRepository.UnansweredExternalChange(modFolder);
-        Assert.NotNull(question);
-        Assert.Contains(PluginName, question, StringComparison.Ordinal);
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal([PluginName], pending.Keys);
+        var notice = Assert.Single(Notices(tree));
+        Assert.Equal(Origin, notice.Origin);
+        Assert.Equal([PluginName], notice.ChangedPlugins);
     }
 
-    // The question reaches the front end as one notification, and the origin on it is the load
-    // order's, since the watch itself carries only the bare mod folder.
+    // A second window closing after the first is the delivery oracle for "never a second".
     [Fact]
-    public async Task TheQuestionAtLoad_IsPublishedOnce_WithTheOriginTheSnapshotNames()
+    public async Task ALiveSettle_NamesTheChangedPluginOnce_WithTheOriginTheSnapshotNames()
     {
         var (tree, _) = TrackedBeforeWatching();
         using var __ = tree;
-        File.WriteAllBytes(PluginPath(tree), "changed-by-xedit"u8.ToArray());
-
         await tree.ApplyLoadOrder();
-
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal(Origin, pending.Origin);
-        Assert.Equal([PluginName], pending.Keys);
-    }
-
-    // The live half of the same route: one settle over a tracked mod is one classification and one
-    // question. A second window closing after it is the delivery oracle for "never a second".
-    [Fact]
-    public async Task ALiveSettle_PublishesTheQuestionOnce_WithTheOriginTheSnapshotNames()
-    {
-        var (tree, modFolder) = TrackedBeforeWatching();
-        using var _ = tree;
-        await tree.ApplyLoadOrder();
-        Assert.Empty(tree.Notifications.Published);
+        Assert.Empty(Assert.Single(Notices(tree)).ChangedPlugins);
 
         await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-by-xedit"u8.ToArray()));
         tree.AdvancePastBothWindows();
-        Assert.Single(Questions(tree));
-
         tree.AdvancePastBothWindows();
 
-        var pending = Assert.Single(Questions(tree));
-        Assert.Equal(Origin, pending.Origin);
-        Assert.Equal([PluginName], pending.Keys);
+        var notices = Notices(tree);
+        Assert.Equal(2, notices.Count);
+        Assert.Equal(Origin, notices[1].Origin);
+        Assert.Equal([PluginName], notices[1].ChangedPlugins);
     }
 
-    // ADR-0015 invariant 2: a restart's classify and a live change's classify are the same call in
-    // Commands, so the two ask the identical question.
+    // ADR-0015 invariant 2: a restart's compare and a live change's compare are the same call in
+    // Commands, so the two tell the same.
     [Fact]
-    public async Task ARestartAndALiveChange_PublishTheIdenticalQuestion()
+    public async Task ARestartAndALiveChange_TellTheSame()
     {
         var (restarted, _) = TrackedBeforeWatching();
         using var __ = restarted;
         File.WriteAllBytes(PluginPath(restarted), "changed-by-xedit"u8.ToArray());
         await restarted.ApplyLoadOrder();
-        var fromRestart = Assert.Single(Questions(restarted));
+        var fromRestart = Assert.Single(Notices(restarted));
 
-        var (live, liveFolder) = TrackedBeforeWatching();
+        var (live, _) = TrackedBeforeWatching();
         using var ___ = live;
         await live.ApplyLoadOrder();
         await live.Observes(() => live.WriteFile(PluginPath(live), "changed-by-xedit"u8.ToArray()));
         live.AdvancePastBothWindows();
-        var fromLiveChange = Assert.Single(Questions(live));
+        var fromLiveChange = Notices(live)[^1];
 
-        Assert.Equal(Origin, fromRestart.Origin);
-        Assert.Equal(Origin, fromLiveChange.Origin);
-        Assert.Equal(fromRestart.Keys, fromLiveChange.Keys);
-        Assert.Equal(fromRestart.TrackedFiles, fromLiveChange.TrackedFiles);
-        Assert.Equal(fromRestart.MetaChanged, fromLiveChange.MetaChanged);
-        Assert.Equal(fromRestart.OldVersion, fromLiveChange.OldVersion);
-        Assert.Equal(fromRestart.NewVersion, fromLiveChange.NewVersion);
+        Assert.Equal(fromRestart.Origin, fromLiveChange.Origin);
+        Assert.Equal(fromRestart.ChangedPlugins, fromLiveChange.ChangedPlugins);
     }
 
     [Fact]
-    public async Task ALoad_PublishesNothing_WhenTheBinaryNeverChanged()
+    public async Task ALoad_NamesNoPlugin_WhenTheBinaryNeverChanged()
     {
         var (tree, _) = TrackedBeforeWatching();
         using var __ = tree;
 
         await tree.ApplyLoadOrder();
 
-        Assert.Empty(tree.Notifications.Published);
-    }
-
-    // The marker outlived its change (bytes restored by hand, a re-Track, a superseding settle):
-    // the classifier is the authority, so a load finding nothing drops it.
-    [Fact]
-    public async Task ALoad_DropsAStaleMarker_AndPublishesNothing_WhenTheBytesMatchTheParkedCompile()
-    {
-        var (tree, modFolder) = TrackedBeforeWatching();
-        using var _ = tree;
-        SourceRepository.RaiseExternalChangeQuestion(modFolder, "a question whose change is gone");
-
-        await tree.ApplyLoadOrder();
-
-        Assert.Null(SourceRepository.UnansweredExternalChange(modFolder));
-        Assert.Empty(Questions(tree));
+        Assert.Empty(Assert.Single(tree.Notifications.Published).ChangedPlugins);
     }
 
     [Fact]
-    public async Task ALoad_KeepsAStaleMarker_WhenTheTrackedPluginCannotBeRead()
-    {
-        var (tree, modFolder) = TrackedBeforeWatching();
-        using var _ = tree;
-        SourceRepository.RaiseExternalChangeQuestion(modFolder, "a question the binary cannot answer for now");
-        File.Delete(PluginPath(tree));
-
-        await tree.ApplyLoadOrder();
-
-        Assert.NotNull(SourceRepository.UnansweredExternalChange(modFolder));
-        Assert.Empty(tree.Notifications.Published);
-    }
-
-    [Fact]
-    public async Task ALoad_WarnsCompileUnfinished_AndOpensNoQuestion_WhenAJournalMarkerIsUnanswered()
+    public async Task ALoad_WarnsCompileUnfinished_AndTellsNoChange_WhenAJournalMarkerIsUnanswered()
     {
         var (tree, modFolder) = TrackedBeforeWatching();
         using var _ = tree;
@@ -166,8 +112,9 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Equal(PluginName, unfinished.Plugin);
     }
 
+    // plugins.md, A row: bytes that cannot be read differ from what Modbench last wrote.
     [Fact]
-    public async Task ALoad_PublishesNothing_WhenTheTrackedPluginsBinaryIsMissing()
+    public async Task ALoad_NamesATrackedPluginWhoseBinaryIsMissing()
     {
         var (tree, _) = TrackedBeforeWatching();
         using var __ = tree;
@@ -175,7 +122,7 @@ public sealed class LoadOrderChangeSettleTests
 
         await tree.ApplyLoadOrder();
 
-        Assert.Empty(tree.Notifications.Published);
+        Assert.Equal([PluginName], Assert.Single(Notices(tree)).ChangedPlugins);
     }
 
     [Fact]
@@ -198,21 +145,19 @@ public sealed class LoadOrderChangeSettleTests
         var (tree, _) = TrackedBeforeWatching();
         using var __ = tree;
         await tree.ApplyLoadOrder();
-        Assert.Empty(Questions(tree));
 
         await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-live-after-load"u8.ToArray()));
 
         tree.AdvancePastBothWindows();
 
-        Assert.Single(Questions(tree));
+        Assert.Equal([PluginName], Notices(tree)[^1].ChangedPlugins);
         Assert.Single(tree.Index.Reconciles);
     }
 
-    // The rival this pins: a re-arm that forgets the registrations but keeps the folder's watch,
-    // so a mod the load order dropped still settles into Commands and asks a question with no
-    // origin to put on it.
+    // The rival this pins: a re-arm that forgets the registrations but keeps the folder's watch, so a
+    // mod the load order dropped still settles into Commands with no origin to put on it.
     [Fact]
-    public async Task ATrackedModDroppedFromTheLoadOrder_RaisesNoQuestion_WhenItsFilesChange()
+    public async Task ATrackedModDroppedFromTheLoadOrder_TellsNothing_WhenItsFilesChange()
     {
         var (tree, droppedFolder) = TrackedBeforeWatching();
         using var _ = tree;
@@ -222,6 +167,7 @@ public sealed class LoadOrderChangeSettleTests
 
         tree.RemovePlugin(PluginName);
         await tree.ApplyLoadOrder();
+        var toldBefore = tree.Notifications.Published.Count;
 
         // The reconcile this load order recorded comes after its re-arm, so the folder's watch is
         // already disposed here and these writes reach no watch at all.
@@ -229,8 +175,7 @@ public sealed class LoadOrderChangeSettleTests
         tree.WriteFile(Path.Combine(droppedFolder, "texture.dds"), "a tracked file changed too"u8.ToArray());
         tree.AdvancePastBothWindows();
 
-        Assert.Empty(tree.Notifications.Published);
-        Assert.Null(SourceRepository.UnansweredExternalChange(droppedFolder));
+        Assert.Equal(toldBefore, tree.Notifications.Published.Count);
         Assert.Empty(tree.Index.BinaryPokes);
     }
 }

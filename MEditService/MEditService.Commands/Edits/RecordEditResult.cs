@@ -34,9 +34,6 @@ public enum RecordEditRefusal
 
     InvalidFormLink,
 
-    /// <summary>Refused per mod, compile included, until the Absorb/Keep dialog is answered; the way out is answering it.</summary>
-    ExternalChangeUnanswered,
-
     /// <summary>Create: no schema table of that name, or the header, which cannot be created this way.</summary>
     RecordTypeNotFound,
 

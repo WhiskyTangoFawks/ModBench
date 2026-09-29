@@ -469,22 +469,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(0.9, (await Field(formKey, "HeightMax")).GetDouble(), 3);
     }
 
-    // A tracked plugin's bytes are the mod's system of record and its rows come from the source
-    // tree, so a rewrite is Commands' question, never the Index's projection.
-    [Fact]
-    public async Task ARewriteOfTheTrackedPluginsBytes_OpensAQuestionNamingThePlugin()
-    {
-        using var fx = await ATrackedMod();
-        using var stream = await Client.NotificationStream();
-
-        OtherTool.WritesThePlugin(
-            fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew("AddedByAnotherTool"));
-
-        var question = Assert.Single(await stream.EventsUntil("question-open"));
-        Assert.Equal(Origin, question.GetProperty("origin").GetString());
-        Assert.Contains(Plugin, question.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
-    }
-
     // A container record's document is one the repository lays out on its own terms, and a revert
     // by git is a write Modbench did not make: it reaches the next read the same way a flat
     // record's does.

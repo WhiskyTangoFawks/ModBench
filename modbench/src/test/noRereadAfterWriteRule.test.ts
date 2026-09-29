@@ -65,7 +65,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('fails the call of a module-level helper that re-reads, made after a write', () => {
     const messages = lines(
       'function refreshAfterWrite(deps) { deps.refreshTree(); deps.refreshMatchingPlugins(); }',
-      'async function dispatchKeep(deps, origin) { await deps.client.keepAsMyEdit(origin); refreshAfterWrite(deps); }',
+      'async function dispatchTrack(deps, plugins) { await deps.client.track(plugins); refreshAfterWrite(deps); }',
     );
 
     expect(messages).toHaveLength(1);
@@ -74,7 +74,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
 
   it('fails the call of a helper declared after the function that calls it', () => {
     const messages = lines(
-      'async function dispatchKeep(deps, origin) { await deps.client.keepAsMyEdit(origin); refreshAfterWrite(deps); }',
+      'async function dispatchTrack(deps, plugins) { await deps.client.track(plugins); refreshAfterWrite(deps); }',
       'function refreshAfterWrite(deps) { deps.refreshTree(); }',
     );
 
@@ -198,8 +198,8 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
 
   it('passes a helper that neither writes nor re-reads', () => {
     const messages = lines(
-      'function say(reporter) { reporter.landed("Kept."); }',
-      'async function f(client, reporter) { await client.keepAsMyEdit(x); say(reporter); }',
+      'function say(reporter) { reporter.landed("Tracked."); }',
+      'async function f(client, reporter) { await client.track(x); say(reporter); }',
     );
 
     expect(messages).toEqual([]);

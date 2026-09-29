@@ -37,7 +37,7 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out _, out var openedRepository) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository
             ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
 
@@ -104,7 +104,7 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out _, out var openedDestinationRepository)
+        if (RefuseIfBlocked(destinationPlugin, out var openedDestinationRepository)
             is { } blocked) return blocked;
         var destinationRepository = openedDestinationRepository
             ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
@@ -145,24 +145,15 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
-    // INVARIANT: the six record gestures and compile enter here first, Track asks BlockingQuestion
-    // below, and nowhere else raises the deferral refusal. A write that bypasses both is not refused
-    // while a question is unanswered.
-    internal RecordEditResult? RefuseIfBlocked(PluginAddress plugin, out string modFolder, out SourceRepository? repository)
+    // The six record gestures enter here first.
+    internal RecordEditResult? RefuseIfBlocked(PluginAddress plugin, out SourceRepository? repository)
     {
-        modFolder = "";
         repository = null;
 
         if (loadOrder.Current.ModFolderOf(plugin) is not { } folder) return RefuseUntracked(plugin);
         if (SourceRepository.Open(folder, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin);
 
-        (modFolder, repository) = (folder, opened);
-
-        // Compile filters this door to ExternalChangeUnanswered alone: an open question must win
-        // over the load-order refusals, or a plugin the game does not load compiles unblocked.
-        if (BlockingQuestion(loadOrder.Current, folder) is { } question)
-            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
-
+        repository = opened;
         return RefuseIfNotLoaded(plugin);
     }
 
@@ -182,30 +173,6 @@ internal sealed class WriteTargets(
                 "it is read-only. Plugin sync gives it a line."),
             _ => null,
         };
-
-    /// <summary>The mod's unanswered question while its change still stands, or null, for every write
-    /// to the mod, Track's included. The marker caches the last verdict (ADR-0003): present means
-    /// classify again.</summary>
-    internal static string? BlockingQuestion(LoadOrderSnapshot loadOrder, string modFolder)
-    {
-        if (SourceRepository.UnansweredExternalChange(modFolder) is not { } question) return null;
-
-        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
-        if (ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is not { } plugins) return question;
-
-        switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
-        {
-            case ExternalChangeClassification.ExternalChange:
-                return question;
-            case null:
-                SourceRepository.ClearExternalChangeQuestion(modFolder);
-                return null;
-            default:
-                // An interrupted compile is a warning, not this question; the marker waits for a
-                // verdict either way.
-                return null;
-        }
-    }
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.

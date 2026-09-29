@@ -156,9 +156,6 @@ public sealed class TrackService(
         if (SourceRepository.HoldsAnotherRepository(modFolder))
             return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
 
-        if (WriteTargets.BlockingQuestion(loadOrder, modFolder) is { } question)
-            return Refuse(TrackRefusal.ExternalChangeUnanswered, question);
-
         if (!Readable(plugin))
         {
             return Refuse(TrackRefusal.RoundTripFailed,

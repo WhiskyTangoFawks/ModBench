@@ -50,12 +50,6 @@ internal static class TestEditService
     internal static TrackHandler TrackHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<TrackHandler>();
 
-    internal static AbsorbExternalChangeHandler AbsorbHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<AbsorbExternalChangeHandler>();
-
-    internal static KeepExternalChangeHandler KeepHandler(LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null) =>
-        Over(holder, logging).GetRequiredService<KeepExternalChangeHandler>();
-
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 

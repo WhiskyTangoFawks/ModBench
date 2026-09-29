@@ -18,8 +18,6 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/track", "Track"),
         ("POST /plugins/compile", "Compile"),
         ("POST /plugins/{plugin}/records", "CreateRecord"),
-        ("POST /plugins/external-change/absorb", "AbsorbExternalChange"),
-        ("POST /plugins/external-change/keep", "KeepExternalChange"),
         ("PUT /load-order", "PutLoadOrder"),
     ];
 

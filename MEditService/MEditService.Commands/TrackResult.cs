@@ -26,9 +26,6 @@ public enum TrackRefusal
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
     MissingLocalizationStrings,
 
-    /// <summary>An external change to the mod is unanswered (ADR-0003 invariant 3).</summary>
-    ExternalChangeUnanswered,
-
     /// <summary>The plugin passed its gate, and git or the file system refused its baseline commit.</summary>
     CommitFailed,
 

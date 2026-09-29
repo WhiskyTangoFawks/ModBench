@@ -3,7 +3,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUr
 
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
 
-import { publishLoadDiagnoses } from '../loadDiagnostics';
+import { publishChangedOutside, publishLoadDiagnoses } from '../loadDiagnostics';
 import type { OriginFolder } from '../../instanceLoader/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
@@ -79,5 +79,23 @@ describe('publishLoadDiagnoses', () => {
 
     const [, groupedDiagnostics] = present(entriesOf(collection)[0], 'the sole grouped diagnostic-collection entry');
     expect(groupedDiagnostics.map((d) => d.message)).toEqual(['first', 'second']);
+  });
+});
+
+// plugins.md, A row: a plugin changed outside Modbench is a warning on the plugin file.
+describe('publishChangedOutside', () => {
+  it('puts one warning on each plugin file, replacing whatever the last call published', () => {
+    const collection = new FakeDiagnosticCollection();
+    const folders = originFolderFrom({ ModA: '/instance/mods/ModA', ModB: '/instance/mods/ModB' });
+    publishChangedOutside(collection, folders, [{ name: 'Gone.esp', origin: 'ModB' }]);
+
+    publishChangedOutside(collection, folders, [{ name: 'A.esp', origin: 'ModA' }]);
+
+    const [path, list] = present(entriesOf(collection)[0], 'the sole published diagnostic-collection entry');
+    expect(entriesOf(collection)).toHaveLength(1);
+    expect(path).toBe('/instance/mods/ModA/A.esp');
+    expect(list.map((d) => [d.message, d.severity])).toEqual([
+      ['Changed outside Modbench: its bytes differ from what Modbench last wrote.', 1],
+    ]);
   });
 });

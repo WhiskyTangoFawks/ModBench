@@ -81,8 +81,7 @@ internal sealed class ModWatch : IDisposable
             _maxWindowTimer = time.CreateTimer(_ => settle(this), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _watcher.Changed += (_, e) => Observe(e.FullPath);
             _watcher.Created += (_, e) => Observe(e.FullPath, appeared: true);
-            // A deletion is a settle like any other: the whole point of the indexed-binary route,
-            // and a no-op for a plugin classification finds no bytes for.
+            // A deletion is a settle like any other: the whole point of the indexed-binary route.
             _watcher.Deleted += (_, e) => Observe(e.FullPath);
             _watcher.Renamed += (_, e) => { Observe(e.OldFullPath); Observe(e.FullPath, appeared: true); };
             _watcher.Error += (_, _) => overflow(this);
@@ -221,7 +220,7 @@ internal sealed class ModWatch : IDisposable
             }
             else
             {
-                // Commands re-checks git's status at settle rather than trusting this path, so
+                // Commands compares the binaries at settle rather than trusting this path, so
                 // which file it was does not matter here.
                 _modTouched = true;
             }

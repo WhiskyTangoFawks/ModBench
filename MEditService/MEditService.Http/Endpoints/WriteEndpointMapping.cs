@@ -35,8 +35,7 @@ internal static class WriteEndpointMapping
         {
             // The request is sound; the plugin's present state refuses it until that state changes.
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
-                or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin
-                or RecordEditRefusal.ExternalChangeUnanswered => 409,
+                or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
             // The envelope itself could not be read as a write: the request is malformed.
             RecordEditRefusal.InvalidEnvelope => 400,
@@ -60,9 +59,9 @@ internal static class WriteEndpointMapping
         {
             TrackRefusal.PluginNotLoaded => 404,
             // State conflicts: the request is well-formed, and the answer is "not a plugin already
-            // tracked", "not on the game's own Data folder" or "not while a change is unanswered" —
-            // the status RecordEditRefusal.PluginHasNoModFolder uses for the second.
-            TrackRefusal.AlreadyTracked or TrackRefusal.DataDirectoryOrigin or TrackRefusal.ExternalChangeUnanswered => 409,
+            // tracked" or "not on the game's own Data folder" — the status
+            // RecordEditRefusal.PluginHasNoModFolder uses for the second.
+            TrackRefusal.AlreadyTracked or TrackRefusal.DataDirectoryOrigin => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,
             // A data problem in the plugin itself, the status the record edits' own refusals use.
@@ -98,10 +97,6 @@ internal static class WriteEndpointMapping
     /// <summary>The load order went away underneath the request — a "not right now", never a bad
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
-
-    /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now".</summary>
-    internal static IResult NotTrackedMod(string origin) =>
-        Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
 
     /// <summary>An argument the adapter itself refuses — malformed syntax is a 400. Same shape as
     /// <see cref="MalformedFormKey"/>, kept separate because the argument here is never a FormKey.</summary>

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import type { PluginDiagnosisReport } from '../client';
+import type { PluginAddress, PluginDiagnosisReport } from '../client';
 // Type only, so nothing of Mod Management is linked in: the contract for "where this origin's
 // files live" belongs beside the rows that answer it.
 import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
@@ -13,9 +13,29 @@ export function publishLoadDiagnoses(
   originFolder: OriginFolder,
   reports: PluginDiagnosisReport[],
 ): void {
+  publishOnPluginFiles(collection, originFolder, reports);
+}
+
+/** plugins.md, A row: a warning on each plugin file whose bytes differ from what Modbench last
+ *  wrote. */
+export function publishChangedOutside(
+  collection: vscode.DiagnosticCollection,
+  originFolder: OriginFolder,
+  plugins: readonly PluginAddress[],
+): void {
+  publishOnPluginFiles(collection, originFolder, plugins.map((p) => ({
+    plugin: p.name, origin: p.origin, text: 'Changed outside Modbench: its bytes differ from what Modbench last wrote.',
+  })));
+}
+
+function publishOnPluginFiles(
+  collection: vscode.DiagnosticCollection,
+  originFolder: OriginFolder,
+  entries: readonly { plugin: string; origin: string; text: string }[],
+): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
-  for (const r of reports) {
+  for (const r of entries) {
     // An origin whose plugins vanished between scan and publish has no file to point at.
     const folder = originFolder(r.origin);
     if (folder === undefined) continue;
