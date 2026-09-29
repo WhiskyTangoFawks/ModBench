@@ -43,7 +43,6 @@ import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';

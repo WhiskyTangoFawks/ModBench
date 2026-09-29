@@ -383,9 +383,8 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1); the game folder's copy
-   *  when its origin is the game folder and the Instance value lists no file for it.
-   *  `Promise`-wrapped only to keep the caller's `await` unchanged. */
+  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1), or the game folder's copy
+   *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
     const name = pluginFileOf(row);
     const address = pluginAddressKey(name, row.origin);
