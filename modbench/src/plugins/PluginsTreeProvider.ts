@@ -391,6 +391,12 @@ export class PluginsTreeProvider
     return Promise.resolve(listed ?? (row.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined));
   }
 
+  /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
+  isEnabled(row: PluginNode): boolean {
+    const address = pluginAddressKey(row.plugin.name, row.origin);
+    return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
+  }
+
   // The copy the game loads: the one the Mod override order resolves the name to, else the game
   // folder's.
   private lockedOriginOf(name: string): string {

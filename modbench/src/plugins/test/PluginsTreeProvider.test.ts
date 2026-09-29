@@ -1027,6 +1027,25 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
   });
 });
 
+// Space's enable-or-disable reads whether the row's line is enabled now (plugins.md, Menus and keys).
+describe('PluginsTreeProvider — isEnabled', () => {
+  it('answers from the Instance value, matching the row\'s file name and origin without case', () => {
+    const { tree } = makeTree([
+      plugin({ name: 'Mod.esp', slot: 0, origin: 'ModA', enabled: true }),
+      plugin({ name: 'Off.esp', slot: 1, origin: 'ModA', enabled: false }),
+    ]);
+
+    expect(tree.isEnabled(new PluginNode({ name: 'mod.ESP', enabled: false }, 'moda'))).toBe(true);
+    expect(tree.isEnabled(new PluginNode({ name: 'Off.esp', enabled: true }, 'ModA'))).toBe(false);
+  });
+
+  it('answers false for a row of the same file name at another origin', () => {
+    const { tree } = makeTree([plugin({ name: 'Mod.esp', slot: 0, origin: 'ModA', enabled: true })]);
+
+    expect(tree.isEnabled(new PluginNode({ name: 'Mod.esp', enabled: true }, 'ModB'))).toBe(false);
+  });
+});
+
 describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () => {
   const lockedRowOf = async (tree: PluginsTreeProvider) =>
     present((await tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
