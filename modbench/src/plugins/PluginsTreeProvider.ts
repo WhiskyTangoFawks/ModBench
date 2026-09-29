@@ -52,7 +52,6 @@ export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' 
 export type RecordBrowser = Pick<
   PluginTreeProvider,
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
-  | 'setImmutablePlugins' | 'setTrackedPlugins'
 >;
 
 /** One held plugin as the record filter's own state reads it. The reconcile hands these back so
@@ -567,8 +566,9 @@ export class PluginsTreeProvider
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
+    // No filename fallback: a row whose plugin mEdit has not named offers no record edit.
     const joinedOrigin = this.joinOrigin(file, row);
-    const facts = row.kind === 'plugin' && joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
+    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -668,10 +668,6 @@ export class PluginsTreeProvider
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
-    // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
-    // vanishing under `mods/` is a watcher event, and that is a reconcile.
-    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map(({ name, origin }) => ({ name, origin })));
-    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map(({ name, origin }) => ({ name, origin })));
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
@@ -760,10 +756,10 @@ export class PluginsTreeProvider
     return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
   }
 
-  // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
-  // the client's answer names no plugin for falls back to the filename.
+  // ADR-0012 keys every fact by origin: a row's own, and for a locked row the copy the game loads.
+  // A row whose origin mEdit names no plugin for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    return this.heldOrigin(file, row.kind === 'plugin' ? row.origin : undefined);
+    return this.heldOrigin(file, row.origin);
   }
 
   private heldOrigin(file: string, origin: string | undefined): string | undefined {

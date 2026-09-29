@@ -1592,17 +1592,6 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(await h.tree.getChildren()).toEqual(before);
   });
 
-  it('pushes the immutable and tracked sets from the reconcile own read', async () => {
-    const h = makeTree([A_ROW(), B_ROW()]);
-    const immutable = vi.spyOn(h.records, 'setImmutablePlugins');
-    const tracked = vi.spyOn(h.records, 'setTrackedPlugins');
-
-    await reconcile(h, [held('A.esp', { isImmutable: true }), held('B.esp', { isTracked: true })]);
-
-    expect(immutable).toHaveBeenCalledWith([{ name: 'A.esp', origin: 'SomeMod' }]);
-    expect(tracked).toHaveBeenCalledWith([{ name: 'B.esp', origin: 'SomeMod' }]);
-  });
-
   // ADR-0012 invariant 1: two plugins that share a filename are never one plugin.
   // Both orders of mEdit's answer, so neither plugin's facts can win by arriving last.
   it.each([
@@ -1623,6 +1612,93 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(expectInstanceOf(record, RecordNode).contextValue).toBe('record untracked editable');
     expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked editable');
   });
+});
+
+// plugins.md, Menus and keys, story 4: a record row offers a record edit only where its plugin row
+// can take one, so every record row reads the conditions its plugin row hands down.
+describe('PluginsTreeProvider — the conditions a record row reads are its plugin row\'s', () => {
+  const weaponOf = (record: RecordSummary) => makeClient({
+    recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [record], total: 1 },
+  });
+
+  async function firstRecordUnder(h: Harness, row: PluginsTreeNode) {
+    const [group] = await h.tree.getChildren(row);
+    const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
+    return { group: expectInstanceOf(group, RecordTypeNode), record: expectInstanceOf(record, RecordNode) };
+  }
+
+  // An override's own plugin is its master's, which mEdit calls read-only: the row still sits in,
+  // and is edited through, the tracked plugin above it.
+  it('states an override record under a tracked, editable plugin tracked and editable', async () => {
+    const client = weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: 'Data' }));
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
+
+    const [row] = await h.tree.getChildren();
+    const { record } = await firstRecordUnder(h, present(row, 'the A.esp row'));
+
+    expect(record.contextValue).toBe('record tracked editable');
+  });
+
+  it('flips a record row on the reconcile that tracks its plugin, from the rows already read', async () => {
+    const client = weaponOf(recordSummary());
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
+    await reconcile(h, [held('A.esp')]);
+    const [row] = await h.tree.getChildren();
+    expect((await firstRecordUnder(h, present(row, 'the A.esp row'))).record.contextValue).toBe('record untracked editable');
+    const reads = client.calls.filter((c) => c.method === 'getRecords').length;
+
+    await reconcile(h, [held('A.esp', { isTracked: true })]);
+    const [again] = await h.tree.getChildren();
+
+    expect((await firstRecordUnder(h, present(again, 'the A.esp row'))).record.contextValue).toBe('record tracked editable');
+    expect(client.calls.filter((c) => c.method === 'getRecords')).toHaveLength(reads);
+  });
+
+  // ADR-0012 invariant 1: a locked row is the plugin its origin names, which lockedOriginOf gives
+  // it, never whichever plugin of its file name mEdit listed last. Both orders of mEdit's answer.
+  const DATA_COPY = held('Fallout4.esm', { origin: 'Data', isImmutable: true });
+  const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
+  const lockedTree = (modCopyWins: boolean) => makeTree(
+    [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
+    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm' })),
+      implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+
+  it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
+    'states a locked row the game folder provides by the game folder\'s copy, with the mod\'s copy listed %s',
+    async (_order, answer) => {
+      const h = lockedTree(false);
+      await reconcile(h, [...answer, held('A.esp')]);
+
+      const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
+      const { group, record } = await firstRecordUnder(h, locked);
+
+      expect(locked.origin).toBe('Data');
+      expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked', 'record untracked']);
+    });
+
+  it('offers no record edit under a locked row mEdit names no plugin for at its origin', async () => {
+    const h = lockedTree(false);
+    await reconcile(h, [MOD_COPY, held('A.esp')]);
+
+    const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
+    const { group, record } = await firstRecordUnder(h, locked);
+
+    expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked', 'record untracked']);
+  });
+
+  it.each([['last', [MOD_COPY, DATA_COPY]], ['first', [DATA_COPY, MOD_COPY]]])(
+    'states a locked row the game loads from a mod by that mod\'s copy, with the game folder\'s listed %s',
+    async (_order, answer) => {
+      const h = lockedTree(true);
+      await reconcile(h, [...answer, held('A.esp')]);
+
+      const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
+      const { group, record } = await firstRecordUnder(h, locked);
+
+      expect(locked.origin).toBe('ModA');
+      expect([group.contextValue, record.contextValue]).toEqual(['recordType tracked editable', 'record tracked editable']);
+    });
 });
 
 // ADR-0002: mEdit is always running, so a disconnect is an error the tree surfaces, not a mode
