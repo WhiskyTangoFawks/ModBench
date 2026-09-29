@@ -9,13 +9,20 @@ import { fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance } from '../instanceLoader/instance';
-import { placeFolder } from '../plugins/pluginPlaces';
+import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
 import { resolvesNoDownloads } from './mo2/downloadsUnresolved';
 import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
 
 const PROFILE = 'Default';
+
+// The two origins this suite picks always resolve to a folder; a `lost` answer here means the
+// fixture broke, never a real case for the test to branch on.
+function folderOf(place: PlaceFolder): string {
+  if ('folder' in place) return place.folder;
+  throw new Error(`Expected the value to name a folder, not ${JSON.stringify(place)}.`);
+}
 
 describe('a created plugin reaches plugins.txt through plugin sync alone', () => {
   let dir: string;
@@ -50,7 +57,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
   });
 
   it.each(['overwrite', 'Existing Mod'])('in %s: the line lands at the end, disabled', async (origin) => {
-    const { folder } = placeFolder(instance.value, origin) as { folder: string };
+    const folder = folderOf(placeFolder(instance.value, origin));
     await writeFile(join(folder, 'New.esp'), 'plugin');
 
     await instance.refresh();
