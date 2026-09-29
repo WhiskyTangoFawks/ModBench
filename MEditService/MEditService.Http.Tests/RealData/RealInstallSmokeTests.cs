@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Installs;
 namespace MEditService.Http.Tests.RealData;
 
 /// <summary>Against whatever real game is installed, discovered rather than hardcoded. Gated behind
-/// <c>MEDIT_SMOKE=1</c>: loads full vanilla masters, so never in a normal run or under mutation.</summary>
+/// <c>MEDIT_SMOKE=1</c>: loads full vanilla masters, so never in a normal run.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class RealInstallSmokeTests
 {

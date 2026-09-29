@@ -159,11 +159,10 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
         var renamed = OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\"");
 
-        var copied = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(response.ToString())}/copy-as-override",
-            new { sourcePlugin = master, sourceOrigin = masterOrigin, destinationPlugin = patch, destinationOrigin = patchOrigin });
+        var copied = await Client.Copy(response.ToString(), (master, masterOrigin), "Override", (patch, patchOrigin));
 
         copied.EnsureSuccessStatusCode();
+        Assert.Single((await copied.Body()).GetProperty("applied").EnumerateArray());
         Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(patchFolder, patch, "\"SharedDialogueQuest\""));
         Assert.Contains("CopiedResponse", File.ReadAllText(renamed), StringComparison.Ordinal);
     }
@@ -254,7 +253,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, "cell");
-        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var placedRef = await Client.FormKeyNamed(Plugin, "refr", PlacedRef);
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
         using var stream = await Client.NotificationStream();
         var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
@@ -358,7 +357,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var cell = await Client.FirstFormKey(Plugin, "cell");
-        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var placedRef = await Client.FormKeyNamed(Plugin, "refr", PlacedRef);
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
         using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
@@ -514,7 +513,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     {
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var placedRef = await Client.FormKeyNamed(Plugin, "refr", PlacedRef);
         var before = await Client.Sequence();
         (await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5)).EnsureSuccessStatusCode();
         await Client.SequenceReaches(before + 1);

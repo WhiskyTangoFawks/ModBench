@@ -12,8 +12,7 @@ public class WorldspaceQueryServiceTests
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
-        CellReferences? cellRefs = null,
-        IReadOnlySet<string>? failedWorldspaces = null) : IRecordReads
+        CellReferences? cellRefs = null) : IRecordReads
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
         {
@@ -46,14 +45,14 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses() => [];
         public IReadOnlySet<PluginAddress> GetTrackedPlugins() => new HashSet<PluginAddress>(PluginAddress.Comparer);
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginAddress p) => failedWorldspaces ?? new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginAddress plugin, int l, int o)
+        public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin)
         {
             LastGetInteriorCellsOrigin = plugin.Origin;
-            return new(cells.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY)).ToList(), cells.Count);
+            return cells;
         }
+        public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
         public CellReferences GetCellReferences(PluginAddress plugin, string fk)
         {
             LastGetCellReferencesOrigin = plugin.Origin;
@@ -73,6 +72,11 @@ public class WorldspaceQueryServiceTests
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
+
+        public void SetFilter(string sql, string source) => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public void ClearFilter() => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+            throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
 
     private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
@@ -141,7 +145,7 @@ public class WorldspaceQueryServiceTests
         // The reads are there; what is missing is a snapshot in the kernel, and that alone must
         // produce a clear NoLoadOrderException rather than a read against the reserved origin.
         var svc = new WorldspaceQueryService(new StubIndex(new StubReader([])), new LoadOrderHolder());
-        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", 50, 0));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp"));
     }
 
     [Fact]
@@ -205,7 +209,7 @@ public class WorldspaceQueryServiceTests
         var reader = new StubReader([]);
         var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
 
-        svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
+        svc.GetInteriorCells("M.esp", origin: "ModB");
 
         Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
     }
@@ -220,10 +224,9 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0),
         ]);
 
-        var result = svc.GetInteriorCells("M.esp", 50, 0);
+        var result = svc.GetInteriorCells("M.esp");
 
-        Assert.Single(result.Items);
-        Assert.Equal("IntCell", result.Items[0].EditorId);
+        Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
 
     [Fact]
@@ -298,12 +301,12 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void GetWorldspaces_MarksOnlyTheWorldspaceWithAFailureBelowIt()
+    public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
     {
         var reader = new StubReader([], [
-            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
+            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
-        ], failedWorldspaces: new HashSet<string>(StringComparer.Ordinal) { "0001:M.esp" });
+        ]);
         var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetWorldspaces("M.esp");

@@ -19,8 +19,8 @@ import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../Plugins
 import { CellNode, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 
-const pluginRow = (name: string, origin?: string) => new PluginNode({ name, enabled: true }, origin);
-const lockedRow = (name: string) => new ImplicitMasterNode(name);
+const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
+const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
 
 // VS Code's own calling convention: a context menu passes the right-clicked row, and the
 // selection only when several rows are selected and the right-clicked row is among them. A key
@@ -164,8 +164,8 @@ describe('a singular Plugins gesture\'s Argument', () => {
   });
 });
 
-// commands.md, Where: a palette entry and a key are handed no row, so their `when` reads what the
-// Plugins selection holds, and the gesture is absent where it would have nothing to act on.
+// commands.md, The surface supplies the Argument; No dead entries: with no row, a palette entry or
+// key reads the Plugins selection, and is absent where it would have nothing to act on.
 describe('what the Plugins palette entries and keys read off the selection', () => {
   const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
     row.contextValue = contextValue;
@@ -180,11 +180,11 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inMod tracked');
   const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
   const untrackedWeapons = new RecordTypeNode('Beta.esp', 'weap', 3, 'Weapon', 'ModB');
-  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
-  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false });
-  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB', { tracked: false, editable: true });
+  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
+  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true, true);
+  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB');
   const cell = new CellNode('Alpha.esp', {
-    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+    formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
   }, 'ModA', { tracked: true, editable: true });
   const enabledNow = (row: PluginNode) => row !== beta;
   const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);
@@ -210,7 +210,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('create sees exactly one selected record type whose plugin is tracked and editable', () => {
     expect(context([weapons]).singleEditableRecordType).toBe(true);
     expect(context([untrackedWeapons]).singleEditableRecordType).toBe(false);
@@ -226,8 +226,15 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allDeletableRecords).toBe(false);
   });
 
-  // mods.md, Menus and keys, story 3, which plugins.md story 5 follows: Space takes the focused
-  // row's direction, and a selection of one row stands for the focused row.
+  // A copy reads its source, so any record copies, whatever its plugin allows.
+  it('copy sees a selection of records, cells included, whatever their plugins allow', () => {
+    expect(context([own, cell, immutable, untrackedRecord]).allRecords).toBe(true);
+    expect(context([own, alpha]).allRecords).toBe(false);
+    expect(context([]).allRecords).toBe(false);
+  });
+
+  // mods.md, Menus and keys, story 2, which plugins.md, Menus and keys, story 3 follows: Space
+  // takes the focused row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
     expect(context([alpha, beta]).selectionToggle).toBe('disable');
     expect(context([beta, alpha]).selectionToggle).toBe('enable');

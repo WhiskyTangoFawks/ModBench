@@ -1096,8 +1096,8 @@ describe('registerDownloadsExcludedToggleCommands', () => {
   });
 });
 
-// commands.md, Where: every gesture is in the palette, which hands it no row, so each takes the
-// Downloads view's own selection.
+// commands.md, The surface supplies the Argument: the palette hands a gesture no row, so each takes
+// the Downloads view's own selection.
 describe('the Downloads gestures from the palette act on the view\'s selection', () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -93,8 +93,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
     {
         var loadOrder = WithPlugin("anything, hash mismatches regardless"u8.ToArray());
         Track(ModFolder, PluginName);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => CompileJournal.RunAsync(
-            ModFolder, PluginName, () => throw new InvalidOperationException("simulated crash")));
+        await CompileJournal.RunBatchAsync(ModFolder, [PluginName], _ => Task.FromResult(false));
 
         var outcome = Settled.Handle(loadOrder, ModFolder);
 
@@ -105,17 +104,15 @@ public sealed class ExternalChangeClassificationTests : IDisposable
             _notifications.Notifications);
     }
 
-    // The rival this pins: naming every plugin whose compile began, when the first landed and only
+    // The rival this pins: naming every plugin the batch named, when its first plugin landed and only
     // the second's binary is bad.
     [Fact]
-    public async Task ASettle_NamesOnlyThePluginsWhoseCompileDidNotLand()
+    public async Task ASettle_NamesOnlyThePluginsTheInterruptedBatchDidNotLand()
     {
         const string landed = "Landed.esp";
         var loadOrder = WithPlugin("anything"u8.ToArray());
         Track(ModFolder, PluginName);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => CompileJournal.RunAsync(
-            ModFolder, PluginName, () => throw new InvalidOperationException("simulated crash")));
-        await CompileJournal.RunAsync(ModFolder, landed, () => Task.FromResult(true));
+        await CompileJournal.RunBatchAsync(ModFolder, [landed, PluginName], plugin => Task.FromResult(plugin == landed));
 
         Settled.Handle(loadOrder, ModFolder);
 
@@ -255,7 +252,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
     }
 
     // An untracked plugin has no source to lose, so its bytes are no part of the question
-    // (decompile-plugin, The trigger, step 3).
+    // (ADR-0003, invariant 3).
     [Fact]
     public void ASettle_ReportsNothing_ForAnUntrackedPluginBesideATrackedOne()
     {

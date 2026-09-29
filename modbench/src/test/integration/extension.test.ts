@@ -87,7 +87,7 @@ function awaitStatus(client: MEditClient, status: BackendStatus, label: string, 
 type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'participates'>): MockPlugin {
   return {
-    isLight: false, isMaster: false, masters: [], recordCount: 0, isImmutable: false,
+    isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0, isImmutable: false,
     inLoadOrder: true, enabled: true, winning: true, masterIssues: [], hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
@@ -526,6 +526,11 @@ describe('modbench command registration', () => {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
   });
+
+  it('registers no load-more command', async () => {
+    const all = await vscode.commands.getCommands(/* filterInternal */ true);
+    assert.ok(!all.includes('modbench.loadMore'), 'modbench.loadMore is registered');
+  });
 });
 
 // commands.md, The system commands: mod sync takes the instance value as its Argument.
@@ -726,13 +731,13 @@ function nodeKind(node: unknown): unknown {
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
   it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
-    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true });
+    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
   });
 
   it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
-    const node = new ImplicitMasterNode('Fallout4.esm');
+    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
   });
@@ -742,7 +747,7 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
 // Problems badge, and VS Code badges any tree row whose resourceUri carries diagnostics.
 describe('the locked row is greyed and carries no Problems badge', () => {
   const dataFolder = path.join(os.tmpdir(), 'locked-row-game', 'Data');
-  const node = new ImplicitMasterNode('Fallout4.esm', path.join(dataFolder, 'Fallout4.esm'));
+  const node = new ImplicitMasterNode('Fallout4.esm', 'Data', path.join(dataFolder, 'Fallout4.esm'));
   const collection = vscode.languages.createDiagnosticCollection('locked-row-test');
   after(() => collection.dispose());
 
@@ -853,8 +858,8 @@ describe('modbench.downloads tree', () => {
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 
-  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
-  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  // downloads.md, Which files are rows, story 1: `download_directory` can name a folder outside
+  // the instance. This proves VS Code's real watcher fires for one, not just that it was asked to.
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
     this.timeout(40000);
     if (!root) throw new Error('no open workspace');
@@ -1203,12 +1208,6 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   let gameDir = '';
   let original = '';
 
-  const setGameDirectoryAndStopTheMEditItRelaunches = async (dir: string) => {
-    await setGameDirectory(dir);
-    await enterEditing();
-    exitEditing();
-  };
-
   // TestMod.esp is the first row and enabled; Other.esp is the second and disabled.
   const focusRow = async (index: number) => {
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\r\nOther.esp\r\n'));
@@ -1232,7 +1231,10 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-keys-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await setGameDirectoryAndStopTheMEditItRelaunches(gameDir);
+    await setGameDirectory(gameDir);
+    // Setting the game directory relaunches mEdit; the tests below need no backend.
+    await enterEditing();
+    exitEditing();
   });
 
   after(async () => {
@@ -1251,7 +1253,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
     assert.strictEqual(fs.readFileSync(pluginsTxtPath, 'utf8'), '*TestMod.esp\r\nOther.esp\r\n');
   });
 
-  it('the disable Space runs, given no row, disables the selected plugin', async function () {
+  it('Space disables the selected plugin', async function () {
     if (!root) this.skip();
     await focusRow(0);
     await vscode.commands.executeCommand('modbench.plugin.disable');
@@ -1512,7 +1514,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
 // An enabled row is collapsible from launch (ADR-0002); launch/close changes its content on
-// expand, never its collapsibleState. A disabled row has no expander (plugins.md, A row story 5).
+// expand, never its collapsibleState. A disabled row has no expander (plugins.md, The tree,
+// story 5).
 
 // plugins.txt lines carry `plugin.name`; the game's implicitly-loaded masters carry `name`.
 function rowFields(row: unknown): { name?: unknown; plugin?: { name?: unknown; enabled?: unknown } } {
@@ -1536,7 +1539,7 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// update-load-order-file, Refusals: once mEdit has attached, plugin sync's refusal reaches the
+// plugins.md, Reporting, story 2: once mEdit has attached, plugin sync's refusal reaches the
 // Plugins view's message line, and a connect runs plugin sync again.
 describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1707,7 +1710,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
   });
 
-  // plugins.md, A row story 5: the game does not load a disabled plugin's records, so its row
+  // plugins.md, The tree, story 4: the game does not load a disabled plugin's records, so its row
   // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();
@@ -2058,7 +2061,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// load-instance, refresh: mEdit reads every plugin again against the load order it holds, and the
+// commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
 // re-read of the instance that follows finds that load order unchanged.
 describe('Refresh rebuilds the index and sends nothing', () => {
   // Launched, so a re-read that changed the load order would put it.
@@ -2376,12 +2379,12 @@ describe('Progressive load', () => {
   });
 });
 
-// pickCopyDestination opens with an unguarded repository.getPlugins(); a rejection escapes the
-// command callback as VS Code's raw "fetch failed" toast. A load order-less mock reproduces it.
-describe('Copy destination picking degrades to a reported error, never an uncaught rejection', () => {
+// common.md, Reporting: a failed destination lookup says what failed and why, and the
+// command resolves rather than escaping as VS Code's raw rejection toast.
+describe('Copy says why its destination lookup failed', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution
-  // short-circuits with no HTTP call and pickCopyDestination's getPlugins() is the first thing to
-  // reach the refusing backend.
+  // short-circuits with no HTTP call, and the destination lookup is the first thing to reach the
+  // backend, which holds no load order.
   const headerArg = {
     webviewSection: 'recordHeader',
     formKey: 'TestMod.esp:000001',
@@ -2392,28 +2395,33 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
 
   beforeEach(() => resetMockBackend());
 
-  for (const command of ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord']) {
-    it(`${command} resolves (not rejects) and shows a Modbench-authored error when the plugins request is refused`, async () => {
+  for (const mode of ['Override', 'New']) {
+    it(`copy as ${mode} resolves and shows one Modbench error naming the reason`, async () => {
       const errors: string[] = [];
       const realShowError = vscode.window.showErrorMessage;
+      const realShowQuickPick = vscode.window.showQuickPick;
       Object.defineProperty(vscode.window, 'showErrorMessage', {
         configurable: true,
         value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
       });
+      Object.defineProperty(vscode.window, 'showQuickPick', {
+        configurable: true,
+        value: (items: readonly { mode?: string }[]) => Promise.resolve(items.find((item) => item.mode === mode)),
+      });
       try {
         // An escaped rejection out of the command callback fails executeCommand's own returned promise,
         // so awaiting with no try/catch is the assertion.
-        await vscode.commands.executeCommand(command, headerArg);
+        await vscode.commands.executeCommand('modbench.record.copy', headerArg);
 
-        assert.ok(requestLog.some((l) => l === 'GET /plugins'),
-          'the command must have actually reached pickCopyDestination\'s getPlugins() call');
+        assert.ok(requestLog.some((l) => l === 'GET /plugins'), 'the command must have looked up the destinations');
         assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
         const [errorToast] = errors;
         if (errorToast === undefined) throw new Error('expected the one error toast just asserted above');
         assert.ok(errorToast.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errorToast}`);
-        assert.ok(!errorToast.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errorToast}`);
+        assert.ok(errorToast.includes('No load order has been received.'), `expected the reason, got: ${errorToast}`);
       } finally {
         Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
+        Object.defineProperty(vscode.window, 'showQuickPick', { configurable: true, value: realShowQuickPick });
       }
     });
   }

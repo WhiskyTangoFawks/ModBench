@@ -94,8 +94,8 @@ public sealed class TrackedModSettledTests : IDisposable
     {
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question already open before the crash");
         await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName,
-                () => throw new InvalidOperationException("simulated crash between source and binary write")));
+            await CompileJournal.RunBatchAsync(_mod.ModFolder, [SourceEditFixture.PluginName],
+                _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder));
 
         var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
@@ -106,71 +106,6 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal(
             new CompileUnfinishedNotification(new PluginAddress(SourceEditFixture.PluginName, SourceEditFixture.ModFolderOrigin)),
             unfinished);
-    }
-
-    [Fact]
-    public async Task Handle_PublishesNothing_AndOpensNoQuestion_WhileACompileOfTheModRuns()
-    {
-        var outcome = TrackedModSettledOutcome.QuestionOpened;
-
-        await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName, () =>
-        {
-            WriteExternalBinaryChange(_mod, 0.9f);
-            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
-            return Task.FromResult(false);
-        });
-
-        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
-        Assert.Empty(_notifications.Notifications);
-        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
-    }
-
-    [Fact]
-    public async Task Handle_PublishesCompileUnfinished_WhenABinaryCannotBeRead_AndAnotherPluginsCompileWasInterrupted()
-    {
-        await Assert.ThrowsAnyAsync<Exception>(() => CompileJournal.RunAsync(_mod.ModFolder, "Other.esp",
-            () => throw new InvalidOperationException("simulated crash")));
-        File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
-
-        var outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
-
-        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
-        Assert.Equal(
-            [new CompileUnfinishedNotification(new PluginAddress("Other.esp", SourceEditFixture.ModFolderOrigin))],
-            _notifications.Notifications);
-    }
-
-    [Fact]
-    public async Task Handle_PublishesNothing_WhenABinaryCannotBeRead_WhileACompileOfTheModRuns()
-    {
-        var outcome = TrackedModSettledOutcome.CompileUnfinished;
-
-        await CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName, () =>
-        {
-            File.Delete(Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName));
-            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
-            return Task.FromResult(false);
-        });
-
-        Assert.Equal(TrackedModSettledOutcome.NoQuestion, outcome);
-        Assert.Empty(_notifications.Notifications);
-    }
-
-    [Fact]
-    public async Task Handle_StillWarnsOfAnInterruptedCompile_WhileACompileOfAnotherModRuns()
-    {
-        using var other = SourceEditFixture.Tracked();
-        await Assert.ThrowsAnyAsync<Exception>(() => CompileJournal.RunAsync(_mod.ModFolder, SourceEditFixture.PluginName,
-            () => throw new InvalidOperationException("simulated crash")));
-        var outcome = TrackedModSettledOutcome.NoQuestion;
-
-        await CompileJournal.RunAsync(other.ModFolder, SourceEditFixture.PluginName, () =>
-        {
-            outcome = Settled.Handle(_mod.LoadOrder, _mod.ModFolder);
-            return Task.FromResult(false);
-        });
-
-        Assert.Equal(TrackedModSettledOutcome.CompileUnfinished, outcome);
     }
 
     // The rival this pins: naming the mod from the load-order plugin that raised the question,

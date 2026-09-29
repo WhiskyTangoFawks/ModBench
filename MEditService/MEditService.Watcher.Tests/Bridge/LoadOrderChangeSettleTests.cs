@@ -154,8 +154,8 @@ public sealed class LoadOrderChangeSettleTests
         var (tree, modFolder) = TrackedBeforeWatching();
         using var _ = tree;
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            CompileJournal.RunAsync(modFolder, PluginName,
-                () => throw new InvalidOperationException("simulated crash between source and binary write")));
+            CompileJournal.RunBatchAsync(modFolder, [PluginName],
+                __ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(modFolder));
 
         await tree.ApplyLoadOrder();

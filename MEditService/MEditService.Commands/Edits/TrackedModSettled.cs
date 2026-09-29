@@ -24,11 +24,11 @@ public sealed class TrackedModSettled
     internal TrackedModSettled(INotificationPublisher notifications) => _notifications = notifications;
 
     /// <summary>Reads every plugin the load order holds in the mod off disk, then classifies. A
-    /// plugin caught mid-write is no verdict, and the mark is read as the load-time check reads it.</summary>
+    /// plugin caught mid-write is no verdict.</summary>
     public TrackedModSettledOutcome Handle(LoadOrderSnapshot loadOrder, string modFolder) =>
         ExternalChangeClassifier.PluginBytesIn(loadOrder, modFolder) is { } plugins
             ? Handle(loadOrder, modFolder, plugins)
-            : HandleUnreadable(loadOrder, modFolder);
+            : TrackedModSettledOutcome.NoQuestion;
 
     /// <summary>Classifies from bytes the caller already read, so a load-time readability probe and
     /// the settle share one read of each tracked binary.</summary>
@@ -44,10 +44,6 @@ public sealed class TrackedModSettled
             case ExternalChangeClassification.CompileUnfinished unfinished:
                 return Warn(loadOrder, modFolder, unfinished);
 
-            // The compile that is writing the bytes settles the mod again when it lands.
-            case ExternalChangeClassification.CompileRunning:
-                return TrackedModSettledOutcome.NoQuestion;
-
             default:
                 SourceRepository.ClearExternalChangeQuestion(modFolder);
                 return TrackedModSettledOutcome.NoQuestion;
@@ -61,7 +57,7 @@ public sealed class TrackedModSettled
             ? Warn(loadOrder, modFolder, unfinished)
             : TrackedModSettledOutcome.NoQuestion;
 
-    // compile-plugin, Failure: no question opens.
+    // plugins.md, Compile, story 5: no question opens.
     private TrackedModSettledOutcome Warn(
         LoadOrderSnapshot loadOrder, string modFolder, ExternalChangeClassification.CompileUnfinished unfinished)
     {

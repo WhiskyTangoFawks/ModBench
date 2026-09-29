@@ -103,10 +103,10 @@ public sealed class PluginCompileService(
             .ToList();
 
         // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
-        // caught, and any other throw leaves the mark. PluginWriter touches the plugin only at
-        // Commit(), so that refusal wrote nothing.
+        // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
+        // until Commit(), so refusing is safe.
         string? writeRefusal = null;
-        await CompileJournal.RunAsync(modFolder, plugin.Name, async () =>
+        await CompileJournal.RunBatchAsync(modFolder, [plugin.Name], async _ =>
         {
             try
             {

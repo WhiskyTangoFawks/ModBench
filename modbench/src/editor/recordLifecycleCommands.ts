@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import { isRefused, type MEditClient, type RecordAddress } from '../client';
+import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
-import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
+import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import type { RecordTreeSync } from './onRecordEdited';
 import { errorMessage } from '../ports/errorMessage';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
@@ -60,12 +59,15 @@ function makeResolveOriginOrReport(
   };
 }
 
+function recordName(formKey: string, editorId: string | undefined): string {
+  return editorId ? `${editorId} [${formKey}]` : formKey;
+}
+
 // The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
 // share a filename (ADR-0012), and the question must say which.
 function recordLabel(record: RecordIdentity): string {
-  const named = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
   const where = record.origin ? `${record.plugin} (${record.origin})` : record.plugin;
-  return `${named} in ${where}`;
+  return `${recordName(record.formKey, record.editorId)} in ${where}`;
 }
 
 function askToDelete(records: readonly RecordIdentity[], ask: AskQuestion): PromiseLike<string | undefined> {
@@ -113,14 +115,10 @@ type RecordLifecycleClient = Pick<MEditClient,
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
-  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
   // The palette hands no row, so both take the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-  // A create or delete landed: the same re-derive every write in this file needs
-  // (plugins.md) — a changed record can start or stop matching the active filter.
-  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
 
   return [
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
@@ -138,7 +136,6 @@ export function registerRecordLifecycleCommands(
       );
       if (!result) return; // the ESL prompt was declined — nothing happened
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      onWritten();
       reporter.landed(`Created ${result.formKey}.`);
     }),
 
@@ -153,7 +150,6 @@ export function registerRecordLifecycleCommands(
       const answer = addressed.length > 0
         ? await client.deleteRecords(addressed.map((a) => a.address)) : { landed: [], refused: [] };
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      if (answer.landed.length > 0) onWritten();
       const outcome: SelectionOutcome<RecordIdentity> = {
         landed: answer.landed, refused: [...unaddressed, ...answer.refused],
       };
@@ -163,88 +159,128 @@ export function registerRecordLifecycleCommands(
   ];
 }
 
-type RecordCopyClient = Pick<MEditClient,
-  'copyRecordAsOverride' | 'copyRecordAsNewRecord' | 'getPlugins' | 'getRecordOverridePlugins' | 'editRecord'>;
+type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders'>;
 
-// Returns the picked `PluginMetadata`, not just its name, so the caller reads `.origin` off it
-// instead of a second round trip. Either call rejecting is caught wholesale: no fallback tier
-// remains below this step.
-async function pickCopyDestination(
-  client: RecordCopyClient, gesture: CopyGesture, formKey: string, reporter: Reporter,
-): Promise<{ name: string; origin: string } | undefined> {
+async function pickCopyMode(): Promise<CopyMode | undefined> {
+  const picked = await vscode.window.showQuickPick(COPY_MODE_ITEMS, { placeHolder: 'Copy as' });
+  return picked?.mode;
+}
+
+// A pick left with nothing picked is Esc by another route: nothing is copied and nothing said.
+async function pickCopyDestinations(
+  client: RecordCopyClient, mode: CopyMode, records: readonly RecordAddress[], reporter: Reporter,
+): Promise<PluginAddress[] | undefined> {
+  let items: CopyDestinationItem[];
   try {
-    const allPlugins = await client.getPlugins();
-    const carrying = gesture === 'copy-as-override' ? await client.getRecordOverridePlugins(formKey) : [];
-    const candidates = copyTargetPlugins(allPlugins, gesture, carrying);
-    if (candidates.length === 0) {
-      // Nothing landed, but the reporter's information tier is `landed`: an unusable gesture says
-      // so at the same level it always has, rather than toasting a warning the user cannot act on.
-      reporter.landed('No eligible destination plugin for this copy.');
-      return undefined;
-    }
-    const items = candidates.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]`, plugin: p }));
-    const picked = await vscode.window.showQuickPick(items, {
-      placeHolder: gesture === 'copy-as-override' ? 'Copy as Override Into…' : 'Copy as New Record Into…',
-    });
-    return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
+    items = copyDestinationItems(await client.getPlugins(), mode, records);
   } catch (error) {
-    reporter.report('error', 'Could not look up destination plugins.', errorMessage(error));
+    reporter.report('error', 'Could not look up the plugins to copy into.', errorMessage(error));
     return undefined;
   }
-}
-
-// No confirmation modal: xEdit's CopyInto asks nothing before an override copy, and Copy as New
-// Record prompts for neither an EditorID nor a FormKey. No free FormID refuses plainly, with no
-// flag-removal retry unlike create.
-async function runCopyRecordCommand(
-  gesture: CopyGesture, arg: unknown, client: RecordCopyClient,
-  resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
-  reporter: Reporter,
-  onWritten: () => void,
-): Promise<void> {
-  const identity = recordIdentity(arg);
-  if (!identity) return;
-  const sourceOrigin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
-  if (!sourceOrigin) return;
-
-  const destination = await pickCopyDestination(client, gesture, identity.formKey, reporter);
-  if (!destination) return;
-
-  if (gesture === 'copy-as-override') {
-    const result = await client.copyRecordAsOverride(identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin);
-    if (!result) return;
-    if (isRefused(result)) { reporter.report('error', result.message); return; }
-    onWritten();
-    reporter.landed(`Copied ${identity.formKey} into ${destination.name}.`);
-  } else {
-    const result = await client.copyRecordAsNewRecord(
-      identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin, undefined,
-    );
-    if (!result) return;
-    if (isRefused(result)) { reporter.report('error', result.message); return; }
-    onWritten();
-    reporter.landed(`Copied as ${result.newFormKey} into ${destination.name}.`);
+  if (items.length === 0) {
+    reporter.landed('No plugin can take the copy: Track a plugin to edit it.');
+    return undefined;
   }
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Copy into', canPickMany: true });
+  return picked?.length ? picked.map((item) => item.plugin) : undefined;
 }
 
-// xEdit parity (xeMainForm.pas's CopyInto): one command per gesture, reached from a tree row or
-// a column header alike — `arg` resolves to the same identity either way.
+// What an override would replace, asked of mEdit once per record before anything is written.
+async function copiesAnOverrideReplaces(
+  client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+): Promise<CopyItem[]> {
+  const holders = new Map<string, PluginAddress[]>();
+  for (const formKey of new Set(records.map((r) => r.formKey))) {
+    holders.set(formKey, await client.getRecordHolders(formKey));
+  }
+  return heldCopies(records, destinations, holders);
+}
+
+function addressLabel(record: RecordAddress, editorIds: ReadonlyMap<string, string | undefined>): string {
+  return recordLabel({ ...record, editorId: editorIds.get(record.formKey) });
+}
+
+function askToReplace(
+  held: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion,
+): PromiseLike<string | undefined> {
+  const named = ({ record, destination }: CopyItem) =>
+    `${recordName(record.formKey, editorIds.get(record.formKey))} in ${destination.name} (${destination.origin})`;
+  const question = held.length === 1
+    ? 'Replace the copy a destination already holds?'
+    : `Replace the ${held.length} copies the destinations already hold?`;
+  return ask(
+    `${question} The replacement is a working-tree change you can review.`,
+    { modal: true, detail: held.map(named).join('\n') },
+    'Replace',
+  );
+}
+
+// The replace Option an override is sent with: false when no destination holds a copy, true once
+// the replacement is confirmed, and undefined when nothing is to be copied.
+async function confirmReplacement(
+  client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
+): Promise<boolean | undefined> {
+  let held: CopyItem[];
+  try {
+    held = await copiesAnOverrideReplaces(client, records, destinations);
+  } catch (error) {
+    reporter.report('error', 'Could not check which plugins already hold a copy.', errorMessage(error));
+    return undefined;
+  }
+  if (held.length === 0) return false;
+  return await askToReplace(held, editorIds, ask) === 'Replace' ? true : undefined;
+}
+
+function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>): string {
+  const [only] = landed;
+  if (landed.length === 1 && only) {
+    const { formKey } = only.record;
+    return `Copied ${recordName(formKey, editorIds.get(formKey))} into ${only.destination.name}.`;
+  }
+  return `Made ${landed.length} copies.`;
+}
+
+/** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when an override
+ *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter,
-  treeSync: RecordTreeSync, refreshMatchingPlugins: () => void,
+  reporter: Reporter, ask: AskQuestion,
+  // The palette hands no row, so copy takes the Plugins selection.
+  viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
-  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-  // A copy lands as a working-tree change on the destination plugin — same reason create
-  // and delete re-derive the tree and the filter's matching-plugin set.
-  const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
-
   return [
-    vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-override', arg, client, resolveOriginOrReport, reporter, onWritten);
-    }),
-    vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: unknown) => {
-      await runCopyRecordCommand('copy-as-new', arg, client, resolveOriginOrReport, reporter, onWritten);
+    vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
+      const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
+      if (identities.length === 0) return;
+      const { addressed, unaddressed } = await addressRecords(
+        identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
+      const reportUnaddressed = () => reporter.selectionOutcome(
+        `Could not copy ${unaddressed.length} of ${identities.length} records.`, { landed: [], refused: unaddressed }, recordLabel);
+      const records = addressed.map((a) => a.address);
+      if (records.length === 0) { reportUnaddressed(); return; }
+      const editorIds = new Map(identities.map((i) => [i.formKey, i.editorId]));
+
+      const mode = await pickCopyMode();
+      if (!mode) return;
+      const destinations = await pickCopyDestinations(client, mode, records, reporter);
+      if (!destinations) return;
+
+      const replace = mode === 'Override'
+        ? await confirmReplacement(client, records, destinations, editorIds, ask, reporter)
+        : false;
+      if (replace === undefined) return;
+
+      const answer = await client.copyRecords(records, mode, destinations, replace);
+      if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+      const written = copiesWritten(answer.landed, mode);
+      if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
+      const into = (item: CopyItem) =>
+        `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;
+      reporter.selectionOutcome(
+        `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
+        answer, into);
+      reportUnaddressed();
     }),
   ];
 }

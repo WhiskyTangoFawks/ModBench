@@ -5,7 +5,8 @@ using MEditService.TestSupport;
 namespace MEditService.SourceAdapter.Tests.Source;
 
 /// <summary>Each plugin lands or is refused on its own, with no rollback beyond git's: a refused
-/// plugin leaves nothing of its own, and the commits around it stand (decompile-plugin, Failure).</summary>
+/// plugin leaves nothing of its own, and the commits around it stand (plugins.md, Track, story 5).
+/// </summary>
 public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 {
     private const string ModName = "SomeMod";

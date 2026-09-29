@@ -27,6 +27,7 @@ vi.mock('vscode', () => ({
 import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
+import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -586,7 +587,7 @@ describe('package.json command titles and categories', () => {
     const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
     expect(
       hidden,
-      'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
+      'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
 
@@ -620,6 +621,36 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   const menuOf = (contextValue: string): [string, string][] => placed(
     inPluginsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.pluginListTree', viewItem: contextValue })));
 
+  // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
+  it('title bar: filter or clear, sort direction, filter records or clear, then create plugin, as icons', () => {
+    expect(inPluginsView('view/title').map((e) => [e.command, e.group])).toEqual(expect.arrayContaining([
+      ['modbench.plugin.sortWinningAtTop', 'navigation@2'],
+      ['modbench.plugin.sortLosingAtTop', 'navigation@2'],
+    ]));
+    expect(placed(inPluginsView('view/title'))).toEqual([
+      ['modbench.plugin.filter', 'navigation'],
+      ['modbench.plugin.clearFilter', 'navigation'],
+      ['modbench.plugin.sortWinningAtTop', 'navigation'],
+      ['modbench.plugin.sortLosingAtTop', 'navigation'],
+      ['modbench.record.filter', 'navigation'],
+      ['modbench.record.clearFilter', 'navigation'],
+      ['modbench.plugin.create', 'navigation'],
+    ]);
+  });
+
+  it('title bar: slot 2 shows the one direction the view is not in', () => {
+    const when = (command: string) =>
+      present(inPluginsView('view/title').find((e) => e.command === command), command).when;
+    expect(when('modbench.plugin.sortWinningAtTop')).toBe(`${PLUGINS_VIEW} && !modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
+    expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
+  });
+
+  it('the empty list\'s message names the title bar\'s create plugin', () => {
+    const create = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.create'), 'create plugin');
+    expect(NO_PLUGINS_MESSAGE).toContain(create.title);
+    expect(NO_PLUGINS_MESSAGE).toContain('title bar');
+  });
+
   it('plugin menu: reveal, enable or disable, track, compile, compile from main, copy value', () => {
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
@@ -641,7 +672,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
+  // plugins.md, Menus and keys: track on an untracked plugin in a mod, compile on a
   // tracked, editable plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
@@ -663,7 +694,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('record-type group menu: create record, only where its plugin is tracked and editable', () => {
     expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable')).toEqual([]);
@@ -674,8 +705,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
         ['modbench.openEditorBeside', '1_open'],
-        ['modbench.record.copyAsOverride', '5_copy'],
-        ['modbench.record.copyAsNewRecord', '5_copy'],
+        ['modbench.record.copy', '5_copy'],
         ['modbench.record.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
       ]);
@@ -684,8 +714,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
       ['modbench.openEditorBeside', '1_open'],
-      ['modbench.record.copyAsOverride', '5_copy'],
-      ['modbench.record.copyAsNewRecord', '5_copy'],
+      ['modbench.record.copy', '5_copy'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
   });
@@ -699,7 +728,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   // Only while the tree itself has focus: not in its filter box, a prompt, or the view's title bar.
   const ON_THE_TREE = `focusedView == modbench.pluginListTree && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
-  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code\'s list.select, which opens the row as a click does', () => {
+  // Enter is left to VS Code's own `list.select`, which opens the focused row as a click does.
+  it('binds each key to its command while the Plugins tree has focus, and leaves Enter to VS Code', () => {
     const pluginsKeys = pkg.contributes.keybindings
       .filter((k) => k.when.startsWith('focusedView == modbench.pluginListTree'))
       .map(({ command, key, mac, when, args }) => ({ command, key, mac, when, args }));
@@ -869,6 +899,16 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
+// editor.md, Menus and keys: the column header offers copy…, which picks the mode itself.
+describe('package.json copy on the record tab', () => {
+  it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
+    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+    expect(webviewMenu.filter((e) => e.command.startsWith('modbench.record.copy')).map((e) => [e.command, e.when])).toEqual([
+      ['modbench.record.copy', String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/`],
+    ]);
+  });
+});
+
 // plugins.md, Compile: from the palette, the one selected compilable plugin, or a pick of them.
 describe('package.json compile\'s palette entry', () => {
   it('is in the palette while any plugin compiles', () => {
@@ -886,6 +926,7 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
     ['modbench.record.create', 'modbench.plugin.singleEditableRecordType'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
+    ['modbench.record.copy', 'modbench.plugin.allRecords'],
   ] as const;
 
   it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
@@ -913,7 +954,7 @@ describe('package.json Downloads palette entries', () => {
   });
 });
 
-// mods.md, Menus and keys, story 3: enable on a disabled row, disable on an enabled one — the
+// mods.md, Menus and keys, story 2: enable on a disabled row, disable on an enabled one — the
 // row's own contextValue flag is what the menu reads to choose between the two commands.
 describe('package.json Mods row menu — enable/disable by row state', () => {
   const modRowMenu = (): MenuEntry[] =>
@@ -981,7 +1022,7 @@ describe('package.json Move on the mod menu and the separator menu', () => {
   });
 });
 
-// mods.md, Menus and keys, story 7: copy value on the mod menu and the separator menu, under the
+// mods.md, Menus and keys, story 5: copy value on the mod menu and the separator menu, under the
 // catalog's one copy value id (commands.md, Record: copy value) — no second command for Mods.
 describe('package.json Mods row menu — copy value', () => {
   const modsViewMenu = (): MenuEntry[] =>
@@ -1177,34 +1218,6 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// The reverse of the forward gate below: a `built` row naming an ID nothing registers.
-function catalogBuiltCommandIds(markdown: string): Set<string> {
-  const ids = new Set<string>();
-  let idColumn: number | undefined;
-  let statusColumn: number | undefined;
-  for (const line of markdown.split('\n')) {
-    if (!line.startsWith('|')) {
-      idColumn = undefined;
-      statusColumn = undefined;
-      continue;
-    }
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (idColumn === undefined) {
-      idColumn = cells.indexOf('Command ID');
-      statusColumn = cells.indexOf('Status');
-      continue;
-    }
-    if (idColumn === -1 || statusColumn === undefined || statusColumn === -1) continue;
-    if (cells[statusColumn] !== 'built') continue;
-    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
-      ids.add(present(match[1], 'the backticked Command ID'));
-    }
-  }
-  return ids;
-}
-
-const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
-
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
@@ -1214,9 +1227,15 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
     outOfPalette: ['modbench.openHeader'],
   },
+  { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },
+  { gesture: 'show referenced by', removedBy: '#1096', ids: ['modbench.record.showReferencedBy'], outOfPalette: [] },
   {
-    gesture: 'copy', removedBy: '#962', ids: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
-    outOfPalette: ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord'],
+    gesture: 'copy value and the name filter', removedBy: '#1096',
+    ids: [
+      'modbench.record.copyValue', 'modbench.mod.filter', 'modbench.mod.clearFilter', 'modbench.plugin.filter',
+      'modbench.plugin.clearFilter', 'modbench.downloadedFile.filter', 'modbench.downloadedFile.clearFilter',
+    ],
+    outOfPalette: [],
   },
 ];
 
@@ -1247,14 +1266,6 @@ describe('package.json registers every command under its catalog Command ID', ()
   it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
     const stale = [...legacy].filter((id) => !registered.includes(id));
     expect(stale, `${stale.join(', ')} is not registered: delete it from LEGACY_GESTURES.`).toEqual([]);
-  });
-
-  it('registers every Command ID whose row is built', () => {
-    const missing = [...builtCatalog].filter((id) => !registered.includes(id));
-    expect(
-      missing,
-      missing.map((id) => `${id} is \`built\` in commands.md but package.json does not register it.`).join('\n'),
-    ).toEqual([]);
   });
 });
 

@@ -2,7 +2,7 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { appendPlugin, syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
+import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
 import { switchProfile } from '../../instanceCommands/profile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
@@ -87,24 +87,11 @@ describe('plugins.txt + profile corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], { kind: 'losingEnd' });
+    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], { kind: 'winningEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture.esp');
-  });
-
-  // "NonAsciiRetexture - Addon.esl" ships on disk but was never given a plugins.txt
-  // line at all (the fixture's "on disk, absent from load order" quirk) — appendPlugin
-  // is the real production path that closes that gap.
-  it('appendPlugin registers a disk-only plugin at the winning end, touching only plugins.txt', async () => {
-    const before = await snapshotTree(dir);
-    await appendPlugin(dir, PROFILE, 'NonAsciiRetexture - Addon.esl');
-    const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
-
-    expect(await pluginOrder(dir)).toContain('NonAsciiRetexture - Addon.esl');
-    expect(await enabledPlugins(dir)).toContain('NonAsciiRetexture - Addon.esl');
   });
 
   // Rival this catches: an implementation that copies or merges profile content

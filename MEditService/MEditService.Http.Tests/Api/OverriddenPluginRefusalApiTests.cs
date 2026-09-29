@@ -5,9 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>edit-record's Refusals table: an overridden plugin is read-only (ADR-0012 invariant 5),
-/// refused through the real host before any source write. The same write against the winning
-/// plugin of the same name lands.</summary>
+/// <summary>An overridden plugin is read-only (ADR-0012 invariant 5), refused through the real host
+/// before any source write. The same write against the winning plugin of the same name lands.
+/// </summary>
 [Collection(WebHostCollection.Name)]
 public sealed class OverriddenPluginRefusalApiTests : HostedTests
 {
@@ -18,17 +18,10 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = new PluginFixtureBuilder("api-overridden-plugin")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
-
-        // BuildScattered gives every explicit plugin Winning: true and its own slot; an overridden
-        // plugin of a listed name carries the winning one's own slot instead (PluginMetadata).
-        var winningSlot = fx.Plugins.First(p => p.Origin == WinningOrigin).Slot;
-        var plugins = fx.Plugins.Select(p => p.Origin == OverriddenOrigin
-            ? p with { Slot = winningSlot, Winning = false }
-            : p).ToList();
-        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track([(PluginName, WinningOrigin), (PluginName, OverriddenOrigin)])).EnsureSuccessStatusCode();
         return fx;
     }

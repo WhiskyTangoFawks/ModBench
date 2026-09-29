@@ -49,13 +49,13 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         string? worldspaceFk = null;
         string? cellFk = null;
         var fx = new PluginFixtureBuilder("api-spatial-origin")
+            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
             .WithPlugin("Shared.esp", mod =>
             {
                 var (wrld, cell) = ConfigurePlugin(mod, "ModA");
                 worldspaceFk = wrld;
                 cellFk = cell;
             }, origin: "ModA")
-            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
             .BuildScattered();
         return (
             fx,
@@ -67,10 +67,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
         // same slot; only the winning, enabled, listed one participates.
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
-            ? p with { Slot = winner.Slot, Winning = false }
-            : p);
+        var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -137,10 +134,16 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         using var _fx = fx;
         await PutBothPlugins(fx);
 
-        var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB&limit=50&offset=0");
-        Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
+        var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB");
+        Assert.Equal(["InteriorModB"], InteriorEditorIds(modB));
 
-        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?limit=50&offset=0");
-        Assert.Equal(["InteriorModA"], omitted.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
+        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells");
+        Assert.Equal(["InteriorModA"], InteriorEditorIds(omitted));
     }
+
+    private static IEnumerable<string?> InteriorEditorIds(JsonElement blocks) =>
+        blocks.EnumerateArray()
+            .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(s => s.GetProperty("cells").EnumerateArray())
+            .Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId")));
 }

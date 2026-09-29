@@ -184,10 +184,12 @@ internal sealed class MutagenModDocuments(
 
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
         {
+            int? block = Int(Get(cellBlock, RecordTypeDispatch.BlockNumberMember));
             foreach (var subBlock in List(cellBlock, RecordTypeDispatch.BlockChildMember))
             {
+                int? sub = Int(Get(subBlock, RecordTypeDispatch.BlockNumberMember));
                 foreach (var cell in List(subBlock, RecordTypeDispatch.SubBlockChildMember))
-                    Record(cells, cell, new CellStructure(null, null, null, null, null, true));
+                    Record(cells, cell, CellStructure.Interior(block, sub));
             }
         }
 

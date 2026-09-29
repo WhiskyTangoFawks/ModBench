@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The container half of both copy gestures: a child lands inside its container's document,
+/// <summary>The container half of both copy modes: a child lands inside its container's document,
 /// minted bare and Partial Form when the destination lacks it. Shares the write side's schema and
 /// codec: one write path (ADR-0007).</summary>
 internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
@@ -22,21 +22,20 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     /// a copied topic lands with no responses.</summary>
     internal RecordEditResult CopyEmbeddedChildAsOverride(
         CopySource source, SourceDocument child, DocumentContainment container,
-        Destination destination, GameRelease release)
+        Destination destination, GameRelease release, bool replace)
     {
         var formKey = child.FormKey;
         var ownFields = child with { Body = ContainerDocumentEdits.WithoutChildren(codec, child.Body, release, child.RecordType) };
 
         if (destination.Repository.HoldsAtEitherRef(destination.Plugin, formKey))
         {
-            // The explicitly-selected child already in the working tree is replaced in place, never
-            // duplicated or refused. Held only at Head (deleted in the working tree) still refuses.
-            if (Identity(destination, formKey, release) is { } existing)
-                return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
+            // Held only at Head has no document to replace, so no replacement is asked for.
+            if (Identity(destination, formKey, release) is not { } existing)
+                return RefuseHeldOnlyAtHead(formKey, destination.Plugin);
+            if (!replace) return RefuseHeldWithoutReplace(formKey, destination.Plugin);
 
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeyCollision,
-                $"{formKey} is already held by a record in {destination.Plugin.Name} at some ref.");
+            // Replaced in place, never duplicated.
+            return ReplaceEmbeddedChildInPlace(source.Plugin, existing, ownFields, destination, release);
         }
 
         var appended = AppendEmbeddedChild(source, container, ownFields, destination, release);
@@ -182,11 +181,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     {
         var cellFormKey = cell.FormKey;
         if (destination.Repository.HoldsAtEitherRef(destination.Plugin, cellFormKey))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeyCollision,
-                $"{cellFormKey} is already held by a record in {destination.Plugin.Name} at some ref.");
-        }
+            return RefuseHeldOnlyAtHead(cellFormKey, destination.Plugin);
 
         if (placement.ParentWorldspace is not { } worldspaceFormKey)
         {
@@ -237,6 +232,18 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     /// in it carries that key at the working tree.</summary>
     internal RecordIdentity? Identity(Destination destination, string formKey, GameRelease release) =>
         destination.Repository.IdentityOf(destination.Plugin, formKey, schemaReflector.GetSchemas(release));
+
+    internal static RecordEditResult RefuseHeldWithoutReplace(string formKey, PluginAddress destination) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.DestinationHoldsRecord,
+            $"{destination.Name} ({destination.Origin}) already holds {formKey}. Copy it again and confirm " +
+            "the replacement to copy over it.");
+
+    internal static RecordEditResult RefuseHeldOnlyAtHead(string formKey, PluginAddress destination) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.FormKeyCollision,
+            $"{destination.Name} ({destination.Origin}) holds {formKey} at HEAD, and its working tree deletes " +
+            "it. Commit or discard that deletion in Source Control, then copy it again.");
 
     // The destination's own IdentityOf named this FormKey, so a document ought to carry it; only a
     // concurrent external edit to the tree closes that gap.

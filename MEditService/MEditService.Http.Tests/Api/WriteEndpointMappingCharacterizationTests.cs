@@ -159,44 +159,47 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
     }
 
-    // --- CopyRecordAsOverride ---
+    // --- CopyRecord: a refusal is an item of the answer, never the status of the call ---
 
-    [Fact]
-    public async Task CopyRecordAsOverride_IntoATrackedDestination_Succeeds()
+    [Theory]
+    [InlineData("Override")]
+    [InlineData("New")]
+    public async Task CopyRecord_IntoATrackedDestination_AnswersTheItemApplied(string mode)
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
-        await Track(DestOrigin); // source deliberately left untracked — CopyFixture's own default shape
+        await Track(DestOrigin); // source deliberately left untracked: a copy reads an untracked source
         var formKey = await FirstNpcFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-override",
-            new { sourcePlugin = Plugin, sourceOrigin = Origin, destinationPlugin = DestPlugin, destinationOrigin = DestOrigin });
+        var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("applied").GetBoolean());
-        Assert.Equal(formKey, body.GetProperty("formKey").GetString());
+        var landed = Assert.Single((await response.Body()).GetProperty("applied").EnumerateArray());
+        Assert.Equal(formKey, landed.GetProperty("record").GetProperty("formKey").GetString());
+        Assert.Equal(DestPlugin, landed.GetProperty("destination").GetProperty("name").GetString());
+        Assert.Equal(DestOrigin, landed.GetProperty("destination").GetProperty("origin").GetString());
     }
 
-    [Fact]
-    public async Task CopyRecordAsOverride_IntoAnUntrackedDestination_IsRefusedWithATypedRefusal()
+    [Theory]
+    [InlineData("Override")]
+    [InlineData("New")]
+    public async Task CopyRecord_IntoAnUntrackedDestination_AnswersTheItemRefusedWithATypedRefusal(string mode)
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx); // destination deliberately left untracked
         var formKey = await FirstNpcFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-override",
-            new { sourcePlugin = Plugin, sourceOrigin = Origin, destinationPlugin = DestPlugin, destinationOrigin = DestOrigin });
+        var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var refused = Assert.Single((await response.Body()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
     }
 
-    [Fact]
-    public async Task CopyRecordAsOverride_WhenTheDestinationCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    [Theory]
+    [InlineData("Override")]
+    [InlineData("New")]
+    public async Task CopyRecord_WhenTheDestinationCannotBeWritten_AnswersTheItemRefused_NotAnUnhandled500(string mode)
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
@@ -207,13 +210,12 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
         try
         {
-            var response = await _client.PostAsJsonAsync(
-                $"/records/{Uri.EscapeDataString(formKey)}/copy-as-override",
-                new { sourcePlugin = Plugin, sourceOrigin = Origin, destinationPlugin = DestPlugin, destinationOrigin = DestOrigin });
+            var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
 
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var refused = Assert.Single((await response.Body()).GetProperty("refused").EnumerateArray());
+            Assert.Equal("SourceWriteFailed", refused.GetProperty("refusal").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(refused.GetProperty("message").GetString()));
         }
         finally
         {
@@ -221,88 +223,32 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
     }
 
-    // --- CopyRecordAsNewRecord (400 already pinned by MalformedFormKeyEndpointTests) ---
-
     [Fact]
-    public async Task CopyRecordAsNewRecord_IntoATrackedDestination_Succeeds()
+    public async Task CopyRecord_WithNoDestination_Is400()
+    {
+        using var fx = BuildSourceAndDestination();
+        await Load(fx);
+        var formKey = await FirstNpcFormKey(Plugin);
+
+        var response = await _client.Copy([(formKey, Plugin, Origin)], "Override", []);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // A copy as new lands under a FormID of its own, so it replaces nothing.
+    [Fact]
+    public async Task CopyRecord_AsNewWithTheReplaceOption_Is400_AndCopiesNothing()
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
         await Track(DestOrigin);
         var formKey = await FirstNpcFormKey(Plugin);
+        var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
 
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = DestPlugin,
-                destinationOrigin = DestOrigin,
-                requestedFormKey = (string?)null,
-            });
+        var response = await _client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("applied").GetBoolean());
-        Assert.Equal(formKey, body.GetProperty("sourceFormKey").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("newFormKey").GetString()));
-    }
-
-    [Fact]
-    public async Task CopyRecordAsNewRecord_IntoAnUntrackedDestination_IsRefusedWithATypedRefusal()
-    {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx); // destination deliberately left untracked
-        var formKey = await FirstNpcFormKey(Plugin);
-
-        var response = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = DestPlugin,
-                destinationOrigin = DestOrigin,
-                requestedFormKey = (string?)null,
-            });
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
-    }
-
-    [Fact]
-    public async Task CopyRecordAsNewRecord_WhenTheDestinationCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
-    {
-        using var fx = BuildSourceAndDestination();
-        await Load(fx);
-        await Track(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin);
-        var destModFolder = ModFolderOf(fx, DestOrigin);
-
-        OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
-        try
-        {
-            var response = await _client.PostAsJsonAsync(
-                $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-                new
-                {
-                    sourcePlugin = Plugin,
-                    sourceOrigin = Origin,
-                    destinationPlugin = DestPlugin,
-                    destinationOrigin = DestOrigin,
-                    requestedFormKey = (string?)null,
-                });
-
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
-        }
-        finally
-        {
-            OtherTool.SetsThePermissions(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
-        }
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(destination, TreeSnapshot.Of(ModFolderOf(fx, DestOrigin)));
     }
 
     // --- CreateRecord (400 already pinned by MalformedFormKeyEndpointTests; 200 incidentally by FormIdEditApiTests) ---

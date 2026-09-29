@@ -24,8 +24,9 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     private const string ChangedAsset = "Meshes/Thing.nif";
     private const string DeletedAsset = "Meshes/Gone.nif";
 
-    // A safety bound against a hang, never the proof: the proof is the settle line itself.
-    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(20);
+    // A safety bound against a hang, never the proof: the proof is the settle line itself. Wide
+    // because file-system event delivery can stall under load.
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     private readonly List<LogEntry> _logs = [];
 
@@ -118,7 +119,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
     }
 
     // A settle can close mid-release, naming only what had changed by then; the question is asked
-    // again at each settle that still finds the change (decompile-plugin, trigger 5).
+    // again at each settle that still finds the change (ADR-0003, invariant 3).
     private static Task<IReadOnlyList<JsonElement>> QuestionsUntilOneNames(
         StreamReader stream, IReadOnlyList<string> trackedFiles) =>
         stream.EventsUntil("question-open", question =>
@@ -269,7 +270,7 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         Assert.DoesNotContain(frames, f => f.Kind == "question-open");
     }
 
-    // Decompile-plugin, trigger 5: every question a release-sized burst opens is the mod's, and a
+    // ADR-0003, invariant 3: every question a release-sized burst opens is the mod's, and a
     // question is asked again at each settle that still finds the change, until one names it all.
     [Fact]
     public async Task AReleaseTouchingManyFiles_AsksTheModsQuestionUntilOneNamesAllOfThem()
@@ -308,10 +309,10 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
             Asset, question.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
     }
 
-    // The mark step 5 of compile-plugin leaves when the write never finishes.
+    // The mark a compile leaves when its write never finishes.
     private static Task InterruptACompile(string modFolder) =>
-        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunAsync(modFolder, Plugin,
-            () => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
+        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunBatchAsync(modFolder, [Plugin],
+            _ => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
 
     private static void AssertNamesThePlugin(JsonElement unfinished)
     {
@@ -467,6 +468,28 @@ public sealed class ATrackedModChangesOnDiskApiTests : HostedTests
         var response = await Answer(verb, "NoSuchMod");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    // ADR-0015 invariant 2: Keep writes the source tree and returns, and the change reaches the
+    // views as the rows-changed push the Mod watcher's re-read publishes.
+    [Fact]
+    public async Task KeepingARelease_PushesRowsChanged_NamingTheKeptRecord_AndTheNextReadAgrees()
+    {
+        var fx = Owned(await Watched());
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
+        ARelease(fx);
+        await stream.EventsUntil("question-open");
+
+        (await Answer("keep", Origin)).EnsureSuccessStatusCode();
+
+        var rows = await stream.EventsUntil(
+            "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey));
+        Assert.Equal(Plugin, rows[^1].GetProperty("plugin").GetString());
+        var heightMax = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
+            .GetProperty("value").GetDouble();
+        Assert.Equal(0.9, heightMax, 3);
     }
 
     // The same 200-with-a-refusal posture both answers have: an outcome the dialog can show, not a

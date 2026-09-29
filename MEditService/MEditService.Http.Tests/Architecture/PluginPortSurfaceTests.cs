@@ -3,7 +3,7 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>ADR-0005 rule 2 on the port itself: no member of <see cref="IPluginAdapter"/> names a
+/// <summary>ADR-0005 invariant 2 on the port itself: no member of <see cref="IPluginAdapter"/> names a
 /// live Mutagen object, directly or through a value it returns. The banned namespaces are the
 /// analyzer's own.</summary>
 public sealed class PluginPortSurfaceTests
@@ -21,7 +21,7 @@ public sealed class PluginPortSurfaceTests
         Assert.True(
             offenders.Count == 0,
             "A member of IPluginAdapter names a live Mutagen object, directly or through a value it "
-            + "returns. Bytes become a mod inside the adapter alone (ADR-0005 rule 2), so the port "
+            + "returns. Bytes become a mod inside the adapter alone (ADR-0005 invariant 2), so the port "
             + "answers in documents and facts:\n"
             + string.Join("\n", offenders));
     }

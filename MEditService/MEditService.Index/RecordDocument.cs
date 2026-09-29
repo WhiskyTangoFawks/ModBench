@@ -35,15 +35,17 @@ public record OverrideStackEntry(
 /// not a collection.</summary>
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
-/// <summary>Filters and paging only; ordering is fixed. Null or empty <c>RecordTypes</c> means
-/// every type; <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
+/// <summary><c>GroupOnly</c> lists a group: in FormID order, without a record another record holds.
+/// Otherwise records list by EditorID. <c>Plugin</c> and <c>Origin</c> filter apart
+/// (ADR-0012).</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
     string? Origin = null,
     string? Search = null,
     int Limit = 50,
-    int Offset = 0);
+    int Offset = 0,
+    bool GroupOnly = false);
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
 public record RecordTypeCount(string Type, int Count, bool HasParseFailure);

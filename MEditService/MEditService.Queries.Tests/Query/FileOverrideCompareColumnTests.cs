@@ -17,7 +17,7 @@ public sealed class FileOverrideCompareColumnTests
     private static RecordQueryService Service(IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<FakeRow> rows)
     {
         var opened = plugins.ToDictionary(
-            c => new PluginAddress(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, Masters: [], RecordCount: 1));
+            c => new PluginAddress(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 1));
         var holder = FakeLoadOrder.Of(Release, [.. plugins]);
         return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }

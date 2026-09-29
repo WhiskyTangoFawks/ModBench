@@ -52,14 +52,11 @@ public static class PluginEndpoints
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
-                "Creates a new plugin at the given path/origin (ADR-0007), Tracking that " +
-                "destination under the Edits preset first if it is not already tracked. Does NOT " +
-                "add the plugin to any load order — the caller (the extension's Mod Management " +
-                "writer, or a script/agent consumer) is responsible for that.")
+                "Writes an empty plugin (a header whose flags its extension sets, no records and no " +
+                "masters) into the given folder, in the release of the held load order. Changes " +
+                "nothing else: no Track, no load order change and no plugins.txt line.")
             .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
-            // 404 and 422 are Track's own refusal map, which this route answers with rather than
-            // repeating inline: the destination is Tracked inside this gesture.
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
@@ -126,9 +123,6 @@ public static class PluginEndpoints
         return app;
     }
 
-    // ADR-0007: an untracked destination is Tracked in the same gesture, silently and always under
-    // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
-    // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
@@ -137,19 +131,15 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await create.CreatePlugin(req.Name, Path.Combine(req.Path, req.Name), req.Origin);
-            if (result.Track is { Applied: false } refused)
+            var plugin = new PluginAddress(req.Name, req.Origin);
+            var result = await create.CreatePlugin(plugin, req.Folder);
+            if (result.Refusal is { } refusal)
             {
-                // Loud, not silent: the plugin file already landed, but plugins.txt is never
-                // appended without a 2xx, so no load order can name this half-created plugin.
-                logger.LogError(
-                    "Refused to track {Origin} while creating {Name}: {Refusal}",
-                    req.Origin, req.Name, refused.Refusal);
-                return WriteEndpointMapping.Refusal(refused);
+                logger.LogWarning("Refused to create {Name} in {Origin}: {Refusal}", req.Name, req.Origin, refusal);
+                return WriteEndpointMapping.Refusal(refusal, result.Message);
             }
 
-            var plugin = result.Plugin;
-            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Path, plugin.Origin, plugin.Slot, result.Version));
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin, Path.Combine(req.Folder, plugin.Name)));
         }
         catch (NoLoadOrderException ex)
         {
@@ -162,10 +152,10 @@ public static class PluginEndpoints
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return WriteEndpointMapping.InvalidArgument(ex);
         }
-        catch (System.IO.IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
-            return WriteEndpointMapping.DestinationConflict(ex);
+            logger.LogError(ex, "Could not write plugin {Name} into {Folder}", req.Name, req.Folder);
+            return WriteEndpointMapping.WriteFailure($"Could not write {req.Name} into {req.Folder}: {ex.Message}");
         }
     }
 
@@ -175,8 +165,8 @@ public static class PluginEndpoints
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Destination path and origin are required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("The folder and the origin are required.", statusCode: 400);
 
         var extension = Path.GetExtension(req.Name);
         return extension.Equals(".esp", StringComparison.OrdinalIgnoreCase)
@@ -351,14 +341,13 @@ public static class PluginEndpoints
     }
 }
 
-// Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
-// freshly installed mod folder, or overwrite/) — the caller resolves which physical folder, the
-// backend acts on it.
-public record CreatePluginRequest(string Name, string Path, string Origin);
+/// <summary>The origin and the file name are the plugin (ADR-0012 invariant 1); the folder is where
+/// the instance holds that origin's files.</summary>
+public record CreatePluginRequest(string Origin, string Name, string Folder);
 
-// What the create gesture wrote and registered, not a plugin row: masters, flags and record count
-// are the Index's to state, and it has not seen this plugin yet. Slot is 0 off a bare load order.
-public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
+/// <summary>The plugin the create gesture wrote and where. Not a plugin row: the Index has not seen
+/// it, and nothing registers it.</summary>
+public record PluginCreatedResponse(string Name, string Origin, string Path);
 
 /// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the
 /// message naming the way out.</summary>

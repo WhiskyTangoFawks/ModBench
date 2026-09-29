@@ -224,7 +224,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a new plugin at the given path/origin (ADR-0007), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer) is responsible for that. */
+        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no Track, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -416,7 +416,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/{formKey}/copy-as-override": {
+    "/records/copy": {
         parameters: {
             query?: never;
             header?: never;
@@ -426,30 +426,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.
-         * @description Serializes the source record's own text, verbatim, into the destination plugin's working tree under the identical FormKey — no Mutagen deserialization, since a record's stored document is already byte-identical to its source file. The destination's master dependency on the record's origin is derived at compile from the bytes it now carries (ADR-0008); no copy-specific master handling happens here.
+         * Copy records into destination plugins, each record into each destination on its own.
+         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey; the master dependency is derived at compile (ADR-0008). A destination that already holds the record is refused unless replace is given, and a replacement changes its own fields only, keeping the children the destination's copy carries. New: a duplicate under the destination's next free FormID, with an EditorID derived from the source's; a container's embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each record and destination is applied or refused on its own, and the answer names both.
          */
-        post: operations["CopyRecordAsOverride"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/records/{formKey}/copy-as-new-record": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Copy as New Record Into… — the source record under a fresh FormKey; a top-level record's child slots are cleared, an embedded child's whole subtree copies with it.
-         * @description Copies the source record (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree. A top-level record's own child slots are cleared, since a container's children never ride along that way; an embedded child (a quest topic, a topic response) instead copies its whole embedded subtree, each descendant under its own fresh FormKey, minting the container chain in the destination when it is missing. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
-         */
-        post: operations["CopyRecordAsNewRecord"];
+        post: operations["CopyRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -555,11 +535,7 @@ export interface components {
             fullName?: string | null;
             hasParseFailure: boolean;
             parseDiagnosis?: string | null;
-        };
-        CellSummaryPagedResult: {
-            items: components["schemas"]["CellSummary"][];
-            /** Format: int32 */
-            total: number;
+            hasChildren: boolean;
         };
         CompareOverride: {
             formKey: string;
@@ -623,10 +599,12 @@ export interface components {
             hasParseFailure: boolean;
             fullName?: string | null;
         };
+        /** @enum {string} */
+        CopyMode: "New" | "Override";
         CreatePluginRequest: {
-            name: string;
-            path: string;
             origin: string;
+            name: string;
+            folder: string;
         };
         EnumMember: {
             value: string;
@@ -703,6 +681,18 @@ export interface components {
         IndexedPlugin: {
             name: string;
             origin: string;
+        };
+        InteriorCellBlock: {
+            /** Format: int32 */
+            number: number;
+            subBlocks: components["schemas"]["InteriorCellSubBlock"][];
+            hasParseFailure: boolean;
+        };
+        InteriorCellSubBlock: {
+            /** Format: int32 */
+            number: number;
+            cells: components["schemas"]["CellSummary"][];
+            hasParseFailure: boolean;
         };
         LoadOrderPlugin: {
             name: string;
@@ -785,12 +775,8 @@ export interface components {
         };
         PluginCreatedResponse: {
             name: string;
-            path: string;
             origin: string;
-            /** Format: int32 */
-            slot?: number | null;
-            /** Format: int64 */
-            version: number;
+            path: string;
         };
         PluginDiagnosisReport: {
             plugin: string;
@@ -820,6 +806,7 @@ export interface components {
             loadOrderIndex?: number | null;
             isLight: boolean;
             isMaster: boolean;
+            isBlueprint: boolean;
             masters: string[];
             /** Format: int32 */
             recordCount: number;
@@ -869,27 +856,26 @@ export interface components {
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
-        RecordCopyAsNewRecordRequest: {
-            sourcePlugin: string;
-            sourceOrigin: string;
-            destinationPlugin: string;
-            destinationOrigin: string;
-            requestedFormKey?: string | null;
+        RecordCopyLanded: {
+            record: components["schemas"]["RecordAddress"];
+            destination: components["schemas"]["PluginAddress"];
+            newFormKey?: string | null;
         };
-        RecordCopyAsNewRecordResponse: {
-            applied: boolean;
-            sourceFormKey: string;
-            newFormKey: string;
+        RecordCopyRefusal: {
+            record: components["schemas"]["RecordAddress"];
+            destination: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["RecordEditRefusal"];
+            message: string;
         };
-        RecordCopyAsOverrideRequest: {
-            sourcePlugin: string;
-            sourceOrigin: string;
-            destinationPlugin: string;
-            destinationOrigin: string;
+        RecordCopyRequest: {
+            records: components["schemas"]["RecordAddress"][];
+            mode: components["schemas"]["CopyMode"];
+            destinations: components["schemas"]["PluginAddress"][];
+            replace: boolean;
         };
-        RecordCopyAsOverrideResponse: {
-            applied: boolean;
-            formKey: string;
+        RecordCopyResponse: {
+            applied: components["schemas"]["RecordCopyLanded"][];
+            refused: components["schemas"]["RecordCopyRefusal"][];
         };
         RecordCreateRequest: {
             origin: string;
@@ -924,7 +910,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -1019,6 +1005,7 @@ export interface components {
             hasParseFailure: boolean;
             fullName?: string | null;
             parseDiagnosis?: string | null;
+            hasChildren: boolean;
         };
     };
     responses: never;
@@ -2114,18 +2101,16 @@ export interface operations {
             };
         };
     };
-    CopyRecordAsOverride: {
+    CopyRecord: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                formKey: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordCopyAsOverrideRequest"];
+                "application/json": components["schemas"]["RecordCopyRequest"];
             };
         };
         responses: {
@@ -2135,118 +2120,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCopyAsOverrideResponse"];
+                    "application/json": components["schemas"]["RecordCopyResponse"];
                 };
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    CopyRecordAsNewRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordCopyAsNewRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordCopyAsNewRecordResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2413,8 +2291,6 @@ export interface operations {
         parameters: {
             query?: {
                 origin?: string;
-                limit?: number;
-                offset?: number;
             };
             header?: never;
             path: {
@@ -2430,7 +2306,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CellSummaryPagedResult"];
+                    "application/json": components["schemas"]["InteriorCellBlock"][];
                 };
             };
             /** @description Internal Server Error */

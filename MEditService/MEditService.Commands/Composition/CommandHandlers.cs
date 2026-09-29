@@ -43,25 +43,27 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
-        // The container half both copy gestures take. Held once: singletons only, nothing per
+        // The container half both copy modes take. Held once: singletons only, nothing per
         // request.
         services.AddSingleton(sp => new RecordCopy(
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
             sp.GetRequiredService<RecordTextCodec>()));
 
-        services.AddSingleton(sp => new CopyRecordAsOverrideHandler(
-            sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<RecordCopy>(),
+        services.AddSingleton(sp => new CopyRecordHandler(
+            new OverrideCopy(
+                sp.GetRequiredService<WriteTargets>(),
+                sp.GetRequiredService<RecordCopy>(),
+                sp.GetRequiredService<LoadOrderHolder>(),
+                sp.GetRequiredService<RecordTextCodec>(),
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(OverrideCopy))),
+            new NewRecordCopy(
+                sp.GetRequiredService<WriteTargets>(),
+                sp.GetRequiredService<RecordCopy>(),
+                sp.GetRequiredService<RecordTextCodec>(),
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(NewRecordCopy))),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<RecordTextCodec>(),
-            sp.GetRequiredService<ILogger<CopyRecordAsOverrideHandler>>()));
-
-        services.AddSingleton(sp => new CopyRecordAsNewRecordHandler(
-            sp.GetRequiredService<WriteTargets>(),
-            sp.GetRequiredService<RecordCopy>(),
-            sp.GetRequiredService<RecordTextCodec>(),
-            sp.GetRequiredService<ILogger<CopyRecordAsNewRecordHandler>>()));
+            sp.GetRequiredService<ILogger<CopyRecordHandler>>()));
 
         services.AddSingleton(sp => new TrackHandler(
             sp.GetRequiredService<TrackService>(),
@@ -91,7 +93,6 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),
-            sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(

@@ -187,7 +187,7 @@ describe('EditsInFlight', () => {
   });
 
   // A report missed while the stream was down would leave the tab waiting for ever; a read before
-  // the Index holds the key would clear the grid for an error (editor.md, States 5).
+  // the Index holds the key would clear the grid for an error (editor.md, States, story 5).
   describe('on the stream\'s reconnect, a tab waiting for its new FormKey', () => {
     it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
       const { client, panel, edits } = openOn('000800:Mod.esp');

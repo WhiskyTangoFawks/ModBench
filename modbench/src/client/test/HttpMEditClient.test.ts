@@ -148,11 +148,11 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.copyRecordAsOverride('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'Other.esp', 'ModB');
+    const result = await client.copyRecords(
+      [{ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }], 'Override',
+      [{ name: 'Other.esp', origin: 'ModB' }], false);
 
-    expect(result).toEqual({
-      refused: true, message: 'Could not copy 000800:MyPatch.esp into "Other.esp" — No load order has been received.',
-    });
+    expect(result).toEqual({ refused: true, message: 'Could not copy 1 record — No load order has been received.' });
   });
 });
 
@@ -227,6 +227,73 @@ describe('HttpMEditClient — deleting records answers per record', () => {
   });
 });
 
+describe('HttpMEditClient — creating a plugin', () => {
+  const plugin = { name: 'New.esp', origin: 'ModA' };
+
+  it('sends the origin, the file name and the folder, and reads back the plugin it wrote', async () => {
+    const wrote = { name: 'New.esp', origin: 'ModA', path: '/mods/ModA/New.esp' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, wrote)));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual(wrote);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/create$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' });
+  });
+
+  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
+      detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists',
+    })));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual({
+      refused: true,
+      message: 'Could not create "New.esp" — A file is already at /mods/ModA/New.esp, so New.esp was not created.',
+    });
+  });
+});
+
+describe('HttpMEditClient — copying records answers per record and destination', () => {
+  const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const patch = { name: 'Patch.esp', origin: 'PatchMod' };
+  const other = { name: 'Other.esp', origin: 'OtherMod' };
+
+  it('sends the records, the mode, the destinations and the replace Option as one call, and reads each item', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ record: npc, destination: patch, newFormKey: null }],
+      refused: [{ record: npc, destination: other, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.copyRecords([npc], 'Override', [patch, other], true);
+
+    expect(outcome).toEqual({
+      landed: [{ record: npc, destination: patch }],
+      refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
+    });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/copy$/);
+    expect(await request?.json()).toEqual({ records: [npc], mode: 'Override', destinations: [patch, other], replace: true });
+  });
+
+  it('asks the record\'s holders by plugin and origin', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod' }, { plugin: 'Patch.esp', origin: 'OtherMod' }],
+      diffs: [], conflictAll: 'NoConflict',
+    })));
+    const client = makeClient(fetch);
+
+    expect(await client.getRecordHolders(npc.formKey)).toEqual([
+      { name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' },
+    ]);
+  });
+});
+
 describe('HttpMEditClient — tracking plugins answers per plugin', () => {
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModA' };
@@ -263,38 +330,28 @@ describe('HttpMEditClient — compiling plugins answers per plugin', () => {
   const second = { name: 'Second.esp', origin: 'ModB' };
   const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
 
-  it('sends the whole selection from the working tree as one call, and reads each compiled plugin and each refusal with its message', async () => {
+  it('sends the whole selection as one call, and reads each compiled plugin and each refusal with its message', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
       applied: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
       refused: [{ plugin: second, refusal: 'None', message: 'Second.esp is not tracked, so there is no source to compile.' }],
     })));
     const client = makeClient(fetch);
 
-    const outcome = await client.compile([first, second], 'workingTree');
+    const outcome = await client.compile([first, second]);
 
     expect(outcome).toEqual({
       landed: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
       refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first, second], ref: null });
-  });
-
-  it('names main as the ref when the source is main', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { applied: [], refused: [] })));
-    const client = makeClient(fetch);
-
-    await client.compile([first], 'main');
-
-    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first], ref: 'main' });
+    expect(await request?.json()).toEqual({ plugins: [first, second] });
   });
 
   it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, 'No load order has been received.')));
     const client = makeClient(fetch);
 
-    const result = await client.compile([first, second], 'workingTree');
+    const result = await client.compile([first, second]);
 
     expect(result).toEqual({ refused: true, message: 'Could not compile 2 plugins — No load order has been received.' });
   });

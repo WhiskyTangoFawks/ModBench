@@ -35,7 +35,7 @@ const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), 
 // The router's one client covers both editField and the picker's search — rebuilt fresh here so
 // each test starts with `editRecord` answering `{ applied: true }`.
 let meditClient: InMemoryMEditClient;
-const onRecordEdited = vi.fn();
+const refreshSourceControlFor = vi.fn();
 
 beforeEach(() => {
   meditClient = new InMemoryMEditClient();
@@ -49,7 +49,7 @@ function editRecordCalls() {
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
-    meditClient, onRecordEdited,
+    meditClient, refreshSourceControlFor,
     // No panel holds this suite's reads: the gate sends each write where it was addressed.
     editInFlight: async (address, write) => { await write(address.formKey); },
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
@@ -108,7 +108,7 @@ describe('routeRecordPanelMessage', () => {
     writeText.mockReset();
     createQuickPick.mockReset();
     fakeReporter.report.mockReset();
-    onRecordEdited.mockReset();
+    refreshSourceControlFor.mockReset();
   });
 
   it('OPEN_RECORD opens the named record in the editor', async () => {
@@ -174,7 +174,7 @@ describe('routeRecordPanelMessage', () => {
 describe('cross-panel copy/paste — two independently-opened panels share this router unmodified', () => {
   beforeEach(() => {
     writeText.mockReset();
-    onRecordEdited.mockReset();
+    refreshSourceControlFor.mockReset();
   });
 
   it('copies a value out of one panel and commits it, via ordinary EDIT_FIELD, into a different panel\'s own record', async () => {
@@ -202,7 +202,7 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
         { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' },
       ],
     }]);
-    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
+    expect(refreshSourceControlFor).toHaveBeenCalledWith('Mod.esp', 'SomeMod');
     // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
   });
 });
@@ -226,7 +226,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
 
   beforeEach(() => {
     fakeReporter.report.mockReset();
-    onRecordEdited.mockReset();
+    refreshSourceControlFor.mockReset();
   });
 
   it('sends the edit through the single write path with its compound plugin identity', async () => {
@@ -258,7 +258,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   it('tells the panel to re-read once the edit has landed', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
+    expect(refreshSourceControlFor).toHaveBeenCalledWith('Mod.esp', 'SomeMod');
     expect(fakeReporter.report).not.toHaveBeenCalled();
   });
 
@@ -336,7 +336,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     expect(fakeReporter.report).toHaveBeenCalledWith(
       'warning',
       'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.');
-    expect(onRecordEdited).not.toHaveBeenCalled();
+    expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 
   it('a refusal is a warning, not an error — the user got a clear answer with a next step', async () => {
@@ -355,7 +355,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
     expect(fakeReporter.report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
-    expect(onRecordEdited).not.toHaveBeenCalled();
+    expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 });
 

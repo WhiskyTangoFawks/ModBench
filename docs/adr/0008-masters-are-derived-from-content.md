@@ -12,12 +12,11 @@ it, so there is no drift to manage: sort and clean are what every compile does.
    Nothing, not a command and not a script, declares a master ahead of the content that requires
    it, and nothing removes, reorders or cleans one directly. A copy or edit that references
    another plugin's record makes that plugin a master at the next compile.
-2. **`masters` is read-only on the header record and shows the Effective masters**
-   ([CONTEXT.md](../../CONTEXT.md)). Save & Compile writes exactly that set; deriving it is one
-   of the two things the format forces compile to derive
-   ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
-3. **A master naming no loaded plugin is flagged, never deactivated**
-   ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)).
+2. **`masters` is read-only on the header record and shows the masters the working tree's content
+   requires.** Compile writes exactly that set; deriving it is one of the two things the format
+   forces compile to derive ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
+3. **An active plugin whose master is not active is flagged, never deactivated**
+   ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md), invariant 4).
 
 ## Alternatives rejected
 

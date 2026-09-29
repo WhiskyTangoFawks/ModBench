@@ -89,16 +89,23 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             .EnumerateFiles(groupDirectory, $"*{SourceRepository.JsonSuffix}", SearchOption.AllDirectories)
             .SelectMany(file => DocumentsAt(file, cell: null, filedAt));
 
-    // Interior placement carries no gameplay meaning, so the block levels a cell sits under are read
-    // as depth alone — every interior cell's block and sub-block are null.
-    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, Dictionary<string, string> filedAt) =>
-        Directory.EnumerateDirectories(cellsDirectory)
-            .SelectMany(Directory.EnumerateDirectories)
-            .SelectMany(Directory.EnumerateDirectories)
-            .SelectMany(cellDirectory => DocumentsAt(
-                Path.Combine(cellDirectory, SourceRepository.RecordDataFileName),
-                new CellStructure(null, null, null, null, null, IsInterior: true),
-                filedAt));
+    // A block level's directory is named by its number, as the whole-mod serializer writes it.
+    private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory, Dictionary<string, string> filedAt)
+    {
+        foreach (var blockDirectory in Directory.EnumerateDirectories(cellsDirectory))
+        {
+            var block = Number(Path.GetFileName(blockDirectory));
+            foreach (var subBlockDirectory in Directory.EnumerateDirectories(blockDirectory))
+            {
+                var structure = CellStructure.Interior(block, Number(Path.GetFileName(subBlockDirectory)));
+                foreach (var cellDirectory in Directory.EnumerateDirectories(subBlockDirectory))
+                {
+                    var cell = Path.Combine(cellDirectory, SourceRepository.RecordDataFileName);
+                    foreach (var document in DocumentsAt(cell, structure, filedAt)) yield return document;
+                }
+            }
+        }
+    }
 
     private IEnumerable<PluginDocument> Worldspaces(string worldspacesDirectory, Dictionary<string, string> filedAt)
     {

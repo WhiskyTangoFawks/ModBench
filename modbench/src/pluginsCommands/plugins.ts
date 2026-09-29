@@ -82,14 +82,6 @@ export function reorderPlugins(
     movePluginsInText(text, pluginNames, dropIndexIn(parsePlugins(text).map((p) => p.name), pluginNames, drop)));
 }
 
-/** The New Plugin gesture's line, enabled, at the winning end; the file already exists on disk
- *  by the time this runs (ADR-0007). Refuses a name that already has a line. */
-export function appendPlugin(
-  instanceRoot: string, profile: string, pluginName: string,
-): Promise<PluginsCommandResult> {
-  return modifyPlugins(instanceRoot, profile, (text) => appendPluginInText(text, pluginName));
-}
-
 interface PluginLinesDelta {
   // Real on-disk names whose line is added, disabled, ascending case-folded.
   added: string[];
@@ -136,7 +128,7 @@ export async function syncPlugins(
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
   // Without the implicit masters, a mod's plugin named like a vanilla master would earn a line
-  // (update-load-order-file, Refusals).
+  // (ADR-0013, invariant 3).
   let addable: ReadonlyMap<string, string>;
   try {
     const implicit = await implicitMasters();
@@ -159,7 +151,7 @@ export async function syncPlugins(
     delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), addable, inDataNames);
     let out = text;
     for (const name of delta.dropped) out = removePluginFromText(out, name);
-    for (const name of delta.added) out = appendPluginInText(out, name, false);
+    for (const name of delta.added) out = appendPluginInText(out, name);
     return out;
   });
   return result.applied ? { ...result, ...delta } : result;

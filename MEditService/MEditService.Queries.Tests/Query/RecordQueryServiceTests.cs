@@ -768,7 +768,7 @@ public sealed class RecordQueryServiceTests
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
         var address = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
-        _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { address };
 
         var plugins = _svc.GetPlugins();
@@ -781,7 +781,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
-        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         var plugins = _svc.GetPlugins();
@@ -792,12 +792,42 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_AfterClearFilter_RestoresAllPlugins()
     {
-        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         _manager.ClearFilter();
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
         Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
+    }
+
+    // --- Queries owns the filter and the rebuild (target-architecture.d2 medit_core.queries) ---
+
+    [Fact]
+    public void SetFilter_ForwardsSqlAndSourceToTheIndex()
+    {
+        _svc.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", _manager.FilterSql);
+        Assert.Equal("npcs.sql", _manager.LastFilterSource);
+    }
+
+    [Fact]
+    public void ClearFilter_ForwardsToTheIndex()
+    {
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        _svc.ClearFilter();
+
+        Assert.Null(_manager.FilterSql);
+    }
+
+    [Fact]
+    public async Task RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
+    {
+        await _svc.RebuildStore(Release, @"C:\Instance");
+
+        Assert.Equal(Release, _manager.LastRebuildRelease);
+        Assert.Equal(@"C:\Instance", _manager.LastRebuildInstanceRoot);
     }
 }

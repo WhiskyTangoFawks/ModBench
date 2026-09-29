@@ -5,6 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
+import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
 
 // ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
@@ -16,6 +17,7 @@ const local = {
     rules: {
         'no-gesture-result-use': noGestureResultUse,
         'no-leading-medit': noLeadingMEdit,
+        'no-reread-after-write': noRereadAfterWrite,
     },
 };
 
@@ -93,13 +95,6 @@ export default defineConfig(
         },
     },
 
-    // Mod Management never calls the backend (CONTEXT.md).
-    {
-        files: ['src/modmanager/**/*.ts'],
-        rules: {
-            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/client/**'], message: 'Mod Management never calls the backend.' }] }],
-        },
-    },
 
     // modbench/CLAUDE.md: a view takes every path from the instance value and never builds one.
     // The views are README's driving band: Toolbox, Mods, Plugins, Downloads and Editor.
@@ -146,6 +141,17 @@ export default defineConfig(
         plugins: { local },
         rules: {
             'local/no-gesture-result-use': 'error',
+        },
+    },
+
+    // ADR-0015 invariant 2: a write returns, and the watch brings its change back. Tests are
+    // out of scope: a test drives a write and then the watch's own re-read.
+    {
+        files: ['src/**/*.ts'],
+        ignores: ['src/**/*.test.ts', 'src/test/**'],
+        plugins: { local },
+        rules: {
+            'local/no-reread-after-write': 'error',
         },
     },
 

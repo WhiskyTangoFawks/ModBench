@@ -60,8 +60,8 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
     public string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 
-    public Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
-        inner.CreateAndWriteAsync(modKey, destinationPath, gameRelease, smallMaster);
+    public Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+        inner.CreateAndWriteAsync(modKey, folder, gameRelease);
 }
 
 /// <summary>Parks a reconcile just before a named plugin's documents are opened until the test

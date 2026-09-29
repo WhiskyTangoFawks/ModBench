@@ -1,9 +1,6 @@
 import * as vscode from 'vscode';
-import {
-  isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type CompileSource, type PluginAddress,
-} from '../client';
-import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveOrigin } from './resolveOrigin';
+import { isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress } from '../client';
+import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
@@ -13,9 +10,8 @@ import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './Plugi
 import {
   compilableSelected, pluginsGestureEntry, pluralArgument, registerPluginsGesture, selectionArgument, type GestureEntry,
 } from './gestureEntry';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
-import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The Plugins tree's one progress surface (ADR-0002): a spinner over the view while the work
@@ -28,20 +24,47 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-// ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
-// mod cannot be resolved has none, and none is invented for it.
-type TrackedRow = { name: string; origin?: string };
+// ADR-0012: the origin tells two plugins that share a filename apart.
+function rowName(row: PluginAddress): string {
+  return `${row.name} (${row.origin})`;
+}
 
-function rowName(row: TrackedRow): string {
-  return row.origin ? `${row.name} (${row.origin})` : row.name;
+type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
+
+// plugins.md, Track, story 2: what each preset's repository tracks.
+const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
+const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
+
+// createQuickPick, not showQuickPick: only the former lets Edits show pre-selected
+// (plugins.md, Pickers, Track), the same pattern DownloadsPanel.ts's pickSort uses.
+function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined> {
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<PresetOption>();
+    quickPick.items = PRESET_OPTIONS;
+    quickPick.placeholder = placeholder;
+    quickPick.activeItems = [EDITS_OPTION];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
+  });
 }
 
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
-  progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
+  progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
+  reporter: Reporter, onTracked: () => Promise<void>,
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
@@ -50,31 +73,14 @@ export function registerTrackCommand(
     const nodes = pluralArgument(entry, 'plugin');
     if (nodes.length === 0) return;
 
-    const addressed: PluginAddress[] = [];
-    const unaddressed: ItemRefusal<TrackedRow>[] = [];
-    for (const node of nodes) {
-      const name = node.plugin.name;
-      const origin = node.origin ?? await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-      if (origin) addressed.push({ name, origin });
-      else unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
-    }
-    const report = (outcome: SelectionOutcome<TrackedRow>) => {
+    const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
+    const report = (outcome: SelectionOutcome<PluginAddress>) => {
       reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
     };
     const [first] = addressed;
-    if (!first) { report({ landed: [], refused: unaddressed }); return; }
+    if (!first) return;
 
-    const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { label: 'Edits' | 'Everything' }>(
-      [
-        { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
-        { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
-      ],
-      {
-        placeHolder: nodes.length === 1
-          ? `Track "${first.name}" — what should its .gitignore include?`
-          : `Track ${nodes.length} plugins — what should their .gitignore include?`,
-      },
-    );
+    const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
     if (!choice) return;
 
     await progress.while(async () => {
@@ -83,13 +89,9 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      const outcome = { landed: result.landed, refused: [...unaddressed, ...result.refused] };
-      if (outcome.landed.length > 0) {
-        // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
-        // menu entry's opposite. Not the filter-match set: tracking changes no record.
-        treeProvider.refresh();
-        await onTracked();
-      }
+      const outcome = result;
+      // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
+      if (outcome.landed.length > 0) await onTracked();
       const [only, ...more] = outcome.landed;
       if (outcome.refused.length > 0) report(outcome);
       else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);
@@ -97,78 +99,45 @@ export function registerTrackCommand(
   });
 }
 
-/** What compile needs: the plugins' origins and the compile itself, the view's progress bar, where
- *  the diagnostics go, and how the user is told and asked. */
+/** What compile needs: the tracked plugins for the palette's pick, the compile itself, the view's
+ *  progress bar, where the diagnostics go, and how the user is told. */
 export interface CompileDeps {
   client: Pick<MEditClient, 'getPlugins' | 'compile'>;
   progress: PluginsViewProgress;
   reporter: Reporter;
-  ask: AskQuestion;
   diagnostics: vscode.DiagnosticCollection;
   originFiles: OriginFilesOf;
-  log: (message: string) => void;
-}
-
-/** compile's Option, as a caller that supplies it passes it after the Argument. */
-export interface CompileOptions {
-  source: CompileSource;
-}
-
-function sourceOf(option: unknown): CompileSource {
-  return typeof option === 'object' && option !== null && Reflect.get(option, 'source') === 'main' ? 'main' : 'workingTree';
 }
 
 /** commands.md, `compile`: the plugins, the selection included, from a Plugins row, a record tab's
- *  column header, or the palette's pick; the source is the working tree unless the caller names
- *  `main`. */
+ *  column header, or the palette's pick, built from the working tree. */
 export function registerCompileCommand(
   deps: CompileDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   return vscode.commands.registerCommand(
     'modbench.plugin.compile',
-    async (clicked?: unknown, selected?: readonly PluginsTreeNode[], option?: unknown) => {
-      const source = sourceOf(option);
-      const argument = await argumentOf(deps, clicked, selected, viewSelection);
-      if (argument === undefined) return;
-      if (source === 'main' && argument.addressed.length > 0 && !await confirmedFromMain(deps.ask, argument.addressed)) return;
-      await compilePlugins(deps, argument, source);
+    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
+      const plugins = await argumentOf(deps, clicked, selected, viewSelection);
+      if (plugins !== undefined) await compilePlugins(deps, plugins);
     },
   );
-}
-
-// compile's Argument: the plugins it sends, and those refused before it could, each named.
-interface CompileArgument {
-  addressed: PluginAddress[];
-  unaddressed: ItemRefusal<TrackedRow>[];
 }
 
 async function argumentOf(
   deps: CompileDeps, clicked: unknown, selected: readonly PluginsTreeNode[] | undefined,
   viewSelection: () => readonly PluginsTreeNode[],
-): Promise<CompileArgument | undefined> {
+): Promise<PluginAddress[] | undefined> {
   const header = columnHeaderOf(clicked);
-  if (header) return { addressed: [header], unaddressed: [] };
+  if (header) return [header];
   const entry = pluginsGestureEntry(clicked, selected, viewSelection);
-  return entry.clicked === undefined ? pickCompilable(deps, entry) : addressed(deps, entry);
+  if (entry.clicked === undefined) return pickCompilable(deps, entry);
+  return selectionArgument(entry, 'plugin').map((node) => ({ name: node.plugin.name, origin: node.origin }));
 }
 
-// ADR-0012: a row's origin, when it has none, is resolved; a plugin whose mod cannot be resolved is
-// refused by name, and none is invented for it.
-async function addressed(deps: CompileDeps, entry: GestureEntry): Promise<CompileArgument> {
-  const argument: CompileArgument = { addressed: [], unaddressed: [] };
-  for (const node of selectionArgument(entry, 'plugin')) {
-    const name = node.plugin.name;
-    const origin = node.origin ?? await resolveOrigin(deps.client, name, deps.log);
-    if (origin) argument.addressed.push({ name, origin });
-    else argument.unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
-  }
-  return argument;
-}
-
-// plugins.md, Compile, story 5: from the palette, a pick of the tracked, editable plugins. An
+// plugins.md, Compile, story 3: from the palette, a pick of the tracked, editable plugins. An
 // extension cannot tell whether the Plugins view has focus, so it always asks, a selected
 // compilable plugin first.
-async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<CompileArgument | undefined> {
+async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
   const isSelected = (p: PluginAddress) => selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
   const compilable = (await deps.client.getPlugins())
@@ -179,37 +148,19 @@ async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<C
     compilable.map((p) => ({ label: p.name, description: p.origin })),
     { placeHolder: 'Compile which plugin?' },
   );
-  return choice && { addressed: [{ name: choice.label, origin: choice.description }], unaddressed: [] };
-}
-
-// plugins.md, Compile, story 2: compile from main confirms, and Esc compiles nothing.
-async function confirmedFromMain(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
-  const [only, ...more] = plugins;
-  const named = only !== undefined && more.length === 0 ? `"${only.name}"` : `${plugins.length} plugins`;
-  const accept = 'Compile from main';
-  const choice = await ask(`Compile ${named} from main?`, {
-    modal: true,
-    detail: `${more.length === 0 ? 'Its binary is' : 'Their binaries are'} written from what main holds. ` +
-      'Your edit branch and your working tree stay as they are.',
-  }, accept);
-  return choice === accept;
+  return choice && [{ name: choice.label, origin: choice.description }];
 }
 
 // The compile itself, under the view's progress bar, reported once when it lands. Nothing re-reads
 // `GET /plugins` after it: a compiled binary changes only bytes on disk, which the index's own
 // mirror watch re-reads.
-async function compilePlugins(deps: CompileDeps, argument: CompileArgument, source: CompileSource): Promise<void> {
-  const { addressed: plugins, unaddressed } = argument;
-  const total = plugins.length + unaddressed.length;
-  if (plugins.length === 0) {
-    if (total > 0) reportCompiled(deps.reporter, { landed: [], refused: [] }, unaddressed, total, source);
-    return;
-  }
+async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress[]): Promise<void> {
+  if (plugins.length === 0) return;
   await deps.progress.while(async () => {
-    const outcome = await deps.client.compile(plugins, source);
+    const outcome = await deps.client.compile(plugins);
     if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
     publishLanded(deps, outcome);
-    reportCompiled(deps.reporter, outcome, unaddressed, total, source);
+    reportCompiled(deps.reporter, outcome, plugins.length);
   });
 }
 
@@ -227,26 +178,21 @@ function diagnosticsWords(count: number): string {
   return `${count} ${count === 1 ? 'diagnostic' : 'diagnostics'}. See the Problems panel.`;
 }
 
-// plugins.md, Compile, story 3, and Reporting: one notification when it lands, naming each refused
+// plugins.md, Compile, story 2, and Reporting: one notification when it lands, naming each refused
 // plugin and why, and pointing at the Problems panel when it left diagnostics.
-function reportCompiled(
-  reporter: Reporter, outcome: CompileOutcome, unaddressed: readonly ItemRefusal<TrackedRow>[], total: number,
-  source: CompileSource,
-): void {
+function reportCompiled(reporter: Reporter, outcome: CompileOutcome, total: number): void {
   const diagnostics = outcome.landed.reduce((sum, compiled) => sum + compiled.diagnostics.length, 0);
-  const refused: ItemRefusal<TrackedRow>[] = [...unaddressed, ...outcome.refused];
-  if (refused.length > 0) {
+  if (outcome.refused.length > 0) {
     const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
     reporter.selectionOutcome(
-      `Could not compile ${refused.length} of ${total} plugins.${rest}`,
-      { landed: outcome.landed.map((compiled) => compiled.plugin), refused }, rowName);
+      `Could not compile ${outcome.refused.length} of ${total} plugins.${rest}`,
+      { landed: outcome.landed.map((compiled) => compiled.plugin), refused: outcome.refused }, rowName);
     return;
   }
   const [only, ...more] = outcome.landed;
   if (only === undefined) return;
   const what = more.length === 0 ? `"${only.plugin.name}"` : `${outcome.landed.length} plugins`;
-  const from = source === 'main' ? ' from main' : '';
-  reporter.landed(diagnostics > 0 ? `Compiled ${what}${from} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}${from}.`);
+  reporter.landed(diagnostics > 0 ? `Compiled ${what} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}.`);
 }
 
 // A join, not an Editing-only gesture (its argument is Mod Management's own row type), so it

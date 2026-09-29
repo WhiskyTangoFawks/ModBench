@@ -31,11 +31,11 @@ beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFi
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   const meditClient = new InMemoryMEditClient();
   meditClient.setCommandResult('editRecord', { applied: true });
-  const onRecordEdited = vi.fn();
+  const refreshSourceControlFor = vi.fn();
   const report = vi.fn();
   const deps: RecordPanelContextCommandDeps = {
     meditClient,
-    onRecordEdited,
+    refreshSourceControlFor,
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
@@ -44,7 +44,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     focusedCell: () => undefined,
     ...overrides,
   };
-  return { deps, meditClient, onRecordEdited, report };
+  return { deps, meditClient, refreshSourceControlFor, report };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
@@ -150,23 +150,23 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 
   it('tells the panel to re-read once the edit has landed', async () => {
-    const { deps, onRecordEdited } = makeDeps();
+    const { deps, refreshSourceControlFor } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
-    expect(onRecordEdited).toHaveBeenCalledWith(IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
   });
 
   it('surfaces a refusal as a warning and does not re-read', async () => {
-    const { deps, meditClient, onRecordEdited, report } = makeDeps();
+    const { deps, meditClient, refreshSourceControlFor, report } = makeDeps();
     meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
     expect(report).toHaveBeenCalledWith('warning', 'Track the mod first.');
-    expect(onRecordEdited).not.toHaveBeenCalled();
+    expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 
   it('does nothing when a command fires with no context', async () => {
@@ -246,7 +246,7 @@ describe('the extended editor opens and saves from the host', () => {
   });
 
   it('a save lands one set envelope at the leaf\'s own path, and re-reads', async () => {
-    const { deps, meditClient, onRecordEdited } = makeDeps();
+    const { deps, meditClient, refreshSourceControlFor } = makeDeps();
     registerRecordPanelContextCommands(deps);
     const path = [
       { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
@@ -259,7 +259,7 @@ describe('the extended editor opens and saves from the host', () => {
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'set', path, value: 'edited in the tab' },
     ]);
-    expect(onRecordEdited).toHaveBeenCalledWith(IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
   });
 
   it('a second save of the same tab writes again', async () => {

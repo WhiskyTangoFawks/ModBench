@@ -70,7 +70,8 @@ public sealed class RecordQueryService(
             resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         }
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset);
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
+            GroupOnly: search is null);
         return reads.Search(query);
     }
 
@@ -152,6 +153,13 @@ public sealed class RecordQueryService(
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
+
+    public void SetFilter(string sql, string source) => _index.SetFilter(sql, source);
+
+    public void ClearFilter() => _index.ClearFilter();
+
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        _index.RebuildStore(gameRelease, instanceRoot);
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

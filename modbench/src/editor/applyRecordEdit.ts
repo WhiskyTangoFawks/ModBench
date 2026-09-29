@@ -9,9 +9,9 @@ export interface RecordWriteDeps {
   // ADR-0007: the single write path, the port's own verb. Injected rather than imported so this
   // stays callable from a plain unit test.
   meditClient: Pick<MEditClient, 'editRecord'>;
-  // plugin/origin ride along because a FormKey names a record, not which plugin's copy of it this
-  // edit landed on.
-  onRecordEdited: (formKey: string, plugin: string, origin: string) => void;
+  // The native Source Control panel does not pick up a field edit's working-tree change on its own.
+  // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
+  refreshSourceControlFor: (plugin: string, origin: string) => void;
   reporter: Reporter;
 }
 
@@ -24,7 +24,7 @@ export async function applyRecordEdit(
   try {
     const outcome = await deps.meditClient.editRecord(formKey, plugin, origin, envelope);
     if (outcome.applied) {
-      deps.onRecordEdited(formKey, plugin, origin);
+      deps.refreshSourceControlFor(plugin, origin);
       return outcome.newFormKey;
     }
     deps.reporter.report('warning', outcome.message);

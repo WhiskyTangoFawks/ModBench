@@ -23,8 +23,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     // same ModKey), which makes this a delta comparison rather than two unrelated files.
     private static ScatteredFixtureData BuildTwoPlugins() =>
         new PluginFixtureBuilder("api-duplicate-filename")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
             // An ordinary editable plugin mastering Shared.esp, so a copy-as-override out of
             // either column has somewhere legitimate to land.
             .WithPlugin("Target.esp", (mod, _) =>
@@ -36,10 +36,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
         // same slot; only the winning, enabled, listed one participates.
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
-            ? p with { Slot = winner.Slot, Winning = false }
-            : p);
+        var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -61,6 +58,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var origins = plugins.EnumerateArray()
             .Where(p => p.GetProperty("name").GetString() == "Shared.esp")
             .Select(p => p.GetProperty("origin").GetString())
+            .Order(StringComparer.Ordinal)
             .ToList();
 
         Assert.Equal(["ModA", "ModB"], origins);

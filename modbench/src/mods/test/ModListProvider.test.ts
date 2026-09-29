@@ -332,7 +332,7 @@ describe('ModListProvider', () => {
   });
 
   // package.json's mod-menu `when` clauses read these flags to offer enable or disable by row
-  // state (mods.md, Menus and keys, story 3), and view on Nexus by hasNexus.
+  // state (mods.md, Menus and keys, story 2), and view on Nexus by hasNexus.
   it('a mod row states its enabled state and whether it has a Nexus id in its contextValue', async () => {
     const provider = makeProvider([
       mod('UFO4P', true, { nexusId: '4598' }),

@@ -42,7 +42,7 @@ internal static class PluginTrees
         SerializeTree(OpenFor(modPath, gameRelease, strings), cancel);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
-    /// files it by. The mod is held here, so the caller never has one (ADR-0005 rule 2).</summary>
+    /// files it by. The mod is held here, so the caller never has one (ADR-0005 invariant 2).</summary>
     internal static IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
         ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>

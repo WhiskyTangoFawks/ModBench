@@ -1,64 +1,43 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>compile-plugin, steps 5 and 7: the mark that a compile began, so an interrupted one is
-/// never read as another program's change. One file in <c>.git</c> names each plugin not landed since.</summary>
+/// <summary>Journals a compile batch so a crash cannot leave it silently half-done; a single plugin's
+/// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch is one
+/// mod folder.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";
 
-    // The mod folders a compile of this process is writing into, each with how many are running.
-    private static readonly ConcurrentDictionary<string, int> Running = new(StringComparer.Ordinal);
-
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
-    private static string RunningKey(string modFolder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(modFolder));
-
-    /// <summary>Whether a compile is writing into the mod right now: its mark is then no interrupted
-    /// compile, and its bytes are no one else's change.</summary>
-    public static bool IsCompiling(string modFolder) => Running.ContainsKey(RunningKey(modFolder));
-
-    /// <summary>Marks <paramref name="plugin"/> while <paramref name="compile"/> runs, and clears it
-    /// once it lands. False from it is a refusal that wrote nothing, which puts the mark back as it
-    /// was; a throw leaves the plugin marked.</summary>
-    public static async Task<bool> RunAsync(string modFolder, string plugin, Func<Task<bool>> compile)
+    /// <summary>The marker is written before the first compile, rewritten after each landed plugin, and
+    /// deleted only once every plugin has landed. A refusal stops the batch and leaves the rest
+    /// unlanded — deliberately indistinguishable from a crash.</summary>
+    public static async Task<IReadOnlyList<string>> RunBatchAsync(
+        string modFolder, IReadOnlyList<string> plugins, Func<string, Task<bool>> compileOne)
     {
-        var key = RunningKey(modFolder);
-        Running.AddOrUpdate(key, 1, (_, count) => count + 1);
-        try
-        {
-            var earlier = UnfinishedBatch(modFolder);
-            var named = (earlier?.Plugins ?? []).Union([plugin], StringComparer.Ordinal).ToList();
-            var landedBefore = (earlier?.Landed ?? []).Where(p => !string.Equals(p, plugin, StringComparison.Ordinal)).ToList();
-            WriteMarker(modFolder, new CompileJournalState(named, landedBefore));
+        if (plugins.Count == 0) return [];
 
-            if (!await compile())
-            {
-                Settle(modFolder, earlier);
-                return false;
-            }
+        WriteMarker(modFolder, plugins, landed: []);
 
-            Settle(modFolder, new CompileJournalState(named, [.. landedBefore, plugin]));
-            return true;
-        }
-        finally
+        var landed = new List<string>();
+        foreach (var plugin in plugins)
         {
-            if (Running.AddOrUpdate(key, 0, (_, count) => count - 1) == 0) Running.TryRemove(key, out _);
+            if (!await compileOne(plugin)) break;
+
+            landed.Add(plugin);
+            WriteMarker(modFolder, plugins, landed);
         }
+
+        if (landed.Count == plugins.Count)
+            File.Delete(MarkerPath(modFolder));
+
+        return landed;
     }
 
-    // A mark with nothing unlanded is deleted, so its file exists only while it means something.
-    private static void Settle(string modFolder, CompileJournalState? state)
-    {
-        if (state is null || state.Unlanded.Count == 0) File.Delete(MarkerPath(modFolder));
-        else WriteMarker(modFolder, state);
-    }
-
-    /// <summary>The marker's content, or null when every plugin it names landed, as when a crash kept it
-    /// from being deleted. A marker means the bytes differ from the parked ref because Modbench's own
-    /// compile was interrupted.</summary>
+    /// <summary>The marker's content, or null when the last batch completed cleanly: a marker means the
+    /// disk/parked-ref mismatch is Modbench's own interrupted compile, not an external change.</summary>
     public static CompileJournalState? UnfinishedBatch(string modFolder)
     {
         var path = MarkerPath(modFolder);
@@ -67,8 +46,7 @@ public static class CompileJournal
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         var plugins = ReadStringArray(doc.RootElement, "plugins");
         var landed = ReadStringArray(doc.RootElement, "landed");
-        var state = new CompileJournalState(plugins, landed);
-        return state.Unlanded.Count == 0 ? null : state;
+        return new CompileJournalState(plugins, landed);
     }
 
     private static List<string> ReadStringArray(JsonElement root, string propertyName) =>
@@ -77,9 +55,9 @@ public static class CompileJournal
                 $"Expected every '{propertyName}' element to be a non-null string."))
             .ToList();
 
-    private static void WriteMarker(string modFolder, CompileJournalState state)
+    private static void WriteMarker(string modFolder, IReadOnlyList<string> plugins, IReadOnlyList<string> landed)
     {
-        var json = JsonSerializer.Serialize(new { plugins = state.Plugins, landed = state.Landed });
+        var json = JsonSerializer.Serialize(new { plugins, landed });
         var path = MarkerPath(modFolder);
 
         // Write-then-rename: a marker torn by a second crash mid-write would defeat the point of having one.
@@ -89,8 +67,9 @@ public static class CompileJournal
     }
 }
 
-/// <summary>A journal marker's content: every plugin whose compile began since the mark was left, and
-/// which of them have landed since. <see cref="Unlanded"/> is the plugins whose binary may be bad.</summary>
+/// <summary>A journal marker's content: every plugin the interrupted batch named, and which of them
+/// had already landed. <see cref="Unlanded"/> is everything the batch didn't reach — recovery's own
+/// job, never this record's.</summary>
 public sealed record CompileJournalState(IReadOnlyList<string> Plugins, IReadOnlyList<string> Landed)
 {
     public IReadOnlyList<string> Unlanded => [.. Plugins.Except(Landed, StringComparer.Ordinal)];

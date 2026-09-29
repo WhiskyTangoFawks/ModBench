@@ -11,7 +11,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 30 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch or create an instance |
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 10 | Rename a profile; Remove a profile; Transfer saves |
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)). | 2 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
-| Platform | MO2 runs programs through a virtual file system. Modbench deploys with hardlinks. | 1 | Conflicts tab: preview, execute with the virtual file system |
+| Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
 | Scripts, tasks or the agent | The gesture runs an external tool or exports data. A task or a script does the same job. | 2 | Export to CSV; Sort with LOOT |
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 16 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
@@ -24,13 +24,14 @@ Gestures Modbench does differently.
 
 | # | Where | Modbench | MO2 | Why |
 |---|---|---|---|---|
-| 1 | The top bar | The Toolbox, the container's first view: a small readout of the Instance's value, Profile and Deployment, with the workspace actions in its title bar ([toolbox.md](../architecture/surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
+| 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, Game and Profile, with the workspace actions in its title bar ([toolbox.md](../architecture/surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
 | 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads.md](../architecture/surfaces/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
-| 3 | Archives | No Archives view. Modbench never builds a merged view ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). | An Archives tab | Ruling. |
-| 4 | Deploy and run | The alpha does not deploy, run the game or run tools. MO2 does. After the alpha, deployment follows Vortex ([ADR-0020](../adr/0020-vortex-is-the-reference-for-deployment.md)). | Runs every program through its virtual file system | Ruling. |
+| 3 | Archives | No Archives view. | An Archives tab | Ruling. |
+| 4 | Deploy and run | MO2 runs the game and the tools, not Modbench. Deployment is a boundary of its own (Orthogonality), and MO2's virtual file system is one implementation of it. | Runs every program through its virtual file system | Ruling. |
 | 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
 | 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
 | 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
+| 8 | Drag indicator | VS Code's tree indicator: onto a row, or between rows | An insertion line | Limitation: a tree view cannot style it. |
 
 ## Omissions by object
 

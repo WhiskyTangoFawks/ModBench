@@ -50,7 +50,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         }
 
         // No plugins.txt is written: the ordered snapshot is the load order. `Listed` puts a plugin
-        // in it and `Enabled` is the `*` prefix; every plugin wins (ADR-0013) unless a test says so.
+        // in it and `Enabled` is the `*` prefix.
         var explicitPlugins = _plugins
             .Where(p => p.Listed)
             .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))
@@ -58,7 +58,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
         WriteCreationClubCatalog(root);
 
-        return new PluginFixtureData(dataFolder, explicitPlugins, root);
+        return new PluginFixtureData(dataFolder, OneWinnerPerFilename(explicitPlugins), root);
     }
 
     public ScatteredFixtureData BuildScattered()
@@ -104,7 +104,21 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         // treats as the Data path, so the catalog belongs in its parent, root.
         WriteCreationClubCatalog(root);
 
-        return new ScatteredFixtureData(root, gameDir, explicitPlugins);
+        return new ScatteredFixtureData(root, gameDir, OneWinnerPerFilename(explicitPlugins));
+    }
+
+    // The mod declared later overrides an earlier mod's file of the same name, and the overridden copy
+    // loads in the winner's slot, as the instance's snapshot sends it (ADR-0012).
+    private static List<LoadOrderEntry> OneWinnerPerFilename(List<LoadOrderEntry> plugins)
+    {
+        var winners = plugins
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.OrdinalIgnoreCase);
+        return [.. plugins.Select(p =>
+        {
+            var winner = winners[p.Name];
+            return ReferenceEquals(winner, p) ? p : p with { Slot = winner.Slot, Winning = false };
+        })];
     }
 
     private void WriteCreationClubCatalog(string folder)

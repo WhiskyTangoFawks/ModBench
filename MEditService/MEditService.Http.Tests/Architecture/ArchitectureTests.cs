@@ -124,17 +124,15 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013 invariant 1: the create and put-load-order handlers are the only writers, the
-    // watcher's own subscription the only reconciler — a second of either makes the Index's
-    // Status lie.
+    // ADR-0013 invariant 1: the put-load-order handler is the only writer, the watcher's own
+    // subscription the only reconciler — a second of either makes the Index's Status lie.
     [Fact]
-    public void LoadOrder_IsWrittenOnlyByItsTwoHandlers_AndReconciledOnlyFromTheWatcher()
+    public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyFromTheWatcher()
     {
         var root = SolutionDirectory();
-        // Create never reconciles: its plugin reaches the Index through the next snapshot. The
-        // watcher, the one listener to the change, is the one caller of the reconcile door.
+        // The watcher, the one listener to the change, is the one caller of the reconcile door.
         string[] reconcilers = ["ModFolderWatcher.cs", "WatcherSinks.cs"];
-        string[] writers = ["CreatePluginHandler.cs", "PutLoadOrderHandler.cs"];
+        string[] writers = ["PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
         var applies = HolderWrites(root, Projects, "Apply");
@@ -145,7 +143,7 @@ public sealed class ArchitectureTests
             .ToList();
         Assert.True(offenders.Count == 0,
             "The load order is reconciled outside Load order state's own Changed subscriber, or "
-            + "written outside CreatePluginHandler.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
+            + "written outside PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
         Assert.True(dead.Count == 0,
@@ -236,11 +234,11 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
-    // calls is a widening nobody asked for — and every implementer, the Indexer and each query
-    // test's stub alike, pays for it.
+    // ADR-0014 invariant 3: Queries are the only readers of the read model, so a member of
+    // IQueryIndex no query service calls is a widening nobody asked for — every implementer
+    // pays for it.
     [Fact]
-    public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
+    public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
             .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
@@ -337,7 +335,7 @@ public sealed class ArchitectureTests
     // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
-    // ADR-0005 rule 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
+    // ADR-0005 invariant 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
     // where the replace-by-rename discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()

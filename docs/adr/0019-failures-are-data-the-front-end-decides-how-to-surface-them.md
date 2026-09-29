@@ -1,14 +1,11 @@
 # Failures are data; the front end decides how to surface them
 
-## Context
-
-A load returned HTTP 200 while silently dropping a whole plugin's records, because Mutagen could
-not parse it. Nothing failed, so an error-only convention let it through, yet the user's model of
-what was loaded was wrong.
+An error-only convention lets a partial result through: a load can succeed while it drops a whole
+plugin's records. So a failure is data, and the front end decides how the user sees it.
 
 ## Strategic invariants
 
-1. **The user's mental model must never be silently wrong.** If the UI implies data is present or
+1. **Never silently wrong** ([principles](../principles.md)). If the UI implies data is present or
    complete and it is not, that is a mandatory user-visible notification, even on an otherwise
    successful operation.
 2. **Surfacing is by severity tier; not every error is a popup.** Notification fatigue is

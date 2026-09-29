@@ -21,14 +21,11 @@ drivers -> driving: {class: ref}
 drivers -> core: {class: ref}
 drivers -> kernel: {class: ref}
 drivers -> driven: {class: ref}
-drivers -> data: {class: ref}
 driving -> core: {class: ref}
 driving -> kernel: {class: ref}
 driving -> driven: {class: ref}
-driving -> data: {class: ref}
 core -> kernel: {class: ref}
 core -> driven: {class: ref}
-core -> data: {class: ref}
 driven -> data: {class: ref}
 
 data -> driving: "watch" {class: signal}
@@ -42,5 +39,3 @@ medit_driven.index -> medit_driven.sourceadapter: "same band"
 medit_driven.index -> medit_driven.pluginadapter: "same band"
 medit_kernel.ports -> medit_kernel.loadorder: "same band"
 modbench_driven.instanceloader -> modbench_driven.instanceadapter: "same band"
-modbench_core.pluginscommands -> modbench_core.client: "same band"
-modbench_core.instancecommands -> modbench_core.client: "same band"

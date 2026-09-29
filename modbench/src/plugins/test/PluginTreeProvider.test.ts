@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage } from '../../client';
+import {
+  InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage, type CellSummary, type InteriorCellBlock,
+} from '../../client';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
@@ -8,7 +10,7 @@ vi.mock('vscode', () => ({
 
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
-  CellNode, InteriorCellsNode, InteriorLoadMoreNode,
+  CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
   headerFormKeyFor,
 } from '../PluginTreeProvider';
@@ -64,8 +66,26 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getCellReferences', { persistent: [], temporary: [] });
   // A Quest/DialogTopic row's own children — empty by default, overridden per-test below.
   client.setQueryAnswer('getContainerChildren', []);
-  client.setQueryAnswer('getInteriorCells', { items: [], total: 0 });
+  client.setQueryAnswer('getInteriorCells', []);
   return client;
+}
+
+function interiorCell(formKey: string, editorId: string | null, overrides: Partial<CellSummary> = {}): CellSummary {
+  return {
+    formKey, editorId, cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false,
+    ...overrides,
+  };
+}
+
+function oneSubBlock(cells: CellSummary[], block = 0, subBlock = 0): InteriorCellBlock[] {
+  const hasParseFailure = cells.some(c => c.hasParseFailure);
+  return [{ number: block, hasParseFailure, subBlocks: [{ number: subBlock, hasParseFailure, cells }] }];
+}
+
+async function interiorCellsBeneath(provider: PluginTreeProvider, group: PluginTreeNode): Promise<PluginTreeNode[]> {
+  const [block] = await provider.getChildren(group);
+  const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
+  return provider.getChildren(present(subBlock, 'the sole sub-block'));
 }
 
 // getPluginChildren(name) is the one way into a plugin's children — there is no root listing
@@ -197,52 +217,6 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out 
   });
 });
 
-// ── loadMoreInterior ────────────────────────────────────────────────────────
-
-describe('PluginTreeProvider.loadMoreInterior', () => {
-  it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
-    const repo = makeClient();
-    repo.setQueryAnswerOnce('getInteriorCells', { items: firstPage, total: 2 });
-    repo.setQueryFailureOnce('getInteriorCells', new Error('boom'));
-
-    const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
-    const firstChildren = await provider.getChildren(node);
-    const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
-
-    await provider.loadMore(loadMoreNode);
-    const afterFailure = await provider.getChildren(node);
-
-    expect(afterFailure.filter(c => c instanceof CellNode)).toHaveLength(1);
-    expect(afterFailure.find(c => c instanceof InteriorLoadMoreNode)).toBeDefined();
-    const errorNode = present(afterFailure.find(c => c instanceof ErrorNode), 'the ErrorNode after the failed retry');
-    expect(errorNode.tooltip).toContain('boom');
-  });
-
-  it('clears the ErrorNode on a successful retry', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
-    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
-    const repo = makeClient();
-    repo.setQueryAnswerOnce('getInteriorCells', { items: firstPage, total: 2 });
-    repo.setQueryFailureOnce('getInteriorCells', new Error('boom'));
-    repo.setQueryAnswerOnce('getInteriorCells', { items: secondPage, total: 2 });
-
-    const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
-    const firstChildren = await provider.getChildren(node);
-    const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
-
-    await provider.loadMore(loadMoreNode);
-    await provider.loadMore(loadMoreNode);
-    const afterRetry = await provider.getChildren(node);
-
-    expect(afterRetry.filter(c => c instanceof CellNode)).toHaveLength(2);
-    expect(afterRetry.find(c => c instanceof InteriorLoadMoreNode)).toBeUndefined();
-    expect(afterRetry.find(c => c instanceof ErrorNode)).toBeUndefined();
-  });
-});
-
 // The merged tree's plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
 // see plugins.md) are covered in PluginsTreeProvider.test.ts; this provider has no plugin-row
 // node of its own.
@@ -292,9 +266,6 @@ describe('RecordTypeNode', () => {
   });
 });
 
-// Record-type children load in one getChildren call (see the large-count test above); only
-// interior-cell listing paginates (InteriorLoadMoreNode; see its own tests further down).
-
 // ── RecordNode ────────────────────────────────────────────────────────────────
 
 describe('RecordNode', () => {
@@ -317,29 +288,25 @@ describe('RecordNode', () => {
   });
 
   it('states a record of a tracked plugin', () => {
-    const node = new RecordNode(makeRecord(0), undefined, { tracked: true, editable: true });
+    const node = new RecordNode(makeRecord(0), undefined, false, true);
     expect(node.contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an untracked plugin', () => {
-    const node = new RecordNode(makeRecord(0), undefined, { tracked: false, editable: true });
+    const node = new RecordNode(makeRecord(0), undefined, false, false);
     expect(node.contextValue).toBe('record untracked editable');
   });
 
   // plugins.md, Menus and keys: the record menu is the same on every record row, an override's too.
   it('states an override as it states the plugin\'s own records', () => {
     const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect(new RecordNode(record, undefined, { tracked: false, editable: true }).contextValue).toBe('record untracked editable');
-    expect(new RecordNode(record, undefined, { tracked: true, editable: true }).contextValue).toBe('record tracked editable');
+    expect(new RecordNode(record).contextValue).toBe('record untracked editable');
+    expect(new RecordNode(record, undefined, false, true).contextValue).toBe('record tracked editable');
   });
 
   it('states a record of an immutable plugin read-only', () => {
-    const node = new RecordNode(makeRecord(0), undefined, { tracked: false, editable: false });
+    const node = new RecordNode(makeRecord(0), undefined, true);
     expect(node.contextValue).toBe('record untracked');
-  });
-
-  it('states no record edit when no one has described its plugin', () => {
-    expect(new RecordNode(makeRecord(0)).contextValue).toBe('record untracked');
   });
 
   // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
@@ -353,55 +320,78 @@ describe('RecordNode', () => {
   });
 });
 
-// ── a field edit flips a cached row's badge without a refetch ─────────────────
-// A rival that calls refreshTree() wholesale fails the no-refetch assertion.
+// ── a read of a record group names its rows, so their badges follow the read ─────
 
-describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
-  it('flips a cached clean record to Modified without calling getRecords again', async () => {
-    const record = makeRecord(0, 'None');
-    const repo = makeClient({ records: { items: [record], total: 1 } });
+describe('onDidReadRecords / workingTreeStateOf', () => {
+  async function readGroup(repo: InMemoryMEditClient) {
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Fallout4.esm', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    await provider.getChildren(typeNode); // populates the page cache
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    const read: (readonly unknown[])[] = [];
+    provider.onDidReadRecords((uris) => read.push(uris));
+    return { provider, typeNode, read };
+  }
 
-    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
+  it('names each row of a group it reads from mEdit, by the row\'s own resource URI', async () => {
+    const record = makeRecord(0, 'Modified');
+    const { provider, typeNode, read } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
 
-    expect(changed).toBe(true);
-    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Modified');
-    // The rival this guards: a fix that re-fetches (or clears the cache and lets the next redraw
-    // re-fetch) instead of patching in place would show a second call here.
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    const [row] = await provider.getChildren(typeNode);
 
-    const [rec] = await provider.getChildren(typeNode);
-    expect(expectInstanceOf(rec, RecordNode).record.workingTreeState).toBe('Modified');
-    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    expect(read).toEqual([[expectInstanceOf(row, RecordNode).resourceUri]]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+  });
+
+  it('names nothing when a group answers from its cache', async () => {
+    const { provider, typeNode, read } = await readGroup(makeClient());
+    await provider.getChildren(typeNode);
+
+    await provider.getChildren(typeNode);
+
+    expect(read).toHaveLength(1);
+  });
+
+  // ADR-0015 invariant 3: mEdit's published rows reach the badge through the next read.
+  it('names the rows again, with mEdit\'s new state, when a refresh makes the group read again', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeClient({ records: { items: [record], total: 1 } });
+    const { provider, typeNode, read } = await readGroup(repo);
+    await provider.getChildren(typeNode);
+
+    repo.setQueryAnswer('getRecords', { items: [{ ...record, workingTreeState: 'Modified' }], total: 1 });
+    provider.refresh();
+    await provider.getChildren(typeNode);
+
+    const uri = recordResourceUri(record.plugin, 'ModA', record.formKey);
+    expect(read).toEqual([[uri], [uri]]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+  });
+
+  // ADR-0015 invariant 3: a read answered before mEdit's rows changed is not the rows' state now.
+  it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeClient();
+    const { provider, typeNode, read } = await readGroup(repo);
+    let answerStale!: (page: RecordPage) => void;
+    repo.setQueryAnswerOnce('getRecords', new Promise<RecordPage>((resolve) => { answerStale = resolve; }));
+    repo.setQueryAnswer('getRecords', { items: [{ ...record, workingTreeState: 'Modified' }], total: 1 });
+
+    const inFlight = provider.getChildren(typeNode);
+    provider.refresh();
+    answerStale({ items: [record], total: 1 });
+    await inFlight;
+
+    expect(read).toEqual([]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBeUndefined();
+
+    await provider.getChildren(typeNode);
+
+    expect(read).toEqual([[recordResourceUri(record.plugin, 'ModA', record.formKey)]]);
+    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
     const provider = new PluginTreeProvider(makeClient());
     expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', '000001:Fallout4.esm')).toBeUndefined();
-  });
-
-  it('markWorkingTreeState returns false, and touches nothing, for an uncached record', () => {
-    const provider = new PluginTreeProvider(makeClient());
-    expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
-  });
-
-  // A create never seeds records_committed, so a field edit on an Added row must never downgrade
-  // it to Modified — that would misrepresent a committed counterpart existing. The rival, an
-  // unconditional overwrite with no current-state check, fails this.
-  it('preserves Added across a field edit — create, then edit, still badges A', async () => {
-    const record = makeRecord(0, 'Added');
-    const repo = makeClient({ records: { items: [record], total: 1 } });
-    const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Fallout4.esm', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
-    await provider.getChildren(typeNode);
-
-    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
-
-    expect(changed).toBe(true);
-    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Added');
   });
 });
 
@@ -413,9 +403,9 @@ describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () =>
 // so each states its record as the record gestures read one: FormKey, EditorID, plugin and origin.
 describe('worldspace, cell and placed rows state their record', () => {
   it.each([
-    ['worldspace', new WorldspaceNode('A.esp', { formKey: '000801:A.esp', editorId: 'World', hasParseFailure: false }, 'ModA')],
+    ['worldspace', new WorldspaceNode('A.esp', { formKey: '000801:A.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, 'ModA')],
     ['cell', new CellNode('A.esp', {
-      formKey: '000801:A.esp', editorId: 'World', cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+      formKey: '000801:A.esp', editorId: 'World', cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
     }, 'ModA')],
     ['placed', new PlacedNode('A.esp', {
       formKey: '000801:A.esp', editorId: 'World', baseFormKey: null, recordType: 'refr', hasParseFailure: false,
@@ -442,16 +432,85 @@ describe('record rows carry their copy identity', () => {
     expect(expectInstanceOf(rec, RecordNode).origin).toBe('ModA');
   });
 
-  it('record rows of a plugin outside the load order are read-only, whatever its row states', async () => {
+  it('record rows of a plugin outside the load order are read-only', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(
-      await provider.getPluginChildren('Plugin0.esp', 'ModA', { tracked: false, editable: true }), RecordTypeNode,
-    )[0], 'the sole RecordTypeNode');
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const [rec] = await provider.getChildren(typeNode);
 
     expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
+  });
+
+  it('record rows of an immutable plugin are read-only, case-insensitively', async () => {
+    const repo = makeClient();
+    const provider = new PluginTreeProvider(repo);
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked');
+  });
+
+  // An enabled, in-load-order, *untracked* plugin. Nothing about it is immutable, so the row
+  // is editable, and its records still wait on Track, which is what `untracked` says.
+  it('mutable but untracked load-order rows are untracked and editable', async () => {
+    const repo = makeClient();
+    const provider = new PluginTreeProvider(repo);
+    provider.setImmutablePlugins([{ name: 'SomethingElse.esm', origin: 'Data' }]);
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record untracked editable');
+  });
+
+  // Tracked-ness reaches the row exactly the way immutability already does — a set pushed in
+  // from the reconcile's own `GET /plugins` answer (`PluginResponse.IsTracked`), never a
+  // filesystem probe made here.
+  it('record rows of a tracked plugin are tracked, case-insensitively', async () => {
+    const repo = makeClient();
+    const provider = new PluginTreeProvider(repo);
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]); // makeRecord's rows belong to Fallout4.esm
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked editable');
+  });
+
+  it('an immutable plugin stays read-only even when tracked', async () => {
+    const repo = makeClient();
+    const provider = new PluginTreeProvider(repo);
+    provider.setImmutablePlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
+    provider.setTrackedPlugins([{ name: 'fallout4.esm', origin: 'Data' }]);
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect(expectInstanceOf(rec, RecordNode).contextValue).toBe('record tracked');
+  });
+
+  // Tracking or untracking a plugin rides the reconcile the `mods/**` watcher already fires when
+  // a `.git` directory appears or vanishes, so this provider owes only a re-render off its cache.
+  it('re-rendering after tracking flips the rows without a repository refetch', async () => {
+    const repo = makeClient();
+    const provider = new PluginTreeProvider(repo);
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
+    const callsAfterFirstRender = repo.calls.filter(c => c.method === 'getRecords').length;
+
+    const changed = vi.fn();
+    provider.onDidChangeTreeData(changed);
+    provider.setTrackedPlugins([{ name: 'Fallout4.esm', origin: 'Data' }]);
+
+    expect(changed).toHaveBeenCalled();
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record tracked editable');
+    // And back again, for the untrack direction.
+    provider.setTrackedPlugins([]);
+    expect(expectInstanceOf((await provider.getChildren(typeNode))[0], RecordNode).contextValue).toBe('record untracked editable');
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
 });
 
@@ -460,7 +519,7 @@ describe('record rows carry their copy identity', () => {
 describe('a plugin\'s conditions reach every row beneath it', () => {
   const TRACKED: PluginConditions = { tracked: true, editable: true };
   const cell = {
-    formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false,
+    formKey: '000002:Plugin0.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: true, fullName: null, hasParseFailure: false,
   };
   const placed = { formKey: '000003:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
 
@@ -468,18 +527,18 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     const repo = makeClient({
       recordTypes: [{ type: 'WEAP', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
     });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: '000001:Plugin0.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [cell],
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [cell] }] }],
     });
-    repo.setQueryAnswer('getInteriorCells', { items: [cell], total: 1 });
+    repo.setQueryAnswer('getInteriorCells', oneSubBlock([cell]));
     repo.setQueryAnswer('getCellReferences', { persistent: [placed], temporary: [placed] });
     return repo;
   }
 
   // Every record row a plugin row expands into, at every depth, by its contextValue.
-  async function rowsBeneath(provider: PluginTreeProvider, origin: string | undefined, pluginRowConditions: PluginConditions): Promise<string[]> {
+  async function rowsBeneath(provider: PluginTreeProvider, origin: string | undefined, told: PluginConditions): Promise<string[]> {
     const states: string[] = [];
     const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
       for (const node of nodes) {
@@ -487,7 +546,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
         if (node.kind !== 'recordType' && node.kind !== 'placed') await walk(await provider.getChildren(node));
       }
     };
-    await walk(await provider.getPluginChildren('Plugin0.esp', origin, pluginRowConditions));
+    await walk(await provider.getPluginChildren('Plugin0.esp', origin, told));
     return states;
   }
 
@@ -503,37 +562,20 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     ]);
   });
 
+  // Two plugins that share a filename each state their own conditions, whatever the other is.
+  it('states an untracked plugin untracked, beside a tracked plugin of the same name', async () => {
+    const provider = new PluginTreeProvider(spatialClient());
+    provider.setTrackedPlugins([{ name: 'Plugin0.esp', origin: 'ModA' }]);
+
+    const states = await rowsBeneath(provider, undefined, { tracked: false, editable: true });
+
+    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
+  });
+
   it('states a plugin outside the load order read-only, whatever it is told', async () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), 'ModA', TRACKED);
 
     expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['tracked']));
-  });
-
-  async function questAndItsTopic(pluginRowConditions: PluginConditions): Promise<[RecordNode, RecordNode]> {
-    const repo = makeClient({
-      recordTypes: [{ type: 'qust', count: 1, displayName: 'Quest' }],
-      records: { items: [{ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }], total: 1 },
-    });
-    repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA')]);
-    const provider = new PluginTreeProvider(repo);
-    const [group] = await provider.getPluginChildren('Fallout4.esm', undefined, pluginRowConditions);
-    const [quest] = await provider.getChildren(present(group, 'the Quest group'));
-    const [topic] = await provider.getChildren(present(quest, 'the quest'));
-    return [expectInstanceOf(quest, RecordNode), expectInstanceOf(topic, RecordNode)];
-  }
-
-  it("states a tracked, editable plugin on a group's records and a quest's children", async () => {
-    const [quest, topic] = await questAndItsTopic(TRACKED);
-
-    expect(quest.contextValue).toBe('record tracked editable');
-    expect(topic.contextValue).toBe('record tracked editable');
-  });
-
-  it("states an untracked, read-only plugin on a group's records and a quest's children", async () => {
-    const [quest, topic] = await questAndItsTopic({ tracked: false, editable: false });
-
-    expect(quest.contextValue).toBe('record untracked');
-    expect(topic.contextValue).toBe('record untracked');
   });
 });
 
@@ -566,28 +608,12 @@ describe('PluginTreeProvider.refresh', () => {
 // ── Worldspace / cell / placed-object tree ──────────────────────────
 
 describe('PluginTreeProvider worldspace tree', () => {
-  it('leaves placed references out of the groups, since they sit beneath their cells', async () => {
-    const repo = makeClient({
-      recordTypes: [
-        { type: 'cell', count: 4, displayName: 'Cell' },
-        { type: 'achr', count: 12, displayName: 'Placed NPC' },
-        { type: 'refr', count: 99, displayName: 'Placed Object' },
-        { type: 'WEAP', count: 5, displayName: 'Weapon' },
-      ],
-    });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren('Plugin0.esp');
-
-    expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon']);
-  });
-
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }] }] }],
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
@@ -609,11 +635,11 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [
-        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false },
-        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: false },
+        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false },
+        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false },
       ],
       blocks: [],
     });
@@ -635,7 +661,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false });
+    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false });
 
     const groups = await provider.getChildren(cellNode);
     expect(groups).toHaveLength(1); // only persistent (temporary empty)
@@ -647,18 +673,56 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(present(placed[0], 'the sole placed row').label).toBe('barrelRef');
   });
 
-  it('paginates interior cells with a load-more node', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswer('getInteriorCells', {
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }],
-      total: 60,
-    });
+  it('nests the Cell group as blocks, then sub-blocks, then cells, labelled as xEdit labels them', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }] });
+    repo.setQueryAnswer('getInteriorCells', [
+      ...oneSubBlock([interiorCell('a:M.esp', 'RoomA')], 0, 1),
+      ...oneSubBlock([interiorCell('b:M.esp', 'RoomB')], 3, 7),
+    ]);
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('M.esp', 'Cell', 0);
+    const [cellGroup] = await provider.getPluginChildren('M.esp');
 
-    const children = await provider.getChildren(node);
-    expect(children.filter(c => c instanceof CellNode)).toHaveLength(1);
-    expect(children.filter(c => c instanceof InteriorLoadMoreNode)).toHaveLength(1);
+    const blocks = await provider.getChildren(present(cellGroup, 'the Cell group'));
+    const subBlocks = await provider.getChildren(present(blocks[1], 'the second block'));
+    const cells = await provider.getChildren(present(subBlocks[0], 'its sole sub-block'));
+
+    expect(blocks.map(b => b.label)).toEqual(['Block 0', 'Block 3']);
+    expect(subBlocks.map(b => b.label)).toEqual(['Sub-Block 7']);
+    expect(expectInstancesOf(cells, CellNode).map(c => c.label)).toEqual(['RoomB']);
+  });
+
+  it('lists every interior cell from one call', async () => {
+    const repo = makeClient();
+    repo.setQueryAnswer('getInteriorCells', oneSubBlock(Array.from({ length: 60 }, (_, i) => interiorCell(`${i}:M.esp`, `Room${i}`))));
+    const provider = new PluginTreeProvider(repo);
+
+    const cells = await interiorCellsBeneath(provider, new InteriorCellsNode('M.esp', 'Cell', 60));
+
+    expect(expectInstancesOf(cells, CellNode)).toHaveLength(60);
+    expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(1);
+  });
+
+  it('gives a worldspace an expander only when a cell is beneath it', () => {
+    const holding = new WorldspaceNode('M.esp', { formKey: 'w1:M.esp', editorId: 'Holding', hasParseFailure: false, hasChildren: true });
+    const empty = new WorldspaceNode('M.esp', { formKey: 'w2:M.esp', editorId: 'Empty', hasParseFailure: false, hasChildren: false });
+
+    expect(holding.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(empty.collapsibleState).toBe(TreeItemCollapsibleState.None);
+  });
+
+  it('gives a cell an expander only when it holds a placed reference', () => {
+    const holding = new CellNode('M.esp', interiorCell('c1:M.esp', 'Holding', { hasChildren: true }));
+    const empty = new CellNode('M.esp', interiorCell('c2:M.esp', 'Empty'));
+
+    expect(holding.collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(empty.collapsibleState).toBe(TreeItemCollapsibleState.None);
+  });
+
+  it('gives a group an expander only when it holds a record', () => {
+    expect(new RecordTypeNode('M.esp', 'weap', 1).collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(new RecordTypeNode('M.esp', 'weap', 0).collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(new WorldspacesNode('M.esp', 'Worldspace', 0).collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(new InteriorCellsNode('M.esp', 'Cell', 0).collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 });
 
@@ -736,7 +800,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false });
+    const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true });
 
     const children = await provider.getChildren(node);
 
@@ -748,7 +812,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getCellReferences', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false });
+    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false });
 
     const children = await provider.getChildren(node);
 
@@ -788,7 +852,7 @@ describe('headerFormKeyFor', () => {
 describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own plugin, and the WorldspaceNodes it builds carry that origin forward', async () => {
     const repo = makeClient();
-    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspacesNode('Shared.esp', 'Worldspace', 0, 'ModB');
 
@@ -801,11 +865,11 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaceChildren: asks the repository for the node\'s own plugin, and its TopCell/Block children carry that origin forward', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getWorldspaceBlocks', {
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false }],
-      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }] }] }],
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasChildren: false, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }, 'ModB');
+    const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, 'ModB');
 
     const worldspaceChildren = await provider.getChildren(node);
     const topCellNode = expectInstanceOf(worldspaceChildren[0], CellNode);
@@ -827,7 +891,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false }, 'ModB');
+    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }, 'ModB');
 
     const groupNode = present(expectInstancesOf(await provider.getChildren(node), PlacedGroupNode)[0], 'the sole PlacedGroupNode');
     expect(repo.calls).toContainEqual({ method: 'getCellReferences', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
@@ -837,19 +901,20 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(placedNode.origin).toBe('ModB');
   });
 
-  it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the CellNodes it builds carry that origin forward', async () => {
+  it('fetchInteriorCells: asks the repository for the node\'s own plugin, and the rows it builds carry that origin forward', async () => {
     const repo = makeClient();
-    repo.setQueryAnswer('getInteriorCells', {
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }],
-      total: 1,
-    });
+    repo.setQueryAnswer('getInteriorCells', oneSubBlock([interiorCell('i:M.esp', 'IntCell')]));
     const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
+    const node = new InteriorCellsNode('Shared.esp', 'Cell', 1, 'ModB');
 
-    const cellNode = present(expectInstancesOf(await provider.getChildren(node), CellNode)[0], 'the sole CellNode');
+    const [block] = expectInstancesOf(await provider.getChildren(node), InteriorBlockNode);
+    const [subBlock] = expectInstancesOf(await provider.getChildren(present(block, 'the sole block')), InteriorSubBlockNode);
+    const [cellNode] = expectInstancesOf(await provider.getChildren(present(subBlock, 'the sole sub-block')), CellNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: ['Shared.esp', 0, 50, 'ModB'] });
-    expect(cellNode.origin).toBe('ModB');
+    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: ['Shared.esp', 'ModB'] });
+    expect(present(block, 'the sole block').origin).toBe('ModB');
+    expect(present(subBlock, 'the sole sub-block').origin).toBe('ModB');
+    expect(present(cellNode, 'the sole cell').origin).toBe('ModB');
   });
 
   // refCache/interiorCache must be keyed by (origin, plugin) like pageCache — a key on plugin
@@ -858,7 +923,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
   it('refCache: caches each plugin\'s cell references separately, so one plugin\'s page is never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
-    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false };
+    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false };
     const fromA = new CellNode('Shared.esp', cell, 'ModA');
     const fromB = new CellNode('Shared.esp', cell, 'ModB');
 
@@ -868,7 +933,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getCellReferences')).toHaveLength(2);
   });
 
-  it('interiorCache: caches each plugin\'s interior-cell page separately, so one plugin\'s page is never served for the other', async () => {
+  it('interiorCache: caches each plugin\'s interior cells separately, so one plugin\'s cells are never served for the other', async () => {
     const repo = makeClient();
     const provider = new PluginTreeProvider(repo);
     const fromA = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModA');
@@ -880,21 +945,6 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
-  it('loadMoreInterior: keeps asking the repository for the node\'s own plugin on the next page', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
-    repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
-    const provider = new PluginTreeProvider(repo);
-    const node = new InteriorCellsNode('Shared.esp', 'Cell', 0, 'ModB');
-    const firstChildren = await provider.getChildren(node);
-    const loadMoreNode = expectInstanceOf(firstChildren.find(c => c instanceof InteriorLoadMoreNode), InteriorLoadMoreNode);
-
-    await provider.loadMore(loadMoreNode);
-
-    expect(repo.calls.filter(c => c.method === 'getInteriorCells').at(-1)).toEqual({
-      method: 'getInteriorCells', args: ['Shared.esp', 1, 50, 'ModB'],
-    });
-  });
 });
 
 // ── browsing a specific plugin of a filename (ADR-0012) ────────────────────────
@@ -1000,24 +1050,24 @@ describe('RecordNode collapsibility for container types', () => {
   // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
   // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, undefined, 'qust', true);
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', true);
     expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
   });
 
   it('is Collapsed when built as a "dial" row that actually has container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, undefined, 'dial', true);
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial', true);
     expect(node.collapsibleState).toBe(1);
   });
 
   // Collapsibility reads the listing's own hasContainerChildren fact, not the record's type
   // signature: a Quest with zero container children must show no expand chevron.
   it('stays None (a leaf) when built as a "qust" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, undefined, 'qust', false);
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust', false);
     expect(node.collapsibleState).toBe(0);
   });
 
   it('stays None (a leaf) when built as a "dial" row with no container children', () => {
-    const node = new RecordNode(makeRecord(0), undefined, undefined, 'dial', false);
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial', false);
     expect(node.collapsibleState).toBe(0);
   });
 
@@ -1036,7 +1086,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
 
     const children = await provider.getChildren(questNode);
 
@@ -1060,7 +1110,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust', true);
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust', true);
 
     const children = expectInstancesOf(await provider.getChildren(questNode), RecordNode);
 
@@ -1079,7 +1129,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     ]);
     const provider = new PluginTreeProvider(repo);
     const topicNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, undefined, 'dial');
+      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, false, false, 'dial');
 
     const children = await provider.getChildren(topicNode);
 
@@ -1092,7 +1142,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial')]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
 
     await provider.getChildren(questNode);
     await provider.getChildren(questNode);
@@ -1108,9 +1158,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const provider = new PluginTreeProvider(repo);
     const questA = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, false, 'qust');
     const questB = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', undefined, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', false, false, 'qust');
 
     const childrenA = expectInstancesOf(await provider.getChildren(questA), RecordNode);
     const childrenB = expectInstancesOf(await provider.getChildren(questB), RecordNode);
@@ -1163,13 +1213,13 @@ describe('the failure prefix', () => {
   it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, hasParseFailure: true }] });
     repo.setQueryAnswer('getWorldspaces', [
-      { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true },
-      { formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false },
+      { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true, hasChildren: true },
+      { formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false, hasChildren: false },
     ]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [],
       blocks: [{ x: 0, y: 0, hasParseFailure: true, subBlocks: [{ x: 0, y: 0, hasParseFailure: true,
-        cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasParseFailure: true }] }] }],
+        cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: true }] }] }],
     });
     repo.setQueryAnswer('getCellReferences', {
       persistent: [{ formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
@@ -1201,20 +1251,21 @@ describe('the failure prefix', () => {
 
   it('marks an interior cell that cannot be read, and its group node', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 2, hasParseFailure: true }] });
-    repo.setQueryAnswer('getInteriorCells', {
-      items: [
-        { formKey: 'bad:M.esp', editorId: 'Bad', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: true },
-        { formKey: 'ok:M.esp', editorId: 'Ok', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: false },
-      ],
-      total: 2,
-    });
+    repo.setQueryAnswer('getInteriorCells', oneSubBlock([
+      interiorCell('bad:M.esp', 'Bad', { hasParseFailure: true }),
+      interiorCell('ok:M.esp', 'Ok'),
+    ]));
     const provider = new PluginTreeProvider(repo);
 
     const [interiorRootOrUndefined] = await provider.getPluginChildren('Plugin0.esp');
     const interiorRoot = present(interiorRootOrUndefined, 'the interior-cells root');
-    const [bad, ok] = await provider.getChildren(interiorRoot);
+    const [block] = await provider.getChildren(interiorRoot);
+    const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
+    const [bad, ok] = await provider.getChildren(present(subBlock, 'the sole sub-block'));
 
-    expect(expectInstanceOf(interiorRoot.iconPath, ThemeIcon).id).toBe('error');
+    for (const node of [interiorRoot, present(block, 'the sole block'), present(subBlock, 'the sole sub-block')]) {
+      expect(expectInstanceOf(node.iconPath, ThemeIcon).id).toBe('error');
+    }
     expect(expectInstanceOf(present(bad, 'the unreadable interior cell').iconPath, ThemeIcon).id).toBe('error');
     expect(present(ok, 'the readable interior cell').iconPath).toBeUndefined();
   });

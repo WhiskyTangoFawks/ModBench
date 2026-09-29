@@ -95,15 +95,14 @@ export type RebuildIndexOutcome =
 
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
-export type CellPage = components['schemas']['CellSummaryPagedResult'];
+export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
+export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
 
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
-/** compile's Option: which state of the source it builds (compile-plugin). */
-export type CompileSource = 'workingTree' | 'main';
 
 /** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
 export interface CompileOutcome {
@@ -120,11 +119,13 @@ export type RecordCreateResponse = components['schemas']['RecordCreateResponse']
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
 export type RecordAddress = components['schemas']['RecordAddress'];
-export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOverrideResponse'];
-export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
+/** Copy's mode Option (commands.md, Record, `copy`). */
+export type CopyMode = components['schemas']['CopyMode'];
+/** One record into one destination: the unit a copy lands or is refused by. */
+export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination'>;
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
- *  (query-index contract, The record filter). */
+ *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
 /** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"
@@ -133,7 +134,7 @@ export type RecordFilter = components['schemas']['FilterRequest'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
@@ -145,16 +146,14 @@ export interface MEditClient {
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
-  copyRecordAsOverride(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-  ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined>;
-  copyRecordAsNewRecord(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-    requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined>;
+  // Each record into each destination is one item, landed or refused on its own. `replace` lets an
+  // override copy over the one a destination already holds.
+  copyRecords(
+    records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
+  ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
   // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself refused, with nothing written.
-  compile(plugins: readonly PluginAddress[], source: CompileSource): Promise<CompileOutcome | WriteRefused>;
+  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Origin-scoped: the mod, not one plugin in it, is the unit both answers cover.
   // Absorb's WriteRefused is the whole answer refused, with nothing written.
   absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
@@ -170,12 +169,13 @@ export interface MEditClient {
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
-  getRecordOverridePlugins(formKey: string): Promise<string[]>;
+  /** Every plugin that holds a copy of the record, its own included. */
+  getRecordHolders(formKey: string): Promise<PluginAddress[]>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
-  getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
+  getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]>;
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
   /** Null when mEdit took the filter, or the reason it did not. */

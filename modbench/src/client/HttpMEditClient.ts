@@ -7,11 +7,11 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type AbsorbOutcome, type BackendStatus, type CellPage, type CellReferences, type CompileOutcome, type CompileSource,
-  type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
+  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileOutcome,
+  type ContainerChildSummary, type ExternalChangeActionResult, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
-  type RebuildIndexOutcome, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
+  type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
@@ -128,14 +128,14 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused> {
-    const { error, response, data } = await this.apiClient.POST('/plugins/create', { body: { name, path, origin } });
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
-      return { refused: true, message: `Failed to create plugin — ${text}` };
-    }
-    return data ?? { name, path, origin, slot: null, version: 0 };
+  async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
+    const failMsg = `Could not create "${plugin.name}"`;
+    const answer = await this.mutate({
+      op: `createPlugin(${plugin.name}, ${plugin.origin})`,
+      failMsg,
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
+    });
+    return answer ?? { refused: true, message: `${failMsg} — no answer` };
   }
 
   /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.
@@ -345,57 +345,35 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** No confirmation — xEdit's own CopyInto asks nothing before an override copy. Success
-   *  carries no new FormKey: an override echoes the caller's own. */
-  async copyRecordAsOverride(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-  ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCopyAsOverrideResponse>({
-      op: `copyRecordAsOverride(${formKey})`,
-      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
-      post: () => this.apiClient.POST('/records/{formKey}/copy-as-override', {
-        params: { path: { formKey } },
-        body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
+  async copyRecords(
+    records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
+  ): Promise<SelectionOutcome<CopyItem> | WriteRefused> {
+    const counted = records.length === 1 ? '1 record' : `${records.length} records`;
+    const answer = await this.mutate({
+      op: `copyRecords(${counted}, ${mode})`,
+      failMsg: `Could not copy ${counted}`,
+      post: () => this.apiClient.POST('/records/copy', {
+        body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
     });
-  }
-
-  /** A deep copy under a fresh FormKey, no EditorID prompt. Resolves `undefined` when the caller
-   *  declines the ESL prompt. */
-  async copyRecordAsNewRecord(
-    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
-    requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCopyAsNewRecordResponse>({
-      op: `copyRecordAsNewRecord(${formKey})`,
-      failMsg: `Could not copy ${formKey} into "${destinationPlugin}"`,
-      post: () => this.apiClient.POST('/records/{formKey}/copy-as-new-record', {
-        params: { path: { formKey } },
-        body: {
-          sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey: requestedFormKey ?? null,
-        },
-      }),
-      onEslContradiction: onEslContradiction && (async (message) => (
-        (await onEslContradiction(message))
-          ? this.copyRecordAsNewRecord(
-            formKey, sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey,
-            onEslContradiction,
-          )
-          : undefined
-      )),
-    });
+    if (answer === undefined) return { refused: true, message: `Could not copy ${counted} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied.map(({ record, destination }) => ({ record, destination })),
+      refused: answer.refused.map((r) => ({ item: { record: r.record, destination: r.destination }, reason: r.message })),
+    };
   }
 
   /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
    *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
    *  disk. */
-  async compile(plugins: readonly PluginAddress[], source: CompileSource): Promise<CompileOutcome | WriteRefused> {
+  async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
     const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
     const answer = await this.mutate({
-      op: `compile(${counted}, ${source})`,
+      op: `compile(${counted})`,
       failMsg: `Could not compile ${counted}`,
       post: () => this.apiClient.POST('/plugins/compile', {
-        body: { plugins: [...plugins], ref: source === 'main' ? 'main' : null },
+        body: { plugins: [...plugins] },
       }),
     });
     if (answer === undefined) return { refused: true, message: `Could not compile ${counted} — no answer` };
@@ -540,13 +518,12 @@ export class HttpMEditClient implements MEditClient {
     return data ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
-  // See the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
-  // yet", not a fault, same posture as getRecordOwner's own 404 case above.
-  async getRecordOverridePlugins(formKey: string): Promise<string[]> {
+  // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
+  async getRecordHolders(formKey: string): Promise<PluginAddress[]> {
     const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
     if (response.status === 404) return [];
-    this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
-    return (data?.overrides ?? []).map((o) => o.plugin);
+    this.ensureOk(`getRecordHolders(${formKey})`, response, error);
+    return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
   }
 
   async getReferences(formKey: string): Promise<ReferenceResult[]> {
@@ -626,14 +603,14 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage> {
+  async getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]> {
     return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
-        params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
         signal,
       });
       this.ensureOk(`getInteriorCells(${plugin})`, response, error);
-      return data ?? { items: [], total: 0 };
+      return data ?? [];
     });
   }
 
