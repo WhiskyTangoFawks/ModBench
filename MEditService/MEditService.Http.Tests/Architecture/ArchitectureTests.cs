@@ -234,11 +234,11 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
-    // calls is a widening nobody asked for — and every implementer, the Indexer and each query
-    // test's stub alike, pays for it.
+    // ADR-0014 invariant 3: Queries are the only readers of the read model, so a member of
+    // IQueryIndex no query service calls is a widening nobody asked for — every implementer
+    // pays for it.
     [Fact]
-    public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
+    public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
             .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))

@@ -65,6 +65,11 @@ public class ContainerChildQueryServiceTests
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
+
+        public void SetFilter(string sql, string source) => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public void ClearFilter() => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+            throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
 
     private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)

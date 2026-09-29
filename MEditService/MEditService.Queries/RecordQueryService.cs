@@ -154,6 +154,13 @@ public sealed class RecordQueryService(
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
 
+    public void SetFilter(string sql, string source) => _index.SetFilter(sql, source);
+
+    public void ClearFilter() => _index.ClearFilter();
+
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        _index.RebuildStore(gameRelease, instanceRoot);
+
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
