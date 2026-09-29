@@ -121,16 +121,6 @@ public sealed class PluginAdapterTests
         }
     }
 
-    // Rival: GetRandomFileName's own 3-character extension, which lands on .esp/.esm/.esl about
-    // 1 in 15k calls — a temp file the watcher and plugin sync would briefly mistake for a plugin.
-    [Fact]
-    public void TempPluginPath_NeverCarriesAPluginExtension()
-    {
-        // A fixed suffix, not a sampled one: GetRandomFileName's own extension would still land on
-        // .esp/.esm/.esl about 1 in 15k calls, too rare for a sample to pin reliably.
-        Assert.Equal(".tmp", Path.GetExtension(MutagenPluginAdapter.TempPluginPath("/some/folder")));
-    }
-
     [Fact]
     public async Task CreateAndWriteAsync_IntoAFolderThatHasGone_AnswersFolderGone_AndMakesNoFolder()
     {

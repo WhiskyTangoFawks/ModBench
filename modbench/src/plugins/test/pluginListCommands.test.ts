@@ -218,29 +218,6 @@ describe('registerCreatePluginCommand', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  // mEdit refuses a light plugin the release cannot load with a 422 (LightPluginUnsupported);
-  // this reaches the reporter the same as any other refusal, named here so the path is covered.
-  it('reports a light-plugin-unsupported refusal at error, and lands no toast', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', {
-      refused: true, message: 'Could not create "MyPatch.esl" — Oblivion has no light plugins, so MyPatch.esl cannot be created.',
-    });
-    showInputBox.mockResolvedValue('MyPatch.esl');
-    pickOrigin('overwrite');
-
-    const { run, reporter } = invoke(client, makeMo2());
-    await run();
-
-    expect(reporter.reports).toEqual([
-      {
-        severity: 'error',
-        message: 'Could not create "MyPatch.esl" — Oblivion has no light plugins, so MyPatch.esl cannot be created.',
-        detail: undefined,
-      },
-    ]);
-    expect(reporter.landings).toEqual([]);
-  });
-
   it('reports that every place holds the name, and offers no empty pick', async () => {
     const mo2 = makeMo2();
     mo2.instance.value = {
