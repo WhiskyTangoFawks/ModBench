@@ -71,8 +71,7 @@ public sealed class PluginCompileService(
                     $"{plugin.Name} is a light plugin but holds native FormID(s) outside the light range " +
                     $"(0x{lightRange.Min:X}-0x{lightRange.Max:X}): {string.Join(", ", outOfRange.Take(4))}" +
                     (outOfRange.Count > 4 ? $" and {outOfRange.Count - 4} more" : "") +
-                    ". Clear the light flag in the header, rename the plugin off .esl, or change the records' " +
-                    "FormIDs into the light range.");
+                    ". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.");
             }
         }
 

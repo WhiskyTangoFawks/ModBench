@@ -105,7 +105,7 @@ export interface CompileDeps {
   client: Pick<MEditClient, 'getPlugins' | 'compile'>;
   progress: PluginsViewProgress;
   reporter: Reporter;
-  diagnostics: vscode.DiagnosticCollection;
+  problems: CompileProblems;
   originFiles: OriginFilesOf;
 }
 
@@ -139,7 +139,8 @@ async function argumentOf(
 // compilable plugin first.
 async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
-  const isSelected = (p: PluginAddress) => selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
+  const selectedKey = selected && pluginAddressKey(selected.plugin.name, selected.origin);
+  const isSelected = (p: PluginAddress) => pluginAddressKey(p.name, p.origin) === selectedKey;
   const plugins = await deps.client.getPlugins().catch((err: unknown) => {
     deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
     return undefined;
@@ -169,14 +170,8 @@ async function compilePlugins(deps: CompileDeps, plugins: readonly PluginAddress
   });
 }
 
-// One mod's diagnostics replace what that mod's folder held, so every plugin of the mod that
-// compiled is published together.
 function publishLanded(deps: CompileDeps, outcome: CompileOutcome): void {
-  const byOrigin = new Map<string, CompileDiagnostic[]>();
-  for (const compiled of outcome.landed) {
-    byOrigin.set(compiled.plugin.origin, [...(byOrigin.get(compiled.plugin.origin) ?? []), ...compiled.diagnostics]);
-  }
-  for (const [origin, diagnostics] of byOrigin) publishCompileDiagnostics(deps.diagnostics, deps.originFiles(origin), diagnostics);
+  for (const { plugin, diagnostics } of outcome.landed) deps.problems.publish(plugin, deps.originFiles(plugin.origin), diagnostics);
 }
 
 function diagnosticsWords(count: number): string {
@@ -187,10 +182,12 @@ function diagnosticsWords(count: number): string {
 // plugin and why, and pointing at the Problems panel when it left diagnostics.
 function reportCompiled(reporter: Reporter, outcome: CompileOutcome, total: number): void {
   const diagnostics = outcome.landed.reduce((sum, compiled) => sum + compiled.diagnostics.length, 0);
-  if (outcome.refused.length > 0) {
+  const [refused] = outcome.refused;
+  if (refused !== undefined) {
     const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
+    const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
     reporter.selectionOutcome(
-      `Could not compile ${outcome.refused.length} of ${total} plugins.${rest}`,
+      `Could not compile ${what}.${rest}`,
       { landed: outcome.landed.map((compiled) => compiled.plugin), refused: outcome.refused }, rowName);
     return;
   }
@@ -212,28 +209,37 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   });
 }
 
-/** Replaces whatever this mod's source files held from the last compile — never additive, or
- *  a fixed diagnostic would survive forever. `files` is the Instance value's answer for the
- *  origin: `overwrite` and `Data` are not under `mods/` (ADR-0012). */
-export function publishCompileDiagnostics(
-  collection: vscode.DiagnosticCollection, files: OriginFiles | undefined, diagnostics: readonly CompileDiagnostic[],
-): void {
-  if (files === undefined) return;
+/** The compile diagnostics in the Problems panel. A plugin's next compile replaces its own whole,
+ *  and no other plugin's: one refused beside it in the same mod keeps what its last compile found.
+ *  `files` is the Instance value's answer for the plugin's origin: `overwrite` and `Data` are not
+ *  under `mods/` (ADR-0012). */
+export class CompileProblems {
+  private readonly published = new Map<string, vscode.Uri[]>();
 
-  // Clear every URI this collection holds under this folder before republishing —
-  // DiagnosticCollection has no "clear just this prefix" primitive, so this walks every entry it holds.
-  for (const [uri] of collection) {
-    if (files.holds(uri.fsPath)) collection.delete(uri);
-  }
+  constructor(private readonly collection: vscode.DiagnosticCollection) {}
 
-  const byUri = new Map<string, vscode.Diagnostic[]>();
-  for (const d of diagnostics) {
-    const fsPath = files.file(d.sourceRelativePath);
-    const list = byUri.get(fsPath) ?? [];
-    list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
-    byUri.set(fsPath, list);
+  publish(plugin: PluginAddress, files: OriginFiles | undefined, diagnostics: readonly CompileDiagnostic[]): void {
+    const key = pluginAddressKey(plugin.name, plugin.origin);
+    for (const uri of this.published.get(key) ?? []) this.collection.delete(uri);
+    if (files === undefined) {
+      this.published.delete(key);
+      return;
+    }
+
+    const byPath = new Map<string, vscode.Diagnostic[]>();
+    for (const d of diagnostics) {
+      const fsPath = files.file(d.sourceRelativePath);
+      const list = byPath.get(fsPath) ?? [];
+      list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
+      byPath.set(fsPath, list);
+    }
+    const uris = [...byPath].map(([fsPath, list]) => {
+      const uri = vscode.Uri.file(fsPath);
+      this.collection.set(uri, list);
+      return uri;
+    });
+    this.published.set(key, uris);
   }
-  for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
 /** The one shape this extension needs from a `vscode.git` `Repository`: `status()`. */

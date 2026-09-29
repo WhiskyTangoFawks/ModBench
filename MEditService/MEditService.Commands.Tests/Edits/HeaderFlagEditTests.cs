@@ -81,8 +81,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.False(compile.Succeeded);
         Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
         Assert.EndsWith(
-            "Clear the light flag in the header, rename the plugin off .esl, or change the records' FormIDs " +
-            "into the light range.",
+            "Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.",
             compile.RefusalReason, StringComparison.Ordinal);
     }
 

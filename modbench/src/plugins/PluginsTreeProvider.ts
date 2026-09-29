@@ -169,29 +169,23 @@ interface PluginFacts {
   order?: PluginOrderFacts;
 }
 
-// ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
+// ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
+// under both, and a read with no origin finds nothing.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
-  private readonly byName = new Map<string, T>();
 
-  set(name: string, origin: string | undefined, value: T): void {
+  set(name: string, origin: string, value: T): void {
     this.byAddress.set(pluginAddressKey(name, origin), value);
-    this.byName.set(name.toLowerCase(), value);
   }
 
-  // Each index accumulates on its own: the name-only fallback reads as every plugin's lines
-  // together, a plugin's own key as its own. `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string | undefined, item: U): void {
+  // `this` narrows to an array-valued instance.
+  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string, item: U): void {
     const addressKey = pluginAddressKey(name, origin);
-    const nameKey = name.toLowerCase();
     this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
-    this.byName.set(nameKey, [...(this.byName.get(nameKey) ?? []), item]);
   }
 
   get(name: string, origin: string | undefined): T | undefined {
-    return origin === undefined
-      ? this.byName.get(name.toLowerCase())
-      : this.byAddress.get(pluginAddressKey(name, origin));
+    return origin === undefined ? undefined : this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
@@ -565,16 +559,14 @@ export class PluginsTreeProvider
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
   private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
     const place = this.placeOf(row.origin);
-    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(row.plugin.name, joinedOrigin);
+    const facts = this.facts?.get(row.plugin.name, joinedOrigin);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
       .join(' ');
   }
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    // No filename fallback: a row whose plugin mEdit has not named offers no record edit.
-    const joinedOrigin = this.joinOrigin(file, row);
-    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, this.joinOrigin(file, row));
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -758,12 +750,11 @@ export class PluginsTreeProvider
   // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
   // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
   private reachableFailureOf(row: PluginListNode): string | undefined {
-    const file = pluginFileOf(row);
-    return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
+    return this.reachableFailures.get(pluginFileOf(row), row.origin);
   }
 
   // ADR-0012 keys every fact by origin: a row's own, and for a locked row the copy the game loads.
-  // A row whose origin mEdit names no plugin for falls back to the filename.
+  // A row whose origin mEdit names no plugin for joins nothing.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
     return this.heldOrigin(file, row.origin);
   }

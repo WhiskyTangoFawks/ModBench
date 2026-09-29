@@ -71,7 +71,8 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Every refusal is a plugin's own item of the answer, never an HTTP error.
+        // A missing load order refuses the whole selection once; every other refusal is an item of
+        // the answer.
         app.MapPost("/plugins/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)

@@ -37,7 +37,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  registerTrackCommand, registerCompileCommand, publishCompileDiagnostics, type PluginsViewProgress,
+  registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
@@ -281,7 +281,7 @@ describe('modbench.plugin.compile', () => {
         },
         say: () => { /* compile says nothing in the message line */ },
       },
-      reporter, diagnostics,
+      reporter, problems: new CompileProblems(diagnostics),
       originFiles: (origin) => (origin === 'ModA' ? PATCH_FILES : undefined),
     }, () => options.viewSelection ?? []);
     return {
@@ -356,6 +356,32 @@ describe('modbench.plugin.compile', () => {
     ]);
   });
 
+  // Never silently wrong: a plugin refused this time has not been rebuilt, so what its last compile
+  // found still stands, beside a plugin of the same mod that compiled again.
+  it('replaces the diagnostics of each plugin that compiled, and keeps a refused plugin\'s of the same mod', async () => {
+    const SIBLING = { name: 'Sibling.esp', origin: 'ModA' };
+    const diagnosticOf = (plugin: { name: string }) =>
+      ({ formKey: `000800:${plugin.name}`, sourceRelativePath: `${plugin.name}/A.json`, message: `${plugin.name} is broken` });
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', {
+      landed: [
+        compiledPluginFixture({ plugin: PATCH, diagnostics: [diagnosticOf(PATCH)] }),
+        compiledPluginFixture({ plugin: SIBLING, diagnostics: [diagnosticOf(SIBLING)] }),
+      ],
+      refused: [],
+    });
+    const { handler, diagnostics } = registered(client);
+    const rows = [row(PATCH), row(SIBLING)];
+    await handler(rows[0], rows);
+
+    client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: PATCH })], refused: [{ item: SIBLING, reason: 'no source' }] });
+    await handler(rows[0], rows);
+
+    expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
+      ['/instance/mods/ModA/Sibling.esp/A.json', ['Sibling.esp is broken']],
+    ]);
+  });
+
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', {
@@ -378,6 +404,18 @@ describe('modbench.plugin.compile', () => {
       message: 'Could not compile 1 of 2 plugins. The rest compiled with 2 diagnostics. See the Problems panel.',
       detail: '"Other.esp (ModB)" (no source)',
     }]);
+  });
+
+  it('names the one plugin it was asked to compile when that plugin is refused', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', { landed: [], refused: [{ item: PATCH, reason: 'no source' }] });
+    const { handler, reporter } = registered(client);
+
+    await handler(row(PATCH));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not compile "MyPatch.esp".', detail: '"MyPatch.esp (ModA)" (no source)' },
+    ]);
   });
 
   it('reports a refusal of the whole selection once, and lands nothing', async () => {
@@ -420,6 +458,18 @@ describe('modbench.plugin.compile', () => {
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
 
+  it('from the palette, leads with the selected plugin whatever the case of its row\'s name and origin', async () => {
+    const client = new InMemoryMEditClient();
+    showQuickPick.mockResolvedValue(undefined);
+    const { handler } = registered(client, { viewSelection: [row({ name: 'other.ESP', origin: 'modb' })] });
+
+    await handler();
+
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }],
+      { placeHolder: 'Compile which plugin?' });
+  });
+
   it('from the palette, compiles nothing when the pick is dismissed', async () => {
     const client = new InMemoryMEditClient();
     showQuickPick.mockResolvedValue(undefined);
@@ -446,9 +496,9 @@ describe('modbench.plugin.compile', () => {
   });
 });
 
-// ── publishCompileDiagnostics ──────────────────────────────────────────────
+// ── CompileProblems ────────────────────────────────────────────────────────
 
-describe('publishCompileDiagnostics', () => {
+describe('CompileProblems', () => {
   const diagnosticAt = (sourceRelativePath: string) => [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }];
 
   const publishedPaths = (diagnostics: FakeDiagnosticCollection) => [...diagnostics].map(([uri]) => uri.fsPath);
@@ -457,30 +507,37 @@ describe('publishCompileDiagnostics', () => {
     const diagnostics = new FakeDiagnosticCollection();
     const plugin = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
 
-    publishCompileDiagnostics(diagnostics, originFiles([plugin], 'overwrite'), diagnosticAt('Source/Stray.psc'));
+    new CompileProblems(diagnostics).publish(plugin, originFiles([plugin], 'overwrite'), diagnosticAt('Source/Stray.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
   });
 
-  it("replaces the entries the origin's folder holds, and leaves every other folder's", () => {
+  it("replaces the plugin's own entries, and leaves every other plugin's, its mod's included", () => {
     const diagnostics = new FakeDiagnosticCollection();
+    const problems = new CompileProblems(diagnostics);
     const plugins = [
       { name: 'A.esp', path: '/instance/mods/ModA/A.esp', origin: 'ModA', slot: 0, enabled: true, winning: true },
-      { name: 'B.esp', path: '/instance/mods/ModB/B.esp', origin: 'ModB', slot: 1, enabled: true, winning: true },
+      { name: 'Also.esp', path: '/instance/mods/ModA/Also.esp', origin: 'ModA', slot: 1, enabled: true, winning: true },
+      { name: 'B.esp', path: '/instance/mods/ModB/B.esp', origin: 'ModB', slot: 2, enabled: true, winning: true },
     ];
-    publishCompileDiagnostics(diagnostics, originFiles(plugins, 'ModA'), diagnosticAt('Source/Old.psc'));
-    publishCompileDiagnostics(diagnostics, originFiles(plugins, 'ModB'), diagnosticAt('Source/Other.psc'));
+    const [a, also, b] = plugins;
+    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/Old.json'));
+    problems.publish(present(also, 'Also.esp'), originFiles(plugins, 'ModA'), diagnosticAt('Also.esp/Kept.json'));
+    problems.publish(present(b, 'B.esp'), originFiles(plugins, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    publishCompileDiagnostics(diagnostics, originFiles(plugins, 'ModA'), diagnosticAt('Source/A.psc'));
+    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/New.json'));
 
-    expect(publishedPaths(diagnostics)).toEqual(['/instance/mods/ModB/Source/Other.psc', '/instance/mods/ModA/Source/A.psc']);
+    expect(publishedPaths(diagnostics)).toEqual([
+      '/instance/mods/ModA/Also.esp/Kept.json', '/instance/mods/ModB/B.esp/Other.json', '/instance/mods/ModA/A.esp/New.json',
+    ]);
   });
 
   it('publishes nothing when the value knows no folder for the origin', () => {
     const diagnostics = new FakeDiagnosticCollection();
 
-    publishCompileDiagnostics(diagnostics, undefined, diagnosticAt('Source/A.psc'));
+    new CompileProblems(diagnostics).publish({ name: 'A.esp', origin: 'ModA' }, undefined, diagnosticAt('Source/A.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual([]);
   });
 });
+

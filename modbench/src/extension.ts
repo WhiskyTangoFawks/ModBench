@@ -25,7 +25,7 @@ import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerCompileCommand, type CompileDeps,
+  registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps,
   registerOpenHeaderCommand, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -72,8 +72,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-  // Compile's diagnostics — one collection for every tracked mod's source files, kept
-  // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
+  // Compile's diagnostics — one collection for every tracked mod's source files, in which
+  // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
   // The session-load scan's own collection — a sibling of the compile one, targeting plugin
@@ -137,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, outputChannel, compileDiagnostics,
+    session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -222,7 +222,7 @@ interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
-  compileDiagnostics: vscode.DiagnosticCollection;
+  compileProblems: CompileProblems;
   notifyConflictsComputed: () => void;
   originFiles: OriginFilesOf;
 }
@@ -248,12 +248,12 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
 }
 
 function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
-  const { session, client, outputChannel, compileDiagnostics, originFiles } = deps;
+  const { session, client, outputChannel, compileProblems, originFiles } = deps;
   return {
     client,
     progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
     reporter: makeReporter(outputChannel, 'plugin.compile'),
-    diagnostics: compileDiagnostics,
+    problems: compileProblems,
     originFiles,
   };
 }

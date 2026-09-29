@@ -155,10 +155,6 @@ internal static class PluginTrees
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
 
-    /// <summary>The prefix of the scratch folder a whole-mod read materializes its files in, so a test
-    /// watching for a leak knows what to look for.</summary>
-    internal const string ReadScratchPrefix = "medit-readtree-";
-
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
     /// 2).</summary>
@@ -166,11 +162,11 @@ internal static class PluginTrees
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
-        var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
+        var scratchDir = Directory.CreateTempSubdirectory(MutagenPluginAdapter.ReadScratchPrefix).FullName;
         try
         {
-            // Outside the catch below: a tree git holds and this filesystem cannot write is not a
-            // source defect, and a refusal naming the source would misname it.
+            // Outside the catch below: a scratch folder this filesystem cannot write is not a source
+            // defect, and a refusal naming the source would misname it.
             var treeRoot = await MaterializeTree(files, scratchDir, cancel);
 
             // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and

@@ -1966,13 +1966,37 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(h.tree.getTreeItem(present(rows[0], 'the sole row')).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  // An implicit master has no mod origin to join facts on, so its filter match falls back to
-  // its name alone (ADR-0012) — it is as filterable as any other row, not exempt.
+  // A locked row is as filterable as any other row, not exempt.
   it('hides an implicit master row the record filter matches no records of', async () => {
     const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
     await reconcile(h, [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: false })]);
 
     expect(await h.tree.getChildren()).toEqual([]);
+  });
+
+  // ADR-0012 invariant 1: a locked row reads its own copy's answer, the copy lockedOriginOf names,
+  // never whichever copy of the name mEdit listed last. Both orders of mEdit's answer.
+  const ownCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: matches });
+  const modCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'ModA', hasMatchingRecords: matches });
+  it.each([
+    ['hides', 'matches nothing', 'first', [ownCopy(false), modCopy(true)], 0],
+    ['hides', 'matches nothing', 'last', [modCopy(true), ownCopy(false)], 0],
+    ['shows', 'matches', 'first', [ownCopy(true), modCopy(false)], 1],
+    ['shows', 'matches', 'last', [modCopy(false), ownCopy(true)], 1],
+  ] as const)('%s a locked row whose own copy %s, with its own copy listed %s', async (_verb, _match, _order, answer, rows) => {
+    const h = makeTree(
+      [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: false })],
+      { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    await reconcile(h, [...answer]);
+
+    expect(await h.tree.getChildren()).toHaveLength(rows);
+  });
+
+  it('hides no row by the answer for another plugin of its name, when mEdit names none at its origin', async () => {
+    const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
+    await reconcile(h, [held('A.esp', { origin: 'SomeOtherMod', hasMatchingRecords: false })]);
+
+    expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
   it('restores a hidden plugin immediately, in load order, once the filter clears', async () => {
@@ -3205,13 +3229,14 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).tooltip).toContain('AMaster.esm');
   });
 
-  it('falls back to the name alone when the row origin matches no plugin the answer names', async () => {
+  // ADR-0012 invariant 1: another plugin of the name is another plugin, so its facts are not this row's.
+  it('states nothing of another plugin of the name when the row origin matches no plugin the answer names', async () => {
     const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
     await reconcile(h, [held('A.esp', {
-      origin: 'SomeOtherMod', masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
+      origin: 'SomeOtherMod', isImmutable: true, masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
     })]);
 
-    expect((await rowItem(h)).tooltip).toContain('Missing master: Ghost.esm');
+    expect((await rowItem(h)).tooltip).toBe('A.esp\nRenamedMod');
   });
 });
 

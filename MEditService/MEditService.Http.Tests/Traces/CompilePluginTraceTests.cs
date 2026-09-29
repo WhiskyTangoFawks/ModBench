@@ -129,6 +129,9 @@ public sealed class CompilePluginTraceTests : HostedTests
         var response = await Client.Compile([(Plugin, Origin), (OtherPlugin, OtherOrigin)]);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("No load order has been received.", problem.GetProperty("detail").GetString());
+        Assert.False(problem.TryGetProperty("refused", out _), "The whole selection is refused once, not per plugin.");
     }
 
     [Fact]
