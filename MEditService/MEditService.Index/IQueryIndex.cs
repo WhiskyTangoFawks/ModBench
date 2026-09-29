@@ -1,10 +1,12 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014 invariant 3: the Index as its only readers see it. Every member has a caller
-/// in <c>MEditService.Queries</c>, and an architecture test says so.</summary>
+/// <summary>ADR-0014 invariant 3: the Index as Queries sees it — its reads, plus the filter and
+/// rebuild (target-architecture.d2 medit_core.queries). Every member has a caller in
+/// <c>MEditService.Queries</c>.</summary>
 public interface IQueryIndex
 {
     /// <summary>Where the projection is and what it has established so far (ADR-0013): anything
@@ -19,4 +21,10 @@ public interface IQueryIndex
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
     /// Index has no store to read.</summary>
     IRecordReads RequireReads();
+
+    void SetFilter(string sql, string source);
+
+    void ClearFilter();
+
+    Task RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

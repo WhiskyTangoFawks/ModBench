@@ -1,6 +1,7 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.TestSupport;
 
@@ -95,12 +96,25 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
 {
     public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
     public string? FilterSql { get; set; }
+    public string? LastFilterSource { get; private set; }
+    public GameRelease? LastRebuildRelease { get; private set; }
+    public string? LastRebuildInstanceRoot { get; private set; }
     public IRecordReads RequireReads() => reads;
 
-    // Mirrors Indexer's own SetFilter/ClearFilter shape; a hand double states the filter
-    // directly rather than compiling SQL to evaluate it.
-    internal void SetFilter(string sql) => FilterSql = sql;
-    internal void ClearFilter() => FilterSql = null;
+    public void SetFilter(string sql, string source)
+    {
+        FilterSql = sql;
+        LastFilterSource = source;
+    }
+
+    public void ClearFilter() => FilterSql = null;
+
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        LastRebuildRelease = gameRelease;
+        LastRebuildInstanceRoot = instanceRoot;
+        return Task.CompletedTask;
+    }
 
     /// <summary>A whole fixture, opened: the index and the load order it was built against.</summary>
     internal static (FakeIndex Index, LoadOrderHolder Holder) From(FakeFixtureData fixture)
