@@ -209,10 +209,8 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   });
 }
 
-/** The compile diagnostics in the Problems panel. A plugin's next compile replaces its own whole,
- *  and no other plugin's: one refused beside it in the same mod keeps what its last compile found.
- *  `files` is the Instance value's answer for the plugin's origin: `overwrite` and `Data` are not
- *  under `mods/` (ADR-0012). */
+/** The compile diagnostics in the Problems panel. A plugin's compile replaces its own and no other
+ *  plugin's, so one refused beside it in its mod keeps what its last compile found. */
 export class CompileProblems {
   private readonly published = new Map<string, vscode.Uri[]>();
 
