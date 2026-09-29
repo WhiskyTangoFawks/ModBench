@@ -135,11 +135,12 @@ public sealed class WriteSideIndexScanTests
     private const string DoorMappingFile = "MEditService.Http/Endpoints/IndexEndpoints.cs";
 
     // The Index's doors as the zoom-out captions them, by the member each route calls. Registers
-    // answers the 404 before validate is asked for a plugin nobody holds.
+    // answers the 404 before validate is asked for a plugin nobody holds. The filter and rebuild
+    // are Queries' doors now, reached through IRecordQueryService.
     private static readonly string[] IndexDoors =
     [
-        "Status", "RequireReads", "ActiveFilter", "SetFilter", "ClearFilter", "Sequence",
-        "AwaitSequenceAsync", "Registers", "ValidateIndex", "RebuildStore",
+        "Status", "RequireReads", "ActiveFilter", "Sequence", "AwaitSequenceAsync", "Registers",
+        "ValidateIndex",
     ];
 
     [Fact]

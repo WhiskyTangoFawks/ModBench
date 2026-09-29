@@ -15,7 +15,7 @@ namespace MEditService.Index;
 /// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
 /// watchers' re-projections, deciding nothing — the load order value answers who participates and
 /// wins, the schema where a field goes.</summary>
-public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
+public sealed class Indexer : IIndexMaintenance, IRefreshIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;

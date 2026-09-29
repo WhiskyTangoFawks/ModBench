@@ -247,13 +247,18 @@ public sealed class ArchitectureTests
             .Select(File.ReadAllText)
             .ToList();
         // Property getters travel as get_X methods; naming the property is what a caller does.
-        var members = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
-            .Concat(typeof(IQueryIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name));
+        // IIndexMaintenance is IQueryIndex plus Queries' own filter-and-rebuild verbs, so both
+        // interfaces' doors are held to the same rule.
+        var members = new[] { typeof(IQueryIndex), typeof(IIndexMaintenance) }
+            .SelectMany(t => t.GetProperties().Select(m => m.Name)
+                .Concat(t.GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name)))
+            .Distinct(StringComparer.Ordinal);
         var uncalled = members
             .Where(name => !queries.Exists(text => text.Contains($".{name}", StringComparison.Ordinal)))
             .ToList();
         Assert.True(uncalled.Count == 0,
-            $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
+            $"{nameof(IQueryIndex)} or {nameof(IIndexMaintenance)} carries a member no query service calls:\n"
+            + string.Join("\n", uncalled));
     }
 
     // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
