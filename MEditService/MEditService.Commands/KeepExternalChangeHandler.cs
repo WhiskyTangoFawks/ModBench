@@ -74,10 +74,9 @@ public sealed class KeepExternalChangeHandler
                 landed.Add(t.FormKey);
             }
 
-            // The working tree now corresponds to this binary — atRef: null snapshots it as it stands,
-            // as Save & Compile parks.
+            // The working tree now corresponds to this binary, so it is parked as compile parks it.
             var binarySha256 = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef: null, binarySha256);
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, binarySha256);
         }
 
         // Index matches the working tree for every changed tracked file, so the same bytes cannot

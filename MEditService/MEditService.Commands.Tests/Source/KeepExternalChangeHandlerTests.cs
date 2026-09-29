@@ -71,7 +71,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         File.WriteAllText(impostor, File.ReadAllText(_mod.NpcSourceFile));
         // Staged, or the parked snapshot would not carry it: git stash create ignores untracked files.
         GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, "add", "-A");
-        SourceRepository.ParkCompileSnapshot(_mod.ModFolder, SourceEditFixture.PluginName, atRef: null, "abc");
+        SourceRepository.ParkCompileSnapshot(_mod.ModFolder, SourceEditFixture.PluginName, "abc");
         var repository = SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
         Assert.Equal(

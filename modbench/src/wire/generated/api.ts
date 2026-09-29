@@ -248,7 +248,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/compile": {
+    "/plugins/compile": {
         parameters: {
             query?: never;
             header?: never;
@@ -562,17 +562,22 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
-        CompileRequest: {
-            origin: string;
-            ref?: string | null;
-        };
-        CompileResult: {
-            succeeded: boolean;
-            refusalReason?: string | null;
-            diagnostics: components["schemas"]["CompileDiagnostic"][];
-            masters: string[];
-            eslContradiction: boolean;
+        CompileRefused: {
+            plugin: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["RecordEditRefusal"];
+            message: string;
+        };
+        CompileRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
+        CompileResponse: {
+            applied: components["schemas"]["CompiledPlugin"][];
+            refused: components["schemas"]["CompileRefused"][];
+        };
+        CompiledPlugin: {
+            plugin: components["schemas"]["PluginAddress"];
+            masters: string[];
+            diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
@@ -1615,9 +1620,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                plugin: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -1632,7 +1635,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompileResult"];
+                    "application/json": components["schemas"]["CompileResponse"];
                 };
             };
             /** @description Bad Request */
@@ -1646,6 +1649,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

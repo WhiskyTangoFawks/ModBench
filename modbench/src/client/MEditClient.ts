@@ -1,6 +1,6 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompileResult,
+  type CompiledPlugin, type CompileDiagnostic,
   type ExternalChangeActionResult, type NotificationEvent,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -9,7 +9,7 @@ import {
   type UnansweredExternalChange, type PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `editRecord` is handed. Re-exported because a caller of the one write path names this
  *  type, and the client is the seam it reaches the backend through (ADR-0007). */
@@ -103,6 +103,13 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
+
+/** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
+export interface CompileOutcome {
+  landed: readonly CompiledPlugin[];
+  refused: readonly ItemRefusal<PluginAddress>[];
+}
+
 /** Absorb's answer: each changed plugin landed or refused, and beside them the commit of the mod's
  *  changed tracked files, which is no plugin's and can fail after every plugin landed. */
 export interface AbsorbOutcome extends SelectionOutcome<PluginAddress> {
@@ -144,7 +151,9 @@ export interface MEditClient {
   copyRecords(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
-  compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
+  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
+  // invariant 4). A WriteRefused is the call itself refused, with nothing written.
+  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Origin-scoped: the mod, not one plugin in it, is the unit both answers cover.
   // Absorb's WriteRefused is the whole answer refused, with nothing written.
   absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
@@ -199,6 +208,6 @@ export interface MEditClient {
 export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult,
+  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
   ExternalChangeActionResult, LoadOrderStatus, LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
 };

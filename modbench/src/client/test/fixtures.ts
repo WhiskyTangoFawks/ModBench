@@ -1,4 +1,4 @@
-import type { CompileResult, NotificationEvent, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
+import type { CompiledPlugin, NotificationEvent, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */
@@ -54,18 +54,10 @@ export function recordSummaryFixture(overrides: Partial<RecordSummary> = {}): Re
   };
 }
 
-/** A `CompileResult` with every required wire member at its neutral (successful, no-diagnostic)
+/** A `CompiledPlugin` with every required wire member at its neutral (no-master, no-diagnostic)
  *  value. */
-export function compileResultFixture(overrides: Partial<CompileResult> = {}): CompileResult {
-  return {
-    succeeded: true,
-    refusalReason: null,
-    diagnostics: [],
-    masters: [],
-    eslContradiction: false,
-    refusal: 'None',
-    ...overrides,
-  };
+export function compiledPluginFixture(overrides: Partial<CompiledPlugin> & Pick<CompiledPlugin, 'plugin'>): CompiledPlugin {
+  return { masters: [], diagnostics: [], ...overrides };
 }
 
 /** A `NotificationEvent` with every required wire member at its neutral value. */

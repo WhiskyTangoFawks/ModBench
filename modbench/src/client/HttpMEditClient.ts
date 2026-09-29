@@ -7,7 +7,7 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileResult,
+  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileOutcome,
   type ContainerChildSummary, type ExternalChangeActionResult, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
@@ -364,15 +364,24 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** {@link WriteRefused} on a transport/HTTP failure — distinct from `succeeded: false`, a typed
-   *  refusal the caller reads off the returned `CompileResult` itself. Never refreshes the tree:
-   *  a compiled binary changes only bytes on disk. */
-  async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined> {
-    return this.mutate<CompileResult>({
-      op: `compile(${plugin})`,
-      failMsg: `Could not compile "${plugin}"`,
-      post: () => this.apiClient.POST('/plugins/{plugin}/compile', { params: { path: { plugin } }, body: { origin, ref: atRef ?? null } }),
+  /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
+   *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
+   *  disk. */
+  async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
+    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
+    const answer = await this.mutate({
+      op: `compile(${counted})`,
+      failMsg: `Could not compile ${counted}`,
+      post: () => this.apiClient.POST('/plugins/compile', {
+        body: { plugins: [...plugins] },
+      }),
     });
+    if (answer === undefined) return { refused: true, message: `Could not compile ${counted} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied,
+      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+    };
   }
 
   /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A plugin that

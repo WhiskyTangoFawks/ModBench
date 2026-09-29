@@ -322,18 +322,13 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Re-parks the last-compile ref at the tree just compiled from, without moving HEAD, branch
-    /// or index (ADR-0007). Null <paramref name="atRef"/> snapshots the working tree; a ref name
-    /// snapshots that ref's tree.</summary>
-    public static void ParkCompileSnapshot(
-        string modFolder, string plugin, string? atRef, string binarySha256)
+    /// <summary>Re-parks the last-compile ref at the working tree just compiled from, without moving HEAD,
+    /// branch or index (ADR-0007).</summary>
+    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256)
     {
         var gitDir = Path.Combine(modFolder, ".git");
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
-
-        var tree = atRef == null
-            ? WorkingTreeSnapshotTree(gitDir, modFolder)
-            : GitCli.Run(gitDir, modFolder, "rev-parse", $"{atRef}^{{tree}}").Trim();
+        var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
 
         // commit-tree is plumbing with no --trailer flag, so the trailer line is hand-written at the message
         // tail.

@@ -18,7 +18,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(DeleteRecordHandler), "AllApplied"),
         (typeof(CreateRecordHandler), "Applied"),
         (typeof(TrackHandler), "AllApplied"),
-        (typeof(CompilePluginHandler), "Succeeded"),
+        (typeof(CompilePluginHandler), "AllApplied"),
         (typeof(CopyRecordHandler), "AllApplied"),
         (typeof(AbsorbExternalChangeHandler), "AllApplied"),
         (typeof(KeepExternalChangeHandler), "Applied"),
@@ -31,6 +31,9 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] Carriers =
     [
         typeof(AbsorbResult),
+        typeof(CompiledPlugin),
+        typeof(CompileRefused),
+        typeof(CompileSelectionResult),
         typeof(ExternalChangeLandResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateResult),

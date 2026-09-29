@@ -1,23 +1,19 @@
 namespace MEditService.PluginAdapter;
 
-/// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
-/// already made. Commit renames them into place; Dispose discards the temp state either way.</summary>
+/// <summary>An uncommitted plugin write: temp-written binary and strings files. Commit renames them
+/// into place; Dispose discards the temp state either way.</summary>
 public sealed class PreparedPluginSave(
     string tmpPath,
     string finalPath,
-    string backupPath,
     IReadOnlyList<(string TempPath, string FinalPath)>? stringsFiles = null) : IDisposable
 {
     private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles = stringsFiles ?? [];
     private string? _rollbackPath;
 
-    /// <summary>The timestamped user-facing <c>.bak</c> this attempt created.</summary>
-    public string BackupPath => backupPath;
-
     public void Commit()
     {
         _rollbackPath = finalPath + ".medit-rollback";
-        // overwrite:true so a stale backup left behind by a prior crash doesn't permanently
+        // overwrite:true so a stale rollback copy left behind by a prior crash doesn't permanently
         // block saves of this plugin
         File.Move(finalPath, _rollbackPath, overwrite: true);
         // finalPath is guaranteed gone at this point (the line above just moved it away, or

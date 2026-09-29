@@ -54,6 +54,17 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
     }
 
+    // commands.md, Plugin, compile: the plugins are its Argument, and it takes no Option.
+    [Fact]
+    public async Task CompileRequest_CarriesThePluginsAndNoOption()
+    {
+        var root = await GetSchemaAsync();
+        var properties = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty("CompileRequest").GetProperty("properties");
+
+        Assert.Equal(["plugins"], properties.EnumerateObject().Select(p => p.Name));
+    }
+
     // Every item's refusal rides the 200's body. A malformed request, a missing load order and a
     // fault no item answers are the call's status; an undeclared one reaches the client as `never`.
     [Fact]
@@ -217,7 +228,6 @@ public sealed class SwaggerSchemaTests
     [Theory]
     [InlineData("CellSummary", "editorId")]        // string? EditorId
     [InlineData("RecordSummary", "editorId")]
-    [InlineData("CompileResult", "refusalReason")] // string? RefusalReason
     [InlineData("TrackResponse", "trackedFilesRefusal")]
     public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
     {

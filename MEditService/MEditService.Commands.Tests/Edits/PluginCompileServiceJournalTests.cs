@@ -18,26 +18,26 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     [Fact]
     public async Task Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
     }
 
-    // The crash is injected at the real door a production caller uses. The mod folder (not .git, which
-    // keeps separate permissions) is made unwritable so PluginWriter's backup-then-write sequence
-    // throws partway through.
+    // The crash is injected at the real door a production caller uses: the mod folder (not .git, which
+    // keeps separate permissions) is read-only so PluginWriter's temp write throws, and writable
+    // again before CompileFixture.Dispose().
     [Fact]
     public async Task Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
-        FileModes.Set(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
+        FileModes.Set(_mod.ModFolder, "500");
         try
         {
-            await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree()));
+            await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin));
         }
         finally
         {
-            FileModes.Set(_mod.ModFolder, "700"); // restored before CompileFixture.Dispose() needs to clean up
+            FileModes.Set(_mod.ModFolder, "700");
         }
 
         var recovery = CompileJournal.UnfinishedBatch(_mod.ModFolder);

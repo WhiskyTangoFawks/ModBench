@@ -39,7 +39,7 @@ public sealed class SourceRepositoryRefEncodingTests
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256: "DEADBEEF");
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
 
             Assert.Equal("DEADBEEF", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
         }

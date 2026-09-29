@@ -18,7 +18,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
     private string PluginPath => Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-    private async Task<CompileResult> Compile() => await _mod.CompileHandler.CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+    private Task<CompileSelectionResult> Compile() => _mod.CompileHandler.CompileAsync([_mod.Plugin]);
 
     // A change both answers can land: the same records the fixture tracked, one value moved.
     private void RaiseParseableExternalChange()
@@ -40,11 +40,10 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
         _mod.RaiseExternalChange();
         var upstreamBytes = File.ReadAllBytes(PluginPath);
 
-        var result = await Compile();
+        var refused = Assert.Single((await Compile()).Refused);
 
-        Assert.False(result.Succeeded);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-        Assert.Equal(SourceRepository.UnansweredExternalChange(_mod.ModFolder), result.RefusalReason);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, refused.Refusal);
+        Assert.Equal(SourceRepository.UnansweredExternalChange(_mod.ModFolder), refused.Message);
         Assert.Equal(upstreamBytes, File.ReadAllBytes(PluginPath));
     }
 
@@ -57,7 +56,8 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
         var result = await Compile();
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(result.Refused);
+        Assert.Equal([_mod.Plugin], result.Landed.Select(landed => landed.Plugin));
     }
 
     [Fact]
@@ -69,6 +69,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
         var result = await Compile();
 
-        Assert.True(result.Succeeded, result.RefusalReason);
+        Assert.Empty(result.Refused);
+        Assert.Equal([_mod.Plugin], result.Landed.Select(landed => landed.Plugin));
     }
 }

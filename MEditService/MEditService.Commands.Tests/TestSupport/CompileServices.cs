@@ -20,7 +20,6 @@ public static class CompileServices
             SharedSchemaReflector.Instance,
             new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             adapter ?? new MutagenPluginAdapter(),
-            new PluginWriter(NullLogger<PluginWriter>.Instance),
             NullLogger<PluginCompileService>.Instance);
     }
 }

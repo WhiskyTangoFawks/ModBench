@@ -14,7 +14,7 @@ import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory
 import { isMo2Instance } from './instanceAdapter/files';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
-  PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginNode, type PluginsTreeNode,
+  PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
 } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
@@ -242,10 +242,8 @@ function registerPluginListView(
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
-  const isEnabled = (row: PluginNode) =>
-    instance.value.plugins.some((p) => p.winning && p.enabled && p.name === row.plugin.name && p.origin === row.origin);
   const showKeyContext = () => {
-    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection, isEnabled))) {
+    for (const [name, value] of Object.entries(pluginsKeyContext(pluginListView.selection, (row) => pluginsTree.isEnabled(row)))) {
       void vscode.commands.executeCommand('setContext', `modbench.plugin.${name}`, value);
     }
     void vscode.commands.executeCommand('setContext', 'modbench.plugin.anyCompilable', pluginsTree.anyCompilable());

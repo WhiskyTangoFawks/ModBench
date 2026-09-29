@@ -34,7 +34,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     private async Task<IReadOnlyList<string>> CompiledResponseEditorIds()
     {
         var result = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
+            .CompileAsync(_fixture.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         using var overlay = ModFactory.ImportGetter(
@@ -139,7 +139,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Empty(Directory.EnumerateDirectories(fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
 
         var compile = await CompileServices.Over(fixture.LoadOrder)
-            .CompileAsync(fixture.DestinationPlugin, new CompileSource.WorkingTree());
+            .CompileAsync(fixture.DestinationPlugin);
         Assert.True(compile.Succeeded, compile.RefusalReason);
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),

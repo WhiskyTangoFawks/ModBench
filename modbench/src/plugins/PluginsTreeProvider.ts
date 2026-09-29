@@ -52,7 +52,6 @@ export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' 
 export type RecordBrowser = Pick<
   PluginTreeProvider,
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
-  | 'setImmutablePlugins' | 'setTrackedPlugins'
 >;
 
 /** One held plugin as the record filter's own state reads it. The reconcile hands these back so
@@ -170,29 +169,23 @@ interface PluginFacts {
   order?: PluginOrderFacts;
 }
 
-// ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
+// ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
+// under both, and a read with no origin finds nothing.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
-  private readonly byName = new Map<string, T>();
 
-  set(name: string, origin: string | undefined, value: T): void {
+  set(name: string, origin: string, value: T): void {
     this.byAddress.set(pluginAddressKey(name, origin), value);
-    this.byName.set(name.toLowerCase(), value);
   }
 
-  // Each index accumulates on its own: the name-only fallback reads as every plugin's lines
-  // together, a plugin's own key as its own. `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string | undefined, item: U): void {
+  // `this` narrows to an array-valued instance.
+  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string, item: U): void {
     const addressKey = pluginAddressKey(name, origin);
-    const nameKey = name.toLowerCase();
     this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
-    this.byName.set(nameKey, [...(this.byName.get(nameKey) ?? []), item]);
   }
 
   get(name: string, origin: string | undefined): T | undefined {
-    return origin === undefined
-      ? this.byName.get(name.toLowerCase())
-      : this.byAddress.get(pluginAddressKey(name, origin));
+    return origin === undefined ? undefined : this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
@@ -383,13 +376,19 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** A plugin row's winning plugin, as the Instance value resolved it, or a locked row's copy in
-   *  the game folder (plugins.md, Menus and keys). `Promise`-wrapped only to keep the caller's
-   *  `await` unchanged. */
+  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1), or the game folder's copy
+   *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    if (row.kind === 'implicitMaster') return Promise.resolve(this.dataFolderFile(row.name));
-    const folded = row.plugin.name.toLowerCase();
-    return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
+    const name = pluginFileOf(row);
+    const address = pluginAddressKey(name, row.origin);
+    const listed = this.instanceValue.plugins.find((p) => pluginAddressKey(p.name, p.origin) === address)?.path;
+    return Promise.resolve(listed ?? (row.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined));
+  }
+
+  /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
+  isEnabled(row: PluginNode): boolean {
+    const address = pluginAddressKey(row.plugin.name, row.origin);
+    return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
   }
 
   // The copy the game loads: the one the Mod override order resolves the name to, else the game
@@ -560,15 +559,14 @@ export class PluginsTreeProvider
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
   private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
     const place = this.placeOf(row.origin);
-    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(row.plugin.name, joinedOrigin);
+    const facts = this.facts?.get(row.plugin.name, joinedOrigin);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
       .join(' ');
   }
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    const joinedOrigin = this.joinOrigin(file, row);
-    const facts = row.kind === 'plugin' && joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, this.joinOrigin(file, row));
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -668,10 +666,6 @@ export class PluginsTreeProvider
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
-    // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
-    // vanishing under `mods/` is a watcher event, and that is a reconcile.
-    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map(({ name, origin }) => ({ name, origin })));
-    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map(({ name, origin }) => ({ name, origin })));
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
@@ -756,14 +750,13 @@ export class PluginsTreeProvider
   // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
   // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
   private reachableFailureOf(row: PluginListNode): string | undefined {
-    const file = pluginFileOf(row);
-    return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
+    return this.reachableFailures.get(pluginFileOf(row), row.origin);
   }
 
-  // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
-  // the client's answer names no plugin for falls back to the filename.
+  // ADR-0012 keys every fact by origin: a row's own, and for a locked row the copy the game loads.
+  // A row whose origin mEdit names no plugin for joins nothing.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    return this.heldOrigin(file, row.kind === 'plugin' ? row.origin : undefined);
+    return this.heldOrigin(file, row.origin);
   }
 
   private heldOrigin(file: string, origin: string | undefined): string | undefined {

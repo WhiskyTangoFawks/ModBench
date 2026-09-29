@@ -66,7 +66,6 @@ try
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     builder.Services.AddSingleton<ConflictClassifier>();
-    builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // ADR-0014 invariant 5: one Index for the whole process, so the two sides never project into

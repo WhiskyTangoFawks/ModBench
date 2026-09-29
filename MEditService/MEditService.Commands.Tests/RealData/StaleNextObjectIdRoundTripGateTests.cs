@@ -43,7 +43,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var scratch = new TrackedScratch(fileName);
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
 
-        await new PluginWriter(NullLogger<PluginWriter>.Instance).SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
+        await PluginWriter.SaveAsync(scratch.PluginPath, GameRelease.Fallout4);
 
         Assert.Equal((storedNextObjectId, storedNumRecords), ReadHeaderStats(scratch.PluginPath));
     }
@@ -68,7 +68,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
         await scratch.TrackAsync();
 
-        var result = await scratch.CompileService().CompileAsync(scratch.Plugin, new CompileSource.WorkingTree());
+        var result = await scratch.CompileService().CompileAsync(scratch.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var compiled = Fallout4Mod.CreateFromBinary(

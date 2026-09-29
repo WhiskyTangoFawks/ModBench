@@ -336,7 +336,7 @@ public sealed class ArchitectureTests
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
     // ADR-0005 invariant 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
-    // where the backup-first discipline then sits.
+    // where the replace-by-rename discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {
@@ -391,13 +391,14 @@ public sealed class ArchitectureTests
         }
     }
 
-    // The adapter's write verb lays bytes down with neither backup nor rename, so who
-    // calls it is the whole of the backup discipline.
+    // The adapter's write verb lays bytes down in place, with no rename, so who calls it is the
+    // whole of the replace-by-rename discipline.
     [Fact]
-    public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToBackUp()
+    public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToReplace()
     {
-        // PluginWriter backs the existing binary up first, PluginTrees writes a scratch copy, and
-        // the create gesture writes a brand-new file — none has an existing binary to back up.
+        // PluginWriter writes a temp file and renames it over the binary, PluginTrees writes a
+        // scratch copy, and the create gesture writes a brand-new file — none lays bytes over an
+        // existing binary in place.
         string[] writers = ["PluginWriter.cs", "PluginTrees.cs", "CreatePluginHandler.cs"];
 
         // Carries no leading dot, so CreateAndWriteAsync is caught alongside WriteAsync; the two
@@ -408,10 +409,10 @@ public sealed class ArchitectureTests
 
         var offenders = Unallowed(writes, writers).ToList();
         Assert.True(offenders.Count == 0,
-            "A plugin binary is backed up before it is written, and the adapter's write verb makes "
-            + "no backup. Only PluginWriter (which backs up first), PluginTrees (which writes a scratch "
-            + "copy) and the create gesture (which writes a file with no existing binary) may call it. It "
-            + "is called in:\n" + string.Join("\n", offenders));
+            "A plugin binary is replaced by writing a temp file and renaming it over the binary, and the "
+            + "adapter's write verb writes in place. Only PluginWriter (which renames), PluginTrees (which "
+            + "writes a scratch copy) and the create gesture (which writes a file with no existing binary) "
+            + "may call it. It is called in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(writers, writes).ToList();
         Assert.True(dead.Count == 0,

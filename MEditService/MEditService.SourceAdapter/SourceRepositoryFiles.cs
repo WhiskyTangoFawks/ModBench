@@ -1,5 +1,3 @@
-using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda.Plugins;
@@ -11,33 +9,29 @@ namespace MEditService.SourceAdapter;
 public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
 /// <summary>A plugin's source as files rather than as documents, and the two questions asked of that
-/// same tree. Each answers at the working tree or at a named ref, and a ref needs no
-/// checkout.</summary>
+/// same tree, at the working tree.</summary>
 public sealed partial class SourceRepository
 {
-    // One repository is one operation, so a tree is read once and a ref costs one git pass: the next
-    // compile looks again (ADR-0009 — never a file timestamp).
-    private readonly Dictionary<string, PluginSourceFiles> _filesByPluginAndRef = new(StringComparer.Ordinal);
+    // One repository is one operation, so a tree is read once: the next compile looks again (ADR-0009 —
+    // never a file timestamp).
+    private readonly Dictionary<string, PluginSourceFiles> _filesByPlugin = new(StringComparer.Ordinal);
 
-    /// <summary>Every file one plugin's source tree holds, relative to the mod folder — the carrier
-    /// Track hands in, handed back out. Null <paramref name="gitRef"/> asks the working tree; empty
-    /// when there is no source there.</summary>
-    public PluginSourceFiles FilesOf(PluginAddress plugin, string? gitRef)
+    /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod
+    /// folder — the carrier Track hands in, handed back out. Empty when there is no source there.</summary>
+    public PluginSourceFiles FilesOf(PluginAddress plugin)
     {
-        var key = $"{plugin.Name}\n{gitRef}";
-        if (!_filesByPluginAndRef.TryGetValue(key, out var files))
-            _filesByPluginAndRef[key] = files = Read(plugin, gitRef);
+        if (!_filesByPlugin.TryGetValue(plugin.Name, out var files))
+            _filesByPlugin[plugin.Name] = files = WorkingTreeFiles(plugin);
         return files;
     }
 
     /// <summary>Which of <paramref name="formKeys"/> more than one document claims. Asked of the
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
     /// in one group folder to the last read.</summary>
-    public IReadOnlyList<string> CollidingFormKeys(
-        PluginAddress plugin, IEnumerable<FormKey> formKeys, string? gitRef)
+    public IReadOnlyList<string> CollidingFormKeys(PluginAddress plugin, IEnumerable<FormKey> formKeys)
     {
         var entriesByTail = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var name in EntryNamesIn(FilesOf(plugin, gitRef).Files, RootFor(plugin.Name)))
+        foreach (var name in EntryNamesIn(FilesOf(plugin).Files, RootFor(plugin.Name)))
         {
             foreach (var tail in TailsCarriedBy(name))
                 entriesByTail[tail] = entriesByTail.GetValueOrDefault(tail) + 1;
@@ -56,42 +50,13 @@ public sealed partial class SourceRepository
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
-    public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity, string? gitRef)
-    {
-        if (gitRef == null) return Locate(plugin, identity)?.RelativePath;
-
-        // The header declares a ModKey rather than the FormKey the index files it under, so no text in
-        // the tree carries that key; its document is the tree root's own.
-        if (identity.RecordType == PluginHeader.RecordType) return HeaderDocumentFor(plugin.Name);
-
-        var candidates = FilesOf(plugin, gitRef).Files
-            .Select(file => (file.RelativePath, Text: Text(file)))
-            .Where(candidate => candidate.Text.Contains(identity.FormKey, StringComparison.Ordinal))
-            .ToList();
-
-        foreach (var (relativePath, text) in candidates)
-        {
-            if (DocumentAt(relativePath, text, plugin.Name) is { } document
-                && document.FormKey.Equals(identity.FormKey, StringComparison.Ordinal))
-            {
-                return relativePath;
-            }
-        }
-
-        // Nothing of its own, so another record's document carries it inline, and that document is
-        // what a diagnostic can name.
-        return candidates.FirstOrDefault(c => CarriesFormKey(c.Text, identity.FormKey)).RelativePath;
-    }
+    public string? RelativePathOf(PluginAddress plugin, RecordIdentity identity) =>
+        Locate(plugin, identity)?.RelativePath;
 
     /// <summary>The plugin header's own document, relative to the mod folder: the whole-mod door's
     /// root <c>RecordData.json</c>.</summary>
     public static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), RecordDataFileName);
-
-    private PluginSourceFiles Read(PluginAddress plugin, string? gitRef) =>
-        gitRef == null
-            ? WorkingTreeFiles(plugin)
-            : new PluginSourceFiles(Ordered(CommittedFiles(plugin, gitRef)), null);
 
     private PluginSourceFiles WorkingTreeFiles(PluginAddress plugin)
     {
@@ -112,10 +77,6 @@ public sealed partial class SourceRepository
     private static IReadOnlyList<TreeFile> Ordered(IEnumerable<TreeFile> files) =>
         [.. files.OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
 
-    private IEnumerable<TreeFile> CommittedFiles(PluginAddress plugin, string gitRef) =>
-        BlobsAtRef(plugin.Name, gitRef)
-            .Select(blob => new TreeFile(blob.RelativePath, Encoding.UTF8.GetBytes(blob.Text)));
-
     // Never exclusive owners of the file: it may have been deleted, moved or locked since the listing.
     private static byte[]? RawBytesOrNull(string path)
     {
@@ -128,8 +89,6 @@ public sealed partial class SourceRepository
             return null;
         }
     }
-
-    private static string Text(TreeFile file) => Encoding.UTF8.GetString(StripUtf8Bom(file.Content));
 
     // One name per entry under the tree's own root: every file, and every directory once however many
     // files it holds. A directory counted twice would read as a collision.
