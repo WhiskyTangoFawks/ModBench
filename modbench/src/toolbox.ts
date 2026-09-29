@@ -47,7 +47,9 @@ import {
   loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
-import { pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
+import {
+  pluginsCopyValueText, registerRevealInExplorerCommand, registerCreatePluginCommand, registerPluginSortCommands,
+} from './plugins/pluginListCommands';
 import { registerPluginEnableCommands } from './plugins/pluginParticipationCommands';
 import { pluginsKeyContext } from './plugins/gestureEntry';
 import { errorMessage } from './ports/errorMessage';
@@ -258,8 +260,9 @@ function registerPluginListView(
     new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-    e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), () => pluginsTree.invalidate())));
+    e, instanceRoot, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'))));
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
+  ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(
     instanceRoot, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
   return { pluginsTree, pluginsSelection: () => pluginListView.selection };
@@ -494,7 +497,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
-  // load-instance, refresh: instance commands rebuild the index and send nothing; the gesture
+  // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder

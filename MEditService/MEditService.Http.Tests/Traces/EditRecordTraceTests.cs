@@ -4,6 +4,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -310,23 +311,126 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CopyingARecordTheCodecCannotRead_AsAnOverride_IsTheSameRefusal()
+    public async Task CopyingTwoRecordsAsOverrides_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
+    {
+        using var fx = await TwoRecordsAndTwoDestinations();
+        var records = await NpcFormKeys(Plugin);
+
+        var answer = await Body(await CopyBothIntoBoth(records, "Override"));
+
+        Assert.Equal(
+            [(records[0], OtherPlugin), (records[1], OtherPlugin)],
+            answer.GetProperty("applied").EnumerateArray().Select(CopiedInto).ToArray());
+        Assert.Equal(
+            [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
+            answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
+        Assert.Single(DestinationDocumentsCarrying(fx, records[0]));
+        Assert.Single(DestinationDocumentsCarrying(fx, records[1]));
+    }
+
+    [Fact]
+    public async Task CopyingTwoRecordsAsNew_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
+    {
+        using var fx = await TwoRecordsAndTwoDestinations();
+        var records = await NpcFormKeys(Plugin);
+
+        var answer = await Body(await CopyBothIntoBoth(records, "New"));
+
+        var applied = answer.GetProperty("applied");
+        Assert.Equal(
+            [(records[0], OtherPlugin), (records[1], OtherPlugin)],
+            applied.EnumerateArray().Select(CopiedInto).ToArray());
+        Assert.Equal(
+            [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
+            answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
+        Assert.Single(DestinationDocumentsCarrying(fx, applied[0].GetProperty("newFormKey").GetString().Require()));
+        Assert.Single(DestinationDocumentsCarrying(fx, applied[1].GetProperty("newFormKey").GetString().Require()));
+    }
+
+    private async Task<ScatteredFixtureData> TwoRecordsAndTwoDestinations()
+    {
+        var fx = new PluginFixtureBuilder("trace-copy-several")
+            .WithPlugin(Plugin, mod => { mod.Npcs.AddNew(Npc); mod.Npcs.AddNew("SecondEditableNpc"); }, origin: Origin)
+            .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
+            .WithPlugin(UntrackedPlugin, mod => mod.Npcs.AddNew("UntrackedNpc"), origin: UntrackedOrigin)
+            .BuildScattered();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
+        return fx;
+    }
+
+    private async Task<HttpResponseMessage> CopyBothIntoBoth(string[] records, string mode)
+    {
+        var response = await Client.Copy(
+            [(records[0], Plugin, Origin), (records[1], Plugin, Origin)], mode,
+            [(OtherPlugin, OtherOrigin), (UntrackedPlugin, UntrackedOrigin)]);
+        response.EnsureSuccessStatusCode();
+        return response;
+    }
+
+    // The tracked destination's working tree, read as a file on disk rather than through any answer.
+    private static string[] DestinationDocumentsCarrying(ScatteredFixtureData fx, string formKey) =>
+        [.. Directory.EnumerateFiles(
+                SourceRepository.RootIn(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
+                SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains(formKey, StringComparison.Ordinal))];
+
+    private static (string FormKey, string Destination, string Refusal) RefusedFrom(JsonElement item) =>
+        (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
+            item.GetProperty("destination").GetProperty("name").GetString().Require(),
+            item.GetProperty("refusal").GetString().Require());
+
+    [Fact]
+    public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_IsRefusedNamingIt_WithoutTheReplaceOption()
+    {
+        using var fx = await Loaded(OtherOrigin);
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
+        var held = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, formKey);
+        (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        var edited = File.ReadAllText(held);
+
+        var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin));
+
+        response.EnsureSuccessStatusCode();
+        var refused = Assert.Single((await Body(response)).GetProperty("refused").EnumerateArray());
+        Assert.Equal("DestinationHoldsRecord", refused.GetProperty("refusal").GetString());
+        Assert.Contains(OtherPlugin, refused.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
+        Assert.Equal(edited, File.ReadAllText(held));
+    }
+
+    [Fact]
+    public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_ReplacesIt_WithTheReplaceOption()
+    {
+        using var fx = await Loaded(OtherOrigin);
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
+        var held = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, formKey);
+        var copied = File.ReadAllText(held);
+        (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+
+        var response = await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin), replace: true);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        Assert.Equal(copied, File.ReadAllText(held));
+    }
+
+    [Theory]
+    [InlineData("Override")]
+    [InlineData("New")]
+    public async Task CopyingARecordTheCodecCannotRead_IsTheSameRefusal(string mode)
     {
         using var fx = await Loaded(Origin, OtherOrigin);
         var formKey = await Client.FirstFormKey(Plugin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-override",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = OtherPlugin,
-                destinationOrigin = OtherOrigin,
-            });
+        var response = await Client.Copy(formKey, (Plugin, Origin), mode, (OtherPlugin, OtherOrigin));
 
-        await AssertParseRefusal(response);
+        response.EnsureSuccessStatusCode();
+        var refused = Assert.Single((await Body(response)).GetProperty("refused").EnumerateArray());
+        Assert.Equal("RecordParseFailed", refused.GetProperty("refusal").GetString());
+        Assert.Contains("Unable to cast", refused.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -335,19 +439,11 @@ public sealed class EditRecordTraceTests : HostedTests
         using var fx = await Loaded(Origin, OtherOrigin);
         var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = OtherPlugin,
-                destinationOrigin = OtherOrigin,
-                requestedFormKey = (string?)null,
-            });
+        var response = await Client.Copy(formKey, (Plugin, Origin), "New", (OtherPlugin, OtherOrigin));
 
         response.EnsureSuccessStatusCode();
-        var newFormKey = (await Body(response)).GetProperty("newFormKey").GetString().Require();
+        var landed = Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        var newFormKey = landed.GetProperty("newFormKey").GetString().Require();
         Assert.NotEqual(formKey, newFormKey);
 
         var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, newFormKey);
@@ -356,26 +452,9 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.DoesNotContain($"\"EditorID\": \"{Npc}\"", text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task CopyingARecordTheCodecCannotRead_AsANewRecord_IsTheSameRefusal()
-    {
-        using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
-        MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
-
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = OtherPlugin,
-                destinationOrigin = OtherOrigin,
-                requestedFormKey = (string?)null,
-            });
-
-        await AssertParseRefusal(response);
-    }
+    private static (string FormKey, string Destination) CopiedInto(JsonElement item) =>
+        (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
+            item.GetProperty("destination").GetProperty("name").GetString().Require());
 
     private static async Task AssertParseRefusal(HttpResponseMessage response)
     {
@@ -386,7 +465,7 @@ public sealed class EditRecordTraceTests : HostedTests
     }
 
     // FormKey.Factory throws on malformed input, and the fix is the endpoint's own 400 rather than a
-    // new refusal case: both doors that take a typed FormKey as an Option answer the same.
+    // new refusal case.
     [Fact]
     public async Task CreatingARecordWithAMalformedFormKey_Is400()
     {
@@ -412,26 +491,6 @@ public sealed class EditRecordTraceTests : HostedTests
         var problem = await Body(response);
         Assert.Equal("CodecRejected", problem.GetProperty("refusal").GetString());
         Assert.Equal("FormKey", problem.GetProperty("path").GetString());
-    }
-
-    [Fact]
-    public async Task CopyingARecordToAMalformedFormKey_Is400()
-    {
-        using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
-
-        var response = await Client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
-            new
-            {
-                sourcePlugin = Plugin,
-                sourceOrigin = Origin,
-                destinationPlugin = OtherPlugin,
-                destinationOrigin = OtherOrigin,
-                requestedFormKey = "not-a-formkey",
-            });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // Asserted against the served document because that is what the frontend client is generated

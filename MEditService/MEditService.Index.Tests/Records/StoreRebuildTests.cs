@@ -71,7 +71,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
-    // plugins.md, Order and view state, story 5: the record filter clears only on purpose. A.esp
+    // plugins.md, Order and view state, story 3: the record filter clears only on purpose. A.esp
     // holds the one NPC it matches beside one it does not; B.esp is parked mid-refill.
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 

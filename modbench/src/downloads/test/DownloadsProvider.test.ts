@@ -235,8 +235,9 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
-  // downloads.md, story 4 and common.md, The name filter, story 2: the filter matches the label.
-  // The file name below has no "armor" in it, so matching on `name` would drop this row.
+  // downloads.md, Order and view state, story 4, and common.md, The name filter, story 2: the
+  // filter matches the label. The file name below has no "armor" in it, so matching on `name`
+  // would drop this row.
   it('narrows by the label, not the raw filename', async () => {
     const provider = makeProvider([
       row({ name: 'file-one.zip', displayName: 'Armor Pack' }),
@@ -539,8 +540,9 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   });
 });
 
-// A folder Modbench cannot resolve is not the folder MO2 names (downloads.md, story 1): the shared
-// "Failed to load:" state (common.md, States, story 2), scoped to this view alone.
+// A folder Modbench cannot resolve is not the folder MO2 names (downloads.md, Which files are
+// rows, story 1): the shared "Failed to load:" state (common.md, States, story 2), scoped to this
+// view alone.
 describe('DownloadsProvider — the configured downloads folder could not be resolved', () => {
   const REASON = 'download_directory "D:\\Games\\downloads" could not be resolved: '
     + "Cannot translate Wine drive letter 'D:' in 'D:\\Games\\downloads': only Z: and C: are translated";

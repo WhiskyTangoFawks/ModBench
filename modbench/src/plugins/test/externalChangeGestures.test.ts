@@ -28,8 +28,6 @@ function makeDispatchDeps(client: AnswerClient, showDialogChoice: string | undef
     client: fullClient(client),
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
     reporter: recordingReporter(),
-    refreshTree: vi.fn(),
-    refreshMatchingPlugins: vi.fn(),
   };
 }
 
@@ -39,26 +37,14 @@ async function answerOne(deps: ExternalChangeCoordinatorDeps, change: Unanswered
 }
 
 describe('asking one mod\'s question and doing its answer', () => {
-  it('a landed Keep refreshes the tree and the matching-plugin set', async () => {
+  it('a landed Keep says nothing', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
     const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await answerOne(deps, unanswered());
 
     expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
-  });
-
-  // The rival: a refused Keep (a same-record collision) still refreshing would show the user a
-  // tree that changed when nothing actually landed.
-  it('a refused Keep does not refresh', async () => {
-    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'collision' }) };
-    const deps = makeDispatchDeps(client, APPLY_BUTTON);
-
-    await answerOne(deps, unanswered());
-
-    expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.reporter.reports).toEqual([]);
   });
 
   it('a WriteRefused Keep shows the ready-to-show message', async () => {
@@ -68,7 +54,6 @@ describe('asking one mod\'s question and doing its answer', () => {
     await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — boom', detail: undefined }]);
-    expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
   // A collision rides a 200 as `succeeded: false` — `WriteRefused` above never sees this case.
@@ -79,21 +64,19 @@ describe('asking one mod\'s question and doing its answer', () => {
     await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined }]);
-    expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  it('a landed Absorb refreshes silently', async () => {
+  it('a landed Absorb is silent', async () => {
     const client = { absorbUpstreamUpdate: vi.fn().mockResolvedValue({ landed: [first], refused: [], trackedFilesRefusal: null }) };
     const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await answerOne(deps, unanswered());
 
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.reporter.reports).toEqual([]);
     expect(deps.reporter.reports).toEqual([]);
   });
 
-  it('a WriteRefused Absorb shows the ready-to-show message and refreshes nothing', async () => {
+  it('a WriteRefused Absorb shows the ready-to-show message', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ refused: true, message: 'Could not absorb the upstream update for "ModA" — could not be parsed' }),
     };
@@ -102,12 +85,11 @@ describe('asking one mod\'s question and doing its answer', () => {
     await answerOne(deps, unanswered());
 
     expect(deps.reporter.reports).toEqual([{ severity: 'error', message: 'Could not absorb the upstream update for "ModA" — could not be parsed', detail: undefined }]);
-    expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
   // ADR-0019: a partial save is an integrity failure, so the plugins that did not land are named
   // even though others did.
-  it('a partial Absorb names each refused plugin and why, and refreshes what landed', async () => {
+  it('a partial Absorb names each refused plugin and why', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({
         landed: [first], refused: [{ item: second, reason: "'Update B.esp' could not be committed to main." }], trackedFilesRefusal: null,
@@ -122,10 +104,9 @@ describe('asking one mod\'s question and doing its answer', () => {
       message: 'Could not absorb 1 of 2 plugins of the upstream update for "ModA".',
       detail: `"B.esp" ('Update B.esp' could not be committed to main.)`,
     }]);
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
-  it('an Absorb whose tracked-files commit failed after every plugin landed says so, and refreshes', async () => {
+  it('an Absorb whose tracked-files commit failed after every plugin landed says so', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({
         landed: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
@@ -140,10 +121,9 @@ describe('asking one mod\'s question and doing its answer', () => {
       message: 'Could not commit the rest of the upstream update for "ModA": every plugin landed.',
       detail: "'Update ModA' could not be committed to main.",
     }]);
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
-  it('an Absorb that landed nothing refreshes nothing', async () => {
+  it('an Absorb that landed nothing names every refused plugin', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({
         landed: [],
@@ -159,7 +139,6 @@ describe('asking one mod\'s question and doing its answer', () => {
     await answerOne(deps, unanswered({ plugins: ['A.esp', 'B.esp'] }));
 
     expect(deps.reporter.reports.map((r) => r.message)).toEqual(['Could not absorb 2 of 2 plugins of the upstream update for "ModA".']);
-    expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
   it('declining the dialog (defer) calls neither verb', async () => {

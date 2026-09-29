@@ -148,11 +148,11 @@ describe('HttpMEditClient — a 503 from a write', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
-    const result = await client.copyRecordAsOverride('000800:MyPatch.esp', 'MyPatch.esp', 'ModA', 'Other.esp', 'ModB');
+    const result = await client.copyRecords(
+      [{ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }], 'Override',
+      [{ name: 'Other.esp', origin: 'ModB' }], false);
 
-    expect(result).toEqual({
-      refused: true, message: 'Could not copy 000800:MyPatch.esp into "Other.esp" — No load order has been received.',
-    });
+    expect(result).toEqual({ refused: true, message: 'Could not copy 1 record — No load order has been received.' });
   });
 });
 
@@ -255,6 +255,42 @@ describe('HttpMEditClient — creating a plugin', () => {
       refused: true,
       message: 'Could not create "New.esp" — A file is already at /mods/ModA/New.esp, so New.esp was not created.',
     });
+  });
+});
+
+describe('HttpMEditClient — copying records answers per record and destination', () => {
+  const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const patch = { name: 'Patch.esp', origin: 'PatchMod' };
+  const other = { name: 'Other.esp', origin: 'OtherMod' };
+
+  it('sends the records, the mode, the destinations and the replace Option as one call, and reads each item', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ record: npc, destination: patch, newFormKey: null }],
+      refused: [{ record: npc, destination: other, refusal: 'DestinationHoldsRecord', message: 'Other.esp already holds it.' }],
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.copyRecords([npc], 'Override', [patch, other], true);
+
+    expect(outcome).toEqual({
+      landed: [{ record: npc, destination: patch }],
+      refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
+    });
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/copy$/);
+    expect(await request?.json()).toEqual({ records: [npc], mode: 'Override', destinations: [patch, other], replace: true });
+  });
+
+  it('asks the record\'s holders by plugin and origin', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod' }, { plugin: 'Patch.esp', origin: 'OtherMod' }],
+      diffs: [], conflictAll: 'NoConflict',
+    })));
+    const client = makeClient(fetch);
+
+    expect(await client.getRecordHolders(npc.formKey)).toEqual([
+      { name: 'Patch.esp', origin: 'PatchMod' }, { name: 'Patch.esp', origin: 'OtherMod' },
+    ]);
   });
 });
 

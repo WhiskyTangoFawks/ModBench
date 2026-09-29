@@ -31,11 +31,12 @@ public sealed class CreatePluginHandler
 
         return await _adapter.CreateAndWriteAsync(modKey, folder, release) switch
         {
+            EmptyPluginWrite.Written => new PluginCreateResult(),
             EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
             EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,
                 $"{folder} already holds a file named {plugin.Name}, so it was not created."),
-            _ => new PluginCreateResult(),
+            var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginWrite)} outcome: {outcome}."),
         };
     }
 }

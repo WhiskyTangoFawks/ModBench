@@ -54,18 +54,16 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
     }
 
-    // RecordEndpoints.Refusal emits 409/422/404 and each handler's catch blocks add 500/503, so
-    // an undeclared status makes Swashbuckle emit `content?: never` for whichever a client hits.
-    [Theory]
-    [InlineData("/records/{formKey}/copy-as-override")]
-    [InlineData("/records/{formKey}/copy-as-new-record")]
-    public async Task CopyRoute_DeclaresEveryStatusItsHandlerCanReturn(string path)
+    // Every item's refusal rides the 200's body. A malformed request, a missing load order and a
+    // fault no item answers are the call's status; an undeclared one reaches the client as `never`.
+    [Fact]
+    public async Task CopyRoute_DeclaresEveryStatusItsHandlerCanReturn()
     {
         var root = await GetSchemaAsync();
-        var responses = root.GetProperty("paths").GetProperty(path).GetProperty("post").GetProperty("responses");
+        var responses = root.GetProperty("paths").GetProperty("/records/copy").GetProperty("post").GetProperty("responses");
 
         var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
-        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
+        Assert.Equal(new HashSet<string> { "200", "400", "500", "503" }, declared);
     }
 
     // Swashbuckle types an undeclared response `content?: never` on the TS side and nothing
@@ -174,13 +172,13 @@ public sealed class SwaggerSchemaTests
         "PluginResponse",
         new[]
         {
-            "name", "path", "isLight", "isMaster", "masters", "recordCount", "isImmutable",
+            "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
             "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
             "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must
     // survive as optional `| null` on the wire.
-    [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure" })]
+    [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell", "hasParseFailure", "hasChildren" })]
     public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot(
         string schemaName, string[] expectedRequired)
     {

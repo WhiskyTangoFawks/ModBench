@@ -128,7 +128,7 @@ export async function syncPlugins(
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
   // Without the implicit masters, a mod's plugin named like a vanilla master would earn a line
-  // (update-load-order-file, Refusals).
+  // (ADR-0013, invariant 3).
   let addable: ReadonlyMap<string, string>;
   try {
     const implicit = await implicitMasters();

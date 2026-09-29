@@ -1,4 +1,4 @@
-# Load the instance. Contract: load-instance.md.
+# Load the instance.
 ...@../styles
 shape: sequence_diagram
 mo2: @../target-architecture.modbench_data.mo2
@@ -12,22 +12,22 @@ toolbox: @../target-architecture.modbench_driving.toolbox
 toolbox.label: Toolbox
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 
-mo2 -> instanceloader: "watch: every file and folder, debounced" {class: signal}
-instanceloader -> instanceadapter: "get: ModOrganizer.ini first · modlist.txt · plugins.txt · meta.ini · the downloads' .meta · the game folder's plugins" {class: loadorder}
-instanceadapter -> instanceloader: "parsed: the game, the profile, the mods in order, the load order, each mod's meta, the downloaded files, the game folder's plugins" {class: loadorder}
-instanceloader."one immutable value, replaced whole; sequence +1; a read failure keeps the last"
+mo2 -> instanceloader: watch {class: signal}
+instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder}
+instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list" {class: loadorder}
+instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
-instanceloader -> instancecommands: "put load order: the snapshot as an argument, on change" {class: loadorder}
-instancecommands -> client: load order snapshot {class: loadorder}
+instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}
   instancecommands -> client: "rebuild the index" {class: loadorder}
   client -> instancecommands: applied or refusal {class: loadorder}
-  instancecommands."a refused rebuild stops here: nothing sent, nothing read again"
+  instancecommands."a refused rebuild stops here"
   instancecommands -> toolbox: applied or refusal {class: loadorder}
-  toolbox -> instanceloader: "refresh: read every file again" {class: loadorder}
+  toolbox -> instanceloader: refresh {class: loadorder}
 }

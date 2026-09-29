@@ -1,8 +1,8 @@
-# Query the record index, purple. Contract: query-index.md.
+# Query the record index, purple.
 ...@../styles
 shape: sequence_diagram
 views: "Plugins · Editor" {class: driving}
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -20,7 +20,7 @@ http -> client: answer {class: query}
 client -> views: records, cells, plugin-keyed status {class: query}
 
 refused: "refused: the filter" {
-  queries -> http: "the SQL returns no FormKey column · the SQL cannot run" {class: query}
+  queries -> http: "the refusal" {class: query}
   http -> client: the refusal {class: query}
   client -> views: the refusal {class: query}
 }

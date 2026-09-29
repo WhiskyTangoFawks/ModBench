@@ -158,7 +158,7 @@ public class RegistrationScopingTests
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
         Assert.Empty(reads.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
-        Assert.Empty(reads.GetInteriorCells(BetaKey, 50, 0).Items);
+        Assert.Empty(reads.GetInteriorCells(BetaKey));
         var cellRefs = reads.GetCellReferences(BetaKey, fx.BetaCellFk);
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);

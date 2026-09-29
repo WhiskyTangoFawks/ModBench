@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-// ADR-0005 rule 2: the verbs a plugin's bytes reach a live Mutagen mod through, and go back to
+// ADR-0005 invariant 2: the verbs a plugin's bytes reach a live Mutagen mod through, and go back to
 // bytes through, driven at IPluginAdapter and PluginWriter rather than the adapter's own internals.
 public sealed class PluginAdapterTests
 {

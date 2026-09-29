@@ -11,7 +11,7 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>The worldspace chain's half of "anything with an error on it or below it carries the
+/// <summary>The nested chains' half of "anything with an error on it or below it carries the
 /// prefix", at the reads the tree listings are built from. Ingest's side has its own test against
 /// the real fixture.</summary>
 public sealed class SpatialParseFailurePrefixTests
@@ -27,8 +27,29 @@ public sealed class SpatialParseFailurePrefixTests
 
         Assert.True(placed.Persistent.Single().HasParseFailure);
         Assert.True(cells.Single().HasParseFailure);
-        Assert.Contains(
-            world.WorldspaceFormKey, world.Reads.GetWorldspacesWithFailuresBelow(SpatialWorld.Plugin));
+        Assert.True(world.Row("wrld").HasParseFailure);
+    }
+
+    [Fact]
+    public void AnUnreadableResponse_MarksItsTopic_AndTheQuestAboveIt()
+    {
+        using var world = new SpatialWorld();
+        world.MarkUnreadable(world.ResponseFormKey);
+
+        Assert.True(world.Row("dial").HasParseFailure);
+        Assert.True(world.Row("qust").HasParseFailure);
+    }
+
+    [Fact]
+    public void AnUnreadablePlacedReference_MarksTheGroupOfTheRecordItSitsBeneath_AndNoOther()
+    {
+        using var world = new SpatialWorld();
+        world.MarkUnreadable(world.PlacedFormKey);
+
+        var groups = world.Reads.GetRecordTypeCounts(SpatialWorld.Plugin).ToDictionary(g => g.Type, g => g.HasParseFailure);
+
+        Assert.True(groups["wrld"]);
+        Assert.False(groups["cell"]);
     }
 
     [Fact]
@@ -65,7 +86,8 @@ public sealed class SpatialParseFailurePrefixTests
 
         Assert.False(placed.Persistent.Single().HasParseFailure);
         Assert.False(cells.Single().HasParseFailure);
-        Assert.Empty(world.Reads.GetWorldspacesWithFailuresBelow(SpatialWorld.Plugin));
+        Assert.False(world.Row("wrld").HasParseFailure);
+        Assert.False(world.Row("qust").HasParseFailure);
     }
 
     // The worldspace itself is a record the listing reads: the worldspace row is only reachable at
@@ -90,9 +112,9 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.InteriorCellFormKey);
 
-        var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin, 50, 0);
+        var interiors = world.Reads.GetInteriorCells(SpatialWorld.Plugin);
 
-        var interior = interiors.Items.Single(c => c.FormKey == world.InteriorCellFormKey);
+        var interior = interiors.Single(c => c.FormKey == world.InteriorCellFormKey);
         Assert.True(interior.HasParseFailure);
         Assert.Equal("could not be read", interior.ParseDiagnosis);
     }
@@ -113,7 +135,11 @@ public sealed class SpatialParseFailurePrefixTests
         internal string CellFormKey { get; }
         internal string PlacedFormKey { get; }
         internal string InteriorCellFormKey { get; }
+        internal string ResponseFormKey { get; }
         internal IRecordReads Reads => _index.RequireReads();
+
+        internal RecordSummary Row(string recordType) =>
+            Assert.Single(Reads.Search(new RecordQuery(RecordTypes: [recordType], Plugin: PluginName, Limit: 100)).Items);
 
         internal SpatialWorld()
         {
@@ -135,7 +161,15 @@ public sealed class SpatialParseFailurePrefixTests
             intBlock.SubBlocks.Add(intSub);
             mod.Cells.Records.Add(intBlock);
 
+            var response = new DialogResponses(mod) { EditorID = "PrefixResponse" };
+            var topic = new DialogTopic(mod) { EditorID = "PrefixTopic" };
+            topic.Responses.Add(response);
+            var quest = new Quest(mod) { EditorID = "PrefixQuest" };
+            quest.DialogTopics.Add(topic);
+            mod.Quests.Add(quest);
+
             WorldspaceFormKey = wrld.FormKey.ToString();
+            ResponseFormKey = response.FormKey.ToString();
             CellFormKey = cell.FormKey.ToString();
             PlacedFormKey = placed.FormKey.ToString();
             InteriorCellFormKey = interior.FormKey.ToString();

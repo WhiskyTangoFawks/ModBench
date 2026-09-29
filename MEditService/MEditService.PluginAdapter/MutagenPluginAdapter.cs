@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Headers;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
@@ -82,7 +83,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {
         using var loaded = OpenForRead(modPath, gameRelease, strings);
-        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String);
+        var name = modPath.ModKey.FileName.String;
+        // Mutagen's game-agnostic getter carries no raw header flags and names no blueprint bit, so
+        // only a game with blueprint plugins reads its header a second time.
+        var isBlueprint = PluginFlagPredicates.HasBlueprintPlugins(gameRelease)
+            && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, gameRelease).Flags);
+        return OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
     }
 
     public LinkAnswers LinkTargets(
@@ -145,14 +151,12 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         plugin.IsMaster = modKey.Type == ModType.Master;
         plugin.IsSmallMaster = modKey.Type == ModType.Light;
 
-        // Mutagen refuses a path whose file name is not the plugin's own, so the temp file is the
-        // plugin's name inside a temp folder beside it.
-        var tempFolder = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName());
-        Directory.CreateDirectory(tempFolder);
+        // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
+        // folder of its own to hold it — and so nothing here can create or resurrect one.
+        var tempPath = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName());
         try
         {
-            var tempPath = Path.Combine(tempFolder, modKey.FileName.String);
-            await WriteAsync(plugin, tempPath);
+            await WriteAsync(plugin, tempPath, noModKeySync: true);
             File.Move(tempPath, destinationPath, overwrite: false);
             return EmptyPluginWrite.Written;
         }
@@ -160,12 +164,13 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         {
             return EmptyPluginWrite.FileExists;
         }
+        catch (DirectoryNotFoundException) when (!Directory.Exists(folder))
+        {
+            return EmptyPluginWrite.FolderGone;
+        }
         finally
         {
-            // Cleanup never outranks the exception it follows.
-            try { Directory.Delete(tempFolder, recursive: true); }
-            catch (IOException) { /* best-effort; another tool holds the temp folder */ }
-            catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); the temp folder remains */ }
+            if (File.Exists(tempPath)) File.Delete(tempPath);
         }
     }
 
@@ -176,7 +181,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,
-        string? stringsFolder = null)
+        string? stringsFolder = null,
+        bool noModKeySync = false)
     {
         // ADR-0006: the header's stored NextObjectID and record count are written as stored, never
         // recomputed. Mutagen's Iterate defaults re-derive both, and real override plugins routinely
@@ -187,6 +193,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             .WithNoDataFolder()
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck);
+        // A destination named other than plugin's ModKey needs this lifted.
+        if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 
         // A caller writing to a temp file needs its own strings folder. Mutagen's write path
         // disposes whichever StringsWriter it holds, so this one is ours only on failure.

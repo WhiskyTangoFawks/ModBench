@@ -85,7 +85,7 @@ describe('load order changed', () => {
 });
 
 describe('refresh', () => {
-  // load-instance, refresh step 2: mEdit reads every plugin again against the load order it holds.
+  // commands.md, `refresh`: mEdit reads every plugin again against the load order it holds.
   it('rebuilds the index for the instance and sends nothing', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });

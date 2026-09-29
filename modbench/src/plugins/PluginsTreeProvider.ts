@@ -1,18 +1,19 @@
 import * as vscode from 'vscode';
 import type {
-  MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal,
+  MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
 } from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
+import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -42,8 +43,9 @@ export interface PluginListSource {
 }
 
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
- *  calls. Pulled once per reconcile, never per rendered row. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses'>;
+ *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
+ *  locked plugins askable. */
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged'>;
 
 /** The record browser a row's children are delegated to (ADR-0002). `PluginTreeProvider`
  *  satisfies it. */
@@ -85,6 +87,12 @@ export interface PluginsTreeProviderOptions {
 }
 
 
+// plugins.md, A row, Identity: VS Code keeps expansion and selection across a rebuild by it, and
+// refuses two rows that share one.
+function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): string {
+  return [kind, pluginAddressKey(plugin.name, plugin.origin), ...(formKey === undefined ? [] : [formKey])].join(':');
+}
+
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Overridden plugins are registered
  *  (ADR-0013), not displayed. */
@@ -93,12 +101,13 @@ export class PluginNode extends vscode.TreeItem {
   constructor(
     public readonly plugin: PluginEntry,
     /** ADR-0012: which plugin of the name this row stands for — the join key for every fact. */
-    public readonly origin?: string,
+    public readonly origin: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
+    this.id = rowIdentity(this.kind, { name: plugin.name, origin });
     this.contextValue = `plugin ${plugin.enabled ? 'enabled' : 'disabled'}`;
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
-    // plugins.md, Menus and keys, story 4: the game loads no disabled plugin's records, so a click
+    // plugins.md, Menus and keys, story 2: the game loads no disabled plugin's records, so a click
     // on its row only selects it.
     if (plugin.enabled) this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
@@ -112,8 +121,9 @@ export class PluginNode extends vscode.TreeItem {
  *  revert. A lock substitutes (ADR-0017). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
-  constructor(public readonly name: string, path?: string) {
+  constructor(public readonly name: string, public readonly origin: string, path?: string) {
     super(name, vscode.TreeItemCollapsibleState.None);
+    this.id = rowIdentity(this.kind, { name, origin });
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
     // plugins.md, A plugin the game loads with no line: MO2's one sentence alone — the label
@@ -125,38 +135,28 @@ export class ImplicitMasterNode extends vscode.TreeItem {
   }
 }
 
-export class EmptyNode extends vscode.TreeItem {
-  readonly kind = 'empty' as const;
-  constructor() {
-    super('No plugins', vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon('check');
-  }
-}
+/** CONTEXT.md, Sort direction: which end of the load order the view shows at the top. */
+export type SortDirection = 'losingAtTop' | 'winningAtTop';
 
-export type PluginListNode = PluginNode | ImplicitMasterNode | EmptyNode;
+const LOSING_END: PluginsDrop = { kind: 'losingEnd' };
+const WINNING_END: PluginsDrop = { kind: 'winningEnd' };
 
-// Each constructor above passes its own plain string to `super()` as the label, so this reads
-// the same string back through its own field rather than the base class's string|TreeItemLabel.
-function plainLabelOf(node: PluginListNode): string {
-  switch (node.kind) {
-    case 'plugin': return node.plugin.name;
-    case 'implicitMaster': return node.name;
-    case 'empty': return '';
-  }
-}
+/** plugins.md, States, story 1: an empty list says so on the message line, never as a row. */
+export const NO_PLUGINS_MESSAGE =
+  'No plugins: plugins.txt lists none, and mEdit names none the game loads on its own. Create Plugin…, in the title bar, adds one.';
+
+export type PluginListNode = PluginNode | ImplicitMasterNode;
 
 /** What this tree hands VS Code: a load-order row, or one of the record browser's nodes under
  *  it. */
 export type PluginsTreeNode = PluginListNode | PluginTreeNode;
 
 // The view is shared, so a drop must be able to tell these rows from another provider's.
-const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'empty']);
+const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster']);
 
-/** The plugin file a row stands for, undefined for the empty-state row. */
-export function pluginFileOf(node: PluginListNode): string | undefined {
-  if (node.kind === 'plugin') return node.plugin.name;
-  if (node.kind === 'implicitMaster') return node.name;
-  return undefined;
+/** The plugin file a row stands for, and its label. */
+export function pluginFileOf(node: PluginListNode): string {
+  return node.kind === 'plugin' ? node.plugin.name : node.name;
 }
 
 // Everything one `GET /plugins` read knows about one plugin. One value rather than three
@@ -167,6 +167,7 @@ interface PluginFacts {
   masterIssues?: MasterIssue[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
+  order?: PluginOrderFacts;
 }
 
 // ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
@@ -279,16 +280,24 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
-  // plugins.txt's raw file order as last rendered, so a drop computes its index against what
-  // the user dragged against rather than a fresh read an external edit could skew.
-  private lastOrder: string[] = [];
+  // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
+  // order the user dragged against.
+  private lastOrder: { name: string; origin: string }[] = [];
   private filterText = '';
   private filterLower = '';
+  private direction: SortDirection = 'losingAtTop';
   private recordFilterSource?: string;
   private recordFilterMatchesNothing = false;
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
+  // Bumped by `invalidate()`, so a build that asked mEdit before it cannot cache over a newer one.
+  private rowsGeneration = 0;
+  // plugins.md, States, story 3: once mEdit names the locked plugins, an unreachable mEdit does not
+  // unlock them.
+  private lockedNames: readonly string[] | undefined;
+  // Whether the last build had no row at all, which the message line says.
+  private nothingToShow = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
@@ -307,11 +316,13 @@ export class PluginsTreeProvider
       this.instanceValue = value;
       this.invalidate();
     }));
-    // Forwarded with the element intact, so a targeted refresh (a "Load more…" landing under one
-    // record type) stays targeted.
     if (options.records) {
       this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     }
+    // plugins.md, The tree, story 2: the locked plugins are mEdit's answer, so an mEdit that
+    // attaches after the rows were built rebuilds them.
+    const unsubscribe = options.client?.onStatusChanged((status) => { if (status === 'attached') this.invalidate(); });
+    if (unsubscribe) this.subscriptions.push({ dispose: unsubscribe });
   }
 
   dispose(): void {
@@ -327,6 +338,7 @@ export class PluginsTreeProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.cache = undefined;
+    this.rowsGeneration++;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -336,12 +348,14 @@ export class PluginsTreeProvider
   }
 
   /** What the view's message line says about its rows: the game folder not found (common.md,
-   *  States, story 5), else a record filter that matches nothing (plugins.md, States, story 5). */
+   *  States, story 5), else no rows at all (plugins.md, States, story 1), else a record filter
+   *  that matches nothing (States, story 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
+    if (this.nothingToShow) return NO_PLUGINS_MESSAGE;
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
     }
@@ -352,6 +366,12 @@ export class PluginsTreeProvider
    *  none is. */
   setRecordFilterSource(source: string | undefined): void {
     this.recordFilterSource = source;
+    this.render();
+  }
+
+  /** Render-only, like the name filter: the rows, and so their expansion, survive a flip. */
+  setViewDirection(direction: SortDirection): void {
+    this.direction = direction;
     this.render();
   }
 
@@ -372,6 +392,13 @@ export class PluginsTreeProvider
     return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
   }
 
+  // The copy the game loads: the one the Mod override order resolves the name to, else the game
+  // folder's.
+  private lockedOriginOf(name: string): string {
+    const folded = name.toLowerCase();
+    return this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.origin ?? DATA_DIRECTORY_ORIGIN;
+  }
+
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
   lockedRowUris(): ReadonlySet<string> {
     return this.lastLockedRowUris;
@@ -379,10 +406,22 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (!isRow(element)) return this.records?.getChildren(element) ?? [];
+    if (!isRow(element)) return this.identified(await (this.records?.getChildren(element) ?? []), this.pluginAbove.get(element));
     const file = pluginFileOf(element);
-    if (file === undefined) return []; // EmptyNode: no plugin to expand into
-    return this.expandPluginRow(element, file);
+    return this.identified(await this.expandPluginRow(element, file), { name: file, origin: element.origin });
+  }
+
+  // The plugin row each row beneath it sits under: a record row's identity names that plugin.
+  private readonly pluginAbove = new WeakMap<PluginsTreeNode, PluginAddress>();
+
+  private identified(children: PluginsTreeNode[], plugin: PluginAddress | undefined): PluginsTreeNode[] {
+    if (plugin === undefined) return children;
+    for (const child of children) {
+      this.pluginAbove.set(child, plugin);
+      const formKey = recordFormKeyOf(child);
+      if (formKey !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+    }
+    return children;
   }
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
@@ -405,27 +444,40 @@ export class PluginsTreeProvider
     await this.firstRead.settled; // never claim "No plugins" before the Instance has actually read one
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
-    if (!this.cache) {
-      const built = await this.buildRows();
-      if (built.kind === 'empty') return [new EmptyNode()];
-      this.cache = built.cache;
-    }
-
+    const losingFirst = await this.builtRows();
+    const built = this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;
     const named = this.filterText
-      ? this.cache.rows.filter((n) => plainLabelOf(n).toLowerCase().includes(this.filterLower))
-      : this.cache.rows;
+      ? built.filter((n) => pluginFileOf(n).toLowerCase().includes(this.filterLower))
+      : built;
     // plugins.md: a row the record filter matches nothing of is omitted, not merely left
     // unexpandable — a visible-but-inert row is still noise.
     return named.filter((row) => !this.isHiddenByFilter(row));
   }
 
-  private async buildRows(): Promise<
-    | { kind: 'empty' }
-    | { kind: 'ok'; cache: { rows: PluginListNode[] } }
-  > {
-    // An unreachable backend renders no implicit row: a plugins.txt line for one of them then
-    // renders as an ordinary row, which is what the file says, rather than a guessed lock.
-    const implicitNames = (await this.implicitMasters()) ?? [];
+  private async builtRows(): Promise<PluginListNode[]> {
+    while (!this.cache) {
+      const generation = this.rowsGeneration;
+      this.settleRows(generation, await this.implicitMasters());
+    }
+    return this.cache.rows;
+  }
+
+  // A build that asked mEdit before the rows were last invalidated drops out.
+  private settleRows(generation: number, lockedAnswer: readonly string[] | undefined): void {
+    if (generation !== this.rowsGeneration) return;
+    const rows = this.buildRows(lockedAnswer);
+    this.cache = { rows };
+    if ((rows.length === 0) !== this.nothingToShow) {
+      this.nothingToShow = rows.length === 0;
+      this.render(); // the message line reads it
+    }
+  }
+
+  private buildRows(lockedAnswer: readonly string[] | undefined): PluginListNode[] {
+    // Until mEdit names the locked plugins, a plugins.txt line for one of them renders as an
+    // ordinary row, which is what the file says, rather than a guessed lock.
+    this.lockedNames = lockedAnswer ?? this.lockedNames;
+    const implicitNames = this.lockedNames ?? [];
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
     // One entry per plugins.txt line: the winning plugin of every listed name, in file order
@@ -433,20 +485,23 @@ export class PluginsTreeProvider
     const listed = this.instanceValue.plugins
       .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
       .sort((a, b) => a.slot - b.slot);
-    this.lastOrder = listed.map((p) => p.name);
 
-    // A name in both sets renders once, as the implicit row. Display order only:
-    // `this.lastOrder` stays plugins.txt's raw order, which write positions are computed against.
-    const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
-    if (implicitNames.length + dedupedOrder.length === 0) return { kind: 'empty' };
-
-    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.dataFolderFile(name)));
+    // A name in both sets renders once, as the implicit row: the game loads it first, wherever its
+    // line sits. A name on two lines renders once, at its first.
+    const shown = new Set(implicitLower);
+    const dedupedOrder = listed.filter((p) => {
+      const folded = p.name.toLowerCase();
+      if (shown.has(folded)) return false;
+      shown.add(folded);
+      return true;
+    });
+    this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
+    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.lockedOriginOf(name), this.dataFolderFile(name)));
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
-    const rows: PluginListNode[] = [
+    return [
       ...lockedRows,
       ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
     ];
-    return { kind: 'ok', cache: { rows } };
   }
 
   // ── the tree item ─────────────────────────────────────────────────────────
@@ -460,16 +515,15 @@ export class PluginsTreeProvider
     element.description = base.description;
     element.iconPath = base.iconPath;
 
-    // ImplicitMasterNode and EmptyNode keep their constructor's decoration untouched: the locked
+    // ImplicitMasterNode keeps its constructor's decoration untouched: the locked
     // row's tooltip is MO2's one sentence alone (plugins.md, A plugin the game loads with no line).
     if (element.kind === 'plugin') this.decoratePlugin(element);
     return element;
   }
 
-  // plugins.md, A row story 5: a disabled plugin's records are not the game's to load, so there
+  // plugins.md, The tree, story 4: a disabled plugin's records are not the game's to load, so there
   // is nothing behind the row to expand into.
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
-    if (pluginFileOf(element) === undefined) return vscode.TreeItemCollapsibleState.None;
     if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
     return vscode.TreeItemCollapsibleState.Collapsed;
   }
@@ -495,8 +549,7 @@ export class PluginsTreeProvider
       row.iconPath = first.kind === 'malformed' ? malformedIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
-    const lines = [file];
-    if (row.origin !== undefined) lines.push(row.origin);
+    const lines = [file, row.origin];
     if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
@@ -520,8 +573,7 @@ export class PluginsTreeProvider
   }
 
   // The instance value names each mod's folder, whatever the mod manager calls the others.
-  private placeOf(origin: string | undefined): 'inMod' | 'inOverwrite' | undefined {
-    if (origin === undefined) return undefined;
+  private placeOf(origin: string): 'inMod' | 'inOverwrite' | undefined {
     if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
     const folded = origin.toLowerCase();
     return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded) ? 'inMod' : undefined;
@@ -532,7 +584,7 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // plugins.md, Menus and keys, story 6: compile on a tracked, editable plugin.
+  // plugins.md, Menus and keys: compile on a tracked, editable plugin.
   private compilable(file: string, origin: string): boolean {
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;
@@ -569,9 +621,11 @@ export class PluginsTreeProvider
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
-  // Bumped by every state-changing call this provider receives, so a slow read answering after a
-  // newer one — or after teardown — cannot resurrect a stale answer.
+  // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
+  // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
+  // `refreshFacts`' own order, apart from `generation` so a fact re-read never discards a hand-off.
+  private factsRead = 0;
 
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
    *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
@@ -627,13 +681,14 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  /** Re-reads the facts alone, leaving the held load order as it is — what a record edit or a
-   *  filter change makes stale. `undefined` when the read failed. Bumps its own generation so a
-   *  later refresh always wins. */
+  /** Re-reads the facts alone, leaving the held load order as it is. `undefined` when the read
+   *  failed. A later re-read wins, and none supersedes a reconcile's hand-off, the only answer
+   *  to which plugins are held. */
   async refreshFacts(): Promise<PluginMatch[] | undefined> {
-    const generation = ++this.generation;
+    const generation = this.generation;
+    const factsRead = ++this.factsRead;
     const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation) return undefined;
+    if (plugins === undefined || generation !== this.generation || factsRead !== this.factsRead) return undefined;
     this.applyPluginFacts(plugins);
     this._onDidChangeTreeData.fire(undefined);
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
@@ -665,6 +720,7 @@ export class PluginsTreeProvider
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
         readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        order: { masters: p.masters, blueprint: p.isBlueprint },
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);
     }
@@ -694,7 +750,6 @@ export class PluginsTreeProvider
   // "is a filter active" signal has to be threaded in here.
   private isHiddenByFilter(row: PluginListNode): boolean {
     const file = pluginFileOf(row);
-    if (file === undefined) return false;
     return this.matches?.get(file, this.joinOrigin(file, row)) === false;
   }
 
@@ -702,14 +757,16 @@ export class PluginsTreeProvider
   // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
   private reachableFailureOf(row: PluginListNode): string | undefined {
     const file = pluginFileOf(row);
-    if (file === undefined) return undefined;
     return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
   }
 
   // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
   // the client's answer names no plugin for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    const origin = row.kind === 'plugin' ? row.origin : undefined;
+    return this.heldOrigin(file, row.kind === 'plugin' ? row.origin : undefined);
+  }
+
+  private heldOrigin(file: string, origin: string | undefined): string | undefined {
     return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
   }
 
@@ -727,9 +784,8 @@ export class PluginsTreeProvider
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ names }));
   }
 
-  /** The block lands before `target`, or at the end past the last row. A drop onto the implicit
-   *  masters is no plugins.txt position — those rows have no line — so it lands at file
-   *  index 0. */
+  /** The order check reads the same drop the write applies to plugins.txt's order, whichever end
+   *  the view shows at the top. */
   async handleDrop(
     target: PluginsTreeNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -738,36 +794,57 @@ export class PluginsTreeProvider
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
     const { names } = payload.value;
-    if (names.length === 0) return;
-    const drop = this.dropFor(target);
+    const drop = this.dropFor(target, names);
     if (drop === undefined) return;
+    const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
+    if (refusal !== undefined) {
+      this.reporter?.report('error', 'Could not move plugins.', refusal);
+      return;
+    }
     try {
       await this.source.reorderPlugins(names, drop);
     } catch (e) {
-      // ADR-0019: an explicit user action failed — notify + log, then resync the
-      // moved rows against disk so the tree never shows a phantom reorder.
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
-      this.reporter?.report('error', 'Failed to reorder plugins.', errorMessage(e));
+      this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
     }
-    this.invalidate();
   }
 
-  // VS Code can hand the drop a row this controller never produced, and "not one of my rows" is
-  // not "past the last row" — the latter means the losing end, so a foreign row must not fall
-  // through to it.
-  private dropFor(target: PluginsTreeNode | undefined): PluginsDrop | undefined {
+  // ADR-0012 invariant 1: only the line's own plugin, by its origin; another plugin of the name
+  // is not it.
+  private orderFacts(): PluginOrderFactsOf {
+    const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
+    return (name) => {
+      const origin = this.heldOrigin(name, originOf.get(name));
+      return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
+    };
+  }
+
+  // plugins.md, Drag and drop, story 2: a drop lands as shown in either direction, and the locked
+  // rows load before every line. A row this controller never produced is not "past the last row".
+  private dropFor(target: PluginsTreeNode | undefined, names: readonly string[]): PluginsDrop | undefined {
+    if (names.length === 0) return undefined;
     if (target !== undefined && !OWN_ROW_KINDS.has((target as { kind?: string }).kind ?? '')) return undefined;
-    // An implicit master's row is above every plugins.txt line, so a drop on one is the top.
-    if (target instanceof ImplicitMasterNode) return { kind: 'winningEnd' };
-    if (target instanceof PluginNode) return { kind: 'before', name: target.plugin.name };
-    return { kind: 'losingEnd' };
+    const losingAtTop = this.direction === 'losingAtTop';
+    if (target instanceof ImplicitMasterNode) return LOSING_END;
+    if (target instanceof PluginNode) {
+      if (names.includes(target.plugin.name)) return undefined;
+      return { kind: losingAtTop ? 'before' : 'after', name: target.plugin.name };
+    }
+    return losingAtTop ? WINNING_END : LOSING_END;
   }
 }
 
-// VS Code only ever passes back an element `getChildren` returned, and only these three classes
+// VS Code only ever passes back an element `getChildren` returned, and only these two classes
 // stand for a plugins.txt line.
 function isRow(element: PluginsTreeNode): element is PluginListNode {
-  return element instanceof PluginNode || element instanceof ImplicitMasterNode || element instanceof EmptyNode;
+  return element instanceof PluginNode || element instanceof ImplicitMasterNode;
+}
+
+// plugins.md, Menus and keys: a record row is every row a record menu sits on.
+function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
+  if (row.kind === 'record') return row.record.formKey;
+  if (row.kind === 'worldspace' || row.kind === 'cell' || row.kind === 'placed') return row.formKey;
+  return undefined;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

@@ -256,6 +256,18 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.sortWinningAtTop",
+        "title": "Sort Plugins Winning at Top",
+        "icon": "$(triangle-down)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.plugin.sortLosingAtTop",
+        "title": "Sort Plugins Losing at Top",
+        "icon": "$(triangle-up)",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.install",
         "title": "Install Mod…",
         "category": "Modbench"
@@ -417,13 +429,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.copyAsOverride",
-        "title": "Copy as Override Into…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.record.copyAsNewRecord",
-        "title": "Copy as New Record Into…",
+        "command": "modbench.record.copy",
+        "title": "Copy Record…",
         "category": "Modbench"
       }
     ],
@@ -546,12 +553,8 @@
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allDeletableRecords"
         },
         {
-          "command": "modbench.record.copyAsOverride",
-          "when": "false"
-        },
-        {
-          "command": "modbench.record.copyAsNewRecord",
-          "when": "false"
+          "command": "modbench.record.copy",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allRecords"
         },
         {
           "command": "modbench.instance.putLoadOrder",
@@ -634,6 +637,14 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.plugin.sortWinningAtTop",
+          "when": "modbench.folder == instance"
+        },
+        {
+          "command": "modbench.plugin.sortLosingAtTop",
+          "when": "modbench.folder == instance"
+        },
+        {
           "command": "modbench.record.filter",
           "when": "modbench.folder == instance"
         },
@@ -662,6 +673,16 @@
           "command": "modbench.plugin.clearFilter",
           "when": "view == modbench.pluginListTree && modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
+        },
+        {
+          "command": "modbench.plugin.sortWinningAtTop",
+          "when": "view == modbench.pluginListTree && !modbench.plugin.winningAtTop && modbench.folder == instance",
+          "group": "navigation@2"
+        },
+        {
+          "command": "modbench.plugin.sortLosingAtTop",
+          "when": "view == modbench.pluginListTree && modbench.plugin.winningAtTop && modbench.folder == instance",
+          "group": "navigation@2"
         },
         {
           "command": "modbench.record.filter",
@@ -926,19 +947,14 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.record.copyAsOverride",
+          "command": "modbench.record.copy",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "5_copy@1"
         },
         {
-          "command": "modbench.record.copyAsNewRecord",
-          "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
-          "group": "5_copy@2"
-        },
-        {
           "command": "modbench.record.copyValue",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
-          "group": "5_copy@3"
+          "group": "5_copy@2"
         },
         {
           "command": "modbench.record.delete",
@@ -973,14 +989,9 @@
           "group": "modbench@10"
         },
         {
-          "command": "modbench.record.copyAsOverride",
+          "command": "modbench.record.copy",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
           "group": "modbench@11"
-        },
-        {
-          "command": "modbench.record.copyAsNewRecord",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
-          "group": "modbench@12"
         },
         {
           "command": "modbench.record.openFieldValue",
@@ -1074,7 +1085,6 @@
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/wire/generated/api.ts",
     "test:unit": "vitest run",
-    "test:mutation": "stryker run",
     "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && env -u WAYLAND_DISPLAY -u XDG_SESSION_TYPE xvfb-run -a vscode-test",
     "lint": "eslint src webview/src eslint-rules eslint.config.mjs",
@@ -1083,8 +1093,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -174,7 +174,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             .Items.Select(i => i.FormKey)];
 
     private int CountOf(Indexer index, string recordType) =>
-        index.RequireReads().CountOf(fixture.Plugin, recordType);
+        index.RequireReads().Search(new RecordQuery(
+            RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
 
     private Dictionary<string, RecordDocument> DocumentsByFormKey(Indexer index) =>
         index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);

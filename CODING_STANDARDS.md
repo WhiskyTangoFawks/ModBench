@@ -13,7 +13,7 @@ with this file.
 
 ## Failures
 
-A failure is data (ADR-0019) and a command returns its refusal (ADR-0014 rule 4). These
+A failure is data (ADR-0019) and a command returns its refusal (ADR-0014 invariant 4). These
 hold the seam between an exception and a result.
 
 - A `throw` that a caller could catch and act on. → It is a refusal or a failure. Return it
@@ -23,8 +23,7 @@ hold the seam between an exception and a result.
 ## Tests
 
 Development is /tdd: a failing test, then the code that passes it, one slice at a time.
-Mutation testing holds assertion strength. These are the marks a skipped loop leaves in a
-diff.
+These are the marks a skipped loop leaves in a diff.
 
 - A hunk changes behaviour and no test in the diff covers it. → Name the hunk. Red comes
   before green.
@@ -44,10 +43,11 @@ diff.
 - A test contains a loop or a conditional. → Split it into one test per path.
 - A port's test double is a mock that asserts calls or their order. → Replace it with a fake
   that honours the port's contract. Tests share the fake. The fake is the port's second
-  adapter (ADR-0014 rule 2). A test asserts a call only when the call is the contract.
+  adapter (ADR-0014 invariant 2). A test asserts a call only when the call is the contract.
 
 ## Naming
 
 - An identifier names a domain concept with a word other than the glossary's. → Use the term
   in [CONTEXT.md](CONTEXT.md).
-- A hunk introduces a domain word the glossary lacks. → Surface to the developer for a decision.
+- A hunk names a concept that neither CONTEXT.md, the reference tool nor ordinary use names. →
+  Describe it, and put the naming question to the developer.

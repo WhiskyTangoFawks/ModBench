@@ -573,7 +573,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
 
-    // update-load-order-file, Failure: the line a delete leaves after the trash names a folder that
+    // mods.md, Reporting, story 3: the line a delete leaves after the trash names a folder that
     // is gone. Rival: mod sync dropping only mod lines, so the deleted separator stays for good.
     it('the line a delete leaves after the trash is dropped by the next mod sync', async () => {
       vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
@@ -1103,7 +1103,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     ]);
   });
 
-  // update-load-order-file, Refusals: `mods/` cannot be listed, so nothing is written. Rival:
+  // mods.md, Reporting, story 2: `mods/` cannot be listed, so nothing is written. Rival:
   // reading a mods/ gone by write time as no folders, which drops every line.
   it('refuses, writing nothing, when mods/ is gone by the time the sync writes', async () => {
     const before = await readFile(modlistPath(), 'utf8');

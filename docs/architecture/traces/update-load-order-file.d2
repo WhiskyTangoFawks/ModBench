@@ -1,11 +1,11 @@
-# One instance file updated. Contract: update-load-order-file.md.
+# One instance file updated.
 ...@../styles
 shape: sequence_diagram
 surfaces: "Mods · Plugins · Toolbox · Downloads" {class: driving}
 cmds: "modlist · plugins · instance · downloads commands" {class: core}
 instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
@@ -13,24 +13,21 @@ mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nmodlist.txt · plugins.txt · ModOrganizer.ini · mods/ · downloads/"
 views: "every view" {class: driving}
 
-surfaces -> cmds: "the gesture, with its argument" {class: loadorder}
-instanceloader -> cmds: "a system command: the value as an argument" {class: loadorder}
-cmds -> client: "which plugins load with no line? · for a move, their masters" {class: query}
-client -> cmds: the set, or unreachable {class: query}
-cmds -> instanceadapter: "the lines to flip, move, add or drop · the folder to make, rename or remove" {class: loadorder}
-instanceadapter."under one lock per file: read, splice through the file's codec, write whole"
+surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
+instanceloader -> cmds: "a system command: the value" {class: loadorder}
+cmds -> client: "for a move: their masters" {class: query}
+client -> cmds: the masters {class: query}
+cmds -> instanceadapter: "the change: lines and folders" {class: loadorder}
 uninstall: "an uninstall, from a downloaded file" {
-  cmds -> instanceadapter: "the download's .meta: uninstalled" {class: loadorder}
-  cmds."a failed mark is a line in the Output, and the uninstall still applied"
+  cmds -> instanceadapter: "the downloaded file's .meta: uninstalled" {class: loadorder}
 }
-instanceadapter -> mo2: bytes, then forget {class: loadorder}
+instanceadapter -> mo2: bytes {class: loadorder}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
 mo2 -> instanceloader: watch {class: signal}
-instanceloader."recompute whole, next sequence"
 instanceloader -> views: value {class: loadorder}
-instanceloader -> cmds: "put load order: the snapshot, on change and on connect" {class: loadorder}
+instanceloader -> cmds: "put load order: the snapshot" {class: loadorder}
 cmds."the rest is index-load-order"
 
 refused: "refused, before any write" {
-  cmds -> surfaces: "the object has gone · a taken name · a master below its dependant · the trash fails · mods/ or a folder cannot be listed · mEdit cannot say" {class: loadorder}
+  cmds -> surfaces: "the refusal" {class: loadorder}
 }

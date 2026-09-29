@@ -44,11 +44,36 @@ internal static class Wire
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
             new { plugin, origin, op = "set", path = new[] { new { kind = "member", name = member } }, value });
 
+    internal static Task<HttpResponseMessage> Copy(
+        this HttpClient client, IEnumerable<(string FormKey, string Plugin, string Origin)> records, string mode,
+        IEnumerable<(string Plugin, string Origin)> destinations, bool replace = false) =>
+        client.PostAsJsonAsync("/records/copy", new
+        {
+            records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
+            mode,
+            destinations = destinations.Select(d => new { name = d.Plugin, origin = d.Origin }),
+            replace,
+        });
+
+    internal static Task<HttpResponseMessage> Copy(
+        this HttpClient client, string formKey, (string Plugin, string Origin) source, string mode,
+        (string Plugin, string Origin) destination, bool replace = false) =>
+        client.Copy([(formKey, source.Plugin, source.Origin)], mode, [destination], replace);
+
     internal static async Task<string> FirstFormKey(this HttpClient client, string plugin, string type = "npc_")
     {
         var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}");
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()
             ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} to carry a formKey.");
+    }
+
+    internal static async Task<string> FormKeyNamed(this HttpClient client, string plugin, string type, string editorId)
+    {
+        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}&search={editorId}");
+        return records.GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("editorId").GetString() == editorId)
+            .GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
     }
 
     internal static async Task<string> FirstFormKeyIn(

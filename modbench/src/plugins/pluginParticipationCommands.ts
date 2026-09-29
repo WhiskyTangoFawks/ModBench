@@ -6,7 +6,7 @@ import { setPluginsEnabled, type PluginParticipation, type PluginsSelectionResul
 import type { Reporter } from '../ports/reporter';
 
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
-// (plugins.md, Menus and keys, story 5 — behaves as in Mods).
+// (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
@@ -33,18 +33,16 @@ function participationVerb(entries: readonly PluginParticipation[]): string {
 }
 
 // Shared by the menu/key path above and the check box, so both read one outcome the same way.
-// The return says whether a row needs a resync.
 export function reportPluginsParticipation(
   result: PluginsSelectionResult, entries: readonly PluginParticipation[], reporter: Reporter,
-): boolean {
+): void {
   const verb = participationVerb(entries);
   if (!result.applied) {
     reporter.report('error', `Failed to ${verb} plugins.`, result.refusal);
-    return true;
+    return;
   }
   reporter.selectionOutcome(
     `Could not ${verb} ${result.outcome.refused.length} of ${entries.length} plugins.`,
     result.outcome, (name) => name,
   );
-  return result.outcome.refused.length > 0;
 }

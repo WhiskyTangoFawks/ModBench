@@ -2,13 +2,15 @@ import type * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
-// Any reconcile-free record change is reason enough for a whole refresh() — the tree has no
-// per-row identity to check against the event (ADR-0015 invariant 3).
+// A whole refresh() per record change: the tree has no per-row identity to check the event
+// against (ADR-0015 invariant 3). The plugin facts too, as a changed record can start or stop
+// matching the record filter.
 export function subscribeTreeToNotifications(
-  client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void },
+  client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void }, refreshPluginFacts: () => void,
 ): () => void {
-  const unsubscribeRows = client.subscribe('rows-changed', () => tree.refresh());
-  const unsubscribePlugin = client.subscribe('plugin-changed', () => tree.refresh());
+  const reread = () => { tree.refresh(); refreshPluginFacts(); };
+  const unsubscribeRows = client.subscribe('rows-changed', reread);
+  const unsubscribePlugin = client.subscribe('plugin-changed', reread);
   return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
 

@@ -310,6 +310,36 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
+    public async Task MidLoad_AListingSortsItsRecordsByLoadPosition_WithALightPluginsLast()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("sm-progressive-order")
+            .WithPlugin("Zulu.esm", mod => mod.Activators.AddNew("CZuluLever"))
+            .WithPlugin("Alpha.esl", mod => mod.Activators.AddNew("AAlphaLever"))
+            .WithPlugin("Beta.esm", mod => mod.Activators.AddNew("BBetaLever"))
+            .WithPlugin("Patch.esp", (mod, masters) =>
+            {
+                foreach (var master in masters) mod.Activators.GetOrAddAsOverride(master.Activators.Single());
+            })
+            .WithPlugin("Late.esp")
+            .BuildScattered();
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "Late.esp");
+        using var _ = manager;
+        using var __ = gate;
+
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        var listed = manager.RequireReads().Search(
+            new RecordQuery(RecordTypes: ["acti"], Plugin: "Patch.esp", Limit: 10, GroupOnly: true)).Items.Select(r => r.EditorId);
+
+        Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);
+
+        gate.Release();
+        await load;
+    }
+
+    [Fact]
     public async Task MidLoad_ReadsAreServed_RatherThanBlockingUntilTheLoadFinishes()
     {
         var holder = new LoadOrderHolder();

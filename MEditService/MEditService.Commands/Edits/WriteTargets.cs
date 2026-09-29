@@ -351,7 +351,7 @@ internal sealed class WriteTargets(
         return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
-    // Shared by create and copy as new (edit-record.md's refusal table): every branch
+    // Shared by create and copy as new (plugins.md, Create record, story 3): every branch
     // names both remedies, even where one is moot for this plugin.
     internal static string FormKeySpaceExhaustedMessage(PluginAddress plugin, bool isLight, bool eslContradiction = false)
     {

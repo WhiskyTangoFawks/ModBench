@@ -1,0 +1,59 @@
+import type * as vscode from 'vscode';
+import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
+
+export interface CopyModeItem extends vscode.QuickPickItem {
+  readonly mode: CopyMode;
+}
+
+/** plugins.md, Pickers, Copy: the mode first, in xEdit's navigator order. */
+export const COPY_MODE_ITEMS: readonly CopyModeItem[] = [
+  { label: 'Override', detail: 'The record itself, under its own FormKey, in each plugin you pick.', mode: 'Override' },
+  { label: 'New record', detail: 'A duplicate under the next free FormID of each plugin you pick.', mode: 'New' },
+];
+
+export interface CopyDestinationItem extends vscode.QuickPickItem {
+  readonly plugin: PluginAddress;
+}
+
+// A plugin's name and origin compare without case, as mEdit compares them.
+const samePlugin = (a: PluginAddress, b: { name: string; origin: string }): boolean =>
+  a.name.toLowerCase() === b.name.toLowerCase() && a.origin.toLowerCase() === b.origin.toLowerCase();
+
+const ownPlugin = (record: RecordAddress): PluginAddress => ({ name: record.plugin, origin: record.origin });
+
+/** The plugins I can edit, each with its load position (plugins.md, Pickers, Copy). An override
+ *  is not offered the one plugin every record already lives in: it is that copy. */
+export function copyDestinationItems(
+  plugins: readonly PluginMetadata[], mode: CopyMode, records: readonly RecordAddress[],
+): CopyDestinationItem[] {
+  const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePlugin(ownPlugin(r), p));
+  return plugins
+    .filter((p) => p.isTracked && !p.isImmutable)
+    .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
+    .map((p) => ({
+      label: p.name,
+      description: p.loadOrderIndex === null || p.loadOrderIndex === undefined ? undefined : `[${p.loadOrderIndex}]`,
+      plugin: { name: p.name, origin: p.origin },
+    }));
+}
+
+// An override into the record's own plugin: that plugin already is the copy.
+const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePlugin(ownPlugin(record), destination);
+
+/** The landed items that wrote a copy: mEdit writes nothing for an override into the record's own
+ *  plugin, and nothing is said of it (commands.md, Doing nothing is not an error). */
+export function copiesWritten(landed: readonly CopyItem[], mode: CopyMode): CopyItem[] {
+  return mode === 'Override' ? landed.filter((item) => !intoItsOwnPlugin(item)) : [...landed];
+}
+
+/** Each record and picked destination where the destination already holds a copy of the record:
+ *  what an override would replace. A record's own plugin holds the record, not a copy of it. */
+export function heldCopies(
+  records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  holders: ReadonlyMap<string, readonly PluginAddress[]>,
+): CopyItem[] {
+  return records.flatMap((record) => destinations
+    .filter((destination) => (holders.get(record.formKey) ?? []).some((holder) => samePlugin(holder, destination)))
+    .map((destination) => ({ record, destination })))
+    .filter((item) => !intoItsOwnPlugin(item));
+}

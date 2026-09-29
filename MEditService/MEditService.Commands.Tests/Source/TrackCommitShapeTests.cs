@@ -142,7 +142,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
     }
 
-    // decompile-plugin, The command, step 9: a failure after a plugin's commit landed does not
+    // plugins.md, Track, story 5: a failure after a plugin's commit landed does not
     // report that plugin refused. A lock another git holds on the edit branch makes its checkout
     // fail after every baseline is on main.
     [Fact]
@@ -183,7 +183,6 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
     }
 
-    // decompile-plugin, Refusals: a question open on the mod refuses the repository destination.
     [Fact]
     public async Task Track_IntoAModWithAnUnansweredExternalChange_RefusesThePlugin_NamingTheQuestion()
     {

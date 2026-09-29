@@ -64,7 +64,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
     // --- DELETE /load-order/filter ---
 
-    // plugins.md, Order and view state, story 5: the filter clears on purpose, whatever is held.
+    // plugins.md, Order and view state, story 3: the filter clears on purpose, whatever is held.
     [Fact]
     public async Task DeleteFilter_WithNoLoadOrder_Returns204()
     {

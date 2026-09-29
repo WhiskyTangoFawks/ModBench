@@ -164,6 +164,17 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal([(name, GameRelease.Oblivion)], adapter.Asked);
     }
 
+    // Rival: a default arm that reports Applied for whatever the adapter answers, so an outcome
+    // neither Written nor a named refusal would be told to the user as a success.
+    [Fact]
+    public async Task CreatePlugin_WhoseAdapterAnswersAnUnnamedOutcome_ThrowsRatherThanReportingApplied()
+    {
+        var adapter = new RecordingAdapter { Outcome = (EmptyPluginWrite)99 };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Odd.esp", "OddMod"), ModFolder("OddMod")));
+    }
+
     private CreatePluginHandler HandlerIn(GameRelease release, RecordingAdapter adapter)
     {
         var holder = new LoadOrderHolder();
@@ -176,11 +187,12 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private sealed class RecordingAdapter : ReadOnlyPluginAdapter
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];
+        public EmptyPluginWrite Outcome { get; init; } = EmptyPluginWrite.Written;
 
         public override Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease)
         {
             Asked.Add((modKey.FileName.String, gameRelease));
-            return Task.FromResult(EmptyPluginWrite.Written);
+            return Task.FromResult(Outcome);
         }
     }
 

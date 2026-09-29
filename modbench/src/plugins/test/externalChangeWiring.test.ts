@@ -21,7 +21,6 @@ vi.mock('../externalChangeCoordinator', () => ({
 }));
 
 import { wireQuestionOpen } from '../externalChangeWiring';
-import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -30,11 +29,8 @@ import { present } from '../../ports/present';
 function wire(askQuestion = scriptedDialog()) {
   const outputChannel = new FakeLogOutputChannel();
   const client = new InMemoryMEditClient();
-  const treeProvider = new PluginTreeProvider(client);
   const reporter = recordingReporter();
-  wireQuestionOpen({
-    client, outputChannel, treeProvider, refreshMatchingPlugins: vi.fn(), askQuestion, reporter,
-  });
+  wireQuestionOpen({ client, outputChannel, askQuestion, reporter });
   return {
     outputChannel, reporter,
     deps: present(subscribeQuestionOpen.mock.calls[0], "wireQuestionOpen's call to the coordinator")[0],

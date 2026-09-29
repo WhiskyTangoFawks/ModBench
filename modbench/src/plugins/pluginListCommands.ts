@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import {
+  ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode, type SortDirection,
+} from './PluginsTreeProvider';
 import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
@@ -9,6 +11,21 @@ import { CellNode, PlacedNode, RecordNode, WorldspaceNode } from './PluginTreePr
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
+
+/** The Plugins view's direction writes no file, so it lives with the view it flips. It starts
+ *  losing at the top on each activation, and the context key, which outlives an extension host
+ *  restart, is told so. */
+export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider, 'setViewDirection'>): vscode.Disposable[] {
+  const show = (direction: SortDirection) => {
+    pluginsTree.setViewDirection(direction);
+    void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', direction === 'winningAtTop');
+  };
+  void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', false);
+  return [
+    vscode.commands.registerCommand('modbench.plugin.sortWinningAtTop', () => show('winningAtTop')),
+    vscode.commands.registerCommand('modbench.plugin.sortLosingAtTop', () => show('losingAtTop')),
+  ];
+}
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
@@ -52,7 +69,7 @@ function copyValueLine(row: CopiedRow): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
 
-/** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 8).
+/** Plugins' own text for the catalog's one copy value id (plugins.md, Menus and keys, story 5).
  *  `undefined` unless `clicked` is a Plugins row or the Plugins key's args, so another view's
  *  invocation defers. */
 export function pluginsCopyValueText(

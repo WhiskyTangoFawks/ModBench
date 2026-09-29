@@ -30,14 +30,14 @@ const value = instanceValueFixture({
 });
 
 describe('pluginPlaces', () => {
-  it('lists Overwrite first, then the enabled mods, and no separator or disabled mod', () => {
-    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['overwrite', 'Winning Mod', 'Losing Mod']);
+  it('lists the enabled mods first, then Overwrite, and no separator or disabled mod', () => {
+    expect(pluginPlaces(value, 'New.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod', 'overwrite']);
   });
 
   // Rival: checking the name across the whole load order, which would leave out every place once
   // any of them held it.
   it('leaves out only a place that already holds a plugin of that name, whatever its case', () => {
-    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['overwrite', 'Winning Mod']);
+    expect(pluginPlaces(value, 'held.ESP').map((p) => p.origin)).toEqual(['Winning Mod', 'overwrite']);
     expect(pluginPlaces(value, 'Other.esp').map((p) => p.origin)).toEqual(['Winning Mod', 'Losing Mod']);
   });
 });

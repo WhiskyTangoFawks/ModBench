@@ -30,7 +30,7 @@ import {
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
-  registerLoadMoreCommand, registerFilterCommands, makeShowRecordFilter, type FilterScripts,
+  registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
 import { wireQuestionOpen } from './plugins/externalChangeWiring';
 import { errorMessage } from './ports/errorMessage';
@@ -99,7 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
   // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(meditClient, treeProvider) },
+    { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
   );
 
@@ -137,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, outputChannel, compileDiagnostics, treeProvider,
+    session, client: meditClient, outputChannel, compileDiagnostics,
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -161,8 +161,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolbox,
     {
       dispose: wireQuestionOpen({
-        client: meditClient, outputChannel, treeProvider,
-        refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+        client: meditClient, outputChannel,
         askQuestion,
         reporter: makeReporter(outputChannel, 'externalChange'),
       }),
@@ -174,7 +173,6 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
-    registerLoadMoreCommand(treeProvider),
     ...registerFilterCommands({
       scripts: filterScripts, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
@@ -182,11 +180,10 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, recordBadgeSource: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
@@ -226,7 +223,6 @@ interface PluginRowCommandDeps {
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
-  treeProvider: PluginTreeProvider;
   notifyConflictsComputed: () => void;
   originFiles: OriginFilesOf;
 }
@@ -234,11 +230,11 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, compileDiagnostics, notifyConflictsComputed, originFiles } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
-      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
+      client, makeReporter(outputChannel, 'pluginListTree.track'),
       async () => {
         await registerHeldTrackedRepositories(
           client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked, pluginFolder);

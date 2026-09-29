@@ -33,13 +33,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('reorderPlugins writes the moved line at the winning end', async () => {
-    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'winningEnd' })).toEqual({ applied: true, wrote: true });
+  it('reorderPlugins writes the moved line at the losing end, first in the file', async () => {
+    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
   it('reorderPlugins refuses a name with no line, naming it, and writes nothing', async () => {
-    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'winningEnd' }), 'No Such.esp');
+    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });

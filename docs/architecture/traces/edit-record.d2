@@ -1,8 +1,8 @@
-# Edit a record, blue. Contract: edit-record.md.
+# Edit a record, blue.
 ...@../styles
 shape: sequence_diagram
 editor: "Plugins · Editor" {class: driving}
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -31,16 +31,16 @@ commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
 source -> watcher: source changed {class: signal}
-watcher -> indexer: "source changed: refresh keys" {class: signal}
+watcher -> indexer: source changed {class: signal}
 sourceadapter -> indexer: documents (tracked) {class: query}
 indexer -> store: rows {class: query}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> editor: rows changed (push), then re-read {class: push}
+client -> editor: rows changed {class: push}
 
 refused: "refused, nothing written for that record" {
-  commands -> http: "untracked · in no mod · an overridden plugin · a question open on the mod · the record has gone · a path not there · a value the codec rejects · a duplicate key · a read-only field · no free FormID · the destination holds the record, with no replace" {class: edit}
+  commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> editor: the refusal {class: edit}
 }

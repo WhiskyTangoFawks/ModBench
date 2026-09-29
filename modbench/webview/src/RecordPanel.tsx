@@ -28,7 +28,7 @@ const mEditWindow = window as Window & typeof globalThis & {
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
 // The document member a record's FormID is, which an edit of the FormID names (editor.md, The
-// FormID; edit-record.md).
+// FormID).
 const FORM_ID_MEMBER = 'FormKey';
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
@@ -408,8 +408,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
-                        // Copy as Override Into…/Copy as New Record Into…,
-                        // this column's native right-click menu — unconditional on isImmutable/
+                        // Copy…, on this column's native right-click menu — unconditional on isImmutable/
                         // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
                         // case, not one to gate out.
                         vscodeContext={combineVscodeContexts(

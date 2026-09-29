@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type CompileResult, type PluginAddress } from '../client';
-import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
+import { headerFormKeyFor } from './PluginTreeProvider';
 import { resolveCompileTarget, type ResolveCompileTargetDeps } from './compileTarget';
 import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
@@ -11,7 +11,7 @@ import {
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import { compilableSelected, pluralArgument, registerPluginsGesture } from './gestureEntry';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
@@ -30,20 +30,47 @@ export interface PluginsViewProgress {
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'compile' | 'editRecord'>;
 
-// ADR-0012: the origin, once resolved, tells two plugins that share a filename apart; a row whose
-// mod cannot be resolved has none, and none is invented for it.
-type TrackedRow = { name: string; origin?: string };
+// ADR-0012: the origin tells two plugins that share a filename apart.
+function rowName(row: PluginAddress): string {
+  return `${row.name} (${row.origin})`;
+}
 
-function rowName(row: TrackedRow): string {
-  return row.origin ? `${row.name} (${row.origin})` : row.name;
+type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
+
+// plugins.md, Track, story 2: what each preset's repository tracks.
+const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
+const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
+
+// createQuickPick, not showQuickPick: only the former lets Edits show pre-selected
+// (plugins.md, Pickers, Track), the same pattern DownloadsPanel.ts's pickSort uses.
+function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined> {
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<PresetOption>();
+    quickPick.items = PRESET_OPTIONS;
+    quickPick.placeholder = placeholder;
+    quickPick.activeItems = [EDITS_OPTION];
+    let accepted = false;
+    quickPick.onDidAccept(() => {
+      accepted = true;
+      const [picked] = quickPick.selectedItems;
+      quickPick.hide();
+      resolve(picked);
+    });
+    quickPick.onDidHide(() => {
+      if (!accepted) resolve(undefined);
+      quickPick.dispose();
+    });
+    quickPick.show();
+  });
 }
 
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
-  progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
+  progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
+  reporter: Reporter, onTracked: () => Promise<void>,
   viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
   // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
@@ -52,31 +79,14 @@ export function registerTrackCommand(
     const nodes = pluralArgument(entry, 'plugin');
     if (nodes.length === 0) return;
 
-    const addressed: PluginAddress[] = [];
-    const unaddressed: ItemRefusal<TrackedRow>[] = [];
-    for (const node of nodes) {
-      const name = node.plugin.name;
-      const origin = node.origin ?? await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
-      if (origin) addressed.push({ name, origin });
-      else unaddressed.push({ item: { name }, reason: 'its mod could not be resolved' });
-    }
-    const report = (outcome: SelectionOutcome<TrackedRow>) => {
+    const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
+    const report = (outcome: SelectionOutcome<PluginAddress>) => {
       reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
     };
     const [first] = addressed;
-    if (!first) { report({ landed: [], refused: unaddressed }); return; }
+    if (!first) return;
 
-    const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { label: 'Edits' | 'Everything' }>(
-      [
-        { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
-        { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
-      ],
-      {
-        placeHolder: nodes.length === 1
-          ? `Track "${first.name}" — what should its .gitignore include?`
-          : `Track ${nodes.length} plugins — what should their .gitignore include?`,
-      },
-    );
+    const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
     if (!choice) return;
 
     await progress.while(async () => {
@@ -85,13 +95,9 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      const outcome = { landed: result.landed, refused: [...unaddressed, ...result.refused] };
-      if (outcome.landed.length > 0) {
-        // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
-        // menu entry's opposite. Not the filter-match set: tracking changes no record.
-        treeProvider.refresh();
-        await onTracked();
-      }
+      const outcome = result;
+      // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
+      if (outcome.landed.length > 0) await onTracked();
       const [only, ...more] = outcome.landed;
       if (outcome.refused.length > 0) report(outcome);
       else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);

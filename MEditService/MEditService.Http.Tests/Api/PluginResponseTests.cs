@@ -5,9 +5,9 @@ namespace MEditService.Http.Tests.Api;
 
 public sealed class PluginResponseTests
 {
-    private static PluginRow Row(bool isTracked) =>
+    private static PluginRow Row(bool isTracked = false, bool isBlueprint = false) =>
         new(new RegisteredPlugin("Fixture.esp", "FixtureMod", Path.Combine(Path.GetTempPath(), "no-such-mod", "Fixture.esp"), 0, Enabled: true, Winning: true),
-            new PluginContent(IsLight: false, IsMaster: false, Masters: [], RecordCount: 1),
+            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1),
             MasterIssues: [], HasMatchingRecords: true, HasParseFailure: false, IsTracked: isTracked);
 
     [Fact]
@@ -15,5 +15,12 @@ public sealed class PluginResponseTests
     {
         Assert.True(PluginResponse.Of(Row(isTracked: true)).IsTracked);
         Assert.False(PluginResponse.Of(Row(isTracked: false)).IsTracked);
+    }
+
+    [Fact]
+    public void IsBlueprint_IsTheRowsFact()
+    {
+        Assert.True(PluginResponse.Of(Row(isBlueprint: true)).IsBlueprint);
+        Assert.False(PluginResponse.Of(Row(isBlueprint: false)).IsBlueprint);
     }
 }

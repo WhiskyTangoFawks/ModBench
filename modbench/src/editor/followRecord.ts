@@ -22,7 +22,8 @@ interface InFlight { writes: number; reported: Set<string>; refreshed: boolean }
 interface Move { plugin: string; origin: string; from: string; to: string; readAt: number | undefined }
 
 /** A panel with an edit in flight reads again once, after the answer, under the FormKey it then
- *  shows, and only on mEdit's report of the change, which may land first (editor.md, States 5). */
+ *  shows, and only on mEdit's report of the change, which may land first (editor.md, States,
+ *  story 5). */
 export class EditsInFlight<Panel extends FollowedPanel> {
   private readonly inFlight = new Map<Panel, InFlight>();
   private readonly moves = new Map<Panel, Move[]>();
