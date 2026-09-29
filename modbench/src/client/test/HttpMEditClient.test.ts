@@ -227,6 +227,37 @@ describe('HttpMEditClient — deleting records answers per record', () => {
   });
 });
 
+describe('HttpMEditClient — creating a plugin', () => {
+  const plugin = { name: 'New.esp', origin: 'ModA' };
+
+  it('sends the origin, the file name and the folder, and reads back the plugin it wrote', async () => {
+    const wrote = { name: 'New.esp', origin: 'ModA', path: '/mods/ModA/New.esp' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, wrote)));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual(wrote);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/create$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' });
+  });
+
+  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
+      detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists',
+    })));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual({
+      refused: true,
+      message: 'Could not create "New.esp" — A file is already at /mods/ModA/New.esp, so New.esp was not created.',
+    });
+  });
+});
+
 describe('HttpMEditClient — copying records answers per record and destination', () => {
   const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };

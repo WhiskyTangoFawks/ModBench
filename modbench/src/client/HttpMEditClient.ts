@@ -128,14 +128,14 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused> {
-    const { error, response, data } = await this.apiClient.POST('/plugins/create', { body: { name, path, origin } });
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
-      return { refused: true, message: `Failed to create plugin — ${text}` };
-    }
-    return data ?? { name, path, origin, slot: null, version: 0 };
+  async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
+    const failMsg = `Could not create "${plugin.name}"`;
+    const answer = await this.mutate({
+      op: `createPlugin(${plugin.name}, ${plugin.origin})`,
+      failMsg,
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
+    });
+    return answer ?? { refused: true, message: `${failMsg} — no answer` };
   }
 
   /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.

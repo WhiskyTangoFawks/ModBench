@@ -44,7 +44,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         Plugin.Dispose();
     }
 
-    // Any test's create-plugin call started a reconcile on its own thread and never awaited it:
+    // A test's own load order put starts a reconcile on its own thread and may never await it:
     // deleting Plugin's files out from under one still running would race it (ADR-0003).
     public async Task DisposeAsync()
     {

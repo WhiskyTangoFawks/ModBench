@@ -140,18 +140,39 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
-    public async Task CreateAndWriteAsync(
-        ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster)
+    public async Task<EmptyPluginWrite> CreateAndWriteAsync(
+        ModKey modKey, string folder, GameRelease gameRelease)
     {
-        // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has written
-        // into yet — a brand-new mod, or overwrite/ before its first file.
-        Directory.CreateDirectory(PathShape.DirectoryOf(destinationPath));
-        if (File.Exists(destinationPath))
-            throw new IOException($"Plugin file already exists: {Path.GetFileName(destinationPath)}");
+        var destinationPath = Path.Combine(folder, modKey.FileName.String);
+        if (!Directory.Exists(folder)) return EmptyPluginWrite.FolderGone;
+        if (File.Exists(destinationPath)) return EmptyPluginWrite.FileExists;
 
         var plugin = CreateEmpty(modKey, gameRelease);
-        if (smallMaster) plugin.IsSmallMaster = true;
-        await WriteAsync(plugin, destinationPath);
+        plugin.IsMaster = modKey.Type == ModType.Master;
+        plugin.IsSmallMaster = modKey.Type == ModType.Light;
+
+        // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
+        // folder of its own — nothing here can create or resurrect one. The fixed .tmp suffix
+        // keeps a random plugin extension from ever landing here.
+        var tempPath = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
+        try
+        {
+            await WriteAsync(plugin, tempPath, noModKeySync: true);
+            File.Move(tempPath, destinationPath, overwrite: false);
+            return EmptyPluginWrite.Written;
+        }
+        catch (IOException) when (File.Exists(destinationPath))
+        {
+            return EmptyPluginWrite.FileExists;
+        }
+        catch (DirectoryNotFoundException) when (!Directory.Exists(folder))
+        {
+            return EmptyPluginWrite.FolderGone;
+        }
+        finally
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
     }
 
     /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
@@ -161,7 +182,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,
-        string? stringsFolder = null)
+        string? stringsFolder = null,
+        bool noModKeySync = false)
     {
         // ADR-0006: the header's stored NextObjectID and record count are written as stored, never
         // recomputed. Mutagen's Iterate defaults re-derive both, and real override plugins routinely
@@ -172,6 +194,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             .WithNoDataFolder()
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck);
+        // A destination named other than plugin's ModKey needs this lifted.
+        if (noModKeySync) writeBuilder = writeBuilder.NoModKeySync();
 
         // A caller writing to a temp file needs its own strings folder. Mutagen's write path
         // disposes whichever StringsWriter it holds, so this one is ours only on failure.

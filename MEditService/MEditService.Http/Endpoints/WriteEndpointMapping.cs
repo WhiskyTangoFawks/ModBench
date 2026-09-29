@@ -70,6 +70,19 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
 
+    /// <summary>Create plugin's own refusal, each found before any write: the status says what kind
+    /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
+    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            PluginCreateRefusal.FolderGone => 404,
+            PluginCreateRefusal.FileExists => 409,
+            // Well-formed, and still not a plugin this game can load.
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
+
     /// <summary>Put load order's own refusal: a bad request, since the only one this handler
     /// answers is discovered by validating the release, never by touching the Index.</summary>
     internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
@@ -93,10 +106,6 @@ internal static class WriteEndpointMapping
     /// <summary>An argument the adapter itself refuses — malformed syntax is a 400. Same shape as
     /// <see cref="MalformedFormKey"/>, kept separate because the argument here is never a FormKey.</summary>
     internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
-
-    /// <summary>The adapter's IOException when a write's destination already holds something — a
-    /// state conflict, not <see cref="WriteFailure"/>'s server fault.</summary>
-    internal static IResult DestinationConflict(IOException ex) => Results.Problem(ex.Message, statusCode: 409);
 
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never

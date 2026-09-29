@@ -17,6 +17,8 @@ public abstract class HostedTests : IDisposable
 
     protected HttpClient Client { get; private set; }
 
+    protected IServiceProvider Services => _app.Services;
+
     private readonly List<IDisposable> _owned = [];
 
     // A subclass that needs a differently-shaped host (one that collects its own log output, for

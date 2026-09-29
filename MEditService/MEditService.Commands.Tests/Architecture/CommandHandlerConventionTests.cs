@@ -32,6 +32,7 @@ public sealed class CommandHandlerConventionTests
     [
         typeof(AbsorbResult),
         typeof(ExternalChangeLandResult),
+        typeof(PluginCreateRefusal),
         typeof(PluginCreateResult),
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),
