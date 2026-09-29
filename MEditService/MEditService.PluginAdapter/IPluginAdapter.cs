@@ -80,15 +80,6 @@ public interface IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
-    /// <summary>A plugin's binary as every record's own document plus the identity a source tree
-    /// files it by.</summary>
-    IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath,
-        GameRelease gameRelease,
-        PluginStrings strings,
-        RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas);
-
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the one at
     /// <paramref name="modPath"/> as the codec models them; null when they are model-identical. Both
     /// are reparsed, since only written bytes show what the writer does.</summary>

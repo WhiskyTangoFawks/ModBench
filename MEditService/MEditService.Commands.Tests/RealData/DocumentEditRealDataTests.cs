@@ -73,13 +73,12 @@ public sealed class DocumentEditRealDataTests : IDisposable
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
         var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         // land/navm/navi publish no schema, so this walk excludes them the same way the Index does.
-        var identities = TestAdapters.Mutagen()
-            .RecordDocumentsOf(modPath, GameRelease.Fallout4, strings, codec, Schemas)
-            .Select(d => d.Identity)
-            .Where(i => Schemas.ContainsKey(i.RecordType))
+        using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
+        var identities = documents.Records
             .Where((_, index) => index % stride == 0)
+            .Select(d => _repository.IdentityOf(_plugin, d.FormKey, Schemas)
+                ?? throw new InvalidOperationException($"Expected the tracked tree to hold {d.FormKey}."))
             .ToList();
         Assert.True(identities.Count > minIdentities, $"Expected a substantial sample of the cut-down plugin; got {identities.Count} documents.");
 
