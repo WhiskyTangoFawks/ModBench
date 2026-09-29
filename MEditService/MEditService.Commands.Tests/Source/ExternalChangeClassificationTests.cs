@@ -66,7 +66,7 @@ public sealed class ExternalChangeClassificationTests : IDisposable
         using var mod = SourceEditFixture.Tracked();
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
         var compileService = CompileServices.Over(mod.LoadOrder);
-        var result = await compileService.CompileAsync(mod.Plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var outcome = Settled.Handle(mod.LoadOrder, mod.ModFolder);

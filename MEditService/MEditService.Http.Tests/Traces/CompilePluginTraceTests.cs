@@ -84,20 +84,6 @@ public sealed class CompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CompilingFromMain_BuildsWhatMainHolds_NotTheWorkingTreesEdit()
-    {
-        using var fx = await LoadedAndTracked();
-        var formKey = await Client.FirstFormKey(Plugin);
-        (await Client.Edit(formKey, Plugin, Origin, "EditorID", "EditedInTheWorkingTree")).EnsureSuccessStatusCode();
-
-        var answer = await Answer(await Client.Compile([(Plugin, Origin)], source: "main"));
-
-        Assert.Single(answer.GetProperty("applied").EnumerateArray());
-        var written = await RecordInTheWrittenBytes(fx, Plugin, Origin, formKey);
-        Assert.Equal("CompiledNpc", written.GetProperty("editorId").GetString());
-    }
-
-    [Fact]
     public async Task Compiling_LeavesNoOtherPluginFileInTheModsRoot()
     {
         using var fx = await LoadedAndTracked();

@@ -18,7 +18,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     [Fact]
     public async Task Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
@@ -33,7 +33,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         FileModes.Set(_mod.ModFolder, "500");
         try
         {
-            await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree()));
+            await Assert.ThrowsAnyAsync<Exception>(async () => await CompileService().CompileAsync(_mod.Plugin));
         }
         finally
         {

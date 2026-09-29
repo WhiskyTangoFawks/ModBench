@@ -388,7 +388,7 @@ public sealed partial class SourceRepository
         _scansBySourceRoot.Clear();
         foreach (var gone in _foundByText.Where(found => !File.Exists(found.Value)).Select(found => found.Key).ToList())
             _foundByText.Remove(gone);
-        _filesByPluginAndRef.Clear();
+        _filesByPlugin.Clear();
     }
 
     private TreeScan ScanOf(string sourceRoot)

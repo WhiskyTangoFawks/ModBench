@@ -18,7 +18,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
     private string PluginPath => Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-    private Task<CompileSelectionResult> Compile() => _mod.CompileHandler.CompileAsync([_mod.Plugin], new CompileSource.WorkingTree());
+    private Task<CompileSelectionResult> Compile() => _mod.CompileHandler.CompileAsync([_mod.Plugin]);
 
     // A change both answers can land: the same records the fixture tracked, one value moved.
     private void RaiseParseableExternalChange()

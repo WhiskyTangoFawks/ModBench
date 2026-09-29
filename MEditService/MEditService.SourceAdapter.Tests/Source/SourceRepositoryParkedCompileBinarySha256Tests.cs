@@ -16,7 +16,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", atRef: null, binarySha256: "DEADBEEF1234");
+            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234");
 
             Assert.Equal("DEADBEEF1234", SourceRepository.ParkedCompileBinarySha256(modFolder, "Test.esp"));
         }

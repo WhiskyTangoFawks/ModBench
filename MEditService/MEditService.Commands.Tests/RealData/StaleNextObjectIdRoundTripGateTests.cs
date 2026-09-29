@@ -68,7 +68,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
         await scratch.TrackAsync();
 
-        var result = await scratch.CompileService().CompileAsync(scratch.Plugin, new CompileSource.WorkingTree());
+        var result = await scratch.CompileService().CompileAsync(scratch.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var compiled = Fallout4Mod.CreateFromBinary(

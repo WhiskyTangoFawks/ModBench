@@ -39,8 +39,8 @@ internal static class Wire
         client.PostAsJsonAsync("/plugins/track", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), preset });
 
     internal static Task<HttpResponseMessage> Compile(
-        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string? source = null) =>
-        client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), @ref = source });
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
+        client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
     internal static Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>

@@ -569,7 +569,6 @@ export interface components {
         };
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
-            ref?: string | null;
         };
         CompileResponse: {
             applied: components["schemas"]["CompiledPlugin"][];

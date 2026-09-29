@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -48,7 +47,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private string NpcRelativePath =>
-        Repository.RelativePathOf(Plugin, Npc, gitRef: null)
+        Repository.RelativePathOf(Plugin, Npc)
             ?? throw new InvalidOperationException($"Expected the tree to hold {NpcFormKey}.");
 
     private string NpcFullPath => Path.Combine(_modFolder, NpcRelativePath);
@@ -60,32 +59,13 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
             .Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void FilesOf_AtTheWorkingTree_AnswersEveryFileUnderThePluginsSourceRoot_WithItsOwnBytes()
+    public void FilesOf_AnswersEveryFileUnderThePluginsSourceRoot_WithItsOwnBytes()
     {
-        var files = Repository.FilesOf(Plugin, gitRef: null).Files;
+        var files = Repository.FilesOf(Plugin).Files;
 
         Assert.Equal(PathsOnDisk(), [.. files.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
         var npc = files.Single(f => f.RelativePath == NpcRelativePath);
         Assert.Equal(File.ReadAllBytes(NpcFullPath), npc.Content);
-    }
-
-    [Fact]
-    public void FilesOf_AtARef_AnswersWhatThatRefCommitted_NotWhatTheWorkingTreeHolds()
-    {
-        var committed = File.ReadAllBytes(NpcFullPath);
-        var npcRelativePath = NpcRelativePath;
-        File.WriteAllText(NpcFullPath, "{ not valid json");
-
-        var atRef = Repository.FilesOf(Plugin, "HEAD").Files;
-        var workingTree = Repository.FilesOf(Plugin, gitRef: null).Files;
-
-        Assert.Equal(committed, atRef.Single(f => f.RelativePath == npcRelativePath).Content);
-        Assert.Equal(
-            Encoding.UTF8.GetBytes("{ not valid json"),
-            workingTree.Single(f => f.RelativePath == npcRelativePath).Content);
-        Assert.Equal(
-            [.. workingTree.Select(f => f.RelativePath).Order(StringComparer.Ordinal)],
-            [.. atRef.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
     }
 
     // One repository spans a write and the reads around it, so the file memo a write leaves behind
@@ -94,7 +74,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     public void FilesOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands()
     {
         var repository = Repository;
-        var before = repository.FilesOf(Plugin, gitRef: null).Files.Count;
+        var before = repository.FilesOf(Plugin).Files.Count;
 
         repository.Put(
             Plugin,
@@ -102,7 +82,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
                 "000950:FilesOf.esp", "npc_", "MemoNpc",
                 "{\n  \"FormKey\": \"000950:FilesOf.esp\",\n  \"EditorID\": \"MemoNpc\"\n}"));
 
-        Assert.Equal(before + 1, repository.FilesOf(Plugin, gitRef: null).Files.Count);
+        Assert.Equal(before + 1, repository.FilesOf(Plugin).Files.Count);
     }
 
     // Half a tree is the one answer that must not escape: a caller cannot tell it from a smaller tree,
@@ -113,18 +93,17 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         var npcRelativePath = NpcRelativePath;
         using var held = new FileStream(NpcFullPath, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var files = Repository.FilesOf(Plugin, gitRef: null);
+        var files = Repository.FilesOf(Plugin);
 
         Assert.Equal(npcRelativePath, files.Unreadable);
         Assert.Empty(files.Files);
     }
 
     [Fact]
-    public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty_AtEitherSource()
+    public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty()
     {
         var stranger = new PluginAddress("Stranger.esp", Plugin.Origin);
 
-        Assert.Empty(Repository.FilesOf(stranger, gitRef: null).Files);
-        Assert.Empty(Repository.FilesOf(stranger, "HEAD").Files);
+        Assert.Empty(Repository.FilesOf(stranger).Files);
     }
 }

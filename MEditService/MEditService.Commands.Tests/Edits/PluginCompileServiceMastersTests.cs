@@ -104,7 +104,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public async Task Compile_ReportsTheEffectiveMasters_InLoadOrder()
     {
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Equal([CharlieName, BravoName], result.Masters);
@@ -115,7 +115,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -132,7 +132,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
@@ -148,7 +148,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(
@@ -160,7 +160,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -182,7 +182,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);

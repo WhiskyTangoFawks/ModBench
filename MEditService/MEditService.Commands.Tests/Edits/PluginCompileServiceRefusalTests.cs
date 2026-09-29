@@ -20,7 +20,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
     {
-        var result = await CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(LoadOrderSnapshot.Empty).CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Equal("No load order has been received.", result.RefusalReason);
@@ -31,7 +31,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     {
         var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);
 
-        var result = await _mod.CompileService().CompileAsync(stranger, new CompileSource.WorkingTree());
+        var result = await _mod.CompileService().CompileAsync(stranger);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Stranger.esp is not in the load order.", result.RefusalReason);
@@ -48,7 +48,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
         File.WriteAllText(collidingPath, npcSourceText);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
@@ -73,7 +73,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
@@ -86,7 +86,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     {
         using var held = new FileStream(_mod.NpcSourceFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(
@@ -98,7 +98,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     {
         File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("Re-Track", result.RefusalReason);
@@ -115,7 +115,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Contains("\"Race\"", npcSourceText);
         File.WriteAllText(_mod.NpcSourceFile, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("Re-Track", result.RefusalReason);

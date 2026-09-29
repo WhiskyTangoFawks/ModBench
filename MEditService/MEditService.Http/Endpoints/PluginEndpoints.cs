@@ -1,5 +1,4 @@
 using MEditService.Commands;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.SourceAdapter;
@@ -72,8 +71,7 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // No "confirmed" flag: compile from main's confirmation is the extension's, and never reaches
-        // the wire. Every refusal is a plugin's own item of the answer, never an HTTP error.
+        // Every refusal is a plugin's own item of the answer, never an HTTP error.
         app.MapPost("/plugins/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)
@@ -217,8 +215,7 @@ public static class PluginEndpoints
         }
     }
 
-    // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012), and the
-    // source. req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree.
+    // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
     internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -228,10 +225,9 @@ public static class PluginEndpoints
         if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
             return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
 
-        CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
         try
         {
-            var result = await compileHandler.CompileAsync(plugins, source);
+            var result = await compileHandler.CompileAsync(plugins);
             foreach (var refused in result.Refused)
             {
                 logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Message}",
@@ -363,8 +359,7 @@ public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 public record TrackResponse(
     IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
 
-// Ref null means CompileSource.WorkingTree; a name (e.g. "main") means CompileSource.AtRef.
-public record CompileRequest(IReadOnlyList<PluginAddress> Plugins, string? Ref);
+public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
 public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);

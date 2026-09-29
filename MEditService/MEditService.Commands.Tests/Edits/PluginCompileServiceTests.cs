@@ -26,7 +26,7 @@ public sealed class PluginCompileServiceTests : IDisposable
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
@@ -46,7 +46,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -63,7 +63,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     public async Task Compile_LeavesUntouchedRecordsUnchanged()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        await CompileService().CompileAsync(_mod.Plugin);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -81,7 +81,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     [Fact]
     public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
@@ -153,7 +153,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.False(File.Exists(leftover));
         File.WriteAllText(leftover, "{\"MEditChildOrder\": {\"Npcs\": [\"" + _mod.Npc + "\", \"" + _mod.OtherNpc + "\"]}}");
 
-        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(Path.Combine("Npcs", "GroupRecordData.json"), result.RefusalReason, StringComparison.Ordinal);

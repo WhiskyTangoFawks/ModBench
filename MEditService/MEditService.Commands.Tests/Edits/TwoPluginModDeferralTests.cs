@@ -91,7 +91,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var pathB = Path.Combine(_modFolder, PluginB);
         var bytesB = File.ReadAllBytes(pathB);
 
-        var result = await _compileHandler.CompileAsync([new PluginAddress(PluginB, Origin)], new CompileSource.WorkingTree());
+        var result = await _compileHandler.CompileAsync([new PluginAddress(PluginB, Origin)]);
 
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, Assert.Single(result.Refused).Refusal);
         Assert.Equal(bytesB, File.ReadAllBytes(pathB));

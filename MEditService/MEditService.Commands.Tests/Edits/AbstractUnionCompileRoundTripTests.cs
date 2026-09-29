@@ -25,7 +25,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private async Task<IFallout4ModGetter> CompileAndReparse()
     {
-        var result = await CompileService().CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_fixture.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.ModFolder, AbstractUnionCompileFixture.PluginName);

@@ -10,8 +10,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>ADR-0007's compile, for one plugin: source (working tree or a git ref) to binary. Reads the
-/// source's own bytes, never the index; refuses only what it cannot emit, and the rest becomes
+/// <summary>ADR-0007's compile, for one plugin: its working tree's source to binary. Reads the source's
+/// own bytes, never the index; refuses only what it cannot emit, and the rest becomes
 /// diagnostics.</summary>
 public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
@@ -20,7 +20,7 @@ public sealed class PluginCompileService(
     IPluginAdapter adapter,
     ILogger<PluginCompileService> logger)
 {
-    public async Task<CompileResult> CompileAsync(PluginAddress plugin, CompileSource source)
+    public async Task<CompileResult> CompileAsync(PluginAddress plugin)
     {
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Plugins.Count == 0)
@@ -30,11 +30,9 @@ public sealed class PluginCompileService(
         if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is not { } modFolder)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
-        // One repository for the whole pass, so the tree it answers from is read once: everything below
-        // asks it for the same source, the working tree or a named ref.
-        var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
+        // One repository for the whole pass, so the tree it answers from is read once.
         var repository = SourceRepository.Over(modFolder, loadOrder.GameRelease);
-        var sourceFiles = repository.FilesOf(plugin, atRef);
+        var sourceFiles = repository.FilesOf(plugin);
 
         // A document the read could not open is content this compile does not have, and compiling the
         // rest would write a binary missing that record with nothing left to notice it (ADR-0003).
@@ -49,7 +47,7 @@ public sealed class PluginCompileService(
         if (files.Count == 0)
         {
             return CompileResult.Refused(
-                $"{plugin.Name} has no source tree at {atRef ?? "the working tree"}, so there is nothing to compile.");
+                $"{plugin.Name} has no source tree in the working tree, so there is nothing to compile.");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
@@ -81,7 +79,7 @@ public sealed class PluginCompileService(
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
         // than pick a winner. Asked of the files: the reader's group cache has already resolved a
         // same-folder collision before the tree is read.
-        var collidingFormKeys = repository.CollidingFormKeys(plugin, tree.FormKeys, atRef);
+        var collidingFormKeys = repository.CollidingFormKeys(plugin, tree.FormKeys);
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
@@ -121,11 +119,9 @@ public sealed class PluginCompileService(
                 return false;
             }
 
-            // The parked snapshot advances only after the binary write has landed. An AtRef compile
-            // parks too: otherwise the parked trailer still names the old working-tree hash and
-            // Modbench's own write reads as an external change.
+            // The parked snapshot advances only after the binary write has landed.
             SourceRepository.ParkCompileSnapshot(
-                modFolder, plugin.Name, atRef, PluginBinaryHash.TrailerFormOfFile(registered.Path));
+                modFolder, plugin.Name, PluginBinaryHash.TrailerFormOfFile(registered.Path));
             return true;
         });
         if (writeRefusal != null)
@@ -136,18 +132,18 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(Reported(content, plugin, registered, loadOrder, repository, atRef), content.Masters);
+        return CompileResult.Success(Reported(content, plugin, registered, loadOrder, repository), content.Masters);
     }
 
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     private List<CompileDiagnostic> Reported(
         Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
-        SourceRepository repository, string? atRef)
+        SourceRepository repository)
     {
         try
         {
-            return LinkDiagnostics(content, plugin, registered, loadOrder, repository, atRef);
+            return LinkDiagnostics(content, plugin, registered, loadOrder, repository);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -205,7 +201,7 @@ public sealed class PluginCompileService(
     // it afterwards, answered by the files the game loads with the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
         Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
-        SourceRepository repository, string? atRef)
+        SourceRepository repository)
     {
         var answers = adapter.LinkTargets(
             loadOrder, registered, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
@@ -236,7 +232,7 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for their path, which keeps a container's
             // subtree scan off the common path.
             var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
-            var relativePath = repository.RelativePathOf(plugin, identity, atRef) ?? string.Empty;
+            var relativePath = repository.RelativePathOf(plugin, identity) ?? string.Empty;
             diagnostics.AddRange(errors.Select(
                 message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
         }

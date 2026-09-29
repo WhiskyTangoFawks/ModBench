@@ -18,14 +18,14 @@ public sealed class CompilePluginHandler
 
     /// <summary>Throws <see cref="NoLoadOrderException"/> with nothing written when none is held: no
     /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
-    public async Task<CompileSelectionResult> CompileAsync(IReadOnlyList<PluginAddress> plugins, CompileSource source)
+    public async Task<CompileSelectionResult> CompileAsync(IReadOnlyList<PluginAddress> plugins)
     {
         _loadOrder.Require();
         var landed = new List<CompiledPlugin>();
         var refused = new List<CompileRefused>();
         foreach (var plugin in plugins)
         {
-            var result = await CompileOneAsync(plugin, source);
+            var result = await CompileOneAsync(plugin);
             if (result.Succeeded)
             {
                 landed.Add(new CompiledPlugin(plugin, result.Masters, result.Diagnostics));
@@ -39,7 +39,7 @@ public sealed class CompilePluginHandler
         return new CompileSelectionResult(landed, refused);
     }
 
-    private async Task<CompileResult> CompileOneAsync(PluginAddress plugin, CompileSource source)
+    private async Task<CompileResult> CompileOneAsync(PluginAddress plugin)
     {
         // Only the deferral is the door's to refuse here: an untracked or unknown plugin gets
         // compile's own refusal, which names the source it lacks rather than a Track it cannot run.
@@ -50,7 +50,7 @@ public sealed class CompilePluginHandler
         // file system refuses is this plugin's failure, and the rest of the selection still compiles.
         try
         {
-            return await _compileService.CompileAsync(plugin, source);
+            return await _compileService.CompileAsync(plugin);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
