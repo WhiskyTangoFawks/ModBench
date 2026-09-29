@@ -13,8 +13,28 @@ public sealed class PluginTreeReadTests
 
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
+    // The adapter's own scratch prefix, spelled here as a leak watcher sees it on disk.
+    private const string ScratchPrefix = "medit-readtree-";
+
+    // Other sessions share the temp folder, so a test asserts only on the folders its own read added.
     private static HashSet<string> ScratchFolders() =>
-        [.. Directory.GetDirectories(Path.GetTempPath(), $"{MutagenPluginAdapter.ReadScratchPrefix}*")];
+        [.. Directory.GetDirectories(Path.GetTempPath(), $"{ScratchPrefix}*")];
+
+    // A folder named with the prefix is found by the glob, so the leak checks cannot pass on a
+    // pattern that matches nothing.
+    [Fact]
+    public void TheScratchGlob_FindsAFolderNamedWithThePrefix()
+    {
+        var canary = Directory.CreateTempSubdirectory($"{ScratchPrefix}canary-").FullName;
+        try
+        {
+            Assert.Contains(canary, ScratchFolders());
+        }
+        finally
+        {
+            Directory.Delete(canary);
+        }
+    }
 
     [Fact]
     public async Task ReadTree_OfAFileItCannotWrite_Throws_AndLeavesNoScratchFolderBehind()

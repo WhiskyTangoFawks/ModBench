@@ -98,10 +98,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyCollection<string> formKeys) =>
         LoadOrderLinks.Targets(loadOrder, gameRelease, schemas, formKeys);
 
-    /// <summary>The prefix of the scratch folder <see cref="ReadTreeAsync"/> materializes its files in,
-    /// so a test watching for a leak knows what to look for.</summary>
-    public const string ReadScratchPrefix = "medit-readtree-";
-
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
